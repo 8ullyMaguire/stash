@@ -29,6 +29,7 @@ type fakeTargets struct {
 	markErr     error
 	writeCount  int
 	auditCount  int
+	lastDeciderID int
 	markRejects int
 }
 
@@ -125,7 +126,13 @@ func equalPtr(a, b *string) bool {
 	return *a == *b
 }
 
-func (f *fakeTargets) MarkRejected(_ context.Context, id int, reason string) error {
+// deciderID is recorded so a test can assert WHO rejected, not just that a
+// rejection happened. It was added to the interface because
+// edit_proposals.decided_by is a foreign key, so a rejection without an actor
+// fails at the SQL layer — and the fake drifted from the interface until this
+// signature changed, which is how the unit suite stopped compiling.
+func (f *fakeTargets) MarkRejected(_ context.Context, id int, deciderID int, reason string) error {
+	f.lastDeciderID = deciderID
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.markErr != nil {

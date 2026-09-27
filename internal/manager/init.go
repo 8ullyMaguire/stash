@@ -255,7 +255,30 @@ func (s *Manager) postInit(ctx context.Context) error {
 		return err
 	}
 
+	// Same ordering constraint: the collab stores read the edit_proposals table,
+	// which does not exist until the schema is at version 94.
+	s.initStashForgeCollab()
+
 	return nil
+}
+
+// initStashForgeCollab constructs the collaboration stores.
+//
+// No error return, and that is deliberate. None of these constructors touch the
+// database -- they build table handles -- so there is no failure mode to report,
+// and inventing one would mean a caller had to handle an error that can never
+// occur. The first real database access is in the resolver, where a genuine
+// error has a real message.
+func (s *Manager) initStashForgeCollab() {
+	s.CollabProposals = sqlite.NewEditProposalStore()
+	s.CollabVotes = sqlite.NewProposalVoteStore()
+	s.CollabTargets = sqlite.NewCollabTargetStore()
+
+	// The adapter is what makes collab.Proposer usable at all: collab speaks its
+	// own Proposal type and its own four methods, and no row store implements
+	// that interface. Without this line the governance logic is unreachable from
+	// the application and only its unit tests ever run.
+	s.CollabStore = sqlite.NewCollabProposalStore()
 }
 
 // initStashForgeAuth builds the StashForge auth layer and decides which session

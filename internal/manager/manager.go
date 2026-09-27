@@ -72,6 +72,22 @@ type Manager struct {
 	Auth      *auth.SessionStore
 	AuthMode  auth.Mode
 
+	// StashForge collaboration surface. The collab stores are present on every
+	// instance, including a single-user one: a single-user instance still needs
+	// somewhere to put an edit proposal if it is ever read by a remote stash
+	// box, and refusing to construct the store means the GraphQL layer has to
+	// carry a nil check that exists for no reason. What a single-user instance
+	// must NOT get is the ability to self-accept, and that is enforced in
+	// collab's policy, not here.
+	CollabProposals *sqlite.EditProposalStore
+	CollabVotes     *sqlite.ProposalVoteStore
+	CollabTargets   *sqlite.CollabTargetStore
+	// CollabStore is the adapter from the row stores to collab.ProposalStore.
+	// It is a separate field from CollabProposals because they are different
+	// interfaces over the same table, and reaching for the wrong one is a
+	// compile error either way.
+	CollabStore *sqlite.CollabProposalStore
+
 	SceneService   SceneService
 	ImageService   ImageService
 	GalleryService GalleryService

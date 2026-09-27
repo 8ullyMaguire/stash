@@ -754,8 +754,8 @@ Each is independently shippable and each ends with tests green and a tag.
 | M0 | **Buildable fork** | `go build ./...` green, UI builds, upstream tests green, baseline recorded |
 | M1 | **User accounts** | users/sessions/invites, auth migration, login UI, rate limiting |
 | M2 | **Proposals & quorum** | edit_proposals, votes, governance, audit, proposal UI |
-| M2.5 | **Governance v2** | replace the acceptance arithmetic with Commons §8.1–8.5: typed field proposals, reputation-weighted ballots, decay, Sybil damping, the five-role table, field locking. Sticky rejection carried over. |
-| M2.8 | **Identity clustering** | Commons §7.1: `PersonCluster`, ONNX face embed, ANN assign, ambiguous bucket, consolidate, claim. |
+| M2b | **Governance v2** | replace the acceptance arithmetic with Commons §8.1–8.5: typed field proposals, reputation-weighted ballots, decay, Sybil damping, the five-role table, field locking. Sticky rejection carried over. |
+| M2c | **Identity clustering** | Commons §7.1: `PersonCluster`, ONNX face embed, ANN assign, ambiguous bucket, consolidate, claim. |
 | M3 | **Metadata sharing** | consent tiers, exporter, dry-run-first sync, public read endpoint, federation |
 | M4 | **Public hosting** | TLS enforcement, 2FA, access grants, first-run wizard |
 | M5 | **P2P downloader** | plugin: BitTorrent + ed2k + Kademlia, library integration, as a static binary over `interface: rpc` |
@@ -763,7 +763,7 @@ Each is independently shippable and each ends with tests green and a tag.
 
 M0 is a prerequisite for everything and is where the work starts.
 
-**Reordered 2026-09-27 by the reconciliation.** M2.5 and M2.8 are new and sit
+**Reordered 2026-09-27 by the reconciliation.** M2b and M2c are new and sit
 *before* M3, not after it, and the order is not arbitrary. Clustering links a
 person across sources, which is a distribution decision, so consent tiers must
 exist first — a cluster merge that crosses a consent boundary has to be a
@@ -848,18 +848,18 @@ job.
 > re-argued. Decision 1: default mode is `contribute` — still open, and it is
 > now more constrained, since §6's tier model makes it a per-object question
 > rather than an instance-wide one. Decision 2: the flat quorum threshold is
-> superseded by M2.5; `MinVoters` survives only as the moderator-only and
+> superseded by M2b; `MinVoters` survives only as the moderator-only and
 > migration path. Decision 3: `NewAccountProposalHold` is retained *and*
 > strengthened — reputation ramping (§5.3) is a better answer to the same
 > problem, so the hold becomes a floor under it rather than the mechanism.
 > Decision 4 stands unchanged and is still the owner's.
 
-**One new open decision, flagged rather than guessed:** whether M2.5's
+**One new open decision, flagged rather than guessed:** whether M2b's
 reputation model needs a *field-type* weight table (titles vote differently
 from tags) or a single global weight per user per field. Commons §8.1 scopes
 votes per field but does not say whether the *weight function* is shared. The
 cheap version is one weight function; the honest version is a type table. This
-changes what gets built and is left to the owner at M2.5.
+changes what gets built and is left to the owner at M2b.
 
 **One new open decision:** whether the M5 downloader plugin's consent gate
 (§7.1) requires the plugin to be *signed* to be trusted with locator proposals

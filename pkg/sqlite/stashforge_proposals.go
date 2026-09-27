@@ -142,6 +142,96 @@ func (qb *EditProposalStore) FindByStatus(ctx context.Context, status models.Pro
 		Limit(uint(limit)).Offset(uint(offset)))
 }
 
+// FindRejectedByAuthor returns this author's rejected proposals, newest first.
+//
+// It backs the sticky-rejection rule in collab. Derived from the proposal rows
+// rather than a separate sticky table: the rule binds (target, field, author),
+// and that is already recorded on the row that recorded the rejection, so a
+// second table would be a second thing to fall out of sync with the first.
+func (qb *EditProposalStore) FindRejectedByAuthor(ctx context.Context, authorID int) ([]*models.EditProposal, error) {
+	return qb.getMany(ctx, qb.selectDataset().
+		Where(goqu.C("author_id").Eq(authorID), goqu.C("status").Eq(string(models.ProposalRejected))).
+		Order(goqu.C("id").Desc()))
+}
+
+// FindFiltered lists proposals with every filter optional and composed with AND.
+//
+// The filters are built as a slice rather than as a chain of ifs so that adding
+// one cannot change the behaviour of the others — a chain is where a filter
+// added later quietly becomes an OR.
+func (qb *EditProposalStore) FindFiltered(ctx context.Context, targetType *string, targetID *int, targetField *string, authorID *int, status models.ProposalStatus, limit, offset int) ([]*models.EditProposal, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	conds := []exp.Expression{}
+	if targetType != nil {
+		conds = append(conds, goqu.C("target_type").Eq(*targetType))
+	}
+	if targetID != nil {
+		conds = append(conds, goqu.C("target_id").Eq(*targetID))
+	}
+	if targetField != nil {
+		conds = append(conds, goqu.C("field").Eq(*targetField))
+	}
+	if authorID != nil {
+		conds = append(conds, goqu.C("author_id").Eq(*authorID))
+	}
+	if status != "" {
+		conds = append(conds, goqu.C("status").Eq(string(status)))
+	}
+
+	q := qb.selectDataset()
+	if len(conds) > 0 {
+		q = q.Where(conds...)
+	}
+	return qb.getMany(ctx, q.
+		Order(goqu.C("created_at").Desc(), goqu.C("id").Desc()).
+		Limit(uint(limit)).Offset(uint(offset)))
+}
+
+// FindPendingFor lists open proposals this user has not yet voted on.
+//
+// Expressed as a NOT EXISTS rather than a join-and-filter, because a join would
+// need DISTINCT to avoid returning a proposal once per vote and DISTINCT on a
+// row set that includes a nullable vote column is a subtle way to lose rows.
+func (qb *EditProposalStore) FindPendingFor(ctx context.Context, userID int, limit, offset int) ([]*models.EditProposal, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	return qb.getMany(ctx, qb.selectDataset().
+		Where(goqu.C("status").Eq(string(models.ProposalOpen))).
+		Where(goqu.C("id").NotIn(goqu.Select("proposal_id").From(goqu.T(proposalVotesTable)).
+			Where(goqu.C("user_id").Eq(userID)))).
+		Order(goqu.C("created_at").Asc(), goqu.C("id").Asc()).
+		Limit(uint(limit)).Offset(uint(offset)))
+}
+
+// MyVote returns this user's vote on a proposal: 1, -1, or 0 when they have
+// not voted.
+//
+// 0 rather than an error or a pointer, because a missing vote is the common case
+// and the caller only ever asks "is this 1 or -1".
+func (qb *ProposalVoteStore) MyVote(ctx context.Context, proposalID, userID int) (int, error) {
+	// sql.ErrNoRows is translated to 0 because "this user has not voted" is a
+	// state the schema represents by the absence of a row, and the caller asked
+	// a yes/no question. Returning the error would make every unanswered
+	// proposal on a page look like a query failure.
+	var row struct {
+		Value int `db:"value"`
+	}
+	err := dbWrapper.Get(ctx, &row,
+		"SELECT value FROM proposal_votes WHERE proposal_id = ? AND user_id = ?",
+		proposalID, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return row.Value, nil
+}
+
 // CountOpenByAuthor backs the NewAccountProposalHold trust signal: a brand-new
 // account that immediately opens twenty proposals is doing something other than
 // using the instance.

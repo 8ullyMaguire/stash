@@ -422,6 +422,49 @@ from the GraphQL schema to a shared field's write function except through
 `Apply`. That is the governance invariant, and it is worth a test that reads
 the resolver registry.
 
+**Status: backend done, UI not started.** Done:
+
+- `graphql/schema/types/proposal.graphql` — `EditProposal`, `EditProposalInput`,
+  four mutations (`propose`, `vote`, `withdraw`, `moderate`), three queries
+  (`proposals`, `moderationQueue`, `pendingMyVote`).
+- `internal/api/resolver_mutation_proposal.go` — every mutation goes through
+  `collab.Proposer` or `collab.Applier`. `moderate` records the decision and
+  lets `Apply` do the write, so the moderator path and the quorum path converge
+  on one writer and one audit row.
+- `pkg/sqlite/stashforge_collab_proposal_store.go` — **the adapter that did not
+  exist.** `collab.ProposalStore` had no implementation anywhere in the tree, so
+  the whole governance layer was unreachable from the application and only its
+  unit tests ever ran. Nothing in M2 caught this because M2's tests exercised
+  `collab` against fakes.
+- Store methods `FindFiltered`, `FindPendingFor`, `FindRejectedByAuthor`,
+  `MyVote`; manager fields for all four collab stores.
+
+Two things the spec did not say and the code forced:
+
+1. **The audit test needed receiver types, not method names.** The first version
+   flagged `SceneMarkerStore.UpdateTags` — a user tagging their own bookmark,
+   which is personal state, not a claim about shared content. Name-only matching
+   conflates the two, and a test that fails on legitimate code gets deleted,
+   taking the real check with it. Stores are now matched by receiver type, with
+   an explicit `sharedFieldStores` list so "is this shared?" is a stated
+   judgement rather than an accident of naming.
+2. **`TestWritePathDetectorCatchesAViolation` is a meta-test and it earned its
+   place immediately.** The scanner was silently matching nothing: `stripImports`
+   used an anchored `(?s)` pattern, so on a file with no `import (` block it ate
+   from the start of the file to the last line beginning with `)`. And the
+   declaration regex consumed the trailing `Store` while the comparison looked
+   for `SceneStore`. The test passed, having verified nothing. The meta-test
+   asserts the scanner's behaviour on snippets with known answers **in both
+   directions** — bad snippets must be caught, and `SceneMarkerStore.UpdateTags`
+   must not be.
+
+Remaining: the Svelte UI (proposal list, detail, vote button, propose-edit
+dialog, moderation queue) in `ui/v2.5/src`.
+
+```bash
+cd ui/v2.5 && pnpm run gqlgen && pnpm run check && pnpm run build
+```
+
 UI: proposal list, proposal detail with votes, a vote button, a "propose edit"
 dialog on scene/performer/studio/tag pages, and a moderation queue. Follow the
 existing page patterns in `ui/v2.5/src`; do not introduce a new state library.
@@ -432,7 +475,7 @@ cd ui/v2.5 && pnpm run gqlgen && pnpm run check && pnpm run build
 
 ---
 
-### Step 2.4a — Governance v2 (M2.5), replacing the acceptance arithmetic
+### Step 2.4a — Governance v2 (milestone M2b), replacing the acceptance arithmetic
 
 **Spec:** §5.3 (adopted from Commons §8.1–8.5)
 **Exit:** a proposal settles by reputation-weighted per-field vote, with decay
@@ -454,7 +497,7 @@ type Policy struct {
     MinVoters       int
     AllowSelfAccept bool
 
-    // Added by M2.5.
+    // Added in M2b.
     Reputation ReputationSource   // agreement-with-settled-outcomes
     Decay      DecayPolicy        // weight loss on repeated rejection
     Sybil      SybilPolicy        // correlated-vote damping
@@ -472,7 +515,7 @@ must be table-driven over the full cross-product, not a handful of cases. The
 flat path's existing tests must still pass unchanged — that is the proof it is
 a fallback and not dead code.
 
-### Step 2.4b — Identity clustering (M2.8)
+### Step 2.4b — Identity clustering (milestone M2c)
 
 **Spec:** §12.1 (adopted from Commons §7.1, §7.4, §7.5)
 **Exit:** a `PersonCluster` links appearances with no name, no studio, and no

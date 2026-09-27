@@ -64,6 +64,13 @@ func (r *Resolver) Query() QueryResolver {
 func (r *Resolver) User() UserResolver {
 	return &userResolver{r}
 }
+
+// EditProposal is the field resolver for EditProposal. Named for the type
+// rather than the field, which is this codebase's convention: one resolver
+// struct per GraphQL type, reused across every field on it.
+func (r *Resolver) EditProposal() EditProposalResolver {
+	return &editProposalResolver{r}
+}
 func (r *Resolver) Scene() SceneResolver {
 	return &sceneResolver{r}
 }
@@ -119,6 +126,7 @@ type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
+type editProposalResolver struct{ *Resolver }
 
 type galleryResolver struct{ *Resolver }
 type galleryChapterResolver struct{ *Resolver }
