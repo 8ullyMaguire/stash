@@ -29,16 +29,18 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 | M2b governance v2: roles, weighted ballots | done | — |
 | M2c identity clustering (plan 2.4b) | done | `m2c-identity-clustering` |
 | **M3 metadata sharing (consent, exporter, federation)** | **done** | `m3-metadata-sharing` |
-| M4 public hosting | not started | — |
+| **M4 public hosting: mode, 2FA, library grants** | **server side done, no UI** | — |
 
 ## Verified state at this tag
 
 - 39/39 unit packages, 0 failures
 - 39/39 integration packages (`-tags integration`), 0 failures
 - `go build ./...` and `go vet ./...` clean
-- `internal/collab` at 137 top-level tests (241 including subtests)
-- `internal/collab/mutate_consent.py`: **22 applied, 22 killed, 0 survived,
-  0 broken**
+- `internal/collab` at 177 top-level tests
+- `pkg/auth` at 71 top-level tests, of which 9 are the 2FA *wiring* tests
+- `pkg/sqlite` adds 9 2FA store tests, one of which races 20 goroutines
+- `internal/collab/mutate_consent.py`: **63 applied, 63 killed, 0 survived,
+  0 broken** (collab + `pkg/auth`)
 
 Counting convention, because the docs previously mixed two and it looked like a
 1000-test regression: `go test ... -v | grep -c '^--- PASS'` counts top-level
@@ -94,6 +96,29 @@ implementation of whatever the module will be handed. Both times a seam was
 missed in this project, the half that existed was thoroughly tested and the
 mismatch was invisible because no file imported both packages.
 
+**6. A comment claiming a mechanism is on a path is not evidence that it is.**
+The 2FA replay guard shipped broken: `checkSecondFactor` called
+`collab.VerifyTOTP` with a nil spent-step set and returned nil, above a comment
+saying "the store owns the spend record, so two concurrent logins cannot both be
+accepted". `SpendTOTPStep` was never called on that path. The store was correct,
+thoroughly tested, and not invoked. Every test before the fix called the session
+store's methods directly with a fake verifier, so all of them passed.
+
+Two things caught it, and both are now permanent:
+
+- **Test through the constructor, not the method.** `TestWiring_*` builds via
+  `Factory.Build` and logs in. A verifier that is implemented and never attached
+  fails there.
+- **A replay guard cannot be tested with a fake**, because the guard lives inside
+  the component. Those tests drive the real arithmetic and take their *codes*
+  from `pquerna/otp` — a second RFC 6238 implementation. Codes from the library
+  under test prove only self-consistency; hand-rolled codes are a third
+  implementation, which can agree with a broken one.
+
+`internal/collab/mutate_consent.py` now mutates `pkg/auth/totp.go` too, so
+removing the spend, ignoring the fresh flag, or failing open on a store error
+each fail a test.
+
 ## Where the design decisions are written down
 
 Not in the code alone. Each of these has a comment at the decision, because each
@@ -112,10 +137,28 @@ is a place where the obvious implementation is wrong:
 
 ## Not done
 
-M4 (public hosting) is the next milestone and is unstarted. The M3 pieces M4 will
-build on — `PeerRegistry`, `CommonsRead`, `PayloadSink` — are interfaces with no
-sqlite implementation yet, so wiring them is real work rather than a lookup.
+**M4 has no UI.** Everything in M4 is server-side and tested; nothing is reachable
+from a browser. In order of what a user would notice first:
+
+- **2FA enrolment.** The store, the encryption, the login gate and the replay
+  guard all exist and are wired. There is no screen to scan a QR code, and no
+  recovery codes. `collab.TOTPURIA` produces the provisioning URI, so a resolver
+  is a small addition — but until it exists, an account cannot be enrolled, and
+  an account that *is* enrolled (by direct DB write) can only be unenrolled the
+  same way.
+- **The first-run wizard.** `ModeFromContext` returns `ErrWizardNotCompleted`
+  until `instance_settings.wizard_completed` is set, which is the intended
+  behaviour — but no handler sets it, so a fresh instance refuses every request
+  with no way forward. This is the one gap that makes the current build unusable
+  as a public instance, and it is deliberately a hard refusal rather than a
+  default: a default would let an unconfigured instance serve publicly.
+- **Library grant management.** `LibraryAccessStore` grants, revokes and
+  authorises, and the 404-vs-403 distinction is tested. No mutation exposes them.
+- **TLS enforcement.** `collab.RequiresTLS` is implemented and tested; nothing at
+  the listener level calls it yet.
+
+**M5 and M6 are unstarted.**
 
 The push destination is still unset: the only remote is `upstream` =
 `github.com/stashapp/stash`, which is the upstream project. Everything here is
-committed locally and unpushed.
+committed locally and unpushed, by instruction.

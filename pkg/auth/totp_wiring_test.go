@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stashapp/stash/internal/collab"
@@ -256,4 +257,115 @@ func TestWiring_TheRecordSurvivesTheVerifierBeingReplaced(t *testing.T) {
 		"a verifier with no record accepts a replayed code -- which is exactly why "+
 			"the step record must be durable and shared rather than in-process memory")
 	require.NotNil(t, res)
+}
+
+// TestWiring_AStoreThatCannotRecordTheSpendRefusesTheLogin: fail-CLOSED.
+//
+// The arithmetic succeeded -- the code is genuinely correct -- and the store then
+// fails to record it. The only safe answer is to refuse, because the code has not
+// been marked spent and would still be replayable. Failing open means the
+// single-use rule silently stops applying the first time the database is busy,
+// which is the worst possible time to find out.
+//
+// # Why this test asserts on the AUDIT REASON and not the error
+//
+// The store returns (false, err). Two branches can consume that: the
+// unavailable-store path, and the already-spent path. Both refuse, and both
+// return the same error to the submitter -- correctly, since the password has
+// been proven and nothing should be disclosed.
+//
+// So an assertion on the error passes whether or not the store's error is
+// honoured: a mutation that IGNORES it falls through to the already-spent branch
+// and refuses for a different reason. That is why the first version of this test
+// survived the mutation, and it is the same lesson as the replay guard: the
+// observable that distinguishes two refusals is the one the operator reads, not
+// the one the client sees.
+func TestWiring_AStoreThatCannotRecordTheSpendRefusesTheLogin(t *testing.T) {
+	f := newFactoryFixture(t)
+	totp := newFakeTOTP()
+	sf := buildInstance(t, f, totp)
+	enrol(t, f, totp, "owner")
+
+	totp.spendErr = errors.New("database is locked")
+
+	_, err := sf.LoginWithTOTP(context.Background(), "owner", "password123",
+		oracleCodeFor(t, oracleSecretValue), "10.0.0.1", "test")
+	require.Error(t, err, "a store that cannot record the spend must refuse the login")
+	assert.Equal(t, 1, totp.spendCalls, "the spend must have been attempted")
+
+	// The audit reason is where the two refusals differ, and it is what an
+	// operator reads to tell "somebody is guessing codes" from "our database is
+	// locked and nobody can log in".
+	assert.Equal(t, 1, f.audit.countReason("totp_store_unavailable"),
+		"a store that could not record the spend must be audited as unavailable, "+
+			"not as a bad code: the two have opposite operational responses")
+	assert.Zero(t, f.audit.countReason("bad_totp"),
+		"an unavailable store is not evidence of a bad code")
+
+	// And the code was NOT recorded as spent, because the store never managed it.
+	// A step wrongly marked spent locks the user out for the rest of its window.
+	assert.Empty(t, totp.spent, "a failed spend must not record the step")
+}
+
+// TestWiring_TheLoginSpendsTheStepItJustVerified: asserted from the login's
+// side, which is the only place it can be.
+//
+// The store branch of checkSecondFactor does the arithmetic ITSELF and never
+// consults the attached verifier -- so a fake verifier's refusal is invisible
+// here, and my first version of this test set verifyErr and asserted a failure.
+// It got nil, correctly: nothing was going to ask the verifier.
+//
+// That is worth stating plainly, because it is a second instance of the same
+// shape as the bug in be58d8c2f. A component attached to a boundary is not
+// necessarily CALLED by it. The property is therefore asserted through the
+// fake's spend counter, which the store branch does reach.
+func TestWiring_TheLoginSpendsTheStepItJustVerified(t *testing.T) {
+	f := newFactoryFixture(t)
+	totp := newFakeTOTP()
+	sf := buildInstance(t, f, totp)
+	enrol(t, f, totp, "owner")
+
+	assert.Zero(t, totp.spendCalls, "nothing has been spent yet")
+
+	code := oracleCodeFor(t, oracleSecretValue)
+	res, err := sf.LoginWithTOTP(context.Background(), "owner", "password123", code, "10.0.0.1", "test")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, 1, totp.spendCalls,
+		"a successful 2FA login must spend the step it verified: this is the call "+
+			"whose absence made a code replayable for the whole of its window")
+
+	// And the code the oracle produced is now recorded, so the store's own
+	// single-use rule applies from here.
+	assert.NotEmpty(t, totp.spent, "the verified step must be in the spent set")
+}
+
+// TestWiring_APolicyRequiringTwoFactorWithNoSecretIsALockoutNotAFreePass: the
+// state that looks like a bug and is not.
+//
+// A user the policy requires 2FA for, with no secret enrolled, cannot log in
+// even with the correct password. That looks exactly like a lockout bug and is
+// the correct behaviour: the alternative is reading "no secret" as "no 2FA",
+// which is a policy that silently does not apply to precisely the accounts it
+// was written for.
+//
+// The fix is enrolment, not a code from their phone, which is why the error is
+// distinct from a wrong code -- the caller has already proven the password, so
+// there is nothing left to protect by hiding it.
+func TestWiring_APolicyRequiringTwoFactorWithNoSecretIsALockoutNotAFreePass(t *testing.T) {
+	f := newFactoryFixture(t)
+	totp := newFakeTOTP()
+	sf := buildInstance(t, f, totp)
+
+	user := newMember(t, f, "owner")
+	// Required, but deliberately NOT enrolled: the fake's secret stays empty.
+	totp.required[user.ID] = true
+	totp.secret = ""
+
+	_, err := sf.Login(context.Background(), "owner", "password123", "10.0.0.1", "test")
+	require.Error(t, err, "a required but unenrolled account must not get in with a password alone")
+	assert.NotErrorIs(t, err, auth.ErrTOTPRequired,
+		"asking for a code would send the user to a screen that cannot help: there is no code")
+	assert.Zero(t, totp.verifyCalls, "nothing to verify against")
 }

@@ -402,7 +402,7 @@ the worst failure a job can have.
 | M1 | Users, sessions, invite keys, rate limiting, auth migration |
 | M2 | Edit proposals, quorum, moderation, audit |
 | M3 | Consent, exporter (dry-run first), commons endpoint, federation |
-| M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard |
+| M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard — **server side done, no UI** |
 | M5 | P2P downloader **as an installable plugin** (BitTorrent + ed2k + Kademlia) |
 | M6 | The 850 upstream issues, capability by capability |
 

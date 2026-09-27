@@ -32,8 +32,12 @@ EXPORTER = ROOT / "internal/collab/exporter.go"
 MODE = ROOT / "internal/collab/mode.go"
 TOTP = ROOT / "internal/collab/totp.go"
 FEDERATION = ROOT / "internal/collab/federation.go"
+AUTH_TOTP = ROOT / "pkg/auth/totp.go"
+AUTH_SESSION = ROOT / "pkg/auth/session.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
+AUTH_TEST_RE = ("Wiring_|Login_|TOTP")
+
 TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
            # M4 step 4.2: the replay guard, the counter, and the truncation.
            "TOTP|"
@@ -311,6 +315,64 @@ MODE_WIZARD_FIXTURES = [
 ]
 
 
+# pkg/auth: the 2FA boundary. These exist because the replay guard was ONCE
+# implemented, tested in isolation, and not called by the login path -- a comment
+# claimed the store owned the spend while the spend was never made. Every
+# mutation below removes or weakens one specific link in the chain, so the next
+# time that chain is broken by accident, a test fails instead of a reviewer
+# wondering why the comment and the code disagree.
+AUTH_TOTP_FIXTURES = [
+    # THE REPLAY SPEND. Removing this is precisely the bug that shipped.
+    ("the login path stops spending the step it just verified",
+     "\t\tfresh, err := s.totpStore.SpendTOTPStep(ctx, userID, step)",
+     "\t\tfresh, err := true, error(nil)\n\t\t_ = step"),
+    # The spend's verdict is what refuses a replay; ignoring it accepts one.
+    ("a spent step is treated as fresh",
+     "\t\tif !fresh {",
+     "\t\tif false {\n\t\t\t_ = fresh"),
+    # Failing OPEN when the store cannot record the spend: the single-use rule
+    # silently stops applying whenever the database is busy.
+    ("a store that cannot record the spend is ignored",
+     "\t\tif err != nil {\n\t\t\t// A store that cannot record the spend has not verified anything, so\n\t\t\t// the login is refused. Failing open here would mean the single-use\n\t\t\t// rule silently stops applying the first time the database is busy.\n\t\t\treturn fmt.Errorf(\"%w: %v\", ErrTOTPStoreUnavailable, err)",
+     "\t\tif err != nil {\n\t\t\t_ = err\n\t\t\t_ = fresh"),
+    # The arithmetic itself, on this path.
+    ("the login verifies no code at all",
+     "\t\tstep, err := collab.VerifyTOTPDetailed(collab.TOTPSecret(secret), code, s.now(), nil)",
+     "\t\tstep, err := int64(0), error(nil)"),
+    # THE PROMPT. Without this, an enrolled user with no code gets a session.
+    ("an enrolled user is not asked for a code",
+     "\t\tif code == \"\" {\n\t\t\treturn ErrTOTPRequired",
+     "\t\tif false {\n\t\t\treturn ErrTOTPRequired"),
+    # THE POLICY. An unavailable store must not read as "no 2FA".
+    ("a failed policy check reads as not-required",
+     "\t\t\tpolicyRequired, pErr := s.totp.Required(ctx, userID)",
+     "\t\t\tpolicyRequired, pErr := false, error(nil)"),
+    # THE LOCKOUT GUARD. Required-but-not-enrolled is a lockout, not a free pass.
+    ("a required but unenrolled account is let in",
+     "\t\tif secret == \"\" {",
+     "\t\tif false {"),
+]
+
+
+# pkg/auth/session.go: where a 2FA failure becomes indistinguishable from a wrong
+# password. The guarantee is the FOLD, not the marker it folds -- and my first
+# attempt mutated the marker inside checkSecondFactor and SURVIVED, correctly,
+# because the fold already hides it. Nothing observable changed, so there was
+# nothing for a test to catch. Mutating a comment's subject instead of the
+# mechanism is how a harness earns a meaningless pass.
+AUTH_SESSION_FIXTURES = [
+    ("a 2FA failure is not collapsed into the invalid-credentials error",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}\n\t\tif true {\n\t\t\treturn nil, err\n\t\t}"),
+    # The prompt is distinguishable ON PURPOSE -- the password is already proven,
+    # so there is nothing left to disclose. If this stops being the only
+    # distinguishable case, the fold has a hole and the form becomes an oracle.
+    ("a wrong code is distinguishable from a wrong password",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}",
+     "\t\tif true {\n\t\t\treturn nil, err\n\t\t}"),
+]
+
+
 def preflight():
     """Verify every fixture before running any of them.
 
@@ -325,7 +387,7 @@ def preflight():
     run. So the anchors are checked up front, and a mismatch is an error before
     any file is touched.
     """
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION)}
     problems = []
     total = 0
     for path, fixtures in (
@@ -335,6 +397,8 @@ def preflight():
         (MODE, MODE_FIXTURES),
         (MODE, MODE_WIZARD_FIXTURES),
         (TOTP, TOTP_FIXTURES),
+        (AUTH_TOTP, AUTH_TOTP_FIXTURES),
+        (AUTH_SESSION, AUTH_SESSION_FIXTURES),
     ):
         for label, old, new in fixtures:
             total += 1
@@ -401,20 +465,25 @@ def verify_restored(originals):
 def main():
     if preflight() != 0:
         return 2
+    COLLAB_RUN = ("./internal/collab/", TEST_RE)
+    AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
+
     work = (
-        [(CONSENT, m) for m in CONSENT_MUTATIONS]
-        + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
-        + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
-        + [(MODE, m) for m in MODE_FIXTURES]
-        + [(MODE, m) for m in MODE_WIZARD_FIXTURES]
-        + [(TOTP, m) for m in TOTP_FIXTURES]
+        [(CONSENT, m, COLLAB_RUN) for m in CONSENT_MUTATIONS]
+        + [(EXPORTER, m, COLLAB_RUN) for m in EXPORTER_MUTATIONS]
+        + [(FEDERATION, m, COLLAB_RUN) for m in FEDERATION_MUTATIONS]
+        + [(MODE, m, COLLAB_RUN) for m in MODE_FIXTURES]
+        + [(MODE, m, COLLAB_RUN) for m in MODE_WIZARD_FIXTURES]
+        + [(TOTP, m, COLLAB_RUN) for m in TOTP_FIXTURES]
+        + [(AUTH_TOTP, m, AUTH_RUN) for m in AUTH_TOTP_FIXTURES]
+        + [(AUTH_SESSION, m, AUTH_RUN) for m in AUTH_SESSION_FIXTURES]
     )
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION)}
     killed, survived, broken = [], [], []
     _install_restore_guard(originals)
 
     try:
-        for path, (label, old, new) in work:
+        for path, (label, old, new), (pkg, sel) in work:
             original = originals[path]
             if old not in original:
                 # A replacement that does not land reports as a survivor that
@@ -431,7 +500,7 @@ def main():
 
             path.write_text(mutated)
             proc = run(
-                ["go", "test", "./internal/collab/", "-run", TEST_RE, "-count=1"],
+                ["go", "test", pkg, "-run", sel, "-count=1"],
                 ROOT,
             )
             out = proc.stdout + proc.stderr
