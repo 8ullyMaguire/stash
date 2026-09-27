@@ -26,9 +26,13 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 CONSENT = ROOT / "internal/collab/consent.go"
+EXPORTER = ROOT / "internal/collab/exporter.go"
 
-# (label, old, new) -- each removes or inverts one safety property.
-MUTATIONS = [
+# Which file each mutation applies to, and the test selection that must kill it.
+TEST_RE = "Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|SubmissionID|AssertNo"
+
+# (file, label, old, new) -- each removes or inverts one safety property.
+CONSENT_MUTATIONS = [
     (
         "absent row treated as opted OUT (the default inverted)",
         "		return true, nil\n	}\n	return choice == ChoiceOptedIn, nil",
@@ -83,12 +87,43 @@ def run(cmd, cwd):
     )
 
 
+EXPORTER_MUTATIONS = [
+    (
+        "exporter: an undisclosed field is passed through",
+        "		if allowed[k] {\n			out[k] = v\n		}",
+        "		_ = allowed\n		out[k] = v",
+    ),
+    (
+        "exporter: the dry-run default is flipped to a real publish",
+        "		// The first export after consent writes to disk and sends nothing\n		// (spec §6.3). The caller may clear this once the user has seen the\n		// disclosure and asked for a real publish.\n		DryRun: true,",
+        "		DryRun: false,",
+    ),
+    (
+        "exporter: a path-shaped value is no longer refused",
+        "	if i := strings.Index(v, \"/\"); i >= 0 && i < len(v)-1 {",
+        "	if i := -1; i >= 0 && i < len(v)-1 {",
+    ),
+    (
+        "exporter: a non-content fingerprint type is published",
+        "		if !allowedFingerprintTypes[k] {\n			continue\n		}",
+        "",
+    ),
+    (
+        "exporter: the submission id ignores the entries (content-blind)",
+        "		fmt.Fprintf(h, \"entry=%s/%d\\n\", e.TargetType, e.TargetID)",
+        "		_ = e",
+    ),
+]
+
+
 def main():
-    original = CONSENT.read_text()
+    work = [(CONSENT, m) for m in CONSENT_MUTATIONS] + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER)}
     killed, survived, broken = [], [], []
 
     try:
-        for label, old, new in MUTATIONS:
+        for path, (label, old, new) in work:
+            original = originals[path]
             if old not in original:
                 # A replacement that does not land reports as a survivor that
                 # means nothing. Distinguish it, or the number lies.
@@ -102,16 +137,9 @@ def main():
                 print(f"BROKEN   {label} (no-op replacement)")
                 continue
 
-            CONSENT.write_text(mutated)
+            path.write_text(mutated)
             proc = run(
-                [
-                    "go",
-                    "test",
-                    "./internal/collab/",
-                    "-run",
-                    "Consent|Disclosure|PublishedField|SetConsent",
-                    "-count=1",
-                ],
+                ["go", "test", "./internal/collab/", "-run", TEST_RE, "-count=1"],
                 ROOT,
             )
             out = proc.stdout + proc.stderr
@@ -130,15 +158,17 @@ def main():
                 survived.append(label)
 
     finally:
-        CONSENT.write_text(original)
+        for path, text in originals.items():
+            path.write_text(text)
 
     # Confirm the restore actually took, so a killed run cannot leave the tree
     # mutated for the next commit.
-    if CONSENT.read_text() != original:
-        print("FATAL: consent.go was not restored", file=sys.stderr)
-        return 2
+    for path, text in originals.items():
+        if path.read_text() != text:
+            print(f"FATAL: {path.name} was not restored", file=sys.stderr)
+            return 2
 
-    total = len(MUTATIONS)
+    total = len(work)
     print(f"\napplied {total} / killed {len(killed)} / survived {len(survived)} / broken {len(broken)}")
 
     if broken:
