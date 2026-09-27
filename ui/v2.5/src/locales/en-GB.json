@@ -1565,7 +1565,28 @@
             "next_step": "When you're ready to proceed with setting up a new system, click Next.",
             "unable_to_locate_specified_config": "If you're reading this, then Stash couldn't find the configuration file specified at the command line or the environment. This wizard will guide you through the process of setting up a new configuration."
         },
-        "welcome_to_stash": "Welcome to Stash"
+        "welcome_to_stash": "Welcome to Stash",
+        "wizard": {
+            "title": "Choose how this instance is shared",
+            "intro": "This decision decides who can reach this instance from the internet. It can only be made once: a public instance is one you have chosen to be public, not one that happened to default that way.",
+            "already_decided": "This instance has already been configured",
+            "current_mode": "The current mode is <strong>{mode}</strong>. Changing it is a separate, authenticated operation.",
+            "continue": "Continue",
+            "load_failed": "Could not read the wizard state from the server.",
+            "decide": "Confirm",
+            "instance_key": "Instance key",
+            "instance_key.help": "The key Stash generated for this instance. It is the same key that encrypts two-factor secrets, so there is only one to keep. It is in your stash configuration file.",
+            "public_needs_tls": "A public instance is refused over plain HTTP, because it would hand session cookies to anyone on the internet. Terminate TLS in front of Stash — the instance already honours X-Forwarded-Proto — or choose a different mode.",
+            "mode": {
+                "label": "Sharing mode",
+                "private": "Private — only accounts on this instance",
+                "private.blurb": "Nothing is published and no media is served. The right choice unless you specifically want to share.",
+                "contribute": "Contribute — signed-in users may propose changes",
+                "contribute.blurb": "Metadata stays on this instance. Other users can propose edits for a moderator to accept.",
+                "public": "Public — readable by anyone, including anonymous visitors",
+                "public.blurb": "Metadata is published to the commons and media is served to users holding an explicit library grant."
+            }
+        }
     },
     "stash_id": "Stash ID",
     "stash_id_count": "Stash ID Count",

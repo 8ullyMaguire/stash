@@ -1,0 +1,80 @@
+fragment TOTPStatusFields on TOTPStatus {
+  enrolled
+  required
+  fingerprint
+}
+
+fragment TOTPEnrollmentFields on TOTPEnrollment {
+  uri
+  secret
+  fingerprint
+}
+
+fragment LibraryFields on Library {
+  id
+  name
+  # nullable, and deliberately not coalesced to false: "defer to my consent"
+  # is a third state, and the UI has to be able to offer it.
+  isPrivate
+  isDefault
+  granteeCount
+}
+
+query MyTOTPStatus {
+  myTOTPStatus {
+    ...TOTPStatusFields
+  }
+}
+
+mutation BeginTOTPEnrollment {
+  beginTOTPEnrollment {
+    ...TOTPEnrollmentFields
+  }
+}
+
+mutation ConfirmTOTPEnrollment($input: TOTPCodeInput!) {
+  confirmTOTPEnrollment(input: $input)
+}
+
+# A code is required, not just a session: a session authenticates as the
+# user and is deliberately not enough to remove the second factor.
+mutation DisableTOTP($input: TOTPCodeInput!) {
+  disableTOTP(input: $input)
+}
+
+query MyLibraries {
+  myLibraries {
+    ...LibraryFields
+  }
+}
+
+query LibraryGrantees($libraryId: ID!) {
+  libraryGrantees(libraryId: $libraryId) {
+    id
+    username
+    isOwner
+  }
+}
+
+mutation CreateLibrary($name: String!) {
+  createLibrary(name: $name) {
+    ...LibraryFields
+  }
+}
+
+# The default library cannot be deleted, and the server refuses with a named
+# error rather than a boolean -- so the UI shows the reason.
+mutation DeleteLibrary($id: ID!) {
+  deleteLibrary(id: $id)
+}
+
+# `action` rather than a boolean: `canSee: false` reads as "the user cannot
+# see" when it means "remove the grant", and a client that sends the wrong
+# one strips access and reports success.
+mutation GrantLibraryAccess($input: LibraryAccessInput!) {
+  grantLibraryAccess(input: $input)
+}
+
+mutation SetConsent($metadataShare: String!) {
+  setConsent(metadataShare: $metadataShare)
+}
