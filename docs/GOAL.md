@@ -40,7 +40,13 @@ whose verification you cannot run.
 |---|---|---|
 | `m0-buildable-fork` baseline | 887 / 0 | 1191 / 1 |
 | `m1-user-tables` (migrations 87-90) | 887 / 0 | 1199 / 1 |
-| `m1-user-store` (auth + store) | **911 / 0** | **1211 / 1** |
+| `m1-user-store` (auth + store) | 911 / 0 | 1211 / 1 |
+| `m1-session-store` (sessions, invites) | **940 / 0** | **1211 / 1** |
+
+`pkg/session.Store` is now an **interface**; the old concrete cookie store was
+renamed `CookieStore` and kept for installs with no user database. `Authenticate`
+returns a username, not a row id, because the string lands in the same context
+slot upstream's signed-URL path uses.
 
 The one integration failure at every point is `TestStudioQueryFast`, the
 pre-existing unregistered-`mod` bug. See `docs/BASELINE.md`.
@@ -60,10 +66,26 @@ wrong the first time:
 `appSchemaVersion` is bumped in the same commit as any migration (86 -> 90 so
 far), and a test asserts the recorded version matches it.
 
-Next up is **M1 step 1.4**: the session layer -- a `SessionStore` implementing
-Stash's existing `pkg/session` surface so a legacy single-password install keeps
-working, with invite create/redeem and login lockout. Then M2, the
+Next up is **M1 step 1.5**: wire `SessionStore` into the HTTP layer
+(`internal/api/session.go` login/logout handlers and
+`internal/api/authentication.go`) behind a registry that picks the cookie store
+for a legacy install and the database store otherwise. Then M2, the
 edit/vote/draft model.
+
+### Mutation checking is not optional here
+
+Every security guard in `pkg/auth` is mutation-checked, because two of them were
+decorative on first write and the tests did not notice. Current state: **12/12
+killed**. When adding a guard, add the mutation trial too -- the procedure is in
+`docs/GOAL.md`'s companion, and the two bugs it caught were:
+
+- a lockout that recorded failures and never consulted the counter, so the
+  right password still worked after five wrong ones;
+- an invite use consumed by a registration that was then rejected for a taken
+  username, contradicting its own doc comment.
+
+A test that only counts "something was audited" is vacuous -- one of the spray
+tests passed with the entire control deleted. Assert on the *distinction*.
 
 ## The seven milestones
 
