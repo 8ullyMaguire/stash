@@ -104,6 +104,18 @@ models:
     model: github.com/stashapp/stash/internal/manager.ImportObjectsInput
   ScanMetaDataFilterInput:
     model: github.com/stashapp/stash/internal/manager.ScanMetaDataFilterInput
+  # StashForge M4 -- public hosting. The model types live in
+  # internal/api/models_hosting.go and are DISTINCT from the collab domain
+  # types on purpose: the schema promises a nullable `isPrivate: Boolean` where
+  # the domain has a three-state *bool, and gqlgen maps a nil *bool onto a
+  # non-null Boolean by returning false -- which would publish a library whose
+  # owner never decided. The conversion is where the null is preserved.
+  TOTPStatus:
+    model: github.com/stashapp/stash/internal/api.TOTPStatusModel
+  TOTPEnrollment:
+    model: github.com/stashapp/stash/internal/api.TOTPEnrollmentModel
+  Library:
+    model: github.com/stashapp/stash/internal/api.LibraryModel
   # renamed types
   BulkUpdateIdMode:
     model: github.com/stashapp/stash/pkg/models.RelationshipUpdateMode

@@ -1,0 +1,40 @@
+-- UNIQUE (user_id, name) on libraries, which migration 101's COMMENT claims and
+-- its SCHEMA does not have.
+--
+-- 101 says, in the comment above the `name` column:
+--
+--   -- UNIQUE per (owner, name) and not globally. Two users may each own a
+--   -- library called "Main" without colliding, and a name is a label rather than
+--   -- an identifier, so uniqueness is scoped to where the label is shown.
+--
+-- and creates no such constraint. Its only indexes are idx_libraries_user
+-- (user_id, id) and idx_libraries_private (a partial index on is_private). So the
+-- documented rule was never enforced: a user could create "Main" three times, the
+-- grant UI would show three libraries with the same label, and nothing anywhere
+-- would object.
+--
+-- THE FOURTH TIME. 101's `movies`-in-a-list-of-seven was the first (the seventh
+-- target table is `groups`; migration 65 renamed it). Migration 105's is_default
+-- comment was the third (the unique index was on a constant column, making it a
+-- global one-default rule). This is the second. The pattern is identical each
+-- time: a COMMENT states a constraint, the DDL does not create it, and a
+-- reasonable reader -- including the author, later -- believes the comment.
+--
+-- The rule that catches it: a comment in a migration is a CLAIM about the
+-- schema, and the only way to know whether it holds is to read the DDL in the
+-- same file. The test below is the executable version: it creates the duplicate
+-- and requires the database to refuse.
+--
+-- WHY A MIGRATION RATHER THAN EDITING 101
+--
+-- Because 101 is applied. Editing it changes its checksum and every existing
+-- database fails to start with a dirty-version error, which is a far worse
+-- outcome than a missing constraint. The same rule that left 101's sentence
+-- standing also means the sentence stays wrong in the file that states it; the
+-- correction is here, and 101 is left alone.
+--
+-- NOT GLOBAL, deliberately. A global unique on `name` would mean two users cannot
+-- each own a library called "Main" -- and 101 explicitly says they may, because a
+-- name is a label and labels are shown per owner. The per-user index is the rule
+-- the comment describes.
+CREATE UNIQUE INDEX `idx_libraries_owner_name` ON `libraries` (`user_id`, `name`);

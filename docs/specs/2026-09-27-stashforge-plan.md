@@ -1479,8 +1479,13 @@ passes, not by reading the handlers, all of which looked correct.
    function nobody calls is not a gate. Both halves are now tested, with the
    route registration itself as the positive control.
 
-Current: `python3 internal/api/mutate_media_gate.py` — **6 applied, 6 killed,
-0 survived, 0 broken**.
+Current: `python3 internal/api/mutate_media_gate.py` — **7 applied, 7 killed,
+0 survived, 0 broken, 0 unscored**.
+
+The seventh mutation ("the refusal body explains itself" — a 404 whose body
+names the library) is the one worth having beyond the obvious 403 case: a
+refusal that explains itself is an oracle even at the right status code, and
+the test asserts the body names no library, user, grant, mode or owner.
 
 **A real bug this step found, pre-existing from 4.1:** `err == sql.ErrNoRows`
 cannot match, because `dbWrapper` wraps the driver error with `%w`. In the access
@@ -1508,12 +1513,37 @@ part. That is a deliberate narrowing and it is the one piece of M4 left.
 
 ### What is left in M4
 
-- TOTP secret encryption at rest (the plan says "encrypted"; it is currently
-  stored as base32 in a column, which is a plaintext secret)
-- GraphQL mutations for 2FA setup/enrolment, the mode choice, and
-  `grantLibraryAccess`
-- The `/setup` screen itself
-- A frontend test runner, if the browser test is wanted as written
+**Two items, and one of the two is a documentation bug rather than work.**
+
+- **GraphQL for 2FA enrolment, the mode choice, and `grantLibraryAccess`.**
+  `graphql/schema/types/hosting.graphql` and
+  `internal/api/resolver_mutation_hosting.go`.
+- **The `/setup` screen itself.**
+
+**NOT left, despite being on this list until now: TOTP at-rest encryption.**
+The list said "the plan says *encrypted*; it is currently stored as base32 in a
+column, which is a plaintext secret". That was true when written and is false
+now: `internal/collab/totp_secret.go` seals with AES-256-GCM under a key derived
+from the instance key, `pkg/sqlite/stashforge_totp.go:114` calls it on every
+write, and migration 104's comment describes the stored form as
+`v1.<base64(nonce+ciphertext)>` with NULL distinguished from an empty string.
+
+**Found by reading the store rather than the list, which is the second time
+this list was wrong in the same way.** A "what remains" list is a claim about
+code, and it decays silently: nothing marks it stale when the work it names
+arrives, so it keeps looking authoritative. The rule now is that this list is
+verified by `grep` before it is believed — which is also how the `movies` vs
+`groups` error survived in step 4.3. Both are the same defect: prose about
+code, trusted as code.
+
+Also corrected, and it changes the resolver design: **libraries are PER-USER,
+not instance-wide.** Migration 101 makes `libraries.user_id` `NOT NULL
+REFERENCES users(id)`, with `UNIQUE (user_id, name)` rather than a global unique
+name. So `Libraries` is "every library belonging to this user" — the index
+`idx_libraries_user` exists for exactly that query — and a grant names a
+(library, user) pair, not a folder on the instance. The first version of
+`hosting.graphql` described instance-wide libraries with an instance-wide grant
+button, which is a different data model wearing the same names.
 
 ---
 

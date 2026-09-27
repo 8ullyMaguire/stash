@@ -86,6 +86,14 @@ type Manager struct {
 	// "may this caller have this file".
 	LibraryAccessStore *sqlite.LibraryAccessStore
 
+	// LibraryStore is the `libraries` TABLE: create, delete, list, and the
+	// ownership checks around them. Separate from LibraryAccessStore above even
+	// though both are about libraries, because one is on the authentication path
+	// (a single indexed read per media request) and this one is on the setup
+	// path (a scan of one user's libraries). Merging them would make the media
+	// gate's dependency a struct that grew setup methods.
+	LibraryStore *sqlite.LibraryStore
+
 	// MediaScopeStore is what every media-serving route asks: which library is
 	// this row in, who owns it, and may this caller have it (M4 step 4.3,
 	// spec §6.4).
@@ -104,8 +112,23 @@ type Manager struct {
 	// mode, and an instance with no mode store would have no way to record the
 	// decision that makes it startable.
 	InstanceModeStore *sqlite.InstanceModeStore
-	Auth              *auth.SessionStore
-	AuthMode          auth.Mode
+
+	// ConsentStore is where a user's metadata-sharing decision lives.
+	//
+	// It is here because this is the FOURTH time a store in this package was
+	// fully implemented, fully tested, and read by nothing: a grep for
+	// NewConsentStore found exactly one hit, its own constructor. So the store
+	// was not a feature that was switched off -- it was a feature nothing
+	// called, which is the same defect as the gate being unreachable and it
+	// survives every test in the tree. The rule that catches it is the cheap
+	// one: grep the constructor in NON-TEST files and see who builds it.
+	//
+	// Always non-nil after init, because §6.1's default (an absent row means
+	// opted IN) is resolved through this store, so a nil one would leave the
+	// publish path unable to answer the question at all.
+	ConsentStore *sqlite.ConsentStore
+	Auth         *auth.SessionStore
+	AuthMode     auth.Mode
 
 	// StashForge collaboration surface. The collab stores are present on every
 	// instance, including a single-user one: a single-user instance still needs

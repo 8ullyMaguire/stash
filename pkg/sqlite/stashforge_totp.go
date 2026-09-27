@@ -97,6 +97,31 @@ func (s *TOTPStore) Secret(ctx context.Context, userID int) (string, error) {
 	return secret.Reveal(), nil
 }
 
+// Fingerprint returns the display-safe fingerprint of a user's stored secret.
+//
+// It exists so the GraphQL layer can show "is this the right code" without ever
+// holding the secret. The plaintext leaves THIS function and goes to a
+// Fingerprint(), which is the last few groups and cannot be reversed; a resolver
+// that called Secret and did the same arithmetic would be a resolver holding a
+// plaintext TOTP secret, and that is the exact thing the sealed column prevents.
+//
+// The decrypt happens here, inside the component that holds the instance key,
+// and nothing wider than the fingerprint crosses the boundary.
+func (s *TOTPStore) Fingerprint(ctx context.Context, userID int) (string, error) {
+	secret, err := s.Secret(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(secret) == "" {
+		// Not enrolled is not an error here. The caller decides what an
+		// absent fingerprint means -- the GraphQL layer renders the field as
+		// null -- so returning an error would make a correct query fail for a
+		// user who simply has not enrolled.
+		return "", nil
+	}
+	return collab.TOTPSecret(secret).Fingerprint(), nil
+}
+
 // SetSecret seals and stores a new secret, and CLEARS the spent-step record.
 //
 // Clearing is the point. A re-enrolment gives the user a new secret with new

@@ -41,50 +41,65 @@ MUTATIONS = [
     # NOTE ON THESE THREE. Deleting the call leaves the collab import unused, so
     # the mutation does not COMPILE -- and a mutation that does not build kills
     # no test. The first run of this harness scored all three as "broken" and
-    # correctly refused to count them as kills. So the import is removed too:
-    # the mutation is then a real edit to working code, which is the only kind
-    # that can tell you anything about the tests.
+    # correctly refused to count them as kills. So the import is renamed to a
+    # blank assignment as well: the mutation is then a real edit to working
+    # code, which is the only kind that can tell you anything about the tests.
+    # (The `collab.` prefix in each mutation is what makes the import unused, so
+    # the replacement text below keeps the identifier used.)
     (
         "gate removed from the image middleware",
         "routes_image.go",
         "\t\tif !allowMedia(w, r, collab.TargetImage, int64(image.ID)) {\n\t\t\treturn\n\t\t}\n",
-        "\t// gate removed by mutation\n",
+        "\t\t_ = collab.TargetImage\n",
         "TestEveryMediaRoutePassesThroughAGatedMiddleware",
     ),
     (
         "gate removed from the scene middleware",
         "routes_scene.go",
         "\t\tif !allowMedia(w, r, collab.TargetScene, int64(scene.ID)) {\n\t\t\treturn\n\t\t}\n",
-        "\t// gate removed by mutation\n",
+        "\t\t_ = collab.TargetScene\n",
         "TestEveryMediaRoutePassesThroughAGatedMiddleware",
     ),
     (
         "gate removed from the group middleware",
         "routes_group.go",
         "\t\tif !allowMedia(w, r, collab.TargetGroup, int64(group.ID)) {\n\t\t\treturn\n\t\t}\n",
-        "\t// gate removed by mutation\n",
+        "\t\t_ = collab.TargetGroup\n",
         "TestEveryMediaRoutePassesThroughAGatedMiddleware",
     ),
     (
         "the two hash-keyed sprite routes ungated",
         "routes_scene.go",
         "\tr.Route(\"/{sceneHash}*\", func(r chi.Router) {\n\t\tr.Use(sceneHashCtx)\n",
-        "\tr.Route(\"/{sceneHash}*\", func(r chi.Router) {\n",
-        "TestSceneHashCtxCallsTheGate",
+        "\tr.Route(\"/{sceneHash}*\", func(r chi.Router) {\n\t\t_ = sceneHashCtx\n",
+        "TestTheHashKeyedSpriteRoutesActuallyUseTheMiddleware",
     ),
     (
         "the gate passes through when it has no store (fail-OPEN)",
         "stashforge_media_gate.go",
         "\t\thttp.NotFound(w, r)\n\t\treturn false\n\t}\n\tgate := mediaGate(mgr.MediaScopeStore)",
-        "\t\tnext := true\n\t\t_ = next\n\t\treturn true\n\t}\n\tgate := mediaGate(mgr.MediaScopeStore)",
+        "\t\treturn true\n\t}\n\tgate := mediaGate(mgr.MediaScopeStore)",
         "TestAllowMediaRefusesRatherThanPassesThroughWhenUnconfigured",
     ),
     (
-        "the gate answers 403 instead of 404",
+        "the refusal answers 403 instead of 404",
+        # writeMediaRefusal, not the call site. The first version of this
+        # mutation targeted `http.NotFound` inside allowMedia, and after the
+        # response was extracted into writeMediaRefusal the text no longer
+        # existed -- so the harness reported UNSCORED, correctly: a mutation
+        # that does not apply is not a result, and scoring it as a kill would
+        # be the project's own forbidden move.
         "stashforge_media_gate.go",
-        "\t\thttp.NotFound(w, r)\n\t\treturn false\n\t}\n\n\treturn true",
-        "\t\thttp.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)\n\t\treturn false\n\t}\n\n\treturn true",
-        "TestAllowMediaRefusesRatherThanPassesThroughWhenUnconfigured",
+        "\thttp.NotFound(w, r)\n}\n",
+        "\thttp.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)\n}\n",
+        "TestWriteMediaRefusalIsA404ThatNamesNothing",
+    ),
+    (
+        "the refusal body explains itself",
+        "stashforge_media_gate.go",
+        "\thttp.NotFound(w, r)\n}\n",
+        "\thttp.Error(w, \"no grant for this library\", http.StatusNotFound)\n}\n",
+        "TestWriteMediaRefusalIsA404ThatNamesNothing",
     ),
 ]
 

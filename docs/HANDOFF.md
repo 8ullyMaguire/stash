@@ -29,7 +29,7 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 | M2b governance v2: roles, weighted ballots | done | — |
 | M2c identity clustering (plan 2.4b) | done | `m2c-identity-clustering` |
 | **M3 metadata sharing (consent, exporter, federation)** | **done** | `m3-metadata-sharing` |
-| **M4 public hosting: mode, 2FA, library grants** | **server side done, no UI**; library grants NOT enforced — see below | — |
+| **M4 public hosting: mode, 2FA, library grants** | **library grants now ENFORCED**; no UI — see below | — |
 
 ## Verified state at this tag
 
@@ -187,25 +187,25 @@ from a browser. In order of what a user would notice first:
   is a small addition — but until it exists, an account cannot be enrolled, and
   an account that *is* enrolled (by direct DB write) can only be unenrolled the
   same way.
-- **Library grants are not enforced, and cannot be yet.** `LibraryAccessStore`
-  grants, revokes and authorises, and the 404-vs-403 distinction is tested. But
-  `Decide(ctx, mode, userID, libraryID)` takes a **library id that no content
-  carries**: `library_id` appears in `libraries` and `user_library_access` and in
-  no target table. `scenes`, `images`, `galleries`, `performers`, `tags`,
-  `studios` and `movies` have no library column, and no request context carries a
-  user id. So there is no "a private library" for the gate to refuse — the word
-  exists in a comment and nowhere else.
-  Verified, not inferred:
-  `grep -rln 'library_id' pkg/sqlite/migrations/*.sql` returns only 101.
-  Migration 101's own rationale claims "every target row hangs off a library" —
-  that was aspirational, written before the columns existed, and it is the one
-  sentence in the file that is false.
-  The fix is a `library_id` column on the seven target tables plus a user id in
-  the request context, and a `Decide` call in `imageRoutes.serveImage`
-  (`internal/api/routes_image.go:135`) and the scene stream path. That is a
-  schema change across every write path for those tables, so it is deliberately
-  not started mid-milestone — it wants its own migration (105) and its own
-  review, and step 4.3 should not be read as done until it lands.
+- **Library grants are now ENFORCED.** This was the long-standing blocker and
+  it is closed. `library_id` is on all seven target tables (migration 105), a
+  user id reaches the request context (`withRequestUserID`), and `allowMedia`
+  gates every media route from the per-target `*Ctx` middlewares before any file
+  is opened. `internal/api/mutate_media_gate.py` mutation-checks it.
+  **Two things to know before changing it:**
+  - The seventh target table is `groups`, not `movies` — migration 65 renamed
+    it, and the plan, GOAL.md and migration 101's comment all still said
+    `movies`. The first version of 105 failed with `no such table: movies`.
+  - **A row with no library resolves to the DEFAULT library, not to
+    "unrestricted".** Every newly-scanned row has `library_id` NULL, so
+    refusing NULL outright would 404 the owner's own new files, and the fix
+    shipped under that pressure is "make NULL mean allow". The default library
+    is owned by the owner, who bypasses by ownership; everyone else still needs
+    a grant row.
+  - **A signed-URL request has no user id** and is therefore refused on a public
+    instance. Deliberate: a device that cannot send a cookie cannot send a grant.
+- **Still no UI.** Everything in M4 is server-side and tested; nothing is
+  reachable from a browser. In order of what a user would notice first:
 - ~~**TLS enforcement.** Nothing calls it yet.~~ **Done** — `Server.Start`
   refuses to boot when the mode forbids the scheme
   (`internal/api/server.go`, `checkInstancePosture`). A public instance over

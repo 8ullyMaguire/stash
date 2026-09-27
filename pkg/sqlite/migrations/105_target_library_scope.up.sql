@@ -39,26 +39,43 @@
 -- becomes a query that can return more than one answer. A column makes the
 -- zero case explicit, which is the case that matters.
 --
--- WHY NULL IS A REFUSAL AND NOT A DEFAULT
+-- WHY NULL IS NOT "PUBLIC" -- AND WHY IT IS NOT A REFUSAL EITHER
 --
--- NULL means "this row is in no library". It does NOT mean "public", and that
--- distinction is the whole point. The tempting reading of a missing scope is
--- "unrestricted, so allow it" -- and that is a fail-open: a row the migration
--- failed to backfill, a row inserted by a write path that forgot the column, or
--- a row belonging to a library that was deleted all read as unrestricted, and
--- the file is served to a user with no grant.
+-- NULL means "this row has no library yet", and the naive choice is to read it
+-- as "unrestricted, so allow it". That is a fail-OPEN: a row the migration
+-- failed to backfill, a row written by a scanner that knows nothing about
+-- libraries, and a row whose library was deleted would all read as
+-- unrestricted, and the file would be served to a user with no grant.
 --
--- So `internal/collab.MediaScope` resolves NULL to the refusal, and the
--- serving path calls that. Fail-closed is not defensiveness for its own sake
--- here: the alternative fails in exactly the case where the operator has the
--- least reason to be looking.
+-- The obvious correction is the opposite: resolve NULL to the REFUSAL. That
+-- was the first version of this file's reasoning, and it is wrong, because
+-- NULL is the SCANNER'S NORMAL OUTPUT rather than an anomaly. Every
+-- newly-scanned row arrives with library_id NULL. Refuse NULL and the owner's
+-- own freshly-scanned files 404 -- and the fix that gets shipped under that
+-- pressure is "make NULL mean allow", which is the fail-open reached by a
+-- different road.
+--
+-- So NULL resolves to the DEFAULT library, not to "unrestricted" and not to
+-- the refusal. The default library is owned by the owner (the backfill below
+-- marks it is_owner=1), and the owner bypasses the grant check BY OWNERSHIP.
+-- Every other user still needs an explicit user_library_access row, so the
+-- fail-open is not reachable by anyone but the person who owns the instance.
+-- An owner is not an untrusted party with respect to their own unscanned files.
+--
+-- The remaining hole is closed at the other end: with no default library there
+-- is no owner to own the row, so the resolver refuses (see
+-- internal/collab/media_scope.go, and the test whose name is
+-- TestMediaScope_NoDefaultLibraryMeansNoOwnershipBypass). Fail-closed where it
+-- counts, and a working instance the day after the upgrade.
 --
 -- WHY THE BACKFILL IS NOT OPTIONAL
 --
--- Every existing install has rows. Left NULL, all of them become unservable
--- media -- a silent outage on upgrade, and the kind that reads as "the fork
--- broke stash". So the backfill runs, and it puts everything the migration can
--- reach into one library owned by the instance owner.
+-- Every existing install has rows. Left NULL, all of them resolve to the default
+-- library instead of to the owner directly -- which works, but only for a
+-- migration whose default-library insert succeeded. The backfill also makes the
+-- common case explicit, so the rows are not relying on a substitution. So the
+-- backfill runs, and it puts everything the migration can reach into one
+-- library owned by the instance owner.
 --
 -- ONE library rather than one per user, deliberately. Pre-existing rows have no
 -- recorded author: stash had no user model until migration 87, so there is
@@ -164,8 +181,27 @@ CREATE INDEX `idx_tags_library`       ON `tags`       (`library_id`, `id`) WHERE
 CREATE INDEX `idx_studios_library`    ON `studios`    (`library_id`, `id`) WHERE `library_id` IS NOT NULL;
 CREATE INDEX `idx_groups_library`     ON `groups`     (`library_id`, `id`) WHERE `library_id` IS NOT NULL;
 
--- At most one default library. A partial unique index rather than a Go
--- invariant, so a second default is refused by the database even if some future
--- write path adds one.
-CREATE UNIQUE INDEX `idx_libraries_single_default` ON `libraries` (`is_default`)
+-- At most one default library PER USER. A partial unique index rather than a
+-- Go invariant, so a second default for the same owner is refused by the database
+-- even if some future write path adds one.
+--
+-- ON (user_id, is_default), NOT ON (is_default). The first version indexed the
+-- single column `is_default`, and that is a UNIQUE constraint on a CONSTANT: every
+-- row with is_default = 1 carries the same value, so the index permits exactly
+-- ONE such row in the entire table. It is a global "one default on the instance"
+-- rule wearing the comment "at most one default library", and it is enforced --
+-- so the second user to create their first library gets a UNIQUE violation and
+-- no default at all.
+--
+-- Found by a test that created a library for each of two users and expected both
+-- to succeed, which is the per-user rule the schema above it states outright
+-- ("Two users may each own a library called Main"). A partial unique index whose
+-- WHERE clause is the constraint is the shape to be suspicious of: it reads like
+-- a filter and is a uniqueness rule.
+--
+-- Two users may each have a default, and they are different libraries. The
+-- per-user scoping is the correct one because a library belongs to a user
+-- (libraries.user_id is NOT NULL) and the gate resolves "a row with no library"
+-- to "the OWNER's default" -- which is only well defined per owner.
+CREATE UNIQUE INDEX `idx_libraries_single_default` ON `libraries` (`user_id`, `is_default`)
   WHERE `is_default` = 1;

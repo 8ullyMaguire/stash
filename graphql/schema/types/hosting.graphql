@@ -1,0 +1,250 @@
+# StashForge — public hosting: 2FA, libraries, grants, consent.
+#
+# The owner-facing half of M4. Nothing here edits SHARED content, so none of it
+# goes through the proposal path — that invariant is enforced elsewhere
+# (TestNoResolverWritesASharedFieldDirectly) and nothing here widens it.
+#
+# # TWO RULES, STATED PER FIELD RATHER THAN IN ONE NOTE
+#
+# 1. Every mutation that changes an INSTANCE-WIDE POSTURE requires the owner.
+# 2. Every mutation acting on the CALLER'S OWN CREDENTIAL takes no user
+#    argument at all.
+#
+# The second is a security rule, not a style one, and the reason is concrete: a
+# `disableTOTP(userId:)` is a mutation any account could point at the owner, and
+# it removes the owner's last defence. So `disableTOTP` takes a CODE and no user,
+# because a session proves who you are and is deliberately not enough to remove
+# the second factor permanently — a stolen session must not be a permanent
+# downgrade with nothing left to notice the theft.
+#
+# # LIBRARIES ARE PER-USER, NOT INSTANCE-WIDE
+#
+# Migration 101: `libraries.user_id` is NOT NULL REFERENCES users(id), with
+# UNIQUE (user_id, name) — not a globally unique name. A library is somebody's
+# sharing scope, not a folder on the instance, and `idx_libraries_user` exists
+# for the "every library belonging to this user" query that `myLibraries` is.
+# The first version of this file described instance-wide libraries with an
+# instance-wide grant button, which is a different data model wearing the same
+# names.
+
+# ---------------------------------------------------------------------------
+# 2FA
+# ---------------------------------------------------------------------------
+
+"""
+A TOTP enrolment, returned by `beginTOTPEnrollment`.
+
+The secret is returned ONCE, here, and by no query ever again. That is the entire
+reason this is a mutation returning a dedicated type rather than a field on
+`User`: a `User.totpSecret` would be readable by every read-only session on the
+instance, and one compromised read key would harvest every unscanned secret and
+mint codes for all of them, forever.
+"""
+type TOTPEnrollment {
+  """
+  The `otpauth://` provisioning URI. Render this as a QR code and nothing else
+  needs implementing; a standard authenticator app scans it directly.
+  """
+  uri: String!
+  """
+  The base32 secret, in the form the URI carries. Present so the code can be
+  typed into a device with no camera — a real case, being a desktop
+  authenticator or an accessibility need.
+  """
+  secret: String!
+  """
+  A short stable fingerprint of the secret, for confirming the RIGHT one was
+  scanned. Comparing the fingerprint on two devices is the standard check, and
+  it is the only way to notice having scanned a QR code belonging to a different
+  account.
+  """
+  fingerprint: String!
+}
+
+"""
+The caller's own 2FA state.
+"""
+type TOTPStatus {
+  """
+  True when a secret exists — the STATE. False for an account that has never
+  enrolled.
+  """
+  enrolled: Boolean!
+  """
+  True when a code is REQUIRED: the POLICY, not the state. Separate from
+  `enrolled` because an owner with no secret is required-but-not-enrolled, which
+  is a LOCKOUT and not a free pass, and a client that cannot tell those apart
+  either locks the user out or lets them through.
+  """
+  required: Boolean!
+  """
+  The display-safe fingerprint, when enrolled. The last groups of the secret
+  rather than the secret: shown to confirm the right code was scanned, and the
+  one field here that is safe to render anywhere the user is looking.
+  """
+  fingerprint: String
+}
+
+# ---------------------------------------------------------------------------
+# Libraries and grants
+# ---------------------------------------------------------------------------
+
+"""
+A library: a SHARING SCOPE belonging to one user, not a folder on the instance.
+
+See the file header. The two consequences worth stating in the schema: `name` is
+unique per owner rather than globally, and the default library is the one
+`isDefault` marks — which exists so a row with no library has somewhere to
+resolve to.
+"""
+type Library {
+  id: ID!
+  name: String!
+  """
+  True when this library's metadata is excluded from the commons. NULL means
+  "defer to the owner's consent" — a third state, and deliberately not the same
+  as false. A new library inherits its owner's decision rather than asserting
+  one of its own.
+  """
+  isPrivate: Boolean
+  """
+  True for the library that a row with no library resolves to. At most one
+  exists; the server enforces it, because a second default makes "which library
+  is this file in" a question with two answers.
+  """
+  isDefault: Boolean!
+  """
+  How many users hold a grant. Cheap to compute, and the number an owner asks
+  for first.
+  """
+  granteeCount: Int!
+}
+
+# ---------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------
+
+input TOTPCodeInput {
+  "The code from the authenticator app."
+  code: String!
+}
+
+"""
+Grant or revoke access to one library.
+
+Both a `user` and a `userId` are accepted, and they are not interchangeable: the
+owner-facing UI knows usernames because the user list shows them, while a link or
+a script carries an id. When both are given the server REFUSES unless they name
+the same person — a mutation that granted to the id while displaying the name
+would show an operator "granted to alice" while changing bob's access, and
+report success, because from the store's point of view the grant did happen.
+"""
+input LibraryAccessInput {
+  "The user, by name."
+  user: String
+  "The user, by id."
+  userId: ID
+  "Null means the caller's default library, which is what an operator means by 'the library'."
+  libraryId: ID
+  """
+  What to change. Explicit rather than a boolean, because `canSee: false` reads
+  as "the user cannot see" when it means "remove the grant", and a client that
+  sends the wrong one strips access by accident and reports success.
+  """
+  action: LibraryAccessAction!
+}
+
+enum LibraryAccessAction {
+  GRANT
+  REVOKE
+}
+
+# ---------------------------------------------------------------------------
+# Query
+# ---------------------------------------------------------------------------
+
+extend type Query {
+  """
+  The caller's own 2FA state.
+
+  No user argument, and that is the design rather than an omission: a
+  `totpStatus(userId:)` query is a way to enumerate which accounts on the
+  instance have enrolled a second factor, which is a list worth having before an
+  attack rather than after one.
+  """
+  myTOTPStatus: TOTPStatus!
+
+  "Every library belonging to the caller. Not owner-only: a library is a user's own sharing scope."
+  myLibraries: [Library!]!
+
+  """
+  Who holds a grant on a library. Requires the OWNER of that library — not
+  merely an instance owner, because the question "who can see my library" is
+  asked by the person whose library it is.
+  """
+  libraryGrantees(libraryId: ID!): [User!]!
+}
+
+# ---------------------------------------------------------------------------
+# Mutation
+# ---------------------------------------------------------------------------
+
+extend type Mutation {
+  """
+  Start 2FA enrolment: generate a secret and return it for scanning.
+
+  Activates NOTHING. The account is not enrolled until `confirmTOTPEnrollment`
+  proves the user can produce a code from it, because enrolling without
+  confirming is how an owner locks themselves out of their own instance with a QR
+  code scanned off the wrong screen — and the recovery is a hand-edit of the
+  database.
+  """
+  beginTOTPEnrollment: TOTPEnrollment!
+
+  """
+  Finish enrolment with a code from the authenticator. Refuses when no enrolment
+  is pending, so a client cannot report a successful enrolment that enrolled
+  nothing and then clear its "scan this code" screen.
+  """
+  confirmTOTPEnrollment(input: TOTPCodeInput!): Boolean!
+
+  """
+  Remove 2FA. Requires a CODE, not just a session: a session authenticates as
+  the user and is deliberately not enough to remove the second factor, so a
+  stolen session cannot be a permanent downgrade. The code is the proof that the
+  person at the keyboard also holds the authenticator.
+  """
+  disableTOTP(input: TOTPCodeInput!): Boolean!
+
+  """
+  Grant or revoke a user's access to one of the caller's libraries. Requires
+  ownership of that library.
+
+  Media is served only to a holder of this grant, and only in a mode that serves
+  media at all — so a grant recorded on a `contribute` instance is a record of
+  intent that takes effect if the mode ever changes, and says nothing on its own.
+  """
+  grantLibraryAccess(input: LibraryAccessInput!): Boolean!
+
+  "Create a library belonging to the caller."
+  createLibrary(name: String!): Library!
+
+  """
+  Delete one of the caller's libraries. Its rows fall out of any library, which
+  the media gate resolves to the caller's DEFAULT library — not to public. The
+  default library itself cannot be deleted, and the reason is the gate: it is
+  what every unscanned row resolves to, so removing it would leave every such row
+  owned by nobody, which the resolver correctly refuses. The refusal would be
+  right and the deletion would still be an outage for every file not yet
+  organised into a library.
+  """
+  deleteLibrary(id: ID!): Boolean!
+
+  """
+  Record this user's metadata-sharing decision. `opted-out` is a hard stop in
+  the publish path, and an opted-out user is never re-prompted: a re-prompt is a
+  dialog with a Share button, and any implementation reading "did not click
+  Share" as consent has published a user who declined.
+  """
+  setConsent(metadataShare: String!): Boolean!
+}

@@ -329,6 +329,8 @@ func (s *Manager) initStashForgeAuth() error {
 	// single-user instance is trivially allowed everywhere, and a store that
 	// only appears in one mode means every read path needs a nil check.
 	s.LibraryAccessStore = sqlite.NewLibraryAccessStore()
+	s.LibraryStore = sqlite.NewLibraryStore()
+	s.ConsentStore = sqlite.NewConsentStore()
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
 
 	// The 2FA store is built HERE, not on demand, because the session store is

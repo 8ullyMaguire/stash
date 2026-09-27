@@ -38,6 +38,17 @@ var ErrConsentOptedOut = errors.New("user has opted out of metadata sharing")
 // can continue because the published set changed since the user answered.
 var ErrDisclosureStale = errors.New("the disclosure has changed since the user answered")
 
+// ErrShareChoiceInvalid is returned when a caller supplies something that is
+// neither opted-in nor opted-out.
+//
+// It exists as a sentinel rather than being folded into a generic bad-request
+// because of what the caller is tempted to do next. There are exactly two valid
+// values and one default (§6.1: an absent row means opted IN), so a
+// caller-side "fix" for an unrecognised value is to coerce it to the default --
+// and that publishes a library on the strength of a typo. Naming the error makes
+// "refuse it" the obvious branch and coercion the deliberate one.
+var ErrShareChoiceInvalid = errors.New("not a valid sharing choice")
+
 // Consent is one user's sharing decision, as stored.
 //
 // MetadataShare is the answer. DisclosureVersion is what the user was shown
