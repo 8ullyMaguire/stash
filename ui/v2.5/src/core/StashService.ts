@@ -3033,3 +3033,30 @@ export const queryParseSceneFilenames = (
     variables: { filter, config },
     fetchPolicy: "network-only",
   });
+
+/// StashForge — edit proposals
+//
+// Every hook here re-reads from the server after a mutation rather than patching
+// the Apollo cache. That is not laziness: a proposal's score is recomputed from
+// the vote rows on every read, and the "voting twice replaces the earlier vote"
+// rule means a local increment would have to replicate the server's arithmetic
+// exactly to stay correct. An extra round trip is cheaper than a score that is
+// subtly wrong, because a wrong score is what people vote on.
+
+export const useProposals = (variables: GQL.ProposalsQueryVariables) =>
+  GQL.useProposalsQuery({ variables, fetchPolicy: "network-only" });
+
+export const useModerationQueue = (
+  variables: GQL.ModerationQueueQueryVariables
+) => GQL.useModerationQueueQuery({ variables, fetchPolicy: "network-only" });
+
+export const usePendingMyVote = (variables: GQL.PendingMyVoteQueryVariables) =>
+  GQL.usePendingMyVoteQuery({ variables, fetchPolicy: "network-only" });
+
+export const usePropose = () => GQL.useProposeMutation();
+
+export const useVote = () => GQL.useVoteMutation();
+
+export const useWithdraw = () => GQL.useWithdrawMutation();
+
+export const useModerate = () => GQL.useModerateMutation();

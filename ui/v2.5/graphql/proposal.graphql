@@ -1,0 +1,84 @@
+fragment EditProposalData on EditProposal {
+  id
+  targetType
+  targetId
+  field
+  oldValue
+  newValue
+  rationale
+  status
+  score
+  voters
+  createdAt
+  decidedAt
+  myVote
+  blockedReason
+  author {
+    id
+    username
+  }
+}
+
+query Proposals(
+  $targetType: String
+  $targetId: ID
+  $targetField: String
+  $status: String
+  $authorId: ID
+  $mine: Boolean
+  $limit: Int
+  $offset: Int
+) {
+  proposals(
+    targetType: $targetType
+    targetId: $targetId
+    targetField: $targetField
+    status: $status
+    authorId: $authorId
+    mine: $mine
+    limit: $limit
+    offset: $offset
+  ) {
+    ...EditProposalData
+  }
+}
+
+# The moderation queue is a separate query rather than `proposals(status: "open")`
+# so that the permission check lives in one place on the server. A client that
+# filtered locally would have to remember the rule, and forgetting it would show
+# a non-moderator the whole backlog.
+query ModerationQueue($limit: Int, $offset: Int) {
+  moderationQueue(limit: $limit, offset: $offset) {
+    ...EditProposalData
+  }
+}
+
+query PendingMyVote($limit: Int, $offset: Int) {
+  pendingMyVote(limit: $limit, offset: $offset) {
+    ...EditProposalData
+  }
+}
+
+mutation Propose($input: EditProposalInput!) {
+  propose(input: $input) {
+    ...EditProposalData
+  }
+}
+
+mutation Vote($proposalId: ID!, $value: Int!) {
+  vote(proposalId: $proposalId, value: $value) {
+    ...EditProposalData
+  }
+}
+
+mutation Withdraw($proposalId: ID!) {
+  withdraw(proposalId: $proposalId) {
+    ...EditProposalData
+  }
+}
+
+mutation Moderate($proposalId: ID!, $approve: Boolean!, $reason: String) {
+  moderate(proposalId: $proposalId, approve: $approve, reason: $reason) {
+    ...EditProposalData
+  }
+}

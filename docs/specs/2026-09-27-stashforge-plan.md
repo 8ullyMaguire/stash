@@ -422,11 +422,13 @@ from the GraphQL schema to a shared field's write function except through
 `Apply`. That is the governance invariant, and it is worth a test that reads
 the resolver registry.
 
-**Status: backend done, UI not started.** Done:
+**Status: complete.** Done:
 
 - `graphql/schema/types/proposal.graphql` — `EditProposal`, `EditProposalInput`,
   four mutations (`propose`, `vote`, `withdraw`, `moderate`), three queries
   (`proposals`, `moderationQueue`, `pendingMyVote`).
+- `ui/v2.5/graphql/proposal.graphql` + `src/components/Proposals/Proposals.tsx`
+  + `src/core/StashService.ts` — the UI, on its own top-level route.
 - `internal/api/resolver_mutation_proposal.go` — every mutation goes through
   `collab.Proposer` or `collab.Applier`. `moderate` records the decision and
   lets `Apply` do the write, so the moderator path and the quorum path converge
@@ -458,11 +460,21 @@ Two things the spec did not say and the code forced:
    directions** — bad snippets must be caught, and `SceneMarkerStore.UpdateTags`
    must not be.
 
-Remaining: the Svelte UI (proposal list, detail, vote button, propose-edit
-dialog, moderation queue) in `ui/v2.5/src`.
+3. **The UI is React, not Svelte.** The plan said "follow the existing page
+   patterns in `ui/v2.5/src`" and also said Svelte; the tree is React +
+   react-bootstrap + Apollo. The pattern reference was right and the framework
+   name was wrong.
+4. **`en-GB.json` is the base catalogue, not `en-US.json`.** `en-US` is a sparse
+   override that falls back to `en-GB`, so a key added only to `en-US` renders
+   as the raw id in every locale. `loading` is `loading.generic`; `cancel` did
+   not exist and is now `buttons.cancel`.
+
+Verified: `pnpm run validate` clean (biome lint, `tsc --noEmit`, biome
+format); `vite build` clean.
 
 ```bash
-cd ui/v2.5 && pnpm run gqlgen && pnpm run check && pnpm run build
+cd ui/v2.5 && pnpm run gqlgen && pnpm run validate
+node node_modules/vite/bin/vite.js build
 ```
 
 UI: proposal list, proposal detail with votes, a vote button, a "propose edit"
