@@ -1003,6 +1003,76 @@ under test.
 **A fixture must assert its own preconditions.** A test that cannot fail for its
 stated reason is worse than no test, because it reports coverage.
 
+**Step 2.4b.7 — the cluster store. Done** (`pkg/sqlite/cluster_store.go`).
+
+Two migrations, because the store needed a column that did not exist and a
+constraint that was wrong.
+
+**99 — `person_clusters.name` + `person_cluster_names`.** The name is a
+`*string` and stays that way. A corpus with no scraper has no names, so nil is
+the state every cluster starts in and most clusters stay in; an empty string
+would be a value every downstream consumer displays, filters on and sorts by.
+`person_cluster_names` is append-only and there is no DELETE path against it, so
+a rename accumulates and `ClearName` leaves the history intact — unnameing is not
+un-deciding.
+
+**100 — a schema bug, not a missing feature.** Migration 97 ended
+`person_cluster_members` with:
+
+    UNIQUE (target_type, target_id, frame_index, face_left, face_top)
+
+No `cluster_id`. The comment above it stated the intent — *"a face appears in a
+given target at a given frame once, so re-detecting must UPDATE rather than add
+a second"* — and the constraint implemented a **broader** rule: one face, one
+cluster, ever.
+
+That makes `ambiguous` unrepresentable, and §7.1 defines ambiguous as one
+embedding matching two distinct candidates — two `cluster_id`s for one
+appearance. The store could not record a conflict, the UI could not be shown both
+candidates, and `ClustersForTarget` could never return more than one row, which
+is the query whose multi-row result **is** the signal. A test caught it by trying
+to record one.
+
+Uniqueness is now scoped to the cluster, which is what the intent actually was: a
+rescan still cannot inflate a cluster, and a genuine conflict is recordable.
+SQLite has no `DROP CONSTRAINT`, so the table is rebuilt.
+
+**A comment stating an intent is not a constraint implementing it.** Nothing
+checked the two agreed, and the gap survived three schema versions because every
+version test watched the number change rather than the meaning. The replacement
+test asserts semantics: same crop twice into one cluster is refused, same crop
+into two clusters is allowed *and* visible through `ClustersForTarget`.
+
+**Four fixture defects, one cause each — and three were mine, not the code's.**
+
+1. `no such column: created_at`. The member SELECT asked for a timestamp
+   migration 97 never created. The column was only ever *selected*; review order
+   is by `distance`, so a `created_at` here would be a second ordering nobody
+   reads. Removed rather than added — a column with no reader is not a migration.
+2. `UNIQUE constraint failed` on the ambiguous fixture. The schema bug above,
+   found by the test that exercised the state the spec requires.
+3. **An absolute count.** `ListUnnamed` asserted `4` and got `7`. `sfTxn` rolls
+   back, so the test's own rows leave nothing behind, but the shared integration
+   fixture is not empty and the rest of the package builds in it. The test was
+   measuring the fixture as much as the code. Now: measure the baseline, assert
+   the **delta**, and identify rows by ID rather than by count — a count is
+   satisfied by any row, so an absence can be masked by an unrelated one
+   appearing.
+4. **A subtest sharing its subject with its siblings.** Four subtests ran against
+   one cluster. A refused write leaves a cluster unnamed, so "empty name" could
+   not distinguish *my* refusal from a sibling's, and "empty actor" failed
+   outright. Each subtest now creates its own.
+
+The rule, hit from two directions in one step: **a value another test can set is
+not a test.** A fixed target id (`scene 42, frame 99`) had already been claimed
+by a row a previous run's rolled-back transaction inserted — the rollback undoes
+the row but the fixture's AUTOINCREMENT sequence keeps moving. Fixed identities
+in a store test are collisions waiting for a reordering, and that one fired on the
+first run.
+
+`appSchemaVersion` **100**. Unit 38/38, integration 38/38, store suite green three
+runs in a row.
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
 **Remaining for this exit:** the GraphQL surface and the job that runs a pass.
