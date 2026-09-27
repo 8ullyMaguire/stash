@@ -368,3 +368,157 @@ func f(ctx context.Context) error {
 		})
 	}
 }
+
+
+// TestClusterFieldResolversAreActuallyWired reads the GENERATED executor
+// rather than testing behaviour, and the reason is that the behaviour cannot
+// fail.
+//
+// `personClusterModel` deliberately leaves `members` nil and `memberCount` zero
+// so that listing twenty clusters does not read every member of every cluster to
+// render twenty rows. That is the right design, and it creates a trap: if
+// gqlgen.yml lacks `resolver: true` for those fields, gqlgen generates
+//
+//     return obj.Members, nil
+//
+// which compiles, leaves the field in the schema, keeps the type looking right,
+// and returns an empty list to every client that selects it. No test that does
+// not select the field fails. No resolver test fails, because the resolver is
+// never called -- it is dead code with a correct body and a correct comment.
+//
+// This is "referenced != used" in its purest form: the field is in the schema,
+// the resolver exists, the type is correct, and the feature does not work.
+//
+// It already happened once. The first attempt configured
+//
+//     member_count:
+//       resolver: true
+//
+// and gqlgen matched config keys against the GraphQL field name, which is
+// `memberCount`. An unrecognised key is silently ignored -- no warning, no
+// error -- so `members` (already the right case) wired correctly and
+// `memberCount` did not, which is the worst shape: half the feature works, the
+// half that works is the half nobody queries first.
+func TestClusterFieldResolversAreActuallyWired(t *testing.T) {
+	exec, err := os.ReadFile(filepath.Join("generated_exec.go"))
+	if err != nil {
+		t.Fatalf("reading the generated executor: %v", err)
+	}
+	src := string(exec)
+
+	// Each of these is a field a client selects and a client currently gets
+	// nothing for. Named explicitly rather than pattern-matched, because a
+	// regexp over "return obj." would have to be careful about the hundreds of
+	// legitimate ones in this file.
+	for _, tc := range []struct {
+		field   string
+		whyGone string
+	}{
+		{"members", "a client selecting `members` gets an empty list for every " +
+			`cluster, which reads as "no faces found" rather than as a bug`},
+		{"memberCount", "a client rendering a count column gets 0 for every " +
+			"cluster, and a review queue that says every cluster is empty is " +
+			"worse than no review queue"},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			if !strings.Contains(src, "ec.resolvers.PersonCluster()."+strings.ToUpper(tc.field[:1])+tc.field[1:]+"(") {
+				t.Errorf("generated_exec.go does not call the PersonCluster "+
+					"field resolver for %q -- gqlgen is reading the struct "+
+					"field instead, so %s", tc.field, tc.whyGone)
+			}
+		})
+	}
+
+	// The inverse, stated positively: the executor must not be reading these
+	// two off the struct at all. Both directions are asserted because the first
+	// check alone would be satisfied by a file that calls the resolver and then
+	// ignores it.
+	if strings.Contains(src, "return obj.Members, nil") {
+		t.Error("generated_exec.go returns obj.Members directly; the field " +
+			"resolver is bypassed and always nil")
+	}
+	if strings.Contains(src, "return obj.MemberCount, nil") {
+		t.Error("generated_exec.go returns obj.MemberCount directly; the " +
+			"field resolver is bypassed and always zero")
+	}
+}
+
+// TestClusterFieldsAreConfiguredForResolving is the config-level half of the
+// same property, and it exists because of the silent-ignore failure above.
+//
+// A gqlgen.yml key that matches no field produces no warning, no error, and no
+// diff in the generated output beyond the absence of a call. Asserting the keys
+// are present is cheap and would have caught the `member_count` vs
+// `memberCount` mistake at the point it was made rather than one generation
+// later.
+//
+// Line-based rather than a YAML parse on purpose: the file is a build input that
+// is only ever edited by hand, and the question here is about INDENTATION --
+// whether `resolver: true` sits under the right key at the right depth. A YAML
+// parser would answer a different question, the more forgiving one.
+func TestClusterFieldsAreConfiguredForResolving(t *testing.T) {
+	cfg, err := os.ReadFile(filepath.Join("..", "..", "gqlgen.yml"))
+	if err != nil {
+		t.Fatalf("reading gqlgen.yml: %v", err)
+	}
+
+	lines := strings.Split(string(cfg), "\n")
+
+	// Find the type header, then read its `fields:` children by indent. A
+	// sibling type header is a line at the SAME indent ending in a colon, and it
+	// is where this block stops.
+	header := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "PersonCluster:" {
+			header = i
+			break
+		}
+	}
+	if header < 0 {
+		t.Fatal("gqlgen.yml has no PersonCluster entry; the cluster fields " +
+			"will be read off the struct and always come back empty")
+	}
+
+	typeIndent := len(lines[header]) - len(strings.TrimLeft(lines[header], " "))
+
+	// field -> whether the next more-indented line says `resolver: true`.
+	found := map[string]bool{}
+	pending := ""
+	for _, l := range lines[header+1:] {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		indent := len(l) - len(strings.TrimLeft(l, " "))
+
+		// Back out to the type level: a new sibling type ends the block.
+		if indent <= typeIndent {
+			break
+		}
+		if strings.HasPrefix(trimmed, "resolver:") {
+			// Applies to the key we saw last, if it is a field.
+			if pending != "" {
+				found[pending] = found[pending] || strings.TrimSpace(trimmed) == "resolver: true"
+			}
+			continue
+		}
+		if strings.HasSuffix(trimmed, ":") {
+			// A nested map (`fields:`) resets nothing; a new key at field
+			// depth becomes the pending one.
+			if indent == typeIndent+4 {
+				pending = strings.TrimSuffix(trimmed, ":")
+				found[pending] = found[pending] || false
+			}
+			continue
+		}
+	}
+
+	for _, field := range []string{"members", "memberCount"} {
+		if !found[field] {
+			t.Errorf("gqlgen.yml PersonCluster.%s is not marked "+
+				"\"resolver: true\"; gqlgen ignores a key it does not "+
+				"recognise and reads the struct field instead, so the field "+
+				"compiles, stays in the schema, and always returns empty", field)
+		}
+	}
+}

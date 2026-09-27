@@ -1,0 +1,235 @@
+# StashForge — the identity-cluster surface.
+#
+# This is the REVIEW surface, not an identity system. A cluster is "these faces
+# are probably the same person, according to an embedding model, and no human
+# has confirmed it." Nothing here asserts an identity, and nothing here writes
+# one to a performer row.
+#
+# # The property this file is built around
+#
+# **`name` is null unless a human set it.** A library with no scraper has no
+# names, so "unnamed" is the normal state of most clusters and the type says so
+# with `String` rather than `String!`. Making it non-null would push the burden
+# of representing "we do not know" onto every client, and the cheapest way to
+# dodge that is to invent a placeholder string — which is how a library fills up
+# with "Unknown", "Unknown 2", and "Unknown 2 (fixed)".
+#
+# The same reasoning gives `confidence: Float` and not `Float!`. Null means no
+# merge decision has been made, which is a different statement from a decision
+# that came out 0.0, and a UI needs to tell them apart: one renders as nothing to
+# show, the other renders as a number.
+#
+# There is no `performer` field on `PersonCluster`. A handle is a user-supplied
+# label, deliberately not a foreign key: the moment a cluster carries a performer
+# id, the cluster becomes an identity claim, and the review surface is the wrong
+# place to make one.
+
+"""
+A face appearing in some number of places, grouped because an embedding model
+said they resemble each other.
+
+This is a hypothesis, not a fact. `name` being non-null is the only signal that
+a human looked at it.
+"""
+type PersonCluster {
+  id: ID!
+  """
+  The name a human gave this cluster, or null when nobody has.
+
+  Null is the DEFAULT, not an edge case: a library with no scraper has no names,
+  and a library where the user has not been through the review queue has no
+  names either. Do not coalesce this into a placeholder — a placeholder string
+  is indistinguishable from a real name once it is stored.
+  """
+  name: String
+  """
+  A user-supplied label for this cluster, or null. Not a performer reference: a
+  handle is for organising, not for asserting an identity.
+  """
+  handle: String
+  "Path to a cropped face image, or null when none was stored."
+  avatar: String
+  """
+  How confident the model is that these are one person, 0.0 to 1.0.
+
+  Null when no merge decision has been made. Distinct from 0.0, which is a
+  decision that the answer is no.
+  """
+  confidence: Float
+  """
+  `singleton`, `clustered`, `ambiguous` or `merged`.
+
+  `singleton` is a cluster of one: not yet a proposal to link anything, and the
+  state every new face starts in.
+  `ambiguous` means one embedding matched two distinct candidates. It is a
+  first-class state and not an error — the system knowing it does not know is
+  something the UI has to render, and a link the user cannot interrogate is a
+  link they will not trust.
+  `merged` means this cluster was folded into another.
+  """
+  state: String!
+  "The engine that produced the grouping. `face` for now."
+  engine: String!
+  "When the cluster was created."
+  createdAt: Timestamp!
+  "When the cluster was last updated."
+  updatedAt: Timestamp!
+  """
+  The appearances that make up this cluster, nearest-match first.
+
+  The order is the evidence: the nearest face is the strongest reason these are
+  the same person, so it comes first and a reviewer reads top-down.
+  """
+  members: [PersonClusterMember!]!
+  "How many appearances are in this cluster."
+  memberCount: Int!
+}
+
+"""
+One appearance of a face in one target, and the evidence linking it to its
+cluster.
+"""
+type PersonClusterMember {
+  "The cluster this appearance belongs to."
+  clusterId: ID!
+  """
+  What the face appears in: `scene`, `gallery`, `image` or `video`.
+
+  A closed vocabulary rather than a free string, for the same reason
+  `EditProposal.targetType` is: an open field list is a stored-XSS surface, so an
+  unlisted type is a 422 rather than a 500.
+  """
+  targetType: String!
+  "The id of the scene, gallery, image or video."
+  targetId: ID!
+  "The frame within a video, or 0 for a still."
+  frameIndex: Int!
+  "The detected face box, in the target's own pixel coordinates."
+  left: Int!
+  top: Int!
+  width: Int!
+  height: Int!
+  "How sure the detector was that a face is there at all, 0.0 to 1.0."
+  detectScore: Float!
+  """
+  Cosine distance to the cluster's exemplar. Smaller is closer, and a link the
+  engine did not make would typically be above 0.5.
+  """
+  distance: Float!
+}
+
+"""
+A record of one naming act.
+
+Append-only. A cluster with a history of four names is a cluster a human has
+revisited four times, and that is worth more than the current name alone: when a
+merge turns out to have been wrong, the question is who decided and when, and a
+single mutable column cannot answer it.
+"""
+type PersonClusterNameRecord {
+  clusterId: ID!
+  "The name that was set."
+  name: String!
+  """
+  Who set it: a username, or `system` for a machine decision.
+
+  A literal string rather than a User reference, because the pipeline names
+  clusters without a session and a row that claimed a user who never acted would
+  be worse than no attribution.
+  """
+  actor: String!
+  "When the name was set."
+  createdAt: Timestamp!
+}
+
+"""
+A page of clusters waiting for a human to look at them.
+"""
+type PersonClusterReviewPage {
+  "The clusters, oldest first: the one that has been unnamed longest is the one a user is most likely to have an opinion about."
+  clusters: [PersonCluster!]!
+  """
+  How many unnamed clusters exist in total, uncapped.
+
+  Present so a UI can say "showing 20 of 3,412" without a second query. It is
+  deliberately NOT the length of `clusters`.
+  """
+  total: Int!
+}
+
+
+extend type Query {
+  """
+  A cluster by id, or null when there is none.
+
+  Null rather than an error for a missing id, matching every other `find*` in
+  this schema: a client that raced a delete should get null, not a 404 to
+  interpret.
+  """
+  personCluster(id: ID!): PersonCluster
+
+  """
+  Clusters, newest first.
+
+  `limit` is REQUIRED and has no default. A library with no scraper can hold
+  hundreds of thousands of unnamed clusters, so an unbounded read is a denial of
+  service dressed as a convenience; making the caller state a bound is cheaper
+  than a maximum that is too small for one library and too large for another.
+  """
+  personClusters(limit: Int!, offset: Int): [PersonCluster!]!
+
+  """
+  The review queue: unnamed clusters, oldest first.
+
+  Oldest first because the cluster that has been unnamed longest is the one a
+  user is most likely to have an opinion about — newest-first would put whatever
+  the pipeline just made at the top, which is exactly what nobody has had time
+  to look at.
+
+  `total` is uncapped so a UI can show "20 of 3,412" without a second query.
+  """
+  unnamedPersonClusters(limit: Int!): PersonClusterReviewPage!
+
+  """
+  The name history of one cluster, oldest first. Append-only.
+  """
+  personClusterNames(clusterId: ID!): [PersonClusterNameRecord!]!
+}
+
+extend type Mutation {
+  """
+  Name a cluster, and record who named it.
+
+  This is the one write that makes a cluster mean something specific to a human,
+  so it is also the one write that is audited: the current name is set and an
+  immutable `PersonClusterNameRecord` is appended, in one transaction. A rename
+  therefore accumulates rather than replacing, and six months later the question
+  of who decided a face is the same person across forty scenes is answerable.
+
+  Setting a name to "" is an error, not a clear. Use `clearPersonClusterName` to
+  un-name a cluster — the two acts are named separately so a blank field on a
+  form cannot silently become an unnamed cluster with an audit row saying it was
+  named "".
+  """
+  namePersonCluster(
+    clusterId: ID!
+    name: String!
+    """
+    Who is doing it. Required even though it usually has one obvious value: a row
+    that says "system" for a name a human typed is worse than no row, because it
+    looks like an attribution and is not one.
+    """
+    actor: String!
+  ): PersonCluster!
+
+  """
+  Remove a cluster's name, keeping the history.
+
+  Unnaming is not un-deciding. The `PersonClusterNameRecord` rows stay, so the
+  fact that somebody once decided this was "Alice" remains visible.
+  """
+  clearPersonClusterName(clusterId: ID!): PersonCluster!
+
+  "Set a user-supplied label on a cluster. Not a performer reference."
+  setPersonClusterHandle(clusterId: ID!, handle: String!): PersonCluster!
+}

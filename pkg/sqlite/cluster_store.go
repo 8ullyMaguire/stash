@@ -38,6 +38,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -485,6 +486,18 @@ func (s *ClusterStore) NameHistory(ctx context.Context, clusterID int64) ([]Name
 // expectOneRow refuses a silent no-op.
 //
 // Every write in this file goes through it, because a statement that matched
+// ErrClusterNotFound is returned by every method that writes to, or reports on,
+// one specific cluster, when no such cluster exists.
+//
+// It is a sentinel rather than a formatted error because the caller above this
+// layer -- the GraphQL resolver -- has to translate it into a client message,
+// and `strings.Contains(err.Error(), "no rows")` is not a thing a translator
+// should be doing. It also carries the distinction the formatted version
+// destroyed: "the cluster is not there" is an answer to a different question
+// from "the write failed", and a client racing a concurrent delete needs the
+// first one as a 404 rather than a 500.
+var ErrClusterNotFound = errors.New("no such cluster")
+
 // zero rows and returned no error is indistinguishable from one that worked --
 // until a caller adds a face to a cluster that does not exist and finds out
 // later, from a listing that does not show it.
@@ -498,7 +511,11 @@ func expectOneRow(res sql.Result, what string, args ...interface{}) error {
 		return fmt.Errorf("%s: the database did not report a row count: %w", prefix, err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("%s: the statement matched no rows", prefix)
+		// Wrapping, not replacing: the sentinel is what a caller matches on and
+		// the prefix is what a human reads. Both are in the one error because
+		// returning them separately would mean the caller has to choose which to
+		// propagate, and it will propagate the wrong one.
+		return fmt.Errorf("%w (%s: the statement matched no rows)", ErrClusterNotFound, prefix)
 	}
 	return nil
 }

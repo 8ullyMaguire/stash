@@ -274,6 +274,13 @@ func (s *Manager) initStashForgeCollab() {
 	s.CollabVotes = sqlite.NewProposalVoteStore()
 	s.CollabTargets = sqlite.NewCollabTargetStore()
 
+	// The identity-cluster store. Registered here rather than in the resolvers
+	// so that the cluster surface and the job that writes clusters share one
+	// instance -- a resolver that built its own would be a second writer to a
+	// table the pipeline also writes, with no way to tell the two apart in a
+	// log.
+	s.PersonClusters = sqlite.NewClusterStore()
+
 	// The adapter is what makes collab.Proposer usable at all: collab speaks its
 	// own Proposal type and its own four methods, and no row store implements
 	// that interface. Without this line the governance logic is unreachable from

@@ -144,4 +144,19 @@ models:
     fields:
       career_length:
         resolver: true
+  # The cluster's members and member count are field resolvers, not struct
+  # fields. `personClusterModel` deliberately leaves both nil/zero so that
+  # listing 20 clusters does not read every member of every cluster to render
+  # 20 rows -- which is the whole point of the review queue being a queue.
+  #
+  # Without `resolver: true` here gqlgen generates `return obj.Members, nil`,
+  # which compiles, passes every test that does not query the field, and returns
+  # an empty list to every client. The field is still in the schema and the
+  # type still looks right, so the breakage is invisible from outside.
+  PersonCluster:
+    fields:
+      members:
+        resolver: true
+      memberCount:
+        resolver: true
   

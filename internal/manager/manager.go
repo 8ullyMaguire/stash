@@ -94,6 +94,16 @@ type Manager struct {
 	// should be a compile error.
 	CollabReputation *sqlite.CollabReputationStore
 
+	// PersonClusters is the identity-clustering store: clusters, their members,
+	// and the append-only record of who named them.
+	//
+	// On the manager rather than constructed per-resolver for the same reason
+	// as the stores above -- the store reaches the database through the package
+	// global, so there is no connection to own and nothing to inject. What the
+	// manager owns is the one instance, so a resolver cannot end up with two
+	// stores that disagree about what exists.
+	PersonClusters *sqlite.ClusterStore
+
 	SceneService   SceneService
 	ImageService   ImageService
 	GalleryService GalleryService
