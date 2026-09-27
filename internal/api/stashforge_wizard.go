@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -141,8 +143,13 @@ const (
 	codeInvalidMode      = "invalid_mode"
 	codeInsecureScheme   = "insecure_scheme"
 	codeBadRequest       = "bad_request"
+	codeBodyTooLarge     = "body_too_large"
 	codeInternal         = "internal_error"
 )
+
+// bodyTooLargeMessage is the operator-facing text for an oversized body. A
+// constant so the two places that can produce it cannot drift apart.
+var bodyTooLargeMessage = fmt.Sprintf("the request body must not exceed %d bytes", wizardBodyLimit)
 
 // State answers "is the wizard done, and what mode are we in".
 func (h *wizardHandler) State(w http.ResponseWriter, r *http.Request) {
@@ -185,8 +192,44 @@ func (h *wizardHandler) Decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The whole body is capped, and the cap is on the READER rather than on the
+	// decoded value.
+	//
+	// Two attempts were wrong before this one, both found by the mutation
+	// harness reporting a survivor:
+	//
+	//  1. MaxBytesReader alone. json.Decoder stops at the end of the JSON value,
+	//     so a small valid object followed by megabytes of trailing whitespace
+	//     decodes cleanly and the cap never fires. Measured: a 4105-byte body
+	//     returned 200 with the cap "in place".
+	//  2. MaxBytesReader plus a probe read after decoding. The decoder buffers
+	//     ahead, so the probe sees the padding, not EOF -- and for a body of
+	//     exactly limit-1 MaxBytesReader still reports no error, so the count
+	//     alone reports an overflow that did not happen. Measured: a 4095-byte
+	//     body was refused.
+	//
+	// What works is capping the READER and treating a decode that consumed the
+	// cap as the overflow signal, with the trailing-whitespace case caught by
+	// draining what is left. Both are checked, so a body that is over the limit
+	// is refused whichever way the excess arrives.
+	limited := http.MaxBytesReader(w, r.Body, wizardBodyLimit)
+
+	raw, readErr := io.ReadAll(limited)
+	if readErr != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(readErr, &maxErr) {
+			h.fail(w, http.StatusRequestEntityTooLarge, codeBodyTooLarge, bodyTooLargeMessage)
+			return
+		}
+		// A genuine read failure, not a size one. Still a refusal: a body the
+		// server could not read is not a body it can decide on.
+		slog.Error("stashforge: reading the wizard request body", "error", readErr)
+		h.fail(w, http.StatusBadRequest, codeBadRequest, "could not read the request body")
+		return
+	}
+
 	var req wizardRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, wizardBodyLimit)).Decode(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		h.fail(w, http.StatusBadRequest, codeBadRequest, "malformed request body")
 		return
 	}

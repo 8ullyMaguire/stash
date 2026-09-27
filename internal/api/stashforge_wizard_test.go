@@ -150,26 +150,43 @@ func TestWizard_AWrongInstanceKeyIsRefused(t *testing.T) {
 // TestWizard_NoConfiguredKeyCannotMakeAnInstancePublic: fail CLOSED.
 //
 // "There is no key, so there is nothing to check" is how an instance with no key
-// ends up accepting an unauthenticated request to make itself public. This is the
-// case a test that always configures a key can never see.
+// ends up accepting an unauthenticated request to make itself public.
+//
+// # Three misconfigurations, because they fail in three different places
+//
+// "no key function" is caught by h.key == nil. "a function returning nil" and
+// "a function returning an empty slice" are caught by len(want) == 0. The
+// mutation harness reported "an unconfigured key matches everything" as SURVIVED
+// until all three were here -- and the reason is worth recording, because the
+// version before this had a map with two keys whose values were BOTH the empty
+// string, so both subtests took the nil-function branch and the len(want) == 0
+// guard was never executed by anything. A test table whose entries are all the
+// same value tests one case and reports three.
 func TestWizard_NoConfiguredKeyCannotMakeAnInstancePublic(t *testing.T) {
-	for name, key := range map[string]string{
-		"no key function at all":           "",
-		"a key function returning nothing": "",
-	} {
-		t.Run(name, func(t *testing.T) {
+	cases := []struct {
+		name string
+		key  InstanceKeyFunc
+	}{
+		{"no key function at all", nil},
+		{"a key function returning nil", func() []byte { return nil }},
+		{"a key function returning an empty slice", func() []byte { return []byte{} }},
+		{"a key function returning a short key", func() []byte { return []byte("short") }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			store := &fakeWizardStore{}
-			var h *wizardHandler
-			if key == "" {
-				h = newTestWizard(store, "")
-			} else {
-				// An empty key, with the function present.
-				h = newWizardHandler(store, func() []byte { return nil })
-			}
+			h := newWizardHandler(store, tc.key)
 
 			rec := postWizard(t, h, "public", wizardTestKey, "https")
 			require.Equal(t, http.StatusForbidden, rec.Code,
-				"no configured key must refuse every attempt, not admit them")
+				"no usable key must refuse every attempt, not admit them")
+			assert.Zero(t, store.completeCalls)
+
+			// And a request offering no key at all is refused too, rather than
+			// being read as "no key needed".
+			rec = postWizard(t, h, "public", "", "https")
+			assert.Equal(t, http.StatusForbidden, rec.Code)
 			assert.Zero(t, store.completeCalls)
 		})
 	}
@@ -314,6 +331,59 @@ func TestWizard_AnUnreadableGateIsRefusedNotPassed(t *testing.T) {
 		"the login page must be told the mode is unknown, not that there is no 2FA")
 }
 
+// TestWizard_AGateThatCannotBeReadIsNotTreatedAsCompleted: the dangerous half of
+// the same rule, tested with a store that distinguishes the two reads.
+//
+// # Why this needed its own store
+//
+// The mutation harness reported "an unreadable gate reads as completed" as
+// SURVIVED even though the refusal above is tested. The mutation sets
+// completed = true and falls through -- and on a store that fails EVERY read, the
+// handler then calls Mode, which fails too, so it returns the same 500. The test
+// passed with the guard removed.
+//
+// So the distinguishing store is one that fails the completed-read but ANSWERS
+// Mode. That is a real state: a partially written row, or a store where one query
+// is denied. Against it, "failed the read" and "decided, and the mode is private"
+// produce different responses, and only one of them is correct.
+func TestWizard_AGateThatCannotBeReadIsNotTreatedAsCompleted(t *testing.T) {
+	store := &partialReadStore{mode: collab.ModePrivate}
+	h := newTestWizard(store, wizardTestKey)
+
+	rec := httptest.NewRecorder()
+	h.State(rec, httptest.NewRequest(http.MethodGet, wizardEndpoint, nil))
+	require.Equal(t, http.StatusInternalServerError, rec.Code,
+		"a completed-read that fails must be an error, not a silent 'yes, decided'")
+	assert.Equal(t, codeInternal, decodeWizard(t, rec).Code)
+
+	// The mode endpoint has the same rule.
+	rec = httptest.NewRecorder()
+	h.Mode(rec, httptest.NewRequest(http.MethodGet, modeEndpoint, nil))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+// partialReadStore fails WizardCompleted and answers Mode. The only combination
+// that separates "the gate is unreadable" from "the instance is decided".
+type partialReadStore struct {
+	mode      collab.Mode
+	readCalls int
+	modeCalls int
+}
+
+func (p *partialReadStore) WizardCompleted(context.Context) (bool, error) {
+	p.readCalls++
+	return false, errStoreUnreadable
+}
+
+func (p *partialReadStore) Mode(context.Context) (collab.Mode, error) {
+	p.modeCalls++
+	return p.mode, nil
+}
+
+func (p *partialReadStore) CompleteWizard(context.Context, collab.Mode, *int64) error {
+	return nil
+}
+
 // TestWizard_ADecisionThatCannotBeWrittenIsReported: a store that reads fine and
 // cannot write. A 500 that says so beats a 200 that lies about completion.
 func TestWizard_ADecisionThatCannotBeWrittenIsReported(t *testing.T) {
@@ -372,25 +442,69 @@ func TestWizard_TheStateEndpointReportsTheDecision(t *testing.T) {
 		"after the server refuses to start")
 }
 
-// TestWizard_AnOversizedBodyIsRefused: an unauthenticated endpoint must not be
-// an unbounded allocation. The whole body is capped.
-func TestWizard_AnOversizedBodyIsRefused(t *testing.T) {
+// TestWizard_ABodyOverTheLimitIsRefusedForItsSize: the limit, tested as a limit.
+//
+// The mutation harness caught that my first version of this test did not test the
+// cap. It sent 8 KiB of garbage in the `mode` field and asserted "not 200" -- and
+// the handler refused it for being an INVALID MODE, so the assertion passed with
+// or without MaxBytesReader. A test that passes with the guard removed is not a
+// test of the guard.
+//
+// So this asserts the refusal reason, and uses a body that is over the limit and
+// otherwise VALID: a huge but well-formed instanceKey. Nothing about it is
+// invalid, so the only thing that can refuse it is the size.
+func TestWizard_ABodyOverTheLimitIsRefusedForItsSize(t *testing.T) {
 	store := &fakeWizardStore{}
 	h := newTestWizard(store, wizardTestKey)
 
-	payload, err := json.Marshal(map[string]string{
-		"mode":        string(bytes.Repeat([]byte("a"), 8<<10)),
-		"instanceKey": wizardTestKey,
-	})
+	// A body that is valid JSON, has a valid mode, and has a correct-length key --
+	// padded past the limit with whitespace, which the decoder skips and the
+	// limit still counts. This isolates SIZE as the only reason to refuse.
+	padded := make([]byte, wizardBodyLimit*4)
+	for i := range padded {
+		padded[i] = ' '
+	}
+	payload, err := json.Marshal(map[string]string{"mode": "private", "instanceKey": wizardTestKey})
 	require.NoError(t, err)
+	body := append(append([]byte{}, payload...), padded...)
 
-	req := httptest.NewRequest(http.MethodPost, wizardEndpoint, bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, wizardEndpoint, bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.Decide(rec, req)
 
-	assert.NotEqual(t, http.StatusOK, rec.Code,
-		"an unauthenticated endpoint must not accept an arbitrarily large body")
-	assert.Zero(t, store.completeCalls)
+	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code,
+		"an oversized body must be refused for its SIZE, not for anything else")
+	assert.Equal(t, codeBodyTooLarge, decodeWizard(t, rec).Code)
+	assert.Zero(t, store.completeCalls, "and nothing may be written from a body that was never fully read")
+}
+
+// TestWizard_ABodyJustUnderTheLimitIsAccepted: so the test above is measuring the
+// boundary and not "big bodies are always rejected".
+func TestWizard_ABodyJustUnderTheLimitIsAccepted(t *testing.T) {
+	store := &fakeWizardStore{}
+	h := newTestWizard(store, wizardTestKey)
+
+	payload, err := json.Marshal(map[string]string{"mode": "private", "instanceKey": wizardTestKey})
+	require.NoError(t, err)
+	// Sized FROM the payload, not as a fraction of the limit: half the limit plus
+	// the JSON is over the limit, which is how the first version of this test
+	// asserted 200 for a body the handler correctly refused.
+	// Comfortably under rather than one byte under: MaxBytesReader reads one byte
+	// past its limit to detect overflow, so a body of exactly limit-1 leaves the
+	// probe reading that sentinel. A boundary test has to know where the
+	// boundary actually is, and it is not where it looks.
+	padded := make([]byte, wizardBodyLimit-len(payload)-64)
+	for i := range padded {
+		padded[i] = ' '
+	}
+	body := append(append([]byte{}, payload...), padded...)
+	require.Less(t, len(body), wizardBodyLimit, "this body is meant to be UNDER the limit")
+
+	req := httptest.NewRequest(http.MethodPost, wizardEndpoint, bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.Decide(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 }
 
 // TestWizard_AMalformedBodyIsRefused: and does not panic or half-apply.

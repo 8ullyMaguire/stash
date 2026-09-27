@@ -38,10 +38,10 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 - `go build ./...` and `go vet ./...` clean
 - `internal/collab` at 177 top-level tests
 - `pkg/auth` at 71 top-level tests, of which 9 are the 2FA *wiring* tests
-- `internal/api` at 34, of which 17 cover the wizard's refusals
+- `internal/api` at 36, of which 19 cover the wizard's refusals
 - `pkg/sqlite` adds 9 2FA store tests, one of which races 20 goroutines
-- `internal/collab/mutate_consent.py`: **63 applied, 63 killed, 0 survived,
-  0 broken** (collab + `pkg/auth`)
+- `internal/collab/mutate_consent.py`: **74 applied, 74 killed, 0 survived,
+  0 broken** (collab, `pkg/auth`, `internal/api`)
 
 Counting convention, because the docs previously mixed two and it looked like a
 1000-test regression: `go test ... -v | grep -c '^--- PASS'` counts top-level
@@ -116,9 +116,26 @@ Two things caught it, and both are now permanent:
   under test prove only self-consistency; hand-rolled codes are a third
   implementation, which can agree with a broken one.
 
-`internal/collab/mutate_consent.py` now mutates `pkg/auth/totp.go` too, so
-removing the spend, ignoring the fresh flag, or failing open on a store error
+`internal/collab/mutate_consent.py` now mutates `pkg/auth/totp.go`,
+`pkg/auth/session.go` and `internal/api/stashforge_wizard.go` too, so removing
+the spend, ignoring the fresh flag, failing open on a store error, dropping the
+instance-key check, re-deciding a decided wizard, or accepting an oversized body
 each fail a test.
+
+**7. A test table whose entries are all the same value tests one case.** The
+wizard's empty-key test had a map with two keys and two values that were both `""`,
+so both subtests took the same branch and the `len(want) == 0` guard was executed
+by nothing. It looked like three cases and was one. The mutation that flips that
+guard survived, which is how it was found.
+
+**8. A size limit on a JSON decoder does not limit the body.**
+`json.Decoder` stops at the end of the JSON value, so a small valid object
+followed by megabytes of trailing whitespace decodes cleanly and the cap never
+fires — measured, a 4105-byte body returned 200 with `MaxBytesReader` "in place".
+The second attempt (probe-read after decoding) was wrong the other way: the
+decoder buffers ahead, so the probe sees the padding, not EOF, and a body of
+`limit-1` was refused. The limit belongs on the READER
+(`io.ReadAll(http.MaxBytesReader(...))`), not on the decoded value.
 
 ## Where the design decisions are written down
 

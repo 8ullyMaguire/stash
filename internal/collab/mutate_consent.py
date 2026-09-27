@@ -34,6 +34,7 @@ TOTP = ROOT / "internal/collab/totp.go"
 FEDERATION = ROOT / "internal/collab/federation.go"
 AUTH_TOTP = ROOT / "pkg/auth/totp.go"
 AUTH_SESSION = ROOT / "pkg/auth/session.go"
+API_WIZARD = ROOT / "internal/api/stashforge_wizard.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
 AUTH_TEST_RE = ("Wiring_|Login_|TOTP")
@@ -373,6 +374,68 @@ AUTH_SESSION_FIXTURES = [
 ]
 
 
+# internal/api/stashforge_wizard.go: the one UNAUTHENTICATED POST in the
+# application, holding the capability to make an instance public. Each mutation
+# removes one guard, and the interesting ones are the ORDERING ones -- a wizard
+# that checks the key before the completed flag leaks whether a wizard ran.
+API_WIZARD_FIXTURES = [
+    ("the instance key is not checked at all",
+     "\tif !h.keyMatches(req.InstanceKey) {",
+     "\tif false {"),
+    # FAIL OPEN. A nil or empty key must match nothing; admitting instead hands
+    # an unauthenticated "make this public" to anyone who can reach the port.
+    ("an unconfigured key matches everything",
+     "\tif len(want) == 0 {\n\t\treturn false\n\t}",
+     "\tif len(want) == 0 {\n\t\treturn true\n\t}"),
+    # The TLS check, and specifically that it runs BEFORE the write.
+    ("a public mode is accepted over plain HTTP",
+     "\tif err := collab.ModeErrors(mode, scheme); err != nil {\n\t\th.fail(w, http.StatusBadRequest, codeInsecureScheme, err.Error())\n\t\treturn\n\t}",
+     "\tif err := collab.ModeErrors(mode, scheme); err != nil {\n\t\tslog.Warn(\"stashforge: public mode over plain HTTP\", \"error\", err)\n\t}"),
+    # Writing the decision before the TLS check would leave an unstartable
+    # instance with the flag already set.
+    ("the decision is written before the scheme is checked",
+     "\tscheme := collab.RequestScheme(r)",
+     "\tscheme := collab.RequestScheme(r)\n\t_ = h.store.CompleteWizard(ctx, mode, nil)"),
+    # ONE-SHOT. Without this, anyone who reaches the port can re-decide.
+    ("the wizard can be re-decided",
+     "\tif completed {\n\t\th.fail(w, http.StatusConflict, codeAlreadyCompleted,",
+     "\tif completed && false {\n\t\th.fail(w, http.StatusConflict, codeAlreadyCompleted,"),
+    # ORDERING: the key check must not be reachable before the completed check,
+    # or a bad key becomes an oracle for "has a wizard run".
+    ("the key is checked before the completed flag",
+     "\tcompleted, err := h.store.WizardCompleted(ctx)\n\tif err != nil {\n\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}",
+     "\tcompleted, err := h.store.WizardCompleted(ctx)\n\tif !h.keyMatches(req.InstanceKey) {\n\t\th.fail(w, http.StatusForbidden, codeBadInstanceKey, \"the instance key is incorrect\")\n\t\treturn\n\t}\n\tif err != nil {\n\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}"),
+    # An unreadable gate must be a refusal, not "completed" -- that would skip
+    # the gate entirely.
+    ("an unreadable gate reads as completed",
+     "\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}\n\n\tresp := wizardResponse{Completed: completed}",
+     "\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\tcompleted = true\n\t}\n\n\tresp := wizardResponse{Completed: completed}"),
+    # THE BODY LIMIT. An unbounded read on an unauthenticated endpoint.
+    #
+    # The cap is on the READER, not the decoder, and getting that wrong is not
+    # theoretical: json.Decoder stops at the end of the JSON value, so a small
+    # valid object followed by megabytes of trailing whitespace decodes cleanly
+    # and a decoder-side cap never fires. I wrote the decoder version first and
+    # the mutation harness reported it as a survivor -- correctly, because the cap
+    # was not doing anything.
+    ("the request body is unbounded",
+     "raw, readErr := io.ReadAll(limited)",
+     "raw, readErr := io.ReadAll(r.Body)\n\t_ = limited"),
+    # The overflow signal, once the cap IS on the reader.
+    ("an oversized body is accepted after the cap",
+     "\t\tif errors.As(readErr, &maxErr) {\n\t\t\th.fail(w, http.StatusRequestEntityTooLarge, codeBodyTooLarge, bodyTooLargeMessage)\n\t\t\treturn\n\t\t}",
+     "\t\tif errors.As(readErr, &maxErr) && false {\n\t\t\th.fail(w, http.StatusRequestEntityTooLarge, codeBodyTooLarge, bodyTooLargeMessage)\n\t\t\treturn\n\t\t}"),
+    # A failed write must not report success.
+    ("a decision that failed to persist reports success",
+     "\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not record the instance mode\")",
+     "\t\th.write(w, wizardResponse{Completed: true, Mode: mode})"),
+    # An invalid mode must be refused with the value, so the operator can fix it.
+    ("an invalid mode is accepted",
+     "\tif !mode.Valid() {",
+     "\tif false {"),
+]
+
+
 def preflight():
     """Verify every fixture before running any of them.
 
@@ -387,7 +450,7 @@ def preflight():
     run. So the anchors are checked up front, and a mismatch is an error before
     any file is touched.
     """
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION, API_WIZARD)}
     problems = []
     total = 0
     for path, fixtures in (
@@ -399,6 +462,7 @@ def preflight():
         (TOTP, TOTP_FIXTURES),
         (AUTH_TOTP, AUTH_TOTP_FIXTURES),
         (AUTH_SESSION, AUTH_SESSION_FIXTURES),
+        (API_WIZARD, API_WIZARD_FIXTURES),
     ):
         for label, old, new in fixtures:
             total += 1
@@ -467,6 +531,7 @@ def main():
         return 2
     COLLAB_RUN = ("./internal/collab/", TEST_RE)
     AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
+    API_RUN = ("./internal/api/", "TestWizard")
 
     work = (
         [(CONSENT, m, COLLAB_RUN) for m in CONSENT_MUTATIONS]
@@ -477,8 +542,9 @@ def main():
         + [(TOTP, m, COLLAB_RUN) for m in TOTP_FIXTURES]
         + [(AUTH_TOTP, m, AUTH_RUN) for m in AUTH_TOTP_FIXTURES]
         + [(AUTH_SESSION, m, AUTH_RUN) for m in AUTH_SESSION_FIXTURES]
+        + [(API_WIZARD, m, API_RUN) for m in API_WIZARD_FIXTURES]
     )
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION, API_WIZARD)}
     killed, survived, broken = [], [], []
     _install_restore_guard(originals)
 
