@@ -30,10 +30,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 CONSENT = ROOT / "internal/collab/consent.go"
 EXPORTER = ROOT / "internal/collab/exporter.go"
 MODE = ROOT / "internal/collab/mode.go"
+TOTP = ROOT / "internal/collab/totp.go"
 FEDERATION = ROOT / "internal/collab/federation.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
 TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
+           # M4 step 4.2: the replay guard, the counter, and the truncation.
+           "TOTP|"
            "SubmissionID|AssertNo|Federation|Commons|SignSubmission|MakeSubmission|"
            "SummarizePeers|RedactPeerKey|"
            # M4: the mode rules. CheckStartup and the media refusal, the two
@@ -220,6 +223,62 @@ MODE_FIXTURES = [
 ]
 
 
+TOTP_FIXTURES = [
+    # THE REPLAY GUARD. This is the whole point of step 4.2: RFC 6238 accepts the
+    # same code any number of times inside its window, and for a login second
+    # factor that is a real weakness.
+    ("a replayed code is accepted",
+     "\tif used[matched] {\n\t\treturn matched, ErrTOTPReplay\n\t}",
+     "\tif false {\n\t\treturn matched, ErrTOTPReplay\n\t}"),
+    ("a replay is reported as a distinct error (a confirmation oracle)",
+     "\tif errors.Is(err, ErrTOTPReplay) {\n\t\t// Folded into the generic error on purpose. See ErrTOTPInvalid.\n\t\treturn ErrTOTPInvalid\n\t}",
+     "\tif errors.Is(err, ErrTOTPReplay) {\n\t\treturn ErrTOTPReplay\n\t}"),
+    # THE COUNTER. int64(TOTPStep) is nanoseconds, so this bug makes every code
+    # come from counter 0 -- a constant that no real authenticator produces.
+    ("the counter divides by nanoseconds instead of seconds",
+     "return at.UTC().Unix() / int64(TOTPStep/time.Second)",
+     "return at.UTC().Unix() / int64(TOTPStep)"),
+    ("the counter is fixed at zero",
+     "return at.UTC().Unix() / int64(TOTPStep/time.Second)",
+     "return 0"),
+    # THE TRUNCATION. Masking a 32-bit word with 0x7fffffff also clears the high
+    # bits of three other bytes, so it disagrees with RFC 4226 most of the time.
+    ("dynamic truncation masks the whole word instead of the top byte",
+     "value := (int64(h[offset]&0x7f) << 24) |\n\t\t(int64(h[offset+1]) << 16) |\n\t\t(int64(h[offset+2]) << 8) |\n\t\tint64(h[offset+3])",
+     "value := int64(binary.BigEndian.Uint32(h[offset:offset+4]) & 0x7fffffff)"),
+    ("the dynamic-truncation offset uses the wrong mask",
+     "offset := h[len(h)-1] & 0x0f",
+     "offset := h[len(h)-1] & 0x07"),
+    # THE CONCURRENCY GUARD. Check-then-record split across two locks is exactly
+    # the race "single-use" exists to prevent, and is invisible single-threaded.
+    # The check and the record are ONE critical section. Moving the check to a
+    # separate pass (rather than into the same loop) is the realistic mistake,
+    # and it is exactly what TestTOTP_ConcurrentReplayIsRefused exists to catch.
+    ("the spend check and the record are not atomic",
+     "\tfor k, v := range g.used {\n\t\tif k < oldest {\n\t\t\tdelete(g.used, k)\n\t\t} else if v && k == step {\n\t\t\treturn false\n\t\t}\n\t}\n\tg.used[step] = true",
+     "\tfor k := range g.used {\n\t\tif k < oldest {\n\t\t\tdelete(g.used, k)\n\t\t}\n\t}\n\tif g.used[step] {\n\t\treturn false\n\t}\n\tg.used[step] = true"),
+    ("the spend guard is unlocked",
+     "\tg.mu.Lock()\n\tdefer g.mu.Unlock()",
+     "\t// unlocked"),
+    # DRIFT TOLERANCE.
+    ("the skew window is removed entirely",
+     "for delta := int64(-TOTPSkew); delta <= TOTPSkew; delta++ {",
+     "for delta := int64(0); delta <= 0; delta++ {"),
+    # DISCLOSURE.
+    ("the secret is printed by String()",
+     'func (s TOTPSecret) String() string {\n\tif s == "" {\n\t\treturn ""\n\t}\n\treturn "[REDACTED TOTP SECRET]"\n}',
+     'func (s TOTPSecret) String() string { return string(s) }'),
+    # MarkTOTPStep must return a copy: a shared map is how a replay gets through.
+    ("MarkTOTPStep mutates the caller's map",
+     "next := make(map[int64]bool, len(used)+1)",
+     "next := used"),
+    # Purge: dropping a step that is still acceptable reopens the window.
+    ("the purge drops steps that are still inside the window",
+     "\toldest := totpCounter(now) - TOTPSkew",
+     "\toldest := totpCounter(now) - 1000"),
+]
+
+
 def _install_restore_guard(originals):
     """Make the restore happen even if this process is killed mid-run.
 
@@ -273,8 +332,9 @@ def main():
         + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
         + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
         + [(MODE, m) for m in MODE_FIXTURES]
+        + [(TOTP, m) for m in TOTP_FIXTURES]
     )
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP)}
     killed, survived, broken = [], [], []
     _install_restore_guard(originals)
 

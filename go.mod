@@ -44,6 +44,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/natefinch/pie v0.0.0-20170715172608-9a0d72014007
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
+	github.com/pquerna/otp v1.5.0
 	github.com/remeh/sizedwaitgroup v1.0.0
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
@@ -76,6 +77,7 @@ require (
 	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/asticode/go-astikit v0.20.0 // indirect
 	github.com/asticode/go-astits v1.8.0 // indirect
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
