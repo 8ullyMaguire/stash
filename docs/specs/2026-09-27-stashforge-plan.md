@@ -920,10 +920,92 @@ mutation deleted the comment above the call instead of moving it, producing two
 `LoadModel` invocations rather than a reorder. The test passed and I recorded a
 false "SURVIVED". Rewritten as a real move of the block, it is killed.
 
+**Step 2.4b.6 — candidate selection. Done** (`internal/cluster/candidates.go`).
+
+The plan calls this "ANN". There is no sqlite-vec, no HNSW and no IVF in the
+tree, and adding a native extension for a corpus that fits in memory would trade
+a correctness property for a speed property nobody needs yet. So it is an
+**exact** search, and the test names say "exact" so nobody later reads a passing
+suite as evidence about an approximate index.
+
+**Exactness is a correctness property here, not a performance choice.** A recall
+miss in the candidate stage is invisible: the guard, the assign margin and the
+consolidate threshold all operate on whatever candidates they are handed, so a
+face that should have been a candidate simply is not considered — and the outcome
+is a cluster that is wrong in a way that looks like a *judgement*. The distance
+would have been 0.31, the threshold is 0.5, and nobody logs the face that was
+never looked at. If this is ever replaced, the replacement needs a recall test
+against **this** implementation as ground truth.
+
+**A bad row is skipped and reported; a bad query is a refusal.** Asymmetric, and
+deliberately. A poisoned row in a 40,000-face index must not stop the other
+39,999 — the alternative turns one corrupt embedding into a library that cannot
+be clustered at all. But a bad query cannot be skipped, because there is nothing
+to search *with*.
+
+A bad query is also **not** recorded in the `SkipReport`, which the first version
+got wrong. `SkipReport` counts rows that were not *compared*; recording the query
+there describes a row as unusable when every row is fine, so an operator reading
+"3 of 40,000 faces could not be compared" hunts for three corrupt embeddings
+that do not exist while the real fault sits in a field named `row`.
+
+**The bug this step found: `CosineDistance` returned `(NaN, nil)`.** Validation
+checked only the running sum of squares, which catches a zero vector and a NaN in
+the run-up to it — but NaN poisons `dot` and `normB`, `cos` comes out NaN, and
+**both** clamp comparisons are false against NaN, so it passed straight through.
+Found by a candidate fixture that counted three skips where the arithmetic said
+four.
+
+That is the worst shape a distance can have: it sorts unpredictably, compares
+false against every threshold in the milestone, and reads as a legitimate
+candidate — so a face with a NaN embedding was offered to the over-merge guard,
+which treated it as infinitely far. **A face with a NaN embedding was
+indistinguishable from a face nobody had looked at**, which is the exact failure
+step 2.4b.0 was built to prevent, one layer down.
+
+**A second bug, found by a fixture that asserted the wrong thing:** a self-match
+is *not* distance exactly 0. Identical vectors land at `cos = 0.9999999999999999`
+— a distance of 1.1e-16. A caller dropping the self-match by testing `== 0` would
+keep it, so a face would be compared against itself and, being arbitrarily close
+to itself, merged into its own cluster.
+
+**The `cos > 1` / `cos < -1` clamps are unreachable defence, documented as such.**
+Cauchy-Schwarz guarantees the bound; a search for a reachable pair that exceeds
+it (long normalised vectors, near-identical perturbations, up to 65536
+components) found none. Two mutations removing the clamps survive — the honest
+reading is that they are **not load-bearing**, not that a test is missing. Kept
+for un-normalised callers and to survive a change to the normalisation that
+reintroduced the drift.
+
+**Four fixtures for the tie-break, all green with it deleted.** Equal distances;
+adjacent ascending pairs; rows rotated off the query; and finally symmetric
+perturbations where the tie pairs were `(2,3)`, `(1,4)`, `(0,5)` — always
+ascending by *position*, and reversing the emission order changed nothing
+because `Neighbour.Index` **is the position in the caller's slice**, not a
+property of the vector. Reversing which vector goes where also reverses the
+label.
+
+The general reason, found on the fourth attempt: **a k-sized buffer filled in
+arrival order and re-sorted by an insertion sort that only moves elements LEFT
+past strictly-greater ones emits positions within an equal-distance run in
+ascending order regardless of what the comparator says about equality. The
+comparator is never asked.** So the comparator is tested **directly** — a private
+function with a total order and no I/O has no excuse for no test, and the test
+asserts antisymmetry over every pair.
+
+**Two fixtures wrong in the same way, and the lesson is the same.** Rows at
+0/90/180/270 put one row *on* the query; rows at 45/135/225/315 were equidistant
+but at distance 0.29, a value no threshold here will ever see. And a `1e-8`
+perturbation of a `0.5` component vanishes entirely in `float32`, so the vectors
+came out bit-identical and the exact-equality branch fired instead of the one
+under test.
+
+**A fixture must assert its own preconditions.** A test that cannot fail for its
+stated reason is worse than no test, because it reports coverage.
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
-**Remaining for this exit:** ANN candidate selection, then the GraphQL surface
-and the job that runs a pass.
+**Remaining for this exit:** the GraphQL surface and the job that runs a pass.
 
 ## M3 — Metadata sharing
 
