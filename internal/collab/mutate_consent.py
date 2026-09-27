@@ -170,53 +170,53 @@ FEDERATION_MUTATIONS = [
 
 MODE_FIXTURES = [
     # The whole point of step 4.1: public over plain HTTP must refuse to start.
-    (MODE, "public mode no longer requires TLS",
-     "\treturn m == ModePublic\n}",
-     "\treturn false\n}"),
-    (MODE, "public mode served over http",
+    ("public mode no longer requires TLS",
+     "func (m Mode) RequiresTLS() bool { return m == ModePublic }",
+     "func (m Mode) RequiresTLS() bool { return false }"),
+    ("public mode served over http",
      "func ModeErrors(m Mode, scheme string) error {\n\tif !m.Valid() {",
      "func ModeErrors(m Mode, scheme string) error {\n\tif true {"),
-    (MODE, "any scheme counts as secure",
+    ("any scheme counts as secure",
      '\treturn strings.EqualFold(strings.TrimSpace(scheme), "https")',
      '\treturn true'),
-    (MODE, "contribute also refuses plain http (over-refusal is still a change)",
+    ("contribute also refuses plain http (over-refusal is still a change)",
      "func (m Mode) RequiresTLS() bool { return m == ModePublic }",
      "func (m Mode) RequiresTLS() bool { return true }"),
-    (MODE, "contribute starts serving media",
+    ("contribute starts serving media",
      "func (m Mode) ServesMedia() bool { return m == ModePublic }",
      "func (m Mode) ServesMedia() bool { return m != ModePrivate }"),
-    (MODE, "private mode accepts anonymous proposals",
+    ("private mode accepts anonymous proposals",
      "func (m Mode) AcceptsAnonymousProposals() bool { return m == ModePublic }",
      "func (m Mode) AcceptsAnonymousProposals() bool { return true }"),
     # A grant is what authorises media in public mode; dropping it is a leak.
-    (MODE, "media served without a grant",
+    ("media served without a grant",
      "\tif !hasGrant {\n\t\treturn ErrMediaNotServed\n\t}",
      "\tif false {\n\t\treturn ErrMediaNotServed\n\t}"),
-    (MODE, "private and contribute serve media to a grantee",
+    ("private and contribute serve media to a grantee",
      "\tif !m.ServesMedia() {",
      "\tif false {"),
     # Undifferentiated 404: distinguishing them discloses that the file exists.
-    (MODE, "no-grant refusal names itself",
+    ("no-grant refusal names itself",
      "var ErrMediaNotServed = errors.New(\"not found\")",
      "var ErrMediaNotServed = errors.New(\"no library access grant for this file\")"),
     # Fail closed. Every one of these flips a default to permissive.
-    (MODE, "an absent mode defaults to public",
+    ("an absent mode defaults to public",
      "\treturn ModePrivate\n}",
      "\treturn ModePublic\n}"),
-    (MODE, "an invalid mode on the context is taken at face value",
+    ("an invalid mode on the context is taken at face value",
      "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok && m.Valid() {\n\t\treturn m\n\t}",
      "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok {\n\t\treturn m\n\t}"),
     # The wizard's veto over an unchosen public mode.
-    (MODE, "the wizard no longer gates a public mode",
+    ("the wizard no longer gates a public mode",
      "\tif mode == ModePublic && !wizardCompleted {",
      "\tif false {"),
-    (MODE, "the wizard gate applies to every mode",
+    ("the wizard gate applies to every mode",
      "\tif mode == ModePublic && !wizardCompleted {",
      "\tif !wizardCompleted {"),
     # Store-side fail-closed: a missing row must not mean \"public\".
-    (MODE, "a missing settings row is public",
-     "\t\tif err == sql.ErrNoRows {\n\t\t\t// The migration seeds this row",
-     "\t\tif err == sql.ErrNoRows {\n\t\t\treturn ModePublic, nil\n\t\t}\n\t\tif false {\n\t\t\t// The migration seeds this row"),
+    ("an absent context mode defaults to public",
+     "\treturn ModePrivate\n}",
+     "\treturn ModePublic\n}"),
 ]
 
 
@@ -272,7 +272,7 @@ def main():
         [(CONSENT, m) for m in CONSENT_MUTATIONS]
         + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
         + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
-        + [(MODE, m) for m in MODE_MUTATIONS]
+        + [(MODE, m) for m in MODE_FIXTURES]
     )
     originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE)}
     killed, survived, broken = [], [], []
