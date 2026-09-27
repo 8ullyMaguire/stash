@@ -34,39 +34,26 @@ whose verification you cannot run.
 
 ## Current state
 
-M0 not started. The fork is cloned and the upstream `upstream` remote is set.
-Two things are already diagnosed:
+**M0 done.** `go build ./...` green, 887 tests passing across 34 packages, 0
+failures — recorded in `docs/BASELINE.md`, which is the number every later
+milestone must not regress.
 
-1. `go build ./...` fails on a clean checkout:
-   `enetx/http2@v1.0.26` has a go1.27 build-tagged file referencing
-   `http.Server.DisableClientPriority`, which does not exist in this toolchain.
-   Toolchain skew, not a Stash defect. Fix by pinning the `go` directive or a
-   `replace` — **never** by editing `$GOMODCACHE`. Plan Step 0.2.
-2. The frontend needs `pnpm run gqlgen` before `pnpm run build`.
-   `src/core/generated-graphql.ts` is not committed; the Go build hard-requires
-   `ui/v2.5/build` via `//go:embed`, so a missing or stale UI build breaks
-   `go build` too.
+Two fixes were needed to get there, and both are ones a fresh clone will hit
+again, so they are in `docs/BASELINE.md` and in the plan:
 
-## The next three actions, in order
+1. `go get github.com/enetx/http@v1.0.29`. The build failed on a clean
+   checkout because `enetx/http2`'s `go1.27`-tagged file needs a field the
+   pinned `enetx/http v1.0.28` does not have — **dependency skew within one
+   module family**, not toolchain skew. My first diagnosis said toolchain and
+   was wrong; the plan is corrected.
+2. Codegen is mandatory and gitignored: `make generate-backend` for
+   `internal/api/generated_*.go` (`.gitignore:22`), and `pnpm run gqlgen` for
+   the frontend's `src/core/generated-graphql.ts`. A fresh clone that reports a
+   wall of `undefined: GalleryResolver` is missing codegen, not broken source.
 
-```bash
-cd ~/code-local/go/stash
-# 1. Baseline first — record what upstream does BEFORE changing anything.
-ls pkg/sqlite/migrations/*.sql | wc -l          # expect 106
-go build ./... 2>&1 | head -5                  # expect the enetx error
-go test ./... 2>&1 | grep -E '^(ok|FAIL|---)' > /tmp/baseline.txt
-git rev-parse HEAD                              # b6b09dd5...
-
-# 2. Frontend, so the Go build can embed it.
-cd ui/v2.5 && pnpm install --frozen-lockfile && pnpm run gqlgen && pnpm run build
-
-# 3. Fix the toolchain skew, then prove the tree is green.
-cd ~/code-local/go/stash && go build ./... && echo "GO BUILD GREEN"
-```
-
-Write `docs/BASELINE.md` with the real numbers and commit it. Then tag
-`m0-buildable-fork`. **M0 is not done until `go build ./...` is green and
-`go test ./...` has no new failures against that baseline.**
+Next up is **M1, user accounts** — plan Steps 1.1 through 1.5, starting with
+migrations `1100_users.sql`, `1101_invite_keys.sql`, `1102_user_sessions.sql`,
+`1103_collab_audit.sql`.
 
 ## The seven milestones
 

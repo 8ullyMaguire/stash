@@ -29,19 +29,37 @@ passes and a tag exists — not when the code looks finished.
 6. **Commit per step**, message naming the change and its verification.
    `git push` to the mirror at each milestone, never mid-milestone.
 
-### The M0 blocker, already diagnosed
+### The M0 blocker, already diagnosed and fixed
 
-`go build ./...` fails on a clean checkout with:
+`go build ./...` failed on a clean checkout with:
 
 ```
-../../../../../go/pkg/mod/github.com/enetx/http2@v1.0.26/client_priority_go127.go:12:11:
+$ go/pkg/mod/github.com/enetx/http2@v1.0.26/client_priority_go127.go:12:11:
     s.DisableClientPriority undefined (type *http.Server has no field or method DisableClientPriority)
 ```
 
-A transitive dependency (`enetx/http2`) has a build-tagged file for go1.27 that
-references a stdlib field which does not exist in this toolchain. This is
-**toolchain skew, not a Stash defect**, and M0 Step 2 fixes it by pinning the
-`go` directive. Do not "fix" it by editing the vendored module.
+**This is transitive dependency skew, not toolchain skew** — the diagnosis in the
+first draft of this plan was wrong, and the distinction changes the fix. The
+failing file imports `github.com/enetx/http`, a vendored fork of the stdlib
+`net/http` reached via `enetx/surf`, and the pinned `enetx/http v1.0.28` has no
+`DisableClientPriority` field. `enetx/http2` ships a `go1.27`-tagged file
+requiring it, so the build breaks only on go1.27+ and is fine on go1.26.
+
+**Fixed in M0 by upgrading the dependency, not the toolchain:**
+
+```
+go get github.com/enetx/http@v1.0.29
+```
+
+Pinning the `go` directive downward would also have worked, but it leaves the
+module family internally inconsistent for the next person to upgrade. Do not
+edit anything under `$GOMODCACHE` — that is a local cache, and the change would
+not survive `go clean -modcache` or appear in review.
+
+The second M0 requirement is codegen: `internal/api/generated_*.go` is
+gitignored (`.gitignore:22`) and the frontend's `src/core/generated-graphql.ts`
+is generated too. `make generate-backend` and `pnpm run gqlgen` must both run
+before the tree builds. See `docs/BASELINE.md`.
 
 ---
 
