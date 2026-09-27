@@ -135,6 +135,34 @@ type StoredMember struct {
 	Embedding []byte
 }
 
+// DefaultConfig is the tuning a pass runs with when the user has not chosen
+// one.
+//
+// It lives here rather than in the manager, and the reason is that the
+// thresholds are not an implementation detail of whoever calls the pass: they
+// decide who a person is, so they belong to the domain and to the tests that
+// assert on who a person is. A manager that supplied its own numbers would
+// mean the values the pass is tested with are not the values it ships with, and
+// a test that passes on 0.5 while production runs on 0.6 is not a test.
+//
+// The numbers are a starting point, not a result. They are the same ones the
+// pass tests use, chosen so that a pass over synthetic faces is well-posed --
+// a threshold that admitted everything would pass every test by making one
+// cluster, and a threshold that admitted nothing would pass every test by
+// making one cluster per face. Both are green. The figures here are the middle
+// of that space, and tuning them against real faces is a separate job.
+func DefaultConfig() Config {
+	return Config{
+		Threshold:        0.5,
+		MergeThreshold:   0.5,
+		Separation:       0.5,
+		MinDetectScore:   0.5,
+		MaxFacesPerFrame: 0,
+		MergeLimit:       0,
+		CandidateK:       DefaultCandidateK,
+	}
+}
+
 // Config is the pass's tunables.
 //
 // Every one of these is a number an operator will want to change after seeing a

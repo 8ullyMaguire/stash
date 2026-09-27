@@ -250,6 +250,78 @@ killed**. When adding a guard, add the mutation trial too -- the procedure is in
 A test that only counts "something was audited" is vacuous -- one of the spray
 tests passed with the entire control deleted. Assert on the *distinction*.
 
+### Step 2.4b.9: the pass, and the seam that was never closed
+
+`internal/cluster` now has a production entry point. `cluster.Pass` drives
+filter → candidates → assign → guard → consolidate → persist over real
+512-wide embeddings (`pass.go`), through a narrow `Store` interface declared in
+the package rather than importing `pkg/sqlite` — layering runs database-below-
+domain, so a pass that reached for the store would be the one place in the tree
+where the arrows point the wrong way. `observe.go` is the half that talks to the
+outside world: decode a frame, detect, crop, embed, skip what is unreadable and
+say which file it was. `task.FaceClusteringJob` is the `job.JobExec` wrapper, and
+`faceClustering: ID!` is the mutation.
+
+**The store implemented three of the four methods the pass's interface needs,
+and no build reported it.** `AddMember` took sqlite's own `Member` rather than
+`cluster.StoredMember`, and `MergeCluster` — the only method that is not a single
+statement — did not exist at all. Every test in the tree passed: the pass was
+tested against a fake store, the store against its own methods, and *each half
+testing alone is not a claim that the halves fit together*. Nothing imported both
+packages, so the compiler never had to compare them. The fix is
+`ClusterStoreAdapter` with a `var _ cluster.Store = (*ClusterStoreAdapter)(nil)`
+assertion in a **non-test** file, so every build checks the seam from now on.
+
+This is step 2.5's lesson, arriving a second time and in the same shape: a pure
+module with fake-backed tests verifies its logic and nothing about whether
+anything can call it. Rule worth keeping — **the first thing to write for a new
+module is a test that constructs it from outside**, against the real
+implementation of whatever it will be given. It takes ten minutes and it is the
+only thing that would have caught this.
+
+Two more, both silent:
+
+1. **`MergeLimit: 0` documents "no cap"; `consolidateBounded` read it as a hard
+   limit of zero.** The loop never ran, the pass reported "merged 0, refused 0,
+   skipped 0", and nothing errored. Found because mutation M12 *survived* — a
+   surviving mutant means a region has no test, and the region it pointed at
+   turned out to be dead code. Still the right way to find these.
+2. **One bad frame abandoned the rest of the file.** The sample loop `break`ed
+   on a frame error, so a single undecodable frame meant the closing credits
+   were never looked at — which is precisely what the sample budget exists to
+   reach. A per-sample failure is a skip; only an unreadable *target* stops a
+   target.
+
+**Consolidate cannot merge anything assign separated, and that is structural.**
+The two stages' conditions are the same inequality, negated. Assign keeps
+clusters apart when the loser's nearest member is farther than the join
+threshold from the winner's centroid; `absorb` merges only when every loser
+member is *closer* than that same threshold from that same centroid. A pair that
+survived assign is exactly a pair absorb refuses. Verified by sweep — angles
+65–100° against join thresholds 0.3–0.6 and merge thresholds to 1.5 produced no
+merge at any setting, and the one shape that could satisfy both (an outlier
+dragging the centroid across the gap) still fails because absorb measures the
+*member*, not the centroid. Pre-existing, not introduced here, and pinned by
+`TestPassConsolidateCannotMergeWhatAssignSeparated` so a future change to absorb
+fails loudly. The pass's `MergeThreshold` knob is therefore a control that can
+never admit a merge, which is a real problem and a **design decision for the
+owner**: fixing it means relaxing the guard's re-check for merges specifically,
+trading a safety property for a working merge path.
+
+**The test fixture was lying about the geometry.** `angVec` set two components
+and left 510 at zero — a 512-wide vector that was 2-dimensional. In a 2-plane,
+renormalising a near-zero mean gave a face-to-centroid distance of 1.02, larger
+than the 2.0 maximum for a true cosine. Every probe disagreed with the last for
+that reason. Worth stating as a rule: **a fixture that spans fewer dimensions
+than the thing it stands for will produce numbers that are arithmetically
+impossible and still compare as plausible.**
+
+Also made: `*job.Progress` is now nil-safe, which is what makes every job in the
+tree testable (`updater` is unexported, so a test in any other package cannot
+build a real `Progress`). `ExecuteTask` on a nil progress still **runs the work** —
+an early return there is a job that reports success having done nothing, which is
+the worst failure a job can have.
+
 ## The seven milestones
 
 | # | Delivers |

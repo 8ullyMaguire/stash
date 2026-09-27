@@ -148,3 +148,36 @@ func TestExecuteTask(t *testing.T) {
 	assert.Len(j.Details, 0)
 	m.mutex.Unlock()
 }
+
+// TestProgressNilSafe pins the contract that makes every job testable.
+//
+// `updater` is unexported and needs a *Manager and a *Job, so a test in ANY
+// other package cannot construct a real Progress. A job whose Execute
+// dereferences it is therefore either untestable or panicking -- which is
+// exactly why the nil case has to be a documented no-op rather than an
+// accident.
+func TestProgressNilSafe(t *testing.T) {
+	var p *Progress
+
+	// None of these may panic, and none of them return anything to check.
+	assert.NotPanics(t, func() { p.Indefinite() })
+	assert.NotPanics(t, func() { p.Definite() })
+	assert.NotPanics(t, func() { p.SetTotal(10) })
+	assert.NotPanics(t, func() { p.AddTotal(5) })
+	assert.NotPanics(t, func() { p.SetProcessed(3) })
+	assert.NotPanics(t, func() { p.AddProcessed(1) })
+	assert.NotPanics(t, func() { p.SetPercent(0.5) })
+	assert.NotPanics(t, func() { p.Increment() })
+
+	// ExecuteTask is the one that must DO something on a nil progress.
+	//
+	// A job's whole body is usually wrapped in ExecuteTask, so an early return
+	// here is not a missing progress bar -- it is a job that reports success
+	// having done no work at all. The user's library looks processed and no
+	// cluster was ever written, which is the failure this test exists for.
+	ran := false
+	assert.NotPanics(t, func() {
+		p.ExecuteTask("work", func() { ran = true })
+	})
+	assert.True(t, ran, "ExecuteTask on a nil Progress dropped the work")
+}
