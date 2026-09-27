@@ -99,8 +99,48 @@ A value that became invalid between proposal and apply is rejected without
 touching the target.
 
 Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2. **Done**
-(`4e43ea0f`, `836cbb08`). Next is **M2b — governance v2** (plan step 2.4a),
-replacing the flat acceptance arithmetic with Commons §8.1–8.5.
+(`4e43ea0f`, `836cbb08`).
+
+**M2b — governance v2 (plan step 2.4a) is done** (`b74e6c15`, `44867817`,
+`b278253a`, `505a5780`). The flat acceptance arithmetic is no longer the
+primary path: `Evaluate` was *extended* rather than replaced, with
+`Policy.Weighted` zero-valued by `DefaultPolicy`, so M2's behaviour is
+unchanged by M2b's arrival and every mode remains reachable.
+
+What landed: the five-role table (`roles.go`), reputation-weighted ballots with
+decay and Sybil damping (`weighting.go`), the weighted decision function
+(`evaluate_weighted.go`), per-field reputation persistence (migration 95 plus
+the store), and the role wiring in the resolvers.
+
+Four bugs the tests caught, all silent — the kind that leave a green suite and
+a governance system that does nothing:
+
+1. The basis-point scale was off by 4x, so every voter looked like a newcomer
+   and the weighting did nothing at all. Now pinned by an explicit property.
+2. Sybil damping compared against the wrong neighbour: `i-1%len(basis)` parses
+   as `i-(1%len)`, not `(i-1)%len`, so the "is this ballot the same as its
+   group" test was meaningless.
+3. Excluding the author's ballot also decremented the distinct-voter count, so
+   `MinVoters` became a tool for excluding authors from their own proposals'
+   quorum. Same shape as #2's neighbour: a filter applied to the wrong
+   collection, where the intent was to move a sum and not a count.
+4. A test asserted the wrong sign, so it asserted nothing about weighting.
+
+The recurring lesson is #2 and #3 as one idea: in governance code, *sum* and
+*count* are different quantities, and a change to one that was meant to affect
+the other is invisible because the arithmetic still produces a plausible
+number.
+
+Two permission checks were also mutation-tested, because a permission test that
+has never been observed to fail is not evidence the permission is unchanged:
+
+* `TestRoleOfAgreesWithM2ModeratorPredicate` fails, naming the affected user,
+  if the role table stops matching M2's `isModerator` for any user the database
+  can represent.
+* The reputation floor and the migration's CHECK and per-field primary key all
+  fail loudly when removed.
+
+Next is whatever the plan lists after step 2.4a.
 
 ### What step 2.5 found: the governance layer was unreachable
 
