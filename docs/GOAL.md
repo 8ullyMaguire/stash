@@ -402,7 +402,7 @@ the worst failure a job can have.
 | M1 | Users, sessions, invite keys, rate limiting, auth migration |
 | M2 | Edit proposals, quorum, moderation, audit |
 | M3 | Consent, exporter (dry-run first), commons endpoint, federation |
-| M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard — **server side done, no UI** |
+| M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard — **server side done, no UI**, and step 4.3 is **not enforced**: `library_id` is on no target table, so `LibraryAccessStore.Decide` has nothing to be called with. Migration 105 is the work. |
 | M5 | P2P downloader **as an installable plugin** (BitTorrent + ed2k + Kademlia) |
 | M6 | The 850 upstream issues, capability by capability |
 

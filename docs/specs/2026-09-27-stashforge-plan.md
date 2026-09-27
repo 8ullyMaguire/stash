@@ -1362,7 +1362,7 @@ against the 2FA budget) and before the throttle is cleared (so a valid password
 plus a wrong code cannot reset your own lockout). A store that cannot be read
 refuses the login; it is never read as "no 2FA configured".
 
-### Step 4.3 — Library access grants. Done
+### Step 4.3 — Library access grants. Domain and store done, NOT ENFORCED
 
 (`internal/collab/access.go`, `pkg/sqlite/stashforge_library_access.go`)
 
@@ -1371,6 +1371,24 @@ refuses the login; it is never read as "no 2FA configured".
 confirms a file exists. There is exactly one refusal error in the file and it
 reads `not found`; a test asserts all three causes are byte-identical and that
 the message names no library, user, grant or mode.
+
+**Not enforced, and not until migration 105 exists.** The gate is real, tested,
+and unreachable. `Decide(ctx, mode, userID, libraryID)` needs a library id, and
+`grep -rln 'library_id' pkg/sqlite/migrations/*.sql` returns exactly one file:
+101. `library_id` is in `libraries` and `user_library_access` and in none of
+scenes, images, galleries, performers, tags, studios or movies. No request
+context carries a user id either. So no serving path can call it, and "a private
+library" is a phrase in a comment rather than a thing in the database. 101's own
+rationale — "every target row hangs off a library" — describes the intended
+design and is false of the schema it heads; it is left in place because editing an
+applied migration breaks its checksum, and the correction lives in
+`docs/HANDOFF.md` where a reader will actually see it.
+
+105 needs: `library_id` on the seven target tables, nullable with NULL meaning
+"not in a library" and NOT silently meaning public (the same reasoning as 101's
+`is_private`); a user id in the request context; a `Decide` call in
+`imageRoutes.serveImage` and the scene stream path, before any file handle is
+opened; and a backfill, or the migration fails on a populated instance.
 
 **A real bug this step found, pre-existing from 4.1:** `err == sql.ErrNoRows`
 cannot match, because `dbWrapper` wraps the driver error with `%w`. In the access

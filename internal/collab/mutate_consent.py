@@ -658,9 +658,27 @@ def main(argv=None):
             # A mutation that does not compile kills no test, and a guard that
             # only looks for a test failure will score it SURVIVED -- a lie
             # about the suite. Detect the build error explicitly.
-            if re.search(r"^(\[|.*\] )?# ", out, re.M) or "cannot use" in out or "undefined:" in out:
+            # A genuine compile failure. Detected by BUILDING, not by grepping
+            # the test output: the previous regex matched any line starting with
+            # "# " (after an optional "[n]" or "] " prefix), and a testify
+            # failure report is full of lines that look like one --
+            # "    --- FAIL:" and the indented "Error:" blocks. Two mutations
+            # that were correctly KILLED were scored BROKEN instead, so the
+            # harness reported a hole that did not exist and would have sent the
+            # next person looking for one.
+            #
+            # `go vet` compiles the package without running anything, so a
+            # mutant that fails to build is caught here and a mutant that fails
+            # a test is caught by the return code below. Nothing is inferred from
+            # the shape of the output.
+            build = run(["go", "vet", pkg], ROOT)
+            bout = build.stdout + build.stderr
+            if build.returncode != 0:
                 print(f"BROKEN   {label} (does not compile -- scores nothing)")
                 broken.append(f"{label} -- does not compile")
+                if bout:
+                    first = bout.strip().splitlines()[0]
+                    print(f"           {first}")
             elif proc.returncode != 0:
                 killed.append(label)
                 print(f"KILLED   {label}")

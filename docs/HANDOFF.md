@@ -29,7 +29,7 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 | M2b governance v2: roles, weighted ballots | done | — |
 | M2c identity clustering (plan 2.4b) | done | `m2c-identity-clustering` |
 | **M3 metadata sharing (consent, exporter, federation)** | **done** | `m3-metadata-sharing` |
-| **M4 public hosting: mode, 2FA, library grants** | **server side done, no UI** | — |
+| **M4 public hosting: mode, 2FA, library grants** | **server side done, no UI**; library grants NOT enforced — see below | — |
 
 ## Verified state at this tag
 
@@ -40,9 +40,12 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 - `pkg/auth` at 71 top-level tests, of which 9 are the 2FA *wiring* tests
 - `internal/api` at 36, of which 19 cover the wizard's refusals
 - `pkg/sqlite` adds 9 2FA store tests, one of which races 20 goroutines
-- `internal/collab/mutate_consent.py`: **79 applied, 79 killed, 0 survived,
-  0 broken** (collab, `pkg/auth`, `internal/api` — including the startup posture
-  gate in `server.go`)
+- `internal/collab/mutate_consent.py`: **79 fixtures**, spanning collab,
+  `pkg/auth`, the wizard handler, and the startup posture gate in `server.go`.
+  One `MUTATION_TARGETS` list drives the preflight, the runner and the restore
+  guard, and `main()` fails if the count the preflight promised is not the count
+  that ran — a mutation group wired into two of three lists used to vanish with
+  a clean-looking summary.
 
 Counting convention, because the docs previously mixed two and it looked like a
 1000-test regression: `go test ... -v | grep -c '^--- PASS'` counts top-level
