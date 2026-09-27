@@ -31,6 +31,9 @@ type fakeUserStore struct {
 	nextID int
 
 	createErr error
+	// countErr makes Count fail, so a test can prove the factory does not read
+	// an unreadable user table as "no users" and fall back to single-user.
+	countErr error
 }
 
 func newFakeUserStore() *fakeUserStore {
@@ -83,7 +86,12 @@ func (f *fakeUserStore) FindPasswordHash(_ context.Context, id int) ([]byte, err
 
 func (f *fakeUserStore) FindAll(context.Context) ([]*models.User, error) { return nil, nil }
 
+// countErr makes Count fail, so a test can prove the factory does not treat an
+// unreadable user table as "no users" and quietly fall back to single-user.
 func (f *fakeUserStore) Count(context.Context) (int, error) {
+	if f.countErr != nil {
+		return 0, f.countErr
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.users), nil

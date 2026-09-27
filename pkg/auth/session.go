@@ -413,6 +413,16 @@ func (s *SessionStore) auditLoginFailure(ctx context.Context, username, ip, reas
 	}
 }
 
+// ResolveRequest implements session.SessionResolver.
+//
+// The same check as Authenticate under a request-only signature: the adapter in
+// pkg/session has no ResponseWriter to pass, because a database-backed session
+// reads an id and looks up a row and never writes a response. A one-line
+// delegation rather than a rename, so the two signatures cannot drift apart.
+func (s *SessionStore) ResolveRequest(ctx context.Context, r *http.Request) (string, error) {
+	return s.Authenticate(ctx, r)
+}
+
 // Authenticate resolves the cookie in the request to a username.
 //
 // A session id is looked up by hash; a row that is missing, expired or belongs

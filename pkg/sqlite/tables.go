@@ -440,4 +440,22 @@ var (
 		table:    goqu.T(userTable),
 		idColumn: goqu.T(userTable).Col(idColumn),
 	}
+
+	// user_sessions is keyed by a BLOB (the session id hash), not an integer
+	// id, so its idColumn is the hash column rather than the shared `id`.
+	userSessionTableMgr = &table{
+		table:    goqu.T(sessionTable),
+		idColumn: goqu.T(sessionTable).Col("id"),
+	}
+
+	// invite_keys is likewise keyed by the key hash.
+	inviteTableMgr = &table{
+		table:    goqu.T(inviteTable),
+		idColumn: goqu.T(inviteTable).Col(inviteKeyHashColumn),
+	}
+
+	collabAuditTableMgr = &table{
+		table:    goqu.T(collabAuditTable),
+		idColumn: goqu.T(collabAuditTable).Col(idColumn),
+	}
 )
