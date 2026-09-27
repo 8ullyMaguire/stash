@@ -730,7 +730,59 @@ as neither kill nor survivor. A mutation that does not build kills no test and
 must not be reported as one. The first `PlanSamples` was restored and the
 mutation reapplied cleanly before the result was believed.
 
+**Step 2.4b.2 — the over-merge guard. Done** (`internal/cluster/overmerge.go`).
+
+Commons §7.1 step 4. Pairwise similarity is not transitive, so a face is
+measured against the cluster's **centroid**, not against any member. A is within
+T of B and B is within T of C says nothing about A and C, and greedy
+nearest-neighbour clustering merges A and C on B's authority — worse, the first
+merge is the most confident one, so the wrong anchor is the one a casual human
+review would have approved.
+
+**Three failure modes, three remedies, three error values.** A distance
+failure means the face belongs to someone else and the caller should look
+elsewhere; a strand means the *cluster* is already two people and must be
+split; a double claim means the index is corrupt. Conflating any two sends the
+user the wrong action.
+
+**The split is deliberately not gated by the merge threshold.** This cost three
+separate passes and the code says why at each site, because the instinct to
+reuse the number is strong and wrong every time: the threshold bounds what the
+ENGINE may conclude, and a human asking to peel a face off is not the engine
+concluding anything. A guard that can only refuse to grow is a one-way ratchet,
+and it makes "reject a bad merge" cheaper than "correct a bad merge", so people
+merge first and split later.
+
+**A cluster of two halves cannot be built through the guarded path** — that is
+the guard working. `forceCluster` plants one deliberately, so the behaviour can
+be tested against state that arrived by import or by a threshold change.
+
+**Seven mutations, five of which survived the first pass** and now all die:
+
+| Mutation | Why it survived |
+|---|---|
+| strand check removed | a rule that can only make the code *more cautious* is invisible to a suite |
+| face joins two clusters | the test asserted `err != nil`, and the candidate then failed on the *distance* check instead — green agreeing with a broken implementation for the wrong reason |
+| split adjacency re-gated on T | the ratchet, above |
+| midpoint instead of widest gap | the test took the 1-vs-N shortcut and never consulted the gap |
+| singleton free-pass removed | looks like a no-op, but then no cluster is ever created, and an empty table reads as "no faces found" — the same shape as a missing model file |
+
+Three for three in this milestone of *a missing refusal is invisible, a missing
+permission is loud*, after the zero-`Detector` guard in 2.4b.0. When a mutation
+survives the fix is a new test, never a weaker mutation.
+
+**A sentinel conflating "not computed" with "computed as zero"** was the one real
+implementation bug, and it is worth naming because the number is innocent:
+`bestGap` started at `-1` and a `len(keep) > 1` loop left it untouched, so
+`bestGap <= 0` could not tell "no gap found" from a genuine gap of `0.0` — which
+is what three members at the same position produce. Now an explicit `haveGap`,
+and the check moved after the case the sentinel is unreachable for.
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
+
+**Remaining for this exit:** the clustering stage — embedding load, ANN
+candidate selection, the assign-versus-ambiguous decision, and the consolidate
+pass writing merge records.
 
 ## M3 — Metadata sharing
 
