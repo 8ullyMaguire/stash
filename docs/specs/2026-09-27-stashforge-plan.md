@@ -1184,85 +1184,123 @@ embedder, and the lister's store) is not wired to a model, so the mutation refus
 explicitly rather than queueing a pass that would find nothing —
 `ErrObserverNotWired`, surfaced by the `faceClustering: ID!` mutation.
 
-## M3 — Metadata sharing
+## M3 — Metadata sharing — DONE. Tag `m3-metadata-sharing`
 
 **Exit:** an opted-in library exports; an opted-out one exports nothing, and
-that is enforced where the permission is read. Tag `m3-metadata-sharing`.
+that is enforced where the permission is read. **Met.**
 
-### Step 3.1 — Consent
+Landed in three steps, plus one the plan did not ask for.
 
-| File | Contents |
-|---|---|
-| `1108_consent.sql` | `consent_preferences` from spec §4 |
+### Step 3.0 — the library boundary the spec assumed existed. Done
 
-`internal/collab/consent.go`:
+(`101_libraries.up.sql`)
 
-```go
-// ShareOptedIn reports whether the user has consented. Absence of a row means
-// opted-in (spec §6.1) — the default is deliberate, so the ABSENT case is the
-// one that must be right.
-func ShareOptedIn(ctx context.Context, q Queryer, userID int64) (bool, error)
-```
+`libraries` and `user_library_access` did not exist. §6.2's "never published ...
+any private library's rows" and §6.4's "served only to users holding a
+`user_library_access` row" were both referring to tables no migration had
+created, so M3's exit criterion could not be true as written.
 
-The disclosure is blocking at first run and re-prompted when
-`disclosure_version` increases. Ship the **exact published field list** in the
-prompt, generated from the same constant the exporter uses — a disclosure that
-is written by hand drifts from what is published, and then it is a lie.
+A library here is a **sharing scope**, not a file collection: stash already models
+paths, and duplicating a file tree would be a second source of truth about
+storage. The alternative — `is_private` on all seven target tables — makes "which
+rows may leave" seven queries that must agree, and the one that is forgotten leaks
+silently.
 
-**Verify:** `TestConsent_DefaultsToOptedIn`, `TestConsent_OptOutIsSticky`,
-`TestConsent_DisclosureVersionChangeForcesReprompt`,
-`TestDisclosureMatchesExporterFields` — the last one compares the prompt's list
-against the exporter's field map, so they cannot diverge.
+### Step 3.1 — Consent. Done
 
-### Step 3.2 — The exporter
+(`102_consent_preferences.up.sql`, `internal/collab/consent.go`,
+`pkg/sqlite/stashforge_consent.go`)
 
-`internal/collab/exporter.go`, per spec §6.3. Runs as a stash job.
+Three decisions, all of which are about the default leaking:
 
-```go
-// BuildPayload produces the export for one library. It is a pure read: it
-// MUST NOT filter by consent, because the caller decides which libraries are
-// in scope. Consent is enforced in the publish path so that the stop is in one
-// place.
-func BuildPayload(ctx context.Context, q Queryer, instance string, lib LibraryRef) (Payload, error)
-```
+* **Absence of a row means opted-in** (§6.1), so the absent case is what the
+  tests pin hardest and what a well-meaning "safety" change would break.
+* **A corrupt `metadata_share` is an error, not a default.** The column is
+  CHECKed, so this can only happen if something bypassed the check — and
+  defaulting there lets a bug make a privacy decision.
+* **An opted-out user is never re-prompted.** A re-prompt is a dialog with a
+  Share button, and any implementation that reads "did not click Share" as
+  consent has published a user who declined. This is the subtlest line in the
+  file; it has a test and a mutation of its own.
 
-Enforcement point, in `Publish`:
+`PublishedFields` is the single source of truth for the disclosure, and the prompt
+renders from it — a hand-written disclosure is a lie the first time a field is
+added to the export.
 
-```go
-if optedIn, err := ShareOptedIn(ctx, tx, userID); err != nil {
-    return err
-} else if !optedIn {
-    // Hard stop, in the same place the permission is read. Not "omit the user
-    // from the query" -- a refactor could drop that filter and silently resume
-    // publishing. See spec §6.1.
-    audit(ctx, tx, userID, "publish_refused_optout", ...)
-    return ErrConsentOptedOut
-}
-```
+### Step 3.2 — The exporter. Done
 
-**Verify:**
+(`internal/collab/exporter.go`)
 
-- `TestPublish_RefusedWhenOptedOut` — and assert the audit row says
-  `publish_refused_optout`, so a refusal is observable, not silent
-- `TestExport_ExcludesFilenamesAndPaths` — walk the marshalled payload and
-  assert no key or value matches a path, a filename, a hostname or an IP. This
-  is a string assertion over the actual JSON, because a struct-level assertion
-  cannot see a field added later.
-- `TestExport_DryRunIsTheDefault` — the first sync after consent writes to disk
-  and sends nothing
+The plan's test list is honoured by name, and the third one is the interesting
+one. `TestExport_ExcludesFilenamesAndPaths` walks the **marshalled JSON**,
+because a struct-level assertion cannot see a field added to the payload later.
 
-**This is the milestone where a mistake is irreversible** — a published private
-library cannot be unpublished from users' copies. Mutation-check the opt-out:
-make `ShareOptedIn` always return true and confirm `TestPublish_RefusedWhenOptedOut`
-fails.
+**Three defects the tests found, each of which would have shipped:**
 
-### Step 3.3 — Serving the commons
+1. **The path guard did not work.** It scanned the marshalled blob for values
+   that *begin* with a path, so a payload carrying a path inside a longer string
+   passed. Only a **positive control** — a deliberately dirty payload the guard
+   must reject — caught it. A guard tested only with clean fixtures proves
+   nothing about whether the guard fires.
+2. Fixing that made the guard **too eager**: it refused a DNS-shaped instance
+   name, which is legitimate and operator-chosen. The check is now scoped to
+   `entries[].fields` and `fingerprints` — the user's data — with the reasoning
+   written at the carve-out, because a carve-out with no stated reason becomes a
+   hole.
+3. The guard **cannot distinguish a path from a title that is a path**; the bytes
+   are identical. That limit is now pinned by a test rather than asserted away:
+   the cost is a rare, visible, user-fixable failure; the alternative makes the
+   guard useless for the case it exists for.
 
-An authenticated read endpoint over `Payload`, plus push to configured peers.
-Federation is opt-in per peer with a per-peer key and a signed submission id.
+`BuildPayload` deliberately does **not** check consent. An exporter that silently
+returned nothing for an opted-out user would be indistinguishable from one that
+returned nothing because the library was empty — and that difference is exactly
+what an operator needs. Consent is enforced inside `Publish`, and the refusal is
+**audited before it returns**.
 
-**Verify:** `TestFederation_OptOutPeerReceivesNothing`,
-`TestFederation_SignedIdRejectsTampering`, `TestCommons_UnauthenticatedReadIs404`.
+### Step 3.3 — Federation. Done
+
+(`internal/collab/federation.go`)
+
+Per-peer opt-in, per-peer key, signed submission id, and an authenticated read.
+
+* **Publishing and consuming are independent flags.** §6.5 says an instance may
+  consume a peer's commons "without publishing to it"; a single `Federated bool`
+  makes that inexpressible, and the fix afterwards is always to publish to people
+  you did not mean to. All four combinations are walked by a test.
+* **Two checks, both required, before acceptance.** The signature says who sent
+  it; the content-address check says what it contains. Signing the id is only
+  safe because the id is derived from the content — so the content is re-hashed
+  on receipt, or a peer could sign an id for an empty payload and send a full
+  one. The library id is a **parameter** to that check, not read from the
+  payload, because the sender must not supply the value the hash binds.
+* **404, not 403**, for both "denied" and "does not exist" — they must be
+  indistinguishable or the endpoint confirms which libraries exist. An absent
+  authorizer is treated as *denied*, never as allowed.
+* **Unknown peer ≠ bad signature.** An unconfigured peer is a configuration
+  question; conflating it with tampering sends an operator hunting a breach that
+  did not happen.
+
+### What M3 found
+
+`appSchemaVersion` was 100 while the new migrations were 101 and 102, so golang-
+migrate stopped at the recorded version and simply **never applied them**. The
+symptom was six tests failing at once with "no such table: consent_preferences".
+`TestStashForge_SchemaVersionMatchesAppSchemaVersion` already guarded exactly
+this and passes now — but it only runs under the integration tag, so the
+`go test ./...` gate is green with an unapplied migration, which is worth knowing
+before the next one.
+
+And the shape repeated from M2c: `internal/collab`'s unit tests passed 100% while
+the sqlite adapter did not compile, because `collab.Rows` was missing `Close()`
+and the fake had been written to match the interface rather than the driver. A fake
+proves the logic; only a real database proves the SQL. Both files now say so.
+
+**Verification:** `internal/collab/mutate_consent.py` — **22 applied, 22 killed,
+0 survived, 0 broken**, across all three files. No EXEMPT list, because this is
+the milestone where a mistake is irreversible.
+
+**Exit status: done.**
 
 ---
 

@@ -27,9 +27,12 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 CONSENT = ROOT / "internal/collab/consent.go"
 EXPORTER = ROOT / "internal/collab/exporter.go"
+FEDERATION = ROOT / "internal/collab/federation.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
-TEST_RE = "Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|SubmissionID|AssertNo"
+TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
+           "SubmissionID|AssertNo|Federation|Commons|SignSubmission|MakeSubmission|"
+           "SummarizePeers|RedactPeerKey")
 
 # (file, label, old, new) -- each removes or inverts one safety property.
 CONSENT_MUTATIONS = [
@@ -115,10 +118,57 @@ EXPORTER_MUTATIONS = [
     ),
 ]
 
+FEDERATION_MUTATIONS = [
+    (
+        "federation: the constant-time compare becomes a byte-by-byte one",
+        "	if !hmac.Equal([]byte(want), []byte(signature)) {",
+        "	if want != signature {",
+    ),
+    (
+        "federation: the content-address check is skipped (signature alone accepted)",
+        "	if err := VerifySubmissionContent(p, libraryID); err != nil {\n		r.audit(ctx, peer, \"federation_rejected_content_mismatch\", err)\n		return err\n	}",
+        "",
+    ),
+    (
+        "federation: the consume flag is not checked on receive",
+        "	if !peer.ConsumeFrom {\n		return fmt.Errorf(\"%w: peer %d (%s)\", ErrPeerConsumeNotEnabled, peer.ID, peer.Name)\n	}",
+        "",
+    ),
+    (
+        "federation: the publish flag is not checked when signing",
+        "	if !peer.PublishTo {\n		return SignedSubmission{}, fmt.Errorf(\"%w: peer %d (%s)\", ErrPeerPublishNotEnabled, peer.ID, peer.Name)\n	}",
+        "",
+    ),
+    (
+        "federation: an empty signature is accepted as if it verified",
+        "	if signature == \"\" {\n		return ErrUnsignedSubmission\n	}",
+        "",
+    ),
+    (
+        "federation: the commons read treats a missing authorizer as allowed",
+        "	if !allowed {\n		return Payload{}, ErrCommonsNotFound\n	}",
+        "	_ = allowed",
+    ),
+    (
+        "federation: the domain separator is dropped from the MAC",
+        "	mac.Write([]byte(\"stashforge/federation/v1\"))\n	mac.Write([]byte{0})",
+        "",
+    ),
+    (
+        "federation: a peer without a key is allowed to sign",
+        "	if len(peer.Key) == 0 {\n		// A peer with no key cannot sign, and an unsigned submission is refused\n		// on the receiving end anyway -- so failing here gives the operator a\n		// useful message instead of a rejection from a peer they cannot debug.\n		return SignedSubmission{}, fmt.Errorf(\"federation: peer %d (%s) has no key configured\", peer.ID, peer.Name)\n	}",
+        "",
+    ),
+]
+
 
 def main():
-    work = [(CONSENT, m) for m in CONSENT_MUTATIONS] + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER)}
+    work = (
+        [(CONSENT, m) for m in CONSENT_MUTATIONS]
+        + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
+        + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
+    )
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION)}
     killed, survived, broken = [], [], []
 
     try:

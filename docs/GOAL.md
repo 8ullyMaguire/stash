@@ -49,15 +49,16 @@ The suite is now fully green: no failing test at any milestone.
 | `m2-proposal-path` (vocabulary + proposer) | 1000 / 0 | 1287 / 1 |
 | `m2-apply-path` (applier + sqlite targets) | 969 / 0 | **2287 / 0** |
 | `m2c-identity-clustering` (plan 2.4b, steps 0-9) | 643 / 0 | **1111 / 0** |
+| `m3-metadata-sharing` (consent + exporter + federation) | 682 / 0 | **1158 / 0** |
 
 Rows 1-4 are sequential snapshots of M2. The `1` failure in each of those rows is
 the same test, and it is now fixed: `TestStudioQueryFast`, the pre-existing
 unregistered-`mod` bug (see `docs/BASELINE.md`). The jump in the
 `m2-apply-path` row is the apply milestone's own growth.
 
-The `m2c-identity-clustering` row is a different milestone (plan step 2.4b), counted
-the same way as the rows above it: 643 top-level unit and 1111 top-level
-integration. Those are **not** comparable to the 2287 in the `m2-apply-path` row,
+The `m2c-identity-clustering` and `m3-metadata-sharing` rows are later
+milestones, counted the same way as the rows above them: 643/1111 and 682/1158
+top-level unit/integration respectively. Those are **not** comparable to the 2287 in the `m2-apply-path` row,
 which is a subtest-inclusive count — the same tree counted that way today gives
 2788 integration and 1410 unit. The column header is what makes the rows look
 like one series, so the counting method is stated here: use
@@ -114,6 +115,36 @@ stages reachable only from their own tests — is closed, and *how* it was close
 the milestone's finding: the store implemented three of the four methods the pass's
 interface needed, and no build said so, because no file imported both packages.
 Step 2.4b.9 below has the detail, including one claim this step had to retract.
+
+**M3 — metadata sharing is done** (`50bbb3cf4`, `32f0c149f`, and the federation
+commit). Consent, the exporter, and peer federation all landed, plus a step the
+plan did not ask for: `libraries` and `user_library_access` did not exist, and
+both §6.2 and §6.4 refer to them as though they did, so "an opted-out library
+exports nothing" was not achievable without them.
+
+The milestone's exit criterion is the one place in the project where a mistake is
+irreversible, so it is mutation-checked harder than anything else here:
+**22 applied, 22 killed, 0 survived, 0 broken**, with no EXEMPT list.
+
+Three defects the tests caught, each of which would have shipped:
+
+1. **The path guard did not work.** It scanned the marshalled JSON for values
+   that *begin* with a path, so a path inside a longer string passed it. Only a
+   positive control — a deliberately dirty payload the guard must reject — found
+   it. A guard tested only with clean fixtures proves nothing.
+2. Fixing that made it **too eager**: it refused a DNS-shaped instance name,
+   which is legitimate. The check is now scoped to the user's data, with the
+   reasoning at the carve-out.
+3. The guard **cannot tell a path from a title that is a path.** That limit is
+   now pinned by a test rather than asserted away.
+
+And one the integration suite caught: `appSchemaVersion` was 100 with migrations
+101 and 102 present, so golang-migrate stopped at the recorded version and
+**never applied them**. Six tests failed at once with "no such table". The
+guard test for it already existed — but it lives under the integration tag, so
+`go test ./...` is green with an unapplied migration.
+
+See `docs/HANDOFF.md` for the cold-start summary.
 
 Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2. **Done**
 (`4e43ea0f`, `836cbb08`).
