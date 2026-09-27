@@ -98,7 +98,42 @@ One accepted proposal produces exactly one audit row, however many workers run.
 A value that became invalid between proposal and apply is rejected without
 touching the target.
 
-Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2.
+Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2. **Done**
+(`4e43ea0f`, `836cbb08`). Next is **M2b — governance v2** (plan step 2.4a),
+replacing the flat acceptance arithmetic with Commons §8.1–8.5.
+
+### What step 2.5 found: the governance layer was unreachable
+
+`collab.ProposalStore` had **no implementation anywhere in the tree**. The
+`Proposer`, the sticky-rejection rule, the vocabulary, the acceptance
+arithmetic — all of it was callable only by its own unit tests, running against
+fakes. M2 was green throughout: 962 unit and 2287 integration tests, and nothing
+in the application could reach the governance logic.
+
+**A pure module with fake-backed tests verifies its logic and nothing about
+whether anything can call it.** The tests were not wrong; they answered a
+different question. Step 2.5 was the first step that had to reach the code from
+outside the package, and that is what exposed it.
+
+Two bugs the write-path test found in itself, worth keeping as a rule:
+
+- The first version matched writer calls **by method name**, which flagged
+  `SceneMarkerStore.UpdateTags` — a user tagging their own bookmark, which is
+  personal state, not a claim about shared content. A test that fails on
+  legitimate code gets deleted, taking the real check with it. Now matched by
+  **receiver type**, with `sharedFieldStores` an explicit list so "is this
+  shared?" is a stated judgement rather than an accident of naming.
+- The scanner then passed while matching **nothing**: `stripImports` used an
+  anchored `(?s)` pattern that ate most of any file without an import block, and
+  the declaration regex consumed the trailing `Store` while the comparison
+  looked for `SceneStore`. `TestWritePathDetectorCatchesAViolation` is the
+  meta-test that caught both, asserting known-answer snippets in both
+  directions. A detector never observed to fail is a detector whose failure mode
+  is silence.
+
+Also fixed: `internal/collab/apply_test.go`'s fake still lacked `DeciderID`, so
+**`go test ./...` did not compile at HEAD**. Committed in `7a34d330`, never
+rebuilt since the decider fix.
 
 ### Four bugs the apply path exposed, and one it did not
 
