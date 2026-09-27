@@ -90,6 +90,28 @@ func CosineDistance(a, b []float32) (float64, error) {
 		return 0, fmt.Errorf("%w: empty", ErrInvalidEmbedding)
 	}
 
+	// Validate BOTH operands before computing anything.
+	//
+	// The first version only validated the sum of squares, which catches a
+	// vector of all zeroes and a NaN in the run-up to it -- but NaN in a later
+	// position still poisons `dot` and `normB`, `cos` comes out NaN, and BOTH
+	// clamp comparisons are false against NaN, so a NaN distance was returned
+	// WITH NO ERROR. A test caught it: one poisoned row in a candidate index
+	// produced dist=NaN and no complaint.
+	//
+	// That is the worst shape a distance can have. It sorts unpredictably, it
+	// compares false against every threshold in the milestone, and it reads as
+	// a legitimate candidate -- so a face whose embedding was NaN would be
+	// offered to the over-merge guard and the assign margin, and both would
+	// treat it as infinitely far, which is the same "found nothing" failure as
+	// step 2.4b.0 one layer down.
+	if err := ValidateEmbedding(a); err != nil {
+		return 0, fmt.Errorf("a: %w", err)
+	}
+	if err := ValidateEmbedding(b); err != nil {
+		return 0, fmt.Errorf("b: %w", err)
+	}
+
 	var dot, normA, normB float64
 	for i := range a {
 		af, bf := float64(a[i]), float64(b[i])
@@ -105,7 +127,37 @@ func CosineDistance(a, b []float32) (float64, error) {
 	// Clamp. Floating point can produce 1.0000000000000002 for two identical
 	// vectors, and a distance above 1 on the identical case is a number every
 	// threshold in the milestone will read as "slightly too far".
-	if cos > 1 {
+	//
+	// The LOWER bound matters for the same reason from the other side.
+	// Identical vectors can also land at cos = 0.9999999999999999, giving a
+	// distance of 1.1e-16 rather than 0. A candidate's own row in the index is
+	// its own nearest, and a caller dropping the self-match by testing `== 0`
+	// would keep it -- so a face is compared against itself and, being
+	// arbitrarily close to itself, is merged into its own cluster. Both bounds
+	// are needed for "identical means exactly identical" to be a property a
+	// caller can test rather than approximate.
+	// "Identical means exactly identical" has to be a property a caller can
+	// TEST, because a caller dropping a candidate's self-match does it by
+	// testing for distance 0, and floating point gives 1.1e-16 for vectors that
+	// are the same data. So exact equality is resolved here.
+	//
+	// The clamps around it are UNREACHABLE DEFENCE, and that is worth knowing
+	// rather than pretending otherwise. The Cauchy-Schwarz bound says cos <= 1;
+	// a search for a reachable pair that exceeds it (long normalised vectors,
+	// near-identical perturbations, up to 65536 components) found none, and the
+	// exact-equality branch above handles the one case that gets close. Two
+	// mutations that remove the clamps therefore survive, and the honest
+	// reading is that the clamps are not load-bearing rather than that a test
+	// is missing.
+	//
+	// They are kept for two reasons that are about the future, not the present:
+	// a caller may pass un-normalised vectors, where the bound does not apply;
+	// and a change to the normalisation that reintroduced the drift would
+	// silently produce distances above 1. One line each, documented as
+	// defensive, is a fair price for not having to rediscover this.
+	if sameVector(a, b) {
+		cos = 1
+	} else if cos > 1 {
 		cos = 1
 	} else if cos < -1 {
 		cos = -1
@@ -346,4 +398,22 @@ func digestFile(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// sameVector reports whether two vectors are element-wise equal.
+//
+// An exact comparison, deliberately. Normalising a vector is idempotent, so
+// callers who normalise on the way in and callers who do not still store the
+// same values for the same face; the comparison is for equality of the stored
+// data, not for approximate similarity, which is what the cosine is for.
+func sameVector(a, b []float32) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -426,3 +426,70 @@ func TestEmbedding_AModelThatChangesItsOutputWidthIsRefused(t *testing.T) {
 		t.Errorf("got %v, want ErrDimensionMismatch", err)
 	}
 }
+
+// TestCosineDistance_AnUnusableOperandIsRefusedNotJustNoticed is the test that
+// pins the bug the candidate stage found.
+//
+// A NaN in EITHER operand must produce an error, not a NaN distance.
+//
+// The trap: both clamp comparisons in CosineDistance are `if cos > 1` and
+// `else if cos < -1`, and against NaN BOTH are false. So a NaN passed through
+// the clamp untouched and was returned with err == nil. It sorted unpredictably,
+// compared false against every threshold in the milestone, and was offered to
+// the over-merge guard as a candidate -- which treated it as infinitely far.
+// A face with a NaN embedding was therefore indistinguishable from a face
+// nobody has looked at, which is the exact failure step 2.4b.0 was built to
+// prevent, one layer down.
+//
+// Validating only the running sum of squares was not enough: it catches a NaN
+// only when the NaN precedes the accumulation that dominates. Here the NaN sits
+// at index 0 with three finite values behind it, and the sum was non-zero.
+func TestCosineDistance_AnUnusableOperandIsRefusedNotJustNoticed(t *testing.T) {
+	good := []float32{1, 0, 0, 0}
+
+	// NaN at EVERY position, so the test does not depend on where it lands.
+	for i := range 4 {
+		bad := []float32{1, 0, 0, 0}
+		bad[i] = float32(math.NaN())
+		for _, pair := range [][2][]float32{{good, bad}, {bad, good}, {bad, bad}} {
+			d, err := CosineDistance(pair[0], pair[1])
+			if err == nil {
+				t.Errorf("NaN at index %d returned distance %v and NO error; "+
+					"a NaN distance compares false against every threshold in "+
+					"the milestone, so a face with a NaN embedding is "+
+					"indistinguishable from a face nobody looked at",
+					i, d)
+			}
+			// The returned distance is 0 on every refusal, because the error
+			// path returns a zero value rather than a computed one. That is the
+			// right choice -- a caller that ignores the error gets 0, which
+			// reads as "identical", rather than a NaN that poisons the sort. So
+			// there is nothing further to assert about d here; the error IS the
+			// signal, and a caller that checks it is safe.
+		}
+	}
+
+	// The same for infinity, which poisons the sum the same way and does NOT
+	// get caught by a NaN-only check.
+	for _, v := range [][]float32{
+		{float32(math.Inf(1)), 0, 0, 0},
+		{1, 0, 0, float32(math.Inf(-1))},
+	} {
+		if _, err := CosineDistance(good, v); err == nil {
+			t.Errorf("an infinity in an operand was accepted: %v", v)
+		}
+		if _, err := CosineDistance(v, good); err == nil {
+			t.Errorf("an infinity in the first operand was accepted: %v", v)
+		}
+	}
+
+	// And a valid pair still works -- the validation must not have become a
+	// blanket refusal.
+	d, err := CosineDistance(good, []float32{0, 1, 0, 0})
+	if err != nil {
+		t.Fatalf("two valid vectors were refused: %v", err)
+	}
+	if math.Abs(d-1) > 1e-9 {
+		t.Errorf("orthogonal distance is %v, want 1", d)
+	}
+}
