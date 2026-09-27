@@ -147,6 +147,30 @@ func TestInstanceModeStore_ModeChangedByIsRecorded(t *testing.T) {
 	})
 }
 
+// TestInstanceModeStore_RequireWizardAgainstTheRealStore: the gate is proven with
+// the real InstanceModeStore as its Gate, not a stub. A stub proves the rule; this
+// proves the store actually satisfies the interface the server will use -- and it
+// would have caught the two `err == sql.ErrNoRows` sites, because a stubbed Gate
+// never exercises a query.
+func TestInstanceModeStore_RequireWizardAgainstTheRealStore(t *testing.T) {
+	store := sqlite.NewInstanceModeStore()
+
+	runWithRollbackTxn(t, "gate refuses then permits", func(t *testing.T, ctx context.Context) {
+		// Incomplete: refused, whatever the row says.
+		require.NoError(t, exec(t, ctx, "UPDATE instance_settings SET mode = 'public' WHERE id = 1"))
+		_, err := collab.RequireWizard(ctx, store)
+		require.Error(t, err)
+		assert.True(t, collab.IsWizardIncomplete(err),
+			"an unconfigured instance must refuse even when the row already says public")
+
+		// Complete: permitted, and the mode comes through.
+		require.NoError(t, store.CompleteWizard(ctx, collab.ModeContribute, nil))
+		mode, err := collab.RequireWizard(ctx, store)
+		require.NoError(t, err)
+		assert.Equal(t, collab.ModeContribute, mode)
+	})
+}
+
 // TestInstanceModeStore_AMissingRowReadsAsPrivateAndUnconfigured exercises the
 // fail-closed path, which no other test reaches: the migration seeds the row, so
 // in normal operation ErrNoRows never fires and the branch is dead code that

@@ -244,6 +244,81 @@ func CheckStartup(mode Mode, scheme string, wizardCompleted bool) error {
 // chose it.
 var ErrModeNotChosen = errors.New("public mode was not chosen by the operator")
 
+// ErrWizardIncomplete is returned by every guarded operation until the
+// first-run wizard has been answered.
+//
+// This is the enforcement behind the plan's "a blocking screen that makes the
+// mode choice explicit". The screen is the friendly part; this is the part that
+// actually holds. A client-side gate is a suggestion, because the client is
+// whatever the caller sent -- so the rule lives here, in the server, where
+// skipping it requires patching the binary.
+type ErrWizardIncomplete struct{}
+
+// Error names the fix, because a bare "forbidden" leaves the operator guessing
+// which of the two refusals they hit.
+func (e ErrWizardIncomplete) Error() string {
+	return "the first-run wizard has not been completed: " +
+		"choose an instance mode at /setup before using the API"
+}
+
+// Is lets a caller test for it without importing errors, matching the style of
+// the other sentinels in this package.
+func (e ErrWizardIncomplete) Is(err error) bool {
+	_, ok := err.(ErrWizardIncomplete)
+	return ok
+}
+
+// Gate is the per-operation guard.
+//
+// One call at the top of each guarded handler, rather than a check in every
+// handler body: a middleware-style wrapper means a new endpoint is guarded by
+// being routed through the wrapper, not by remembering. That is the whole
+// difference between "the wizard cannot be skipped" and "the wizard is skipped
+// in the one handler someone forgot".
+type Gate interface {
+	// Mode returns the instance posture, or the refusal if the wizard is
+	// incomplete.
+	Mode(ctx context.Context) (Mode, error)
+	// WizardCompleted reports whether the wizard has been answered, WITHOUT
+	// refusing. Some operations need the raw answer -- chiefly the wizard's own
+	// completion call, which is the one thing allowed before it is complete.
+	WizardCompleted(ctx context.Context) (bool, error)
+}
+
+// RequireWizard returns the mode, or ErrWizardIncomplete.
+//
+// Written as a free function over the Gate interface so the store satisfies it
+// without importing anything, and so a test can substitute a stub that always
+// refuses.
+func RequireWizard(ctx context.Context, g Gate) (Mode, error) {
+	done, err := g.WizardCompleted(ctx)
+	if err != nil {
+		return ModePrivate, err
+	}
+	if !done {
+		// Refuse BEFORE reading the mode. A mode read on an unconfigured
+		// instance is a value nobody chose, and letting it out -- even as a
+		// refusal path -- is how "public" ends up as an answer to a question
+		// that was never asked.
+		return ModePrivate, ErrWizardIncomplete{}
+	}
+	m, err := g.Mode(ctx)
+	if err != nil {
+		return ModePrivate, err
+	}
+	return m, nil
+}
+
+// IsWizardIncomplete reports whether an error is the wizard refusal, so a
+// handler maps it to a redirect rather than string-matching.
+func IsWizardIncomplete(err error) bool {
+	if err == nil {
+		return false
+	}
+	var w ErrWizardIncomplete
+	return errors.As(err, &w)
+}
+
 // ModeFromContext reads the mode an instance is running in.
 type ModeKey struct{}
 

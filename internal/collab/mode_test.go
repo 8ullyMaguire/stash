@@ -291,6 +291,117 @@ func TestCheckStartup_WizardGatesThePublicMode(t *testing.T) {
 	}
 }
 
+// stubGate is a Gate whose answers the test dictates.
+type stubGate struct {
+	mode      Mode
+	done      bool
+	modeErr   error
+	wizardErr error
+}
+
+func (g stubGate) Mode(context.Context) (Mode, error)            { return g.mode, g.modeErr }
+func (g stubGate) WizardCompleted(context.Context) (bool, error) { return g.done, g.wizardErr }
+
+// TestRequireWizard_TheWizardCannotBeSkipped is the plan's step 4.4 requirement,
+// tested on the server rather than in a browser.
+//
+// The plan asks for "a browser test that the wizard cannot be skipped". A
+// client-side check cannot establish that: the client is whatever bytes the
+// caller sent, so a test that clicks past the screen proves only that the screen
+// was clickable. The property that actually matters -- that the API refuses
+// until the mode is chosen -- is a property of the server, and this is where it
+// is pinned. A browser test would be a second, weaker check of the same rule.
+func TestRequireWizard_TheWizardCannotBeSkipped(t *testing.T) {
+	// Not completed: every guarded operation refuses, whatever the row says.
+	// Including a row that says public, which is the dangerous case.
+	for _, rowMode := range []Mode{ModePrivate, ModeContribute, ModePublic} {
+		g := stubGate{mode: rowMode, done: false}
+		_, err := RequireWizard(context.Background(), g)
+		if err == nil {
+			t.Errorf("with a %q row and the wizard incomplete, the operation was allowed", rowMode)
+			continue
+		}
+		if !IsWizardIncomplete(err) {
+			t.Errorf("with a %q row and the wizard incomplete, got %v, want the wizard refusal", rowMode, err)
+		}
+	}
+
+	// Completed: the mode comes back, and all three are permitted.
+	for _, m := range []Mode{ModePrivate, ModeContribute, ModePublic} {
+		g := stubGate{mode: m, done: true}
+		got, err := RequireWizard(context.Background(), g)
+		if err != nil {
+			t.Errorf("with the wizard complete and mode %q, got %v, want success", m, err)
+		}
+		if got != m {
+			t.Errorf("mode = %q, want %q", got, m)
+		}
+	}
+}
+
+// TestRequireWizard_RefusesBeforeReadingTheMode: the gate must not read the mode
+// on an unconfigured instance. Reading it is harmless in itself, but the ORDER is
+// the guarantee: a mode nobody chose must not become an answer to a question that
+// was never asked, and "read then refuse" invites a future change to
+// "read, log, and refuse" which leaks it into a log.
+func TestRequireWizard_RefusesBeforeReadingTheMode(t *testing.T) {
+	// A gate whose Mode() would fail loudly proves it was not called.
+	g := countingGate{done: false, modeCalls: new(int)}
+	_, err := RequireWizard(context.Background(), g)
+	if !IsWizardIncomplete(err) {
+		t.Fatalf("got %v, want the wizard refusal", err)
+	}
+	if *g.modeCalls != 0 {
+		t.Errorf("Mode() was called %d times before the wizard refusal; it must be read only after the wizard is complete", *g.modeCalls)
+	}
+}
+
+type countingGate struct {
+	mode      Mode
+	done      bool
+	modeCalls *int
+}
+
+func (g countingGate) Mode(context.Context) (Mode, error) {
+	*g.modeCalls++
+	return g.mode, nil
+}
+func (g countingGate) WizardCompleted(context.Context) (bool, error) { return g.done, nil }
+
+// TestRequireWizard_DatabaseErrorsPropagate: a store failure must not be reported
+// as "the wizard is incomplete", which would send an operator to the setup screen
+// when the real problem is a broken database.
+func TestRequireWizard_DatabaseErrorsPropagate(t *testing.T) {
+	wanted := errors.New("database is on fire")
+
+	if _, err := RequireWizard(context.Background(), stubGate{wizardErr: wanted}); !errors.Is(err, wanted) {
+		t.Errorf("a wizard read failure returned %v, want the underlying error", err)
+	}
+	_, err := RequireWizard(context.Background(), stubGate{done: true, modeErr: wanted})
+	if !errors.Is(err, wanted) {
+		t.Errorf("a mode read failure returned %v, want the underlying error", err)
+	}
+
+	// And a nil error is not the wizard refusal.
+	if IsWizardIncomplete(nil) {
+		t.Error("IsWizardIncomplete(nil) = true")
+	}
+	if IsWizardIncomplete(wanted) {
+		t.Error("an unrelated error was reported as the wizard refusal")
+	}
+}
+
+// TestErrWizardIncomplete_NamesTheFix: the message has to say where to go,
+// because a bare "forbidden" leaves the operator guessing which refusal they hit.
+func TestErrWizardIncomplete_NamesTheFix(t *testing.T) {
+	msg := ErrWizardIncomplete{}.Error()
+	for _, want := range []string{"wizard", "/setup", "mode"} {
+		if !contains2(msg, want) {
+			t.Errorf("message %q should mention %q", msg, want)
+		}
+	}
+}
+
 func contains2(haystack, needle string) bool {
 	for i := 0; i+len(needle) <= len(haystack); i++ {
 		if haystack[i:i+len(needle)] == needle {

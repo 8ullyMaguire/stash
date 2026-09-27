@@ -63,6 +63,20 @@ type SessionStore struct {
 	// means test order changes the result. Stash is single-process, so
 	// per-store is also the correct production granularity.
 	fails *failedAttempts
+
+	// totp is the 2FA hook, nil when the instance has no 2FA configured at all.
+	// A nil verifier means "no 2FA in this build", which is DIFFERENT from a
+	// verifier that reports every user as not-required: the first is an
+	// unconfigured instance and the second is a configured one where this user
+	// has opted out. Both allow the login, but only the second is a decision.
+	totp TOTPVerifier
+
+	// totpRequired decides policy. Default nil means "a configured secret is
+	// required", which is the safe reading: an owner with a secret must use it.
+	totpRequired func(isOwner bool) bool
+
+	// totpStore holds the secret and the durable spend record. See totp.go.
+	totpStore TOTPStore
 }
 
 // SessionConfig is the subset of Stash's config this store needs. It is
@@ -268,6 +282,16 @@ type LoginResult struct {
 // roughly the same time. The *reason* is written to the audit log, which
 // moderators read, rather than returned to a caller who does not deserve it.
 func (s *SessionStore) Login(ctx context.Context, username, password, ip, userAgent string) (*LoginResult, error) {
+	return s.login(ctx, username, password, "", ip, userAgent)
+}
+
+// LoginWithTOTP is Login with a one-time code. The code is a parameter rather
+// than a session-wide field so that two logins cannot share it.
+func (s *SessionStore) LoginWithTOTP(ctx context.Context, username, password, code, ip, userAgent string) (*LoginResult, error) {
+	return s.login(ctx, username, password, code, ip, userAgent)
+}
+
+func (s *SessionStore) login(ctx context.Context, username, password, code, ip, userAgent string) (*LoginResult, error) {
 	now := s.now()
 
 	// Always run a verification, even with no user, so timing does not leak
@@ -325,6 +349,44 @@ func (s *SessionStore) Login(ctx context.Context, username, password, ip, userAg
 		// the same thing: whether an account is disabled is not the
 		// submitter's business, and surfacing it confirms the account exists.
 		s.auditLoginFailure(ctx, username, ip, "disabled")
+		return nil, models.ErrInvalidCredentials
+	}
+
+	// The 2FA gate, AFTER the password and account checks and BEFORE the
+	// throttle is cleared or a session is minted.
+	//
+	// After, because a wrong password must not be charged against the 2FA
+	// attempt budget -- otherwise an attacker who knows a password cannot be
+	// rate-limited on the code, and an attacker who does not can lock a user out
+	// of their own account by guessing codes.
+	//
+	// Before, because clearing the throttle first would let a user with a valid
+	// password and a wrong code reset their own lockout counter on every attempt.
+	if err := s.checkSecondFactor(ctx, user, code); err != nil {
+		// ErrTOTPRequired is the one distinguishable case: the password was
+		// correct and the server is asking for the second leg. The caller has
+		// already proven the password, so there is nothing left to disclose.
+		if errors.Is(err, ErrTOTPRequired) {
+			return nil, err
+		}
+		// Everything else -- a wrong code, a replayed code, a corrupt secret --
+		// collapses to ErrInvalidCredentials. The audit log keeps the reason;
+		// the submitter does not. A distinct response would confirm that the
+		// password was correct, which is the whole value of the second factor.
+		reason := "bad_totp"
+		if errors.Is(err, ErrTOTPSecretInvalid) {
+			reason = "corrupt_totp_secret"
+		} else if errors.Is(err, ErrTOTPStoreUnavailable) {
+			reason = "totp_store_unavailable"
+		}
+		// Charged against the same counter as a password failure, so an attacker
+		// guessing codes is rate-limited exactly as one guessing passwords is.
+		n := s.throttle().record(username, now)
+		auditReason := reason
+		if n >= MaxFailedAttempts {
+			auditReason = "locked_out"
+		}
+		s.auditLoginFailure(ctx, username, ip, auditReason)
 		return nil, models.ErrInvalidCredentials
 	}
 

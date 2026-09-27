@@ -37,6 +37,8 @@ FEDERATION = ROOT / "internal/collab/federation.go"
 TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
            # M4 step 4.2: the replay guard, the counter, and the truncation.
            "TOTP|"
+           # M4 step 4.4: the wizard gate.
+           "RequireWizard|WizardIncomplete|"
            "SubmissionID|AssertNo|Federation|Commons|SignSubmission|MakeSubmission|"
            "SummarizePeers|RedactPeerKey|"
            # M4: the mode rules. CheckStartup and the media refusal, the two
@@ -276,6 +278,27 @@ TOTP_FIXTURES = [
     ("the purge drops steps that are still inside the window",
      "\toldest := totpCounter(now) - TOTPSkew",
      "\toldest := totpCounter(now) - 1000"),
+    # M4 step 4.4: the wizard gate. "The wizard cannot be skipped" is only true
+    # while this comparison is true.
+    ("the wizard gate lets an incomplete instance through",
+     "\tif !done {",
+     "\tif false {"),
+    ("the wizard gate is inverted",
+     "\tif !done {",
+     "\tif done {"),
+    # The gate must refuse BEFORE reading the mode, so an unchosen mode never
+    # becomes an answer to a question nobody asked.
+    ("the gate reads the mode before checking the wizard",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tif m, mErr := g.Mode(ctx); mErr == nil && m == ModePublic {\n\t\treturn m, nil\n\t}\n\tdone, err := g.WizardCompleted(ctx)"),
+    # A database failure reported as "wizard incomplete" sends the operator to
+    # the setup screen when the real problem is a broken database.
+    ("a database failure is reported as the wizard refusal",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, err\n\t}",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, ErrWizardIncomplete{}\n\t}"),
+    ("an invalid mode from the gate is not an error",
+     "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, err\n\t}\n\treturn m, nil\n}",
+     "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, nil\n\t}\n\tif !m.Valid() {\n\t\treturn ModePublic, nil\n\t}\n\treturn m, nil\n}"),
 ]
 
 
