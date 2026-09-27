@@ -205,7 +205,57 @@ from a browser. In order of what a user would notice first:
   - **A signed-URL request has no user id** and is therefore refused on a public
     instance. Deliberate: a device that cannot send a cookie cannot send a grant.
 - **Still no UI.** Everything in M4 is server-side and tested; nothing is
-  reachable from a browser. In order of what a user would notice first:
+  reachable from a browser. The one remaining M4 item is **the `/setup` screen** —
+  the wizard's server gate (`collab.RequireWizard`) is done, and `ui/v2.5` has no
+  test runner, so the browser test the plan names would mean introducing a
+  framework. The security property holds without it.
+- ~~**GraphQL for 2FA, libraries, grants, consent.**~~ **Done** —
+  `graphql/schema/types/hosting.graphql`,
+  `internal/api/resolver_mutation_hosting.go`, `internal/api/models_hosting.go`,
+  `internal/collab/library.go`, `pkg/sqlite/stashforge_libraries.go`.
+  **Three things to know before changing any of it:**
+  - **`collab.Library` is a DOMAIN type, not a row struct, because `is_private`
+    is a three-state column and a Go `bool` cannot hold the third.** A library
+    that defers to its owner's consent is not the same as one marked
+    not-private, and gqlgen maps a nil pointer onto a non-null `Boolean` by
+    returning `false` — which publishes a library nobody chose to publish.
+  - **Libraries are per-user, not instance-wide** (101: `user_id` NOT NULL,
+    names unique per owner). The first version of the schema described
+    instance-wide libraries, which is a different data model wearing the same
+    names.
+  - **A 2FA mutation takes a code, never a user id.** `disableTOTP(userId:)` would
+    be a mutation any account could point at the owner.
+- **The mode is still chosen over HTTP, not GraphQL.** `POST /stashforge/wizard`
+  is a one-time, instance-key-gated decision and refuses a second POST on purpose;
+  changing a live mode afterwards needs a separate authenticated path, and
+  deliberately does not exist yet rather than riding on the wizard endpoint.
+
+**Four prose-versus-schema mismatches so far, all the same shape** — a COMMENT
+states a constraint, the DDL does not create it, and the comment is believed:
+
+1. The plan and GOAL.md list `movies` among the seven target tables. It is
+   `groups`; migration 65 renamed it.
+2. 101 says `UNIQUE per (owner, name)` and creates no such index. **Migration
+   106** adds it — a user could previously create "Main" three times.
+3. 105's partial unique index was on `(is_default)` alone — a UNIQUE constraint on
+   a **constant**, so it enforced *one default on the whole instance*. The second
+   user to create a library got a violation and **no default at all**, so every
+   one of their unscanned rows resolved to "no library, no owner" and the media
+   gate refused it. Now `(user_id, is_default)`.
+4. 105's comment said NULL resolves to the refusal; the code resolves it to the
+   default library. The code is right — NULL is the scanner's normal output, and
+   refusing it 404s the owner's own new files.
+
+**The rule: a comment in a migration is a claim about the schema, and the only
+way to know whether it holds is to read the DDL in the same file.** Be suspicious
+of a partial unique index whose `WHERE` clause is itself the constraint.
+
+**`TestStashForgeStoreConstructorsAreActuallyWired`** now guards the fourth
+"referenced != used": every `New*Store` in `pkg/sqlite` must be called from a
+non-test file. It caught `sqlite.ConsentStore` — fully implemented, fully tested,
+and built by nothing, so `setConsent` was dead code. It checks 30 constructors and
+is mutation-checked. **If you add a store, wire it in `internal/manager/init.go`
+after `Database.Open` and the test will tell you if you did not.**
 - ~~**TLS enforcement.** Nothing calls it yet.~~ **Done** — `Server.Start`
   refuses to boot when the mode forbids the scheme
   (`internal/api/server.go`, `checkInstancePosture`). A public instance over

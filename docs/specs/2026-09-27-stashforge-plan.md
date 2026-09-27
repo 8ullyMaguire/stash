@@ -1513,37 +1513,102 @@ part. That is a deliberate narrowing and it is the one piece of M4 left.
 
 ### What is left in M4
 
-**Two items, and one of the two is a documentation bug rather than work.**
+**One item, and it is the only one that is not server-side.**
 
-- **GraphQL for 2FA enrolment, the mode choice, and `grantLibraryAccess`.**
-  `graphql/schema/types/hosting.graphql` and
-  `internal/api/resolver_mutation_hosting.go`.
-- **The `/setup` screen itself.**
+- **The `/setup` screen itself.** The wizard's server gate
+  (`collab.RequireWizard`) is done and tested; `ui/v2.5` has no test runner, so
+  the browser test the plan names would mean introducing a framework. The
+  security property holds without it.
 
-**NOT left, despite being on this list until now: TOTP at-rest encryption.**
-The list said "the plan says *encrypted*; it is currently stored as base32 in a
-column, which is a plaintext secret". That was true when written and is false
-now: `internal/collab/totp_secret.go` seals with AES-256-GCM under a key derived
-from the instance key, `pkg/sqlite/stashforge_totp.go:114` calls it on every
-write, and migration 104's comment describes the stored form as
-`v1.<base64(nonce+ciphertext)>` with NULL distinguished from an empty string.
+**DONE since the previous revision of this list:**
 
-**Found by reading the store rather than the list, which is the second time
-this list was wrong in the same way.** A "what remains" list is a claim about
-code, and it decays silently: nothing marks it stale when the work it names
-arrives, so it keeps looking authoritative. The rule now is that this list is
-verified by `grep` before it is believed — which is also how the `movies` vs
-`groups` error survived in step 4.3. Both are the same defect: prose about
-code, trusted as code.
+- **GraphQL for 2FA, libraries, grants and consent** —
+  `graphql/schema/types/hosting.graphql`,
+  `internal/api/resolver_mutation_hosting.go`, `internal/api/models_hosting.go`,
+  `internal/collab/library.go`, `pkg/sqlite/stashforge_libraries.go`.
+- **TOTP at-rest encryption** — the list said "the plan says *encrypted*; it is
+  currently stored as base32 in a column, which is a plaintext secret". True
+  when written, false now: `internal/collab/totp_secret.go` seals with
+  AES-256-GCM under a key derived from the instance key, `pkg/sqlite/stashforge_totp.go`
+  calls it on every write, and migration 104 describes the stored form as
+  `v1.<base64(nonce+ciphertext)>`.
 
-Also corrected, and it changes the resolver design: **libraries are PER-USER,
-not instance-wide.** Migration 101 makes `libraries.user_id` `NOT NULL
-REFERENCES users(id)`, with `UNIQUE (user_id, name)` rather than a global unique
-name. So `Libraries` is "every library belonging to this user" — the index
-`idx_libraries_user` exists for exactly that query — and a grant names a
-(library, user) pair, not a folder on the instance. The first version of
-`hosting.graphql` described instance-wide libraries with an instance-wide grant
-button, which is a different data model wearing the same names.
+**Both were verified by `grep` before being believed, and both had to be.** A
+"what remains" list is a claim about code and it decays silently — nothing marks
+it stale when the work it names arrives. This is the same defect as `movies` vs
+`groups`, and it is now the rule: **a comment is a claim about the schema, and
+the only way to know whether it holds is to read the DDL in the same file.**
+
+### Migration 106 — and the fourth prose-versus-schema mismatch
+
+Writing the library store turned up three more of the same defect, which makes
+four in total. The shape is always identical: a COMMENT states a constraint, the
+DDL does not create it, and a reasonable reader — including me, later — believes
+the comment.
+
+1. **101 says `UNIQUE per (owner, name)` and creates no such index.** Its only
+   indexes are `idx_libraries_user` and `idx_libraries_private`. So a user could
+   create "Main" three times, the grant UI would show three libraries with the
+   same label, and nothing objected. Migration 106 adds it — per owner, not
+   globally, because 101 explicitly says two users may each own a "Main".
+2. **105's partial unique index was `UNIQUE (is_default) WHERE is_default = 1`.**
+   That is a UNIQUE constraint on a **constant**: every row in the index carries
+   the same value, so it permits exactly one such row in the whole table. It was a
+   *global* "one default on the instance" rule wearing the comment "at most one
+   default library", and it was **enforced** — the second user to create a library
+   got a violation and no default at all, so every one of their unscanned rows
+   resolved to "no library, no owner" and the gate refused it. Now
+   `(user_id, is_default)`.
+3. **105's comment said NULL resolves to the refusal; the code resolves it to the
+   default library.** The code was right and the comment was wrong, so the comment
+   is what changed. NULL is the scanner's normal output, not an anomaly.
+
+The shape to be suspicious of, learned the hard way: **a partial unique index
+whose `WHERE` clause is itself the constraint.** It reads like a filter and is a
+uniqueness rule, and on a constant column it means something almost nobody
+intended.
+
+### `TestStashForgeStoreConstructorsAreActuallyWired`
+
+The fourth "referenced != used": `sqlite.ConsentStore` was fully implemented and
+fully tested, and `NewConsentStore` appeared in **exactly one place in the tree —
+its own constructor**. Nothing built it, so `setConsent` would have been dead code
+written against a store no product path could reach. The whole suite was green
+throughout, as it was for `ProposalStore`, `ReputationStore` and the media gate.
+
+The test is one grep: every `New*Store` in `pkg/sqlite` must be called from a
+non-test file. It checks **30 constructors, all wired**, and it is
+mutation-checked — deleting the `ConsentStore` wiring makes it fail, naming the
+store. That is the whole family of bugs, and it costs about a second.
+
+It reported 30 false positives on its first run because it walked `..` from
+`internal/api` — which is `internal/`, not the repository — so it never saw
+`pkg/sqlite/database.go` where every upstream store is actually built. **A check
+that fails on everything the first time is a check whose scope is wrong, not one
+that has found thirty bugs.**
+
+### Four defects the new store's own tests found
+
+1. **`OwnedLibrary` returned two distinguishable errors** — `models.ErrNotFound`
+   for a library that does not exist, `ErrNotLibraryOwner` for one that is not
+   yours. That is an existence oracle: a caller probing ids learns exactly which
+   are real. Both are now the ownership refusal. This is *narrower* than the media
+   gate's 404 rule and the distinction is deliberate: the gate must not confirm a
+   **file** exists, while here the caller already holds the id and the risk is
+   only telling real ids from fake ones.
+2. **`findUsersByIDs` used raw SQL against `models.User`**, which has no `db` tags
+   at all. sqlx failed with `missing destination name created_at`. The tags are
+   on the package's own `userRow`, so the query has to go *through* `UserStore`
+   rather than around it.
+3. **Two refusals checked `models.ErrNotFound` where `dbWrapper.Get` returns
+   `sql.ErrNoRows`.** Neither fired, and the caller got `error executing SELECT id
+   from libraries...` — naming a column instead of an instruction. The package has
+   two not-found conventions and they are not interchangeable.
+4. **`UserStore.FindByUsername` returns `(nil, nil)` for a missing name**, not
+   `models.ErrNotFound` — the two contracts coexist in one package (`user.go:231`
+   swallows `sql.ErrNoRows`, `Find` does not). A caller checking only `err` passed
+   a nil `*models.User` through to `u.ID`: a nil dereference on a grant mutation,
+   triggered by typing a username that is not there.
 
 ---
 
