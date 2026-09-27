@@ -307,6 +307,34 @@ func (db *Database) openWriteDB() error {
 	return err
 }
 
+// SchemaColumns returns the real column names of a table, read with PRAGMA.
+//
+// Exists because the Go row structs are not a substitute for the schema. They
+// carry a `db` tag per field, and that LOOKS authoritative until you notice one
+// that names a column the table does not have -- which is exactly how spec §4.1
+// came to list `studio.url` and `group.title`, both of which do not exist.
+// Reading the schema is the only way to catch that class of mistake.
+//
+// The table name is passed as a PRAGMA ARGUMENT, never interpolated, because
+// this is a function an argument can reach.
+func (db *Database) SchemaColumns(ctx context.Context, table string) ([]string, error) {
+	rows, err := db.readDB.QueryxContext(ctx, "SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		return nil, fmt.Errorf("reading columns of %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
 func (db *Database) Remove() error {
 	databasePath := db.dbPath
 	err := db.Close()

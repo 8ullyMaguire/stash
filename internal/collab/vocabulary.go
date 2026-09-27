@@ -61,7 +61,12 @@ var vocabulary = map[string]map[string]proposableField{
 		"director":  {Type: TypeString},
 		"studio_id": {Type: TypeInt},
 		"date":      {Type: TypeDate},
-		"url":       {Type: TypeString},
+		// NO `url`. A scene's URLs live in the `scene_urls` JOIN table
+		// (scene.go:34), which is multi-valued and ordered. Proposing a single
+		// `url` would mean either inventing a column that does not exist or
+		// silently dropping every URL but one -- and "edit the url" is not an
+		// edit the single-field proposal model can express honestly. Out of
+		// scope until the proposal model carries list semantics.
 	},
 	"performer": {
 		"name":           {Type: TypeString},
@@ -72,9 +77,14 @@ var vocabulary = map[string]map[string]proposableField{
 		"country":        {Type: TypeString},
 	},
 	"studio": {
+		// NO `url`. The spec §4.1 list includes one; studios have no such column
+		// (see studio.go: ID, Name, ParentID, Rating, Details, Favorite,
+		// IgnoreAutoTag, Organized, ImageBlob). A vocabulary entry for a column
+		// that does not exist is a runtime SQL error waiting for the first
+		// proposal against a studio, so the map follows the schema and the spec
+		// is corrected in its own file.
 		"name":      {Type: TypeString},
 		"details":   {Type: TypeString},
-		"url":       {Type: TypeString},
 		"parent_id": {Type: TypeInt},
 	},
 	"tag": {
@@ -90,8 +100,15 @@ var vocabulary = map[string]map[string]proposableField{
 		"rating": {Type: TypeRating, Min: 1, Max: 5},
 	},
 	"group": {
-		"title":   {Type: TypeString},
-		"details": {Type: TypeString},
+		// NO `title` or `details`: a group has `name` and `description` (see
+		// group.go: ID, Name, Aliases, Duration, Date, Rating, StudioID,
+		// Director, Description). Spec §4.1 lists title/details, which are the
+		// GALLERY's fields -- most likely a copy-paste when the list was written.
+		"name":        {Type: TypeString},
+		"description": {Type: TypeString},
+		"date":        {Type: TypeDate},
+		"studio_id":   {Type: TypeInt},
+		"rating":      {Type: TypeRating, Min: 1, Max: 5},
 	},
 }
 

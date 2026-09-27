@@ -224,14 +224,32 @@ Only these fields are proposable, because an open field is a stored-XSS and a
 deserialisation surface:
 
 ```
-scene:     title, details, director, studio_id, date, url
+scene:     title, details, director, studio_id, date
 performer: name, disambiguation, details, gender, birthdate, country
-studio:    name, details, url, parent_id
+studio:    name, details, parent_id
 tag:       name, description
 gallery:   title, details
 image:     title, rating
-group:     title, details
+group:     name, description, date, studio_id, rating
 ```
+
+**Corrected 2026-09-27, during M2 step 2.4.** The original list was written from
+assumption rather than from the schema, and four of its entries name columns that
+do not exist:
+
+| listed | reality |
+|---|---|
+| `scene.url` | URLs live in the `scene_urls` **join table** (scene.go:34), multi-valued and ordered. A single-valued `url` proposal would have to invent a column or silently drop every URL but one. Out of scope until the proposal model carries list semantics. |
+| `studio.url` | studios have no `url` column. |
+| `group.title`, `group.details` | a group has `name` and `description`; title/details are the **gallery's** fields, so this was a copy-paste. |
+| `gallery.details` etc. | fine. |
+
+Each of these would have been a runtime SQL error on the first proposal touching
+it — a 500, discovered by a user, not a 422. `TestVocabulary_EveryFieldIsARealColumn`
+in `pkg/sqlite` now reads the real columns with PRAGMA and asserts the two agree,
+and it is mutation-checked by re-adding `scene.url` and confirming the test
+fails. **A vocabulary derived from assumption is a stored-XSS surface with better
+manners; read the schema.**
 
 `new_value` is validated against the same validator the mutation path uses
 (`validate_*` in `internal/api`); an unparseable value is a 422 at proposal

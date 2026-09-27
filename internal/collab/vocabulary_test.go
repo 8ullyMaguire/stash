@@ -118,13 +118,14 @@ func TestVocabulary_NilValueIsAValidEdit(t *testing.T) {
 // must not leak fields from other target types.
 func TestVocabulary_ProposableFieldsIsScopedAndSorted(t *testing.T) {
 	scene := collab.ProposableFields("scene")
-	require.Len(t, scene, 6, "spec §4.1 lists exactly six proposable scene fields")
+	require.Len(t, scene, 5,
+		"five proposable scene fields: spec §4.1 listed six, but scene.url is not a column")
 
 	var names []string
 	for _, f := range scene {
 		names = append(names, f.Field)
 	}
-	assert.Equal(t, []string{"date", "details", "director", "studio_id", "title", "url"}, names,
+	assert.Equal(t, []string{"date", "details", "director", "studio_id", "title"}, names,
 		"the order must be stable; a Go map iteration order would reshuffle the form on every render")
 
 	// Image fields sort as rating, title -- so the bounds live on index 0, and
