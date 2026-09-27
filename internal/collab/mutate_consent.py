@@ -35,6 +35,7 @@ FEDERATION = ROOT / "internal/collab/federation.go"
 AUTH_TOTP = ROOT / "pkg/auth/totp.go"
 AUTH_SESSION = ROOT / "pkg/auth/session.go"
 API_WIZARD = ROOT / "internal/api/stashforge_wizard.go"
+API_POSTURE = ROOT / "internal/api/server.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
 AUTH_TEST_RE = ("Wiring_|Login_|TOTP")
@@ -378,6 +379,45 @@ AUTH_SESSION_FIXTURES = [
 # application, holding the capability to make an instance public. Each mutation
 # removes one guard, and the interesting ones are the ORDERING ones -- a wizard
 # that checks the key before the completed flag leaks whether a wizard ran.
+# The startup posture gate, in internal/api/server.go. Same reasoning as the
+# wizard: it is a security decision, and collab.CheckStartup shipped in 4.1 with
+# no production caller at all -- a tested rule nobody calls.
+API_POSTURE_FIXTURES = [
+    # The whole point of the gate. Public + http must not boot.
+    ("a public instance boots over plain HTTP",
+     "\tif err := collab.CheckStartup(mode, scheme, completed); err != nil {\n\t\treturn fmt.Errorf(\"refusing to start: %w\", err)\n\t}",
+     "\t_ = collab.CheckStartup(mode, scheme, completed)"),
+    # FAIL CLOSED. A store that cannot be read must stop the boot. Continuing
+    # "as if private" turns a database hiccup into a silent posture downgrade.
+    ("an unreadable mode boots anyway",
+     "\tmode, err := store.Mode(ctx)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"cannot determine the instance mode, refusing to start rather than guessing a posture: %w\", err)\n\t}",
+     "\tmode, err := store.Mode(ctx)\n\tif err != nil {\n\t\tmode = collab.ModePrivate\n\t}"),
+    # The subtle half. Mode may be perfectly readable and public-over-https --
+    # the one legal configuration -- while the WIZARD read fails. The gate exists
+    # to establish that public was consented to, so a failed consent read must
+    # refuse even when every other input says go.
+    ("an unreadable wizard flag boots anyway",
+     "\tcompleted, err := store.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"cannot determine whether the first-run wizard completed, refusing to start: %w\", err)\n\t}",
+     "\tcompleted, err := store.WizardCompleted(ctx)\n\tif err != nil {\n\t\tcompleted = true\n\t}"),
+    # The scheme, derived from the TLS config rather than assumed. A mutation
+    # that hardcodes "https" makes every boot look secure, including the
+    # plain-HTTP one this gate exists to catch.
+    #
+    # This one SURVIVED the first version, because the derivation was inline in
+    # Start() and every test passed a scheme in as an argument -- nothing could
+    # see where the argument came from. The function is extracted for that
+    # reason, and the anchor points at it.
+    ("the scheme is assumed to be https",
+     "\tif s.TLSConfig != nil {\n\t\treturn \"https\"\n\t}\n\treturn \"http\"",
+     "\treturn \"https\""),
+    # And the other direction: reporting https for a server that will serve
+    # plain HTTP because TLS is configured but not actually listening TLS. The
+    # derivation must be the TLS config and nothing else.
+    ("a non-nil TLS config is reported as plain HTTP",
+     "\tif s.TLSConfig != nil {\n\t\treturn \"https\"\n\t}",
+     "\tif s.TLSConfig != nil {\n\t\t_ = s.TLSConfig\n\t}\n\treturn \"http\""),
+]
+
 API_WIZARD_FIXTURES = [
     ("the instance key is not checked at all",
      "\tif !h.keyMatches(req.InstanceKey) {",
@@ -450,20 +490,10 @@ def preflight():
     run. So the anchors are checked up front, and a mismatch is an error before
     any file is touched.
     """
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION, API_WIZARD)}
+    originals = _snapshot()
     problems = []
     total = 0
-    for path, fixtures in (
-        (CONSENT, CONSENT_MUTATIONS),
-        (EXPORTER, EXPORTER_MUTATIONS),
-        (FEDERATION, FEDERATION_MUTATIONS),
-        (MODE, MODE_FIXTURES),
-        (MODE, MODE_WIZARD_FIXTURES),
-        (TOTP, TOTP_FIXTURES),
-        (AUTH_TOTP, AUTH_TOTP_FIXTURES),
-        (AUTH_SESSION, AUTH_SESSION_FIXTURES),
-        (API_WIZARD, API_WIZARD_FIXTURES),
-    ):
+    for path, fixtures, _run in MUTATION_TARGETS:
         for label, old, new in fixtures:
             total += 1
             if old not in originals[path]:
@@ -477,6 +507,57 @@ def preflight():
         return 2
     print(f"preflight ok: {total} fixtures, every anchor lands")
     return 0
+
+
+def _expected_fixtures():
+    return sum(len(fixtures) for _path, fixtures, _run in MUTATION_TARGETS)
+
+
+# (path, fixtures) for every file this harness mutates. Declared ONCE and used
+# by the preflight, the runner, the restore guard and the restore verification.
+# It was two hardcoded tuples before, and they had already drifted once: adding
+# a file to the fixture loop and not to the originals map made the preflight
+# raise KeyError and the run abort with that file left mutated on disk.
+COLLAB_RUN = ("./internal/collab/", TEST_RE)
+AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
+API_RUN = ("./internal/api/", "TestWizard")
+
+# The startup posture gate's tests live in their own file, and a mutation in
+# server.go must be run against BOTH: TestCheckInstancePosture and
+# TestServerScheme. Selecting on the wizard alone would report the posture
+# mutations as untested, because none of them touch a wizard test.
+POSTURE_RUN = ("./internal/api/", "TestCheckInstancePosture|TestServerScheme")
+
+# (path, fixtures, (package, -run selector)). ONE list, consumed by the
+# preflight, the runner and the restore guard.
+#
+# It was three hardcoded lists of the same file set, and they had drifted twice:
+# the posture group was added to the preflight and the originals map but not to
+# the runner's `work`, so a full sweep reported "74 applied" while the preflight
+# said 79 fixtures -- a count that looks fine and is 5 short, which is the worst
+# way for a mutation harness to be wrong. Nothing warns about a mutation that
+# simply never ran.
+MUTATION_TARGETS = [
+    (CONSENT, CONSENT_MUTATIONS, COLLAB_RUN),
+    (EXPORTER, EXPORTER_MUTATIONS, COLLAB_RUN),
+    (FEDERATION, FEDERATION_MUTATIONS, COLLAB_RUN),
+    (MODE, MODE_FIXTURES, COLLAB_RUN),
+    (MODE, MODE_WIZARD_FIXTURES, COLLAB_RUN),
+    (TOTP, TOTP_FIXTURES, COLLAB_RUN),
+    (AUTH_TOTP, AUTH_TOTP_FIXTURES, AUTH_RUN),
+    (AUTH_SESSION, AUTH_SESSION_FIXTURES, AUTH_RUN),
+    (API_WIZARD, API_WIZARD_FIXTURES, API_RUN),
+    (API_POSTURE, API_POSTURE_FIXTURES, POSTURE_RUN),
+]
+
+def _snapshot():
+    """Read every mutated file once, keyed by path.
+
+    Deduplicated by path, because two fixture groups may target one file (MODE
+    has both MODE_FIXTURES and MODE_WIZARD_FIXTURES) and a dict keyed twice on
+    the same path is fine for reading but reads twice to write.
+    """
+    return {p: p.read_text() for p in dict.fromkeys(p for p, _f, _r in MUTATION_TARGETS)}
 
 
 def _install_restore_guard(originals):
@@ -526,25 +607,28 @@ def verify_restored(originals):
     return 0
 
 
-def main():
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
     if preflight() != 0:
         return 2
+
+    # --preflight must CHECK ONLY. Without this it checked every anchor, printed
+    # "preflight ok", and then ran the entire sweep anyway -- so the flag that
+    # exists to answer "would this sweep be valid" was a three-minute sweep, and
+    # I used it as a smoke test and got 74 results instead of the 79 I asked
+    # about.
+    if "--preflight" in argv:
+        return 0
     COLLAB_RUN = ("./internal/collab/", TEST_RE)
     AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
     API_RUN = ("./internal/api/", "TestWizard")
 
-    work = (
-        [(CONSENT, m, COLLAB_RUN) for m in CONSENT_MUTATIONS]
-        + [(EXPORTER, m, COLLAB_RUN) for m in EXPORTER_MUTATIONS]
-        + [(FEDERATION, m, COLLAB_RUN) for m in FEDERATION_MUTATIONS]
-        + [(MODE, m, COLLAB_RUN) for m in MODE_FIXTURES]
-        + [(MODE, m, COLLAB_RUN) for m in MODE_WIZARD_FIXTURES]
-        + [(TOTP, m, COLLAB_RUN) for m in TOTP_FIXTURES]
-        + [(AUTH_TOTP, m, AUTH_RUN) for m in AUTH_TOTP_FIXTURES]
-        + [(AUTH_SESSION, m, AUTH_RUN) for m in AUTH_SESSION_FIXTURES]
-        + [(API_WIZARD, m, API_RUN) for m in API_WIZARD_FIXTURES]
-    )
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP, AUTH_TOTP, AUTH_SESSION, API_WIZARD)}
+    work = [
+        (path, mutation, run)
+        for path, fixtures, run in MUTATION_TARGETS
+        for mutation in fixtures
+    ]
+    originals = _snapshot()
     killed, survived, broken = [], [], []
     _install_restore_guard(originals)
 
@@ -595,7 +679,24 @@ def main():
         return 2
 
     total = len(work)
+    expected = _expected_fixtures()
     print(f"\napplied {total} / killed {len(killed)} / survived {len(survived)} / broken {len(broken)}")
+
+    # The count the preflight promised, against the count that ran. A mutation
+    # that never runs is indistinguishable from a mutation that passes, and the
+    # number is the only place it would show: "74 applied" beside a preflight
+    # that said 79 is a 5-mutation hole with a clean-looking summary. This is the
+    # check that would have caught the posture fixtures being wired into two of
+    # the three lists.
+    if total != expected:
+        print(
+            f"\nCOUNT MISMATCH: preflight checked {expected} fixtures but only "
+            f"{total} ran. A mutation group is wired into MUTATION_TARGETS for "
+            f"the preflight and the runner differently -- see the comment on "
+            f"MUTATION_TARGETS.",
+            file=sys.stderr,
+        )
+        return 2
 
     if broken:
         print("\nBROKEN means the harness itself failed, not that the code is weak:", file=sys.stderr)

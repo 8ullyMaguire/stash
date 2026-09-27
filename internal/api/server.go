@@ -32,6 +32,7 @@ import (
 
 	"github.com/stashapp/stash/internal/api/loaders"
 	"github.com/stashapp/stash/internal/build"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/manager"
 	"github.com/stashapp/stash/internal/manager/config"
 	"github.com/stashapp/stash/pkg/fsutil"
@@ -355,6 +356,18 @@ func handleFavicon(staticUI *statigz.Server) func(w http.ResponseWriter, r *http
 // It calls ListenAndServeTLS if TLS is configured, otherwise it calls ListenAndServe.
 // Calls to Start are blocked until the server is shutdown.
 func (s *Server) Start() error {
+	// The instance posture decides whether this listener may serve plain HTTP at
+	// all, so the check belongs HERE -- at the point of no return. Everything
+	// downstream is too late: a request already accepted over HTTP has had its
+	// session cookie and its instance key in the clear.
+	//
+	// collab.RequiresTLS() said a public instance must not be served over plain
+	// HTTP, and it shipped in M4 step 4.1 with no production caller at all. A
+	// tested rule nobody calls is a comment.
+	if err := s.checkInstancePosture(s.scheme()); err != nil {
+		return err
+	}
+
 	logger.Infof("stash is listening on " + s.Addr)
 	logger.Infof("stash is running at " + s.displayAddress)
 
@@ -363,6 +376,75 @@ func (s *Server) Start() error {
 	} else {
 		return s.ListenAndServe()
 	}
+}
+
+// scheme reports how requests will actually arrive, which is the only thing the
+// posture check may reason about.
+//
+// It is derived from the TLS config rather than assumed, and extracted as its own
+// function only so a test can reach it. The first version had this inline in
+// Start(), and the mutation that hardcodes "https" SURVIVED the posture suite,
+// because every test passed a scheme in as an argument and none of them could
+// see where it came from. Testing a function at the wrong seam tests its inputs
+// and leaves its behaviour untested.
+func (s *Server) scheme() string {
+	if s.TLSConfig != nil {
+		return "https"
+	}
+	return "http"
+}
+
+// instancePostureStore is what checkInstancePosture needs from the mode store:
+// the two reads, and nothing else. An interface rather than *sqlite.InstanceModeStore
+// so the refusals can be tested against a store that fails one read and not the
+// other -- which is the case that decides whether this fails open or closed, and
+// which a nil-store and a real-store pair cannot express.
+type instancePostureStore interface {
+	Mode(ctx context.Context) (collab.Mode, error)
+	WizardCompleted(ctx context.Context) (bool, error)
+}
+
+// checkInstancePosture refuses to start in a posture the instance's own mode
+// forbids. It FAILS CLOSED: a store that cannot be read stops the boot rather
+// than defaulting to a posture nobody chose, because starting anyway makes a
+// transient database error a silent security downgrade that only a restart
+// reveals.
+func (s *Server) checkInstancePosture(scheme string) error {
+	// The nil test is HERE, against the concrete pointer, and not on the
+	// interface. A nil *sqlite.InstanceModeStore assigned to an interface is a
+	// NON-nil interface holding a nil pointer, so `store == nil` in the callee
+	// would be false and it would call Mode() on a nil receiver -- a panic at
+	// boot, for every deployment that is not a StashForge instance. The
+	// order of these two checks is the entire fix for that trap.
+	if s.manager == nil || s.manager.InstanceModeStore == nil {
+		return nil
+	}
+	return checkInstancePosture(s.manager.InstanceModeStore, scheme)
+}
+
+// checkInstancePosture is the testable core: given a store and a scheme, decide
+// whether this instance may serve. It takes a non-nil store -- the
+// "not a StashForge instance" case is decided by the caller, against the
+// concrete pointer, for the reason given above.
+func checkInstancePosture(store instancePostureStore, scheme string) error {
+	ctx := context.Background()
+
+	mode, err := store.Mode(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot determine the instance mode, refusing to start rather than guessing a posture: %w", err)
+	}
+
+	completed, err := store.WizardCompleted(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot determine whether the first-run wizard completed, refusing to start: %w", err)
+	}
+
+	if err := collab.CheckStartup(mode, scheme, completed); err != nil {
+		return fmt.Errorf("refusing to start: %w", err)
+	}
+
+	logger.Infof("instance mode is %q, served over %s", mode, scheme)
+	return nil
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.

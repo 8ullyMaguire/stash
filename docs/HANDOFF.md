@@ -40,8 +40,9 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 - `pkg/auth` at 71 top-level tests, of which 9 are the 2FA *wiring* tests
 - `internal/api` at 36, of which 19 cover the wizard's refusals
 - `pkg/sqlite` adds 9 2FA store tests, one of which races 20 goroutines
-- `internal/collab/mutate_consent.py`: **74 applied, 74 killed, 0 survived,
-  0 broken** (collab, `pkg/auth`, `internal/api`)
+- `internal/collab/mutate_consent.py`: **79 applied, 79 killed, 0 survived,
+  0 broken** (collab, `pkg/auth`, `internal/api` — including the startup posture
+  gate in `server.go`)
 
 Counting convention, because the docs previously mixed two and it looked like a
 1000-test regression: `go test ... -v | grep -c '^--- PASS'` counts top-level
@@ -128,7 +129,22 @@ so both subtests took the same branch and the `len(want) == 0` guard was execute
 by nothing. It looked like three cases and was one. The mutation that flips that
 guard survived, which is how it was found.
 
-**8. A size limit on a JSON decoder does not limit the body.**
+**8. Test a function at the seam it is connected by, not the one you can reach.**
+The mutation "the scheme is assumed to be https" survived, because the scheme was
+derived inline in `Start()` and every posture test passed a scheme in as an
+*argument* — nothing could see where the argument came from. Extracting
+`Server.scheme()` so the derivation is its own testable unit is what closed it.
+The same shape as the typed-nil trap below.
+
+**9. A nil `*T` in an `interface` is not a nil interface.** `checkInstancePosture`
+took an `instancePostureStore` and began `if store == nil`. The caller passes
+`s.manager.InstanceModeStore`, a `*sqlite.InstanceModeStore`: when that is nil the
+interface is **non-nil holding a nil pointer**, so the check never fired and the
+function called `Mode()` on a nil receiver — a panic at boot for every
+non-StashForge deployment. The nil test has to be against the concrete pointer,
+at the caller.
+
+**10. A size limit on a JSON decoder does not limit the body.**
 `json.Decoder` stops at the end of the JSON value, so a small valid object
 followed by megabytes of trailing whitespace decodes cleanly and the cap never
 fires — measured, a 4105-byte body returned 200 with `MaxBytesReader` "in place".
@@ -187,8 +203,11 @@ from a browser. In order of what a user would notice first:
   schema change across every write path for those tables, so it is deliberately
   not started mid-milestone — it wants its own migration (105) and its own
   review, and step 4.3 should not be read as done until it lands.
-- **TLS enforcement.** `collab.RequiresTLS` is implemented and tested; nothing at
-  the listener level calls it yet.
+- ~~**TLS enforcement.** Nothing calls it yet.~~ **Done** — `Server.Start`
+  refuses to boot when the mode forbids the scheme
+  (`internal/api/server.go`, `checkInstancePosture`). A public instance over
+  plain HTTP no longer starts, and a store that cannot be read stops the boot
+  rather than defaulting to a posture nobody chose.
 
 **M5 and M6 are unstarted.**
 
