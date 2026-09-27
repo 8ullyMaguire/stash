@@ -432,6 +432,74 @@ cd ui/v2.5 && pnpm run gqlgen && pnpm run check && pnpm run build
 
 ---
 
+### Step 2.4a — Governance v2 (M2.5), replacing the acceptance arithmetic
+
+**Spec:** §5.3 (adopted from Commons §8.1–8.5)
+**Exit:** a proposal settles by reputation-weighted per-field vote, with decay
+and Sybil damping; the five-role table governs what each role may do; flat
+net-vote counting survives only as the moderator-only and migration path.
+
+What already exists and is kept: the proposal table, the vote table, the audit
+table, the closed field vocabulary, and the apply path with its
+compare-and-set. **Nothing built in M2 is discarded.** What is replaced is the
+decision function, so this is a smaller step than it looks.
+
+```go
+// internal/collab/governance.go -- extended, not replaced
+type Policy struct {
+    // The M2 fields remain, and remain reachable: QuorumThreshold == 0
+    // disables the flat path, leaving moderator-only. That configuration
+    // is still a supported mode, so the arithmetic is not deleted.
+    QuorumThreshold int
+    MinVoters       int
+    AllowSelfAccept bool
+
+    // Added by M2.5.
+    Reputation ReputationSource   // agreement-with-settled-outcomes
+    Decay      DecayPolicy        // weight loss on repeated rejection
+    Sybil      SybilPolicy        // correlated-vote damping
+    Roles      RoleTable          // public/subscriber/contributor/steward/admin
+}
+```
+
+**Order within the step, and why:** roles before weighting. The five-role table
+is what makes a public instance safe, and a public instance is where weighted
+voting starts to matter — so the access model is in place before the
+economics that depend on it.
+
+**Verify:** `go test ./internal/collab/ -run 'TestWeight|TestDecay|TestSybil|TestRole'`
+must be table-driven over the full cross-product, not a handful of cases. The
+flat path's existing tests must still pass unchanged — that is the proof it is
+a fallback and not dead code.
+
+### Step 2.4b — Identity clustering (M2.8)
+
+**Spec:** §12.1 (adopted from Commons §7.1, §7.4, §7.5)
+**Exit:** a `PersonCluster` links appearances with no name, no studio, and no
+credit, and an unnamed cluster is the default rather than a failure state.
+
+**Step 2.4b.0 — the two tests that must exist before the model does.**
+
+1. **A detector that cannot run fails visibly.** Missing model, unverified
+   digest, absent runtime: each fails *with a reason*. An empty result indexes
+   a library as face-free, which is a silent, permanent-looking claim about the
+   user's content that is in fact a missing file. This is the single most
+   dangerous behaviour in the feature and it is a one-line mistake to write.
+2. **A malformed expected digest is refused, not compared.** A truncated digest
+   can never match, so a check that compares rather than refuses is refusing by
+   accident rather than by decision. Test the malformed case explicitly.
+
+**Step 2.4b.1 — the sample budget test.** A per-file sample budget is a ceiling
+on work, and when a file needs more samples than the budget allows they are
+spread evenly from the first frame to the last — *not* the first N of the
+requested interval, and not that interval at a coarser stride. Both of those
+concentrate the budget at the start, so a face in the last act of a long video
+is never looked at. The test asserts where the **last** sample lands; asserting
+the sample count cannot distinguish a correct plan from one that covered the
+first minute of a three-hour file and stopped.
+
+**Exit:** clusters created, browsable, and unnameable without complaint.
+
 ## M3 — Metadata sharing
 
 **Exit:** an opted-in library exports; an opted-out one exports nothing, and
@@ -580,27 +648,85 @@ So the isolation is established and tested first, while there is nothing to
 untangle:
 
 ```bash
-cd pkg/p2pdownloader && go mod init github.com/stashapp/stash-plugin-p2pdownloader
+# OUTSIDE the core module. `plugins/` is not under the core module, so a go.mod
+# here is a genuinely separate module rather than a nested one the core tree can
+# reach into.
+cd plugins && mkdir -p p2pdownloader && cd p2pdownloader
+go mod init github.com/stashapp/stash-plugin-p2pdownloader
 ```
+
+**Not `pkg/p2pdownloader/`.** That path is inside the core module: a `go.mod`
+there is a *nested* module, which Go tolerates but which leaves the code in the
+core tree, inside `go build ./...`, and greppable as core. The location is the
+enforcement, and it has to be outside the module boundary, not merely a
+directory with a `go.mod` in it.
 
 Its own `go.mod` is what enforces it: a package in the core tree cannot import a
 different module without the core's own `go.mod` gaining a `require` and a
 `replace`, and both are visible in review.
 
+**And it must be loadable, which is a separate question from being separate.**
+The module is built to a static binary and referenced by a `source.json` with
+`interface: rpc`:
+
+```json
+{ "id": "p2p-downloader", "name": "P2P Downloader", "interface": "rpc",
+  "exec": ["./stash-plugin-p2pdownloader"] }
+```
+
+A module that is separate but never referenced is not a plugin, and that is the
+other half of why the original location was wrong: it failed *both* ways —
+reachable from the core, and invisible to the plugin host.
+
 **Verify, before implementing transfers:**
 
 ```bash
 # the core must not know the plugin exists
-go build ./... && go vet ./...        # passes with pkg/p2pdownloader absent
-grep -rn 'p2pdownloader' --include='*.go' . | grep -v '^./pkg/p2pdownloader/'
+go build ./... && go vet ./...        # passes with the plugin absent
+grep -rn 'p2pdownloader' --include='*.go' . | grep -v '^./plugins/p2pdownloader/'
 # must print nothing
 ```
 
-Named test `TestP2PDownloaderIsNotImportedByCore` asserts the grep above is
-empty, and `TestP2PDownloaderHasItsOwnModule` asserts the directory has a
-`go.mod` whose module path is not under `github.com/stashapp/stash/`. If either
-fails, the downloader is core code and M5 is incomplete no matter how well the
-transfer protocols work.
+**Corrected 2026-09-27 — the original seam test was insufficient, and would
+have passed on a non-plugin.** Two changes, both from reading the plugin host
+rather than assuming it.
+
+**One: the location and the transport.** The original text put the module at
+`pkg/p2pdownloader/`, which is *inside the core module* and therefore not a
+Stash plugin at all. Stash loads plugins three ways
+(`pkg/plugin/config.go:363`): `js` (goja — JavaScript, which cannot host a
+BitTorrent client), `raw` (a binary that exits when the task ends, so no DHT
+and no inbound connections), and `rpc` (a binary, launched once, long-lived,
+over `net/rpc/jsonrpc`). The downloader ships as its own module at
+`plugins/p2pdownloader/`, built to a static binary, loaded with
+`interface: rpc`. It is native, it is a real plugin, and it stays up.
+
+**Two: the test needs a second half.** `TestP2PDownloaderIsNotImportedByCore`
+asserts the grep is empty — and a Go package *inside the core tree* that imports
+nothing from the core satisfies that grep trivially. The test would have been
+green on something that cannot load and never runs. So:
+
+- `TestP2PDownloaderIsNotImportedByCore` — the grep above is empty.
+- `TestP2PDownloaderHasItsOwnModule` — the directory has a `go.mod` whose
+  module path is not under `github.com/stashapp/stash/`, **and is not inside
+  the core module's directory tree**.
+- `TestP2PDownloaderIsNotBundledByCore` — **the half that matters.** The core
+  binary contains no P2P downloader symbol, and the core's plugin manifest
+  registry does not list it. A core that shells out to a *bundled* downloader
+  passes both greps above and is exactly the failure mode worth excluding: the
+  code is outside the import graph but still inside the shipped artifact.
+  Verify with `go tool nm` over the built binary, plus an assertion that no
+  `source.json` in the core tree references the downloader.
+
+If any of the three fails, the downloader is core code and M5 is incomplete no
+matter how well the transfer protocols work.
+
+**Step 5.0a — the consent gate, before any transfer code.** The plugin may
+request a locator; core decides (spec §7.1). Ship the gate first, with a test
+that a plugin calling `locator.propose` on a `denied` object gets a refusal
+and writes nothing. Building the transfer path first would mean retrofitting
+the gate onto a component that already has every permission, which is the
+failure mode §7.1 exists to prevent.
 
 The plugin's manifest, per `pkg/plugin/plugins.go`'s `Plugin` struct:
 
@@ -653,7 +779,7 @@ Windows reserved names and trailing dots/spaces, and verify the final path with
 **Verify, before implementing transfers:**
 
 ```bash
-cd pkg/p2pdownloader && go test ./... -run TestSanitizeJoin -v
+cd plugins/p2pdownloader && go test ./... -run TestSanitizeJoin -v
 ```
 
 Cases: `../../etc/passwd`, `/etc/passwd`, `a/../../b`, a name with a NUL, a

@@ -259,7 +259,18 @@ time, not a 500 at apply time.
 
 ## 5. Governance: quorum or moderator
 
-The rule the owner chose: **a proposal is accepted when
+> **Superseded in part, 2026-09-27 by owner decision.** The *acceptance
+> arithmetic* below is replaced by Commons §8.1–8.5 (reproduced in §5.3): typed
+> per-field proposals, reputation-weighted ballots, weight decay, and Sybil
+> damping. Flat net-vote counting does not survive contact with a public
+> instance — `MinVoters=3` is a speed bump, not a defence, because three fresh
+> accounts cross it. Everything else in this section stands: the tables, the
+> audit, §5.1, §5.2, and the sticky-rejection rule, which Commons did not
+> specify and which is carried into Commons §8.1.1. The code in
+> `internal/collab/governance.go` is not deleted — flat counting remains the
+> moderator-only and migration path — but it is no longer the primary rule.
+
+The rule as originally specified: **a proposal is accepted when
 `Σ(+1) − Σ(−1) ≥ threshold`, or when a moderator approves it. Both paths
 always exist; which is reachable is configuration.**
 
@@ -335,9 +346,92 @@ CREATE INDEX idx_collab_audit_actor ON collab_audit(actor_id, at DESC);
 
 Append-only. No UPDATE or DELETE path is ever written for it.
 
+### 5.3 The adopted governance model (Commons §8.1–8.5)
+
+Replaced in by owner decision 2026-09-27. Reproduced here so this spec stands
+alone, and it is Commons' model rather than a summary of it.
+
+**Typed field voting.** For each `(object, field)` the platform holds a set of
+`FieldProposal`s, each with a value, a proposer (a user *or* an automatic
+proposer), provenance, and a timestamp. The field's displayed value is the
+winner by weighted vote, computed and cached. A field may be `locked`
+(stash-box #213), pinning the value and refusing further proposals until a
+steward unlocks it. A machine proposal is just another voter.
+
+**Per-field vote scoping.** Agreeing about titles says nothing about tags.
+Weight is earned and spent per field, so reputation in one area cannot be
+cashed in to overrule another.
+
+**Reputation from agreement, not volume.** Weight is a function of reputation;
+reputation is agreement with *settled outcomes* over time. New accounts ramp as
+their proposals are confirmed (the newcomer problem, #743 notes the current
+method is flawed). Weight decays on repeated rejection. Many accounts voting
+the same way is discounted as Sybil, and coordinated patterns are *flagged*,
+not silently punished.
+
+**The five-role model**, alongside the consent tier:
+
+| Role | Browses | Votes | Curates | Extra |
+|---|---|---|---|---|
+| `public` (no login) | yes, within consent tier | no | no | consent-tier-visible items only |
+| `subscriber` | yes | yes | no | tier-filtered items |
+| `contributor` | yes | yes | yes | full tier filter |
+| `steward` | yes | yes | yes | + moderation queue |
+| `admin` | yes | yes | yes | + settings, roles, peer config |
+
+A `public` role with no login is explicitly supported: read-only browsing of
+consent-tier-visible items, with streaming, download and voting all gated. This
+is what actually implements "public site" — §8 of this spec says how to host
+one but never said who may read. The tier filter must be enforced **in the
+query layer, not the UI**: an anonymous viewer is precisely the case where a
+UI-only filter leaks.
+
+**Scores are recomputed from the accepted-edit set, never read from a stored
+counter.** Both codebases arrived at this independently; it is stated once here
+and once in Commons §8.1.1. A stored tally is a thing to be able to be wrong,
+and recomputing fixes stash-box #743/#9.
+
+**Sticky rejection survives** and is carried into Commons §8.1.1 — see the note
+at the head of this section.
+
+**What this costs.** M2 is complete and green, and this makes its acceptance
+arithmetic the secondary path rather than the primary one. The proposal table,
+vote table, audit table, closed field vocabulary, and the apply path with its
+compare-and-set are all still load-bearing; what is replaced is the decision
+function. Nothing built in M2 is discarded.
+
 ---
 
 ## 6. Metadata sharing, opt-out
+
+> **Extended 2026-09-27 by owner decision.** Commons §14.1's six-tier consent
+> model is adopted, replacing the binary opt-in/opt-out this section starts
+> from. A binary flag cannot express "visible but not redistributable", which
+> is the state most of an amateur corpus is actually in. **This spec's
+> `metadata_share` opt-in *default* is kept** — Commons defaults `unverified`
+> items to private, and both are defensible, but an amateur corpus needs
+> contribution to happen. §6.1's blocking disclosure is what makes an opt-in
+> default honest rather than a leak.
+
+**The adopted tiers** (Commons §14.1), each object carrying tier, attestation,
+and audit trail:
+
+| Tier | Meaning |
+|---|---|
+| `unverified` | Scanned locally; consent not established. Private by default. Not publishable. |
+| `self_published` | The uploader asserts they are the creator and the subject consents. |
+| `performer_claimed` | A verified performer claim covers it. Strongest tier. |
+| `third_party_permitted` | Licensed/permitted by a studio or the subject under a stated basis. |
+| `quarantined` | Reported or contested. Hidden everywhere, pending review. |
+| `denied` | Takedown accepted. Permanently blocked by hash across all peers. |
+
+Plus `redistribution_permitted`, deliberately independent of the tier: the tier
+says *who is asserting*, the flag says *on what terms* (§7.1). A `denied` object
+adds a content-hash blocklist entry that propagates to every peer and is checked
+on import, scan, and match. Revocation propagates as a tombstone, never as a
+vote, and is never outvoted by contribution points.
+
+Enforced in the data layer, not the UI.
 
 ### 6.1 The default, and the disclosure
 
@@ -428,15 +522,43 @@ install", and the plugin system is Stash's documented extension point. A
 peer-to-peer client does not belong in the security-critical binary that holds
 a private library.
 
+**Corrected 2026-09-27, on reading the plugin host rather than assuming it.**
+Stash's plugin system is not one thing, it is three transports
+(`pkg/plugin/config.go:363`, `getTaskBuilder`):
+
+| `interface` | transport | what runs | long-lived? |
+|---|---|---|---|
+| `js` | goja VM | a JavaScript plugin | yes |
+| `raw` | `Exec`, stdin/stdout, process exits | a binary, one shot | **no** |
+| `rpc` | `Exec` once, `net/rpc/jsonrpc` | a binary, persistent | **yes** |
+
+`Config.Exec []string` (line 49) is what launches a program. The original text
+said "the plugin is a separate Go module" in `pkg/p2pdownloader/`, which is
+**not a Stash plugin at all** — it is a Go package inside the core tree, which
+is the thing the owner's requirement rules out. Worse, the milestone's own seam
+test (`TestP2PDownloaderIsNotImportedByCore`) would have passed on it, because
+a package in the core tree that imports nothing from the core trivially
+satisfies a grep. The test would be green and the milestone would describe
+something that installs and never runs.
+
 **What "easy to install" has to mean here, concretely:** a user drops the
-plugin's directory (containing `source.json`) into the configured plugins path,
-or pastes a release URL into the UI's plugin installer, and the downloader
-appears — on a **stock StashForge build, with no recompilation and no new host
-capability**. The plugin is a separate Go module, the core tree never imports
-it, and the milestone is not complete until a test proves the core still builds
-and still contains no reference to it. Shipping it as `pkg/p2pdownloader/`
-*inside the core module* would satisfy the wording "a plugin" while being core
-code with an extra directory; the separate module is what makes the claim true.
+plugin's directory (containing `source.json` and the built binary) into the
+configured plugins path, or pastes a release URL into the UI's plugin
+installer, and the downloader appears — on a **stock StashForge build, with no
+recompilation and no new host capability**. The downloader is a **separate Go
+module built to a static binary** and loaded with `interface: rpc`, so it is
+native (the owner's stated preference, and the reason `js` is wrong: goja
+cannot host a BitTorrent client), a genuine Stash plugin, and a long-lived
+process — which a seeder requires, since DHT participation, inbound peer
+connections, and transfers that survive across tasks all need a process that
+stays up. `raw` cannot provide that.
+
+The core tree never imports the module, and the milestone is not complete until
+a test proves both that the core still builds with the module absent **and that
+the core does not bundle or shell out to the downloader as part of itself**. The
+second half is the half that matters: a grep for imports alone would pass on a
+core that invoked a bundled binary, which is the failure mode actually worth
+excluding.
 
 It is also the worked example of "a plugin can do this", which is why the
 library-integration half uses only what the plugin API already exposes: the
@@ -468,6 +590,51 @@ scheduling integration.
 name is `../../etc/cron.d/x` must resolve inside the target root or the item is
 rejected. A peer-supplied filename is untrusted input and this is the bug class
 that gets a whole box.
+
+### 7.1 The consent gate is core's, and never the plugin's
+
+Adopted from Commons §5.18.1 and §14.1 during the 2026-09-27 reconciliation.
+This is the most important thing the other spec contributes to this one, and it
+is *more* load-bearing here than there, because the plugin is more powerful.
+
+A tier check inside a third-party component is a tier check that can be buggy,
+disabled, or hostile. So the split is strict:
+
+- The plugin **requests**; core **decides**. The plugin calls
+  `locator.propose(object, locator)`. Core evaluates the §14.1 tier table and
+  either persists the locator or refuses it.
+- The plugin has **no write path** to the consent tier, the object, or the
+  database. It cannot write a magnet to a `denied` object even if it is
+  malicious, and gets the same refusal a well-behaved one gets.
+- A **hand-off to a client re-checks the tier at the moment of the action**,
+  not at storage time, because consent can be revoked in between.
+
+**`redistribution_permitted` is a separate gate from the tier.** A tier says
+*who is asserting*; the flag says *on what terms*. `third_party_permitted`
+without the flag is an item the user may watch and keep but not redistribute.
+A full-featured downloader is exactly where that distinction gets tested,
+because it *can* redistribute — the flag has teeth here that it would not have
+in a hand-off plugin, which is the argument for having it.
+
+**Rejected outright, and this is a deliberate asymmetry with Commons:** Commons
+gates a P2P locator on `third_party_permitted` **plus** the flag, so an
+amateur creator's own upload can never carry a magnet. StashForge's owner
+requires a downloader that acquires material, including amateur material, which
+is the whole point of a corpus no catalog describes. A gate that makes the
+owner's requirement impossible is not a safety property, it is a contradiction.
+
+StashForge's rule, instead: **a locator may be stored at any tier except
+`quarantined` and `denied`, and hand-off to a client additionally requires
+`redistribution_permitted`.** Storage and redistribution are different acts and
+get different gates — storing a magnet in your own library is not
+redistributing anything, and refusing it protects no one. The gate that does
+load-bearing work is the one on *acting*, not on *recording*, and Commons
+conflates them.
+
+The tier model itself (`unverified`, `self_published`, `performer_claimed`,
+`third_party_permitted`, `quarantined`, `denied`) and the `denied`-destroys-
+locators rule are adopted unchanged, because they are what make a
+non-`third_party_permitted` corpus holdable at all.
 
 ---
 
@@ -587,12 +754,79 @@ Each is independently shippable and each ends with tests green and a tag.
 | M0 | **Buildable fork** | `go build ./...` green, UI builds, upstream tests green, baseline recorded |
 | M1 | **User accounts** | users/sessions/invites, auth migration, login UI, rate limiting |
 | M2 | **Proposals & quorum** | edit_proposals, votes, governance, audit, proposal UI |
-| M3 | **Metadata sharing** | consent, exporter, dry-run-first sync, public read endpoint, federation |
+| M2.5 | **Governance v2** | replace the acceptance arithmetic with Commons §8.1–8.5: typed field proposals, reputation-weighted ballots, decay, Sybil damping, the five-role table, field locking. Sticky rejection carried over. |
+| M2.8 | **Identity clustering** | Commons §7.1: `PersonCluster`, ONNX face embed, ANN assign, ambiguous bucket, consolidate, claim. |
+| M3 | **Metadata sharing** | consent tiers, exporter, dry-run-first sync, public read endpoint, federation |
 | M4 | **Public hosting** | TLS enforcement, 2FA, access grants, first-run wizard |
-| M5 | **P2P downloader** | plugin: BitTorrent + ed2k + Kademlia, library integration |
+| M5 | **P2P downloader** | plugin: BitTorrent + ed2k + Kademlia, library integration, as a static binary over `interface: rpc` |
 | M6 | **Upstream issues** | the 850-row matrix, worked capability by capability |
 
 M0 is a prerequisite for everything and is where the work starts.
+
+**Reordered 2026-09-27 by the reconciliation.** M2.5 and M2.8 are new and sit
+*before* M3, not after it, and the order is not arbitrary. Clustering links a
+person across sources, which is a distribution decision, so consent tiers must
+exist first — a cluster merge that crosses a consent boundary has to be a
+moderation event, and there is nothing to moderate against until §6's tiers
+are in. Governance v2 precedes both because reputation-weighted voting is what
+makes a public instance survivable, and a public instance is what M3–M4 are
+for.
+
+---
+
+## 12.1 The amateur corpus, and the clustering it needs
+
+**Added 2026-09-27 by owner decision**, adopting Commons §7.1, §7.4 and §7.5.
+This is the largest gap between the two specs and it is a gap in StashForge, not
+a difference of opinion.
+
+The original ask was the amateur corpus: *link scenes with the same person even
+when nobody has identified that person as a content creator.* StashForge has no
+answer and its plan does not propose one. It inherits stash's scraper-only
+identity model — a person is a row that a scraper found a name for — so for a
+corpus with no scraper the person is fragmented across every appearance with no
+thread, which is exactly the problem.
+
+**The primitive: `PersonCluster`.** A set of face embeddings believed to be one
+person, with no name required, no studio, and no credit. Stable id, optional
+handle, optional avatar, a confidence. Meaningless to a user until it has three
+or more appearances, at which point the UI offers to name it.
+
+**The pipeline** (Commons §7.1): detect faces over generated keyframes → embed
+with a local ONNX model → nearest-neighbour assign into the ANN index →
+agglomerative consolidate with a guard against transitive over-merge → name, or
+deliberately do not.
+
+**The part that matters most is a state, not an algorithm.** The *ambiguous*
+bucket is first-class, and an unnamed cluster is the **default**, not a
+fallback. A system that requires a name before it will link a person cannot
+serve a corpus where the names are the thing that is missing. This is the
+single design decision that makes the rest work, and it is why §4.1's field
+vocabulary has no way to express "performer" for such items: the item is linked
+to a *cluster*, and the cluster is not yet a performer.
+
+Two properties that are easy to get wrong and are specified in Commons:
+
+- **A detector that cannot run is not a detector that found nothing.** A missing
+  model, an unverified model, or an absent runtime must fail visibly with a
+  reason. An empty result indexes a library as face-free, which is a silent,
+  permanent-looking claim about the user's content that is in fact a missing
+  file.
+- **A model is untrusted input.** A face model is fetched over the network and
+  then executed, so its SHA-256 is verified against a pinned digest *before any
+  byte of it is parsed*, and a malformed expected digest is refused rather than
+  compared.
+
+**Scope adopted:** §7.1 clustering, §7.4 body/appearance similarity, §7.5
+self-service performer claim (a performer can claim a cluster without an
+account, via a signed request verified against their claim), §7.2 merge/split/
+alias/disambiguate, §7.11 automatic career span.
+
+**Consequence for the plan:** a new milestone between M2 and M3, because
+consent tiers (§6) and clusters have to exist before material can be linked
+across sources. Consent and identity are the same problem here — a cluster
+merge that crosses a consent boundary is a moderation event, not a background
+job.
 
 ---
 
@@ -607,6 +841,31 @@ M0 is a prerequisite for everything and is where the work starts.
 ---
 
 ## 14. Open decisions, flagged rather than guessed
+
+> **Updated 2026-09-27.** Decisions 1–3 below are **closed** by the
+> reconciliation (`docs/specs/2026-09-27-reconciliation.md`) and are recorded
+> here rather than deleted, because a closed decision that leaves no trace gets
+> re-argued. Decision 1: default mode is `contribute` — still open, and it is
+> now more constrained, since §6's tier model makes it a per-object question
+> rather than an instance-wide one. Decision 2: the flat quorum threshold is
+> superseded by M2.5; `MinVoters` survives only as the moderator-only and
+> migration path. Decision 3: `NewAccountProposalHold` is retained *and*
+> strengthened — reputation ramping (§5.3) is a better answer to the same
+> problem, so the hold becomes a floor under it rather than the mechanism.
+> Decision 4 stands unchanged and is still the owner's.
+
+**One new open decision, flagged rather than guessed:** whether M2.5's
+reputation model needs a *field-type* weight table (titles vote differently
+from tags) or a single global weight per user per field. Commons §8.1 scopes
+votes per field but does not say whether the *weight function* is shared. The
+cheap version is one weight function; the honest version is a type table. This
+changes what gets built and is left to the owner at M2.5.
+
+**One new open decision:** whether the M5 downloader plugin's consent gate
+(§7.1) requires the plugin to be *signed* to be trusted with locator proposals
+at all, or whether any installed plugin may request them and be refused
+individually per request. Signing is safer; per-request refusal is what §7.1
+currently specifies, and it is weaker.
 
 1. **Default mode.** `contribute` is proposed: metadata shares, media does not.
    It satisfies "self-governed public site" and "my content stays mine", but a
