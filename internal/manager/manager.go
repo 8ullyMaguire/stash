@@ -76,8 +76,15 @@ type Manager struct {
 	// has to ask whether it is nil rather than assume it.
 	TOTPStore *sqlite.TOTPStore
 
-	// LibraryAccessStore decides who may read a library. Every read path consults
-	// it; a library with no row in it is private to its owner.
+	// LibraryAccessStore decides who may read a library; a library with no grant
+	// row is private to its owner.
+	//
+	// CONSTRUCTED BUT NOT YET CONSULTED. Decide() has no caller outside this
+	// package's own store, so no media path enforces grants yet. An earlier
+	// version of this comment said "every read path consults it", which was
+	// false -- and a comment asserting an invariant nothing upholds is worse than
+	// no comment, because the next reader trusts it. Making the read paths call
+	// Decide() is the remaining work for step 4.3.
 	LibraryAccessStore *sqlite.LibraryAccessStore
 
 	// InstanceModeStore holds the instance's private/contribute/public decision
