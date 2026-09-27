@@ -682,14 +682,53 @@ credit, and an unnamed cluster is the default rather than a failure state.
    can never match, so a check that compares rather than refuses is refusing by
    accident rather than by decision. Test the malformed case explicitly.
 
-**Step 2.4b.1 — the sample budget test.** A per-file sample budget is a ceiling
-on work, and when a file needs more samples than the budget allows they are
-spread evenly from the first frame to the last — *not* the first N of the
-requested interval, and not that interval at a coarser stride. Both of those
-concentrate the budget at the start, so a face in the last act of a long video
-is never looked at. The test asserts where the **last** sample lands; asserting
-the sample count cannot distinguish a correct plan from one that covered the
-first minute of a three-hour file and stopped.
+**Step 2.4b.1 — the sample budget test. Done** (`internal/cluster/sample_budget.go`).
+
+A per-file sample budget is a ceiling on work, and when a file needs more
+samples than the budget allows they are spread evenly from the first frame to
+the last — *not* the first N of the requested interval, and not that interval
+at a coarser stride. Both of those concentrate the budget at the start, so a
+face in the last act of a long video is never looked at. The test asserts where
+the **last** sample lands; asserting the sample count cannot distinguish a
+correct plan from one that covered the first minute of a three-hour file and
+stopped.
+
+**The spread includes the final frame, and the test found that it had to.**
+The obvious formulation — `i * duration / budget` for `i` in `[0, budget)` —
+samples the *intervals* and leaves the tail outside all of them. With 5 samples
+over 1000 frames it puts the last sample at **800**, leaving the final fifth of
+the file unwatched while looking textbook-correct: even gaps, the right count,
+no error. The implementation now spreads over `[0, duration-1]` inclusive, so
+the last sample is always the last frame.
+
+The cost is stated in the code rather than hidden: the stride becomes
+`(duration-1)/(budget-1)` instead of `duration/budget`, so coverage is a hair
+less even in the interior — `0, 249, 499, 749, 999` rather than
+`0, 250, 500, 750, 1000`. Buying the last frame with one frame of interior
+unevenness is the right trade for a budget whose entire purpose is not missing
+the end of a file.
+
+`budget == 1` is a special case, handled before the endpoint spread: a single
+sample goes at frame 0, which is the one frame guaranteed to be worth looking at
+(a face, or a post-credit title card). Spreading one sample across a range would
+mean picking a midpoint and gambling on the film having a face in its middle.
+
+**Mutation-tested against both defects the plan names.** Taking the first N
+frames, and using the `i*duration/budget` even stride, both fail with the
+diagnosis in the message:
+
+    last sample is frame 4 of 1000, want 999 (the final frame); the budget must
+    reach the END of the file. A plan whose last sample is near the beginning
+    never looks at the last act, and reports no error doing it
+
+`TestPlanSamplesIsNotTheFirstNFrames` and
+`TestPlanSamplesIsNotAUniformSubsetOfTheInterval` name the two wrong answers
+explicitly rather than relying on the end-to-end assertion to catch them.
+
+One thing this cost: the first mutation attempt failed to compile, so it scored
+as neither kill nor survivor. A mutation that does not build kills no test and
+must not be reported as one. The first `PlanSamples` was restored and the
+mutation reapplied cleanly before the result was believed.
 
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
