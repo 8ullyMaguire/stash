@@ -63,6 +63,12 @@ type UserReader interface {
 	// missing user: absence is the normal case on a login form, not a fault.
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	Find(ctx context.Context, id int) (*User, error)
+
+	// FindPasswordHash returns the stored PHC argon2id string. It is on the
+	// reader rather than folded into Find because the rest of the application
+	// has no reason to hold a credential, and a general getter would guarantee
+	// some future endpoint logs or serialises one.
+	FindPasswordHash(ctx context.Context, id int) ([]byte, error)
 	FindAll(ctx context.Context) ([]*User, error)
 	Count(ctx context.Context) (int, error)
 }

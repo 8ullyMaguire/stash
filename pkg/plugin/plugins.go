@@ -102,7 +102,7 @@ type ServerConfig interface {
 type Cache struct {
 	config       ServerConfig
 	plugins      []Config
-	sessionStore *session.Store
+	sessionStore session.Store
 	gqlHandler   http.Handler
 }
 
@@ -123,7 +123,7 @@ func (c *Cache) RegisterGQLHandler(handler http.Handler) {
 	c.gqlHandler = handler
 }
 
-func (c *Cache) RegisterSessionStore(sessionStore *session.Store) {
+func (c *Cache) RegisterSessionStore(sessionStore session.Store) {
 	c.sessionStore = sessionStore
 }
 

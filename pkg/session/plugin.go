@@ -20,7 +20,7 @@ func init() {
 	gob.Register([]VisitedPluginHook{})
 }
 
-func (s *Store) VisitedPluginHandler() func(http.Handler) http.Handler {
+func (s *CookieStore) VisitedPluginHandler() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// get the visited plugins from the cookie and set in the context
@@ -60,7 +60,7 @@ func setVisitedPluginHooks(ctx context.Context, visitedPlugins []VisitedPluginHo
 	return context.WithValue(ctx, contextVisitedPlugins, visitedPlugins)
 }
 
-func (s *Store) MakePluginCookie(ctx context.Context) *http.Cookie {
+func (s *CookieStore) MakePluginCookie(ctx context.Context) *http.Cookie {
 	currentUser := GetCurrentUserID(ctx)
 	visitedPlugins := GetVisitedPluginHooks(ctx)
 

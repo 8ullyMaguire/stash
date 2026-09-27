@@ -50,7 +50,7 @@ type Manager struct {
 	ReadLockManager *fsutil.ReadLockManager
 
 	DownloadStore *DownloadStore
-	SessionStore  *session.Store
+	SessionStore  session.Store
 
 	PluginCache  *plugin.Cache
 	ScraperCache *scraper.Cache

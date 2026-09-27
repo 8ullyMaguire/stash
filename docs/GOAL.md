@@ -81,8 +81,12 @@ edit/vote/draft model.
 
 1. **Upstream tests stay green, unchanged.** The pass count may only go up. A
    fork that breaks upstream has silently become a different product.
-2. **Migrations are additive, numbered from 1100.** Never edit an applied
-   migration, never renumber, never reuse a number.
+2. **Migrations are additive and CONTIGUOUS, numbered from 87.** Never edit an
+   applied migration, never renumber, never reuse a number. An earlier draft of
+   this file said "numbered from 1100" to leave headroom; that is wrong and
+   breaks the build. golang-migrate orders by the numeric prefix and rejects a
+   gap outright (`invalid migration version 88, expected 1101`). StashForge's
+   continue upstream's 86. Bump `appSchemaVersion` in the same commit.
 3. **SQLite only.** No Postgres, no sqlc.
 4. **No stored counters.** Scores are computed from votes. A counter is the bug
    stash-box has open as #743/#9.
@@ -114,11 +118,13 @@ edit/vote/draft model.
   library, no scanner, no playback, no plugins.
 - Stash already speaks GraphQL to stash-box via `pkg/stashbox`. That client is
   preserved and is the federation integration point.
-- `users` is `user_id`; `community_members` does not exist in this schema and
-  the analogous table is `memberships`-style — **check
-  `information_schema` before writing any fixture SQL.** This has bitten three
-  times already in other repos: a fixture that references a column which does
-  not exist is not a test, it is a passing no-op.
+- **StashForge's own `users` table uses `id`, not `user_id`** (migration
+  87_users). Columns: `id`, `username` (COLLATE NOCASE), `password_hash`,
+  `email`, `created_at`, `disabled_at`, `is_owner`, `reputation`. A fixture that
+  references a column which does not exist is not a test, it is a passing
+  no-op — so read the migration, do not recall the shape. (Notes about
+  `user_id` / `community_members` / `information_schema` are from a *different*
+  repo, Postgres-backed, and do not apply to this SQLite fork.)
 - `//go:embed v2.5/build` in `ui/ui.go` means a stale UI build makes every
   route render blank with HTTP 200. Rebuild before browser-verifying anything.
 - **stash#2792 is closed** (2026-05-02) and the maintainer's comments argue

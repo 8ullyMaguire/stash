@@ -128,7 +128,7 @@ func Initialize(cfg *config.Config, l *log.Logger) (*Manager, error) {
 
 		// create temporary session store - this will be re-initialised
 		// after config is complete
-		mgr.SessionStore = session.NewStore(cfg)
+		mgr.SessionStore = session.NewCookieStore(cfg)
 
 		logger.Warnf("config file %snot found. Assuming new system...", cfgFile)
 	}
@@ -187,7 +187,7 @@ func initJobManager(cfg *config.Config) *job.Manager {
 func (s *Manager) postInit(ctx context.Context) error {
 	s.RefreshConfig()
 
-	s.SessionStore = session.NewStore(s.Config)
+	s.SessionStore = session.NewCookieStore(s.Config)
 	s.PluginCache.RegisterSessionStore(s.SessionStore)
 
 	s.RefreshPluginCache()
