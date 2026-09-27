@@ -34,7 +34,7 @@ whose verification you cannot run.
 
 ## Current state
 
-**M0 and M1 steps 1.1-1.3 are done**, each committed and tagged.
+**M0, all of M1, and M2 steps 2.1-2.3 are done**, each committed and tagged.
 
 | | unit (pass/fail) | integration (pass/fail) |
 |---|---|---|
@@ -42,7 +42,10 @@ whose verification you cannot run.
 | `m1-user-tables` (migrations 87-90) | 887 / 0 | 1199 / 1 |
 | `m1-user-store` (auth + store) | 911 / 0 | 1211 / 1 |
 | `m1-session-store` (sessions, invites) | 940 / 0 | 1211 / 1 |
-| `m1-auth-wiring` (stores, adapter, factory) | **962 / 0** | **1253 / 1** |
+| `m1-auth-wiring` (stores, adapter, factory) | 962 / 0 | 1253 / 1 |
+| `m1-graphql-auth` (register/login/logout/me) | 962 / 0 | 1267 / 1 |
+| `m2-governance` (rules + migrations 92-94) | 984 / 0 | 1285 / 1 |
+| `m2-proposal-path` (vocabulary + proposer) | **1000 / 0** | **1287 / 1** |
 
 `pkg/session.Store` is now an **interface**; the old concrete cookie store was
 renamed `CookieStore` and kept for installs with no user database. `Authenticate`
@@ -67,10 +70,27 @@ wrong the first time:
 `appSchemaVersion` is bumped in the same commit as any migration (86 -> 90 so
 far), and a test asserts the recorded version matches it.
 
-**M1 is complete.** Next up is the plan's M1 step 1.5 — GraphQL `register` /
-`login` / `logout` / `me` resolvers, with the concurrency case that matters: an
-invite key must stay single-use when two registrations race it. Then M2, the
-edit/vote/quorum model.
+**M1 is complete.** M2 steps 2.1 (migrations 92-94), 2.2 (the pure governance
+rules) and 2.3 (the vocabulary and the proposer) are done.
+
+The single-use invite case the plan named as the one that matters is now tested
+for real: eight goroutines redeem one `max_uses=1` key simultaneously, each in
+its own COMMITTED transaction, exactly one wins. It could not use the package's
+`withRollbackTxn`, which serialises the writers -- so a green test would have
+proved nothing.
+
+M2 so far is pure logic with no HTTP: `internal/collab` decides whether a change
+may be proposed (closed field vocabulary, value validation, sticky rejection,
+supersession) and whether it is accepted (`Evaluate(Policy, VoteCount)`). The
+decision is a function of two values with no I/O, so it is tested in every
+combination rather than a few hand-picked ones.
+
+**Next up is M2 step 2.4 — applying an accepted proposal.** This is the step the
+plan flags as the one where the design can go wrong: apply must be idempotent
+and atomic, two workers applying the same proposal must not double-mutate or
+write two audit rows, and a value that became invalid between proposal and apply
+must reject the proposal rather than corrupt the target. Then 2.5 (GraphQL +
+UI).
 
 ### M5 is a plugin, and that is a testable claim
 
