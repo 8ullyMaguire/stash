@@ -38,6 +38,28 @@ func sfTxn(t *testing.T, f func(ctx context.Context)) {
 	}))
 }
 
+// scalarErr is scalar's counterpart for a statement that must FAIL -- a CHECK
+// constraint, a foreign key. A constraint nobody has tried to violate is a
+// comment, so the tests that assert one has to actually do it, and they need a
+// way to say "this query is expected to fail" without require.NoError.
+//
+// It returns the error instead of asserting, because the interesting part of
+// these failures is WHICH error: a test that only checks "something went wrong"
+// would pass on a typo in the SQL.
+func scalarErr(t *testing.T, ctx context.Context, query string, args ...interface{}) error {
+	t.Helper()
+	_, _, err := db.QuerySQL(ctx, query, args)
+	return err
+}
+
+// execErr runs a statement and returns its error rather than asserting. For
+// writes the test expects to be rejected.
+func execErr(t *testing.T, ctx context.Context, query string, args ...interface{}) error {
+	t.Helper()
+	_, _, err := db.ExecSQL(ctx, query, args)
+	return err
+}
+
 func scalar(t *testing.T, ctx context.Context, query string, args ...interface{}) interface{} {
 	t.Helper()
 	// QuerySQL/ExecSQL take args as a single []interface{} slice, not variadic --

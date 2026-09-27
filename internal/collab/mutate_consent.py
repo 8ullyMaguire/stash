@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Mutation check for the consent guard (M3 step 3.1).
+
+The plan's warning is the reason this file exists:
+
+    This is the milestone where a mistake is irreversible -- a published private
+    library cannot be unpublished from users' copies. Mutation-check the opt-out:
+    make ShareOptedIn always return true and confirm
+    TestPublish_RefusedWhenOptedOut fails.
+
+So the mutation that matters most is the one that silently turns every user into
+a consenting one. If that mutation SURVIVES, this harness is telling you
+nothing about the guard, and the number below is decoration.
+
+Every mutation here must be KILLED. There is no EXEMPT list, and that is
+deliberate: a survivor in this file is either a missing test or a bug, and both
+are worth stopping for.
+"""
+
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+CONSENT = ROOT / "internal/collab/consent.go"
+
+# (label, old, new) -- each removes or inverts one safety property.
+MUTATIONS = [
+    (
+        "absent row treated as opted OUT (the default inverted)",
+        "		return true, nil\n	}\n	return choice == ChoiceOptedIn, nil",
+        "		return false, nil\n	}\n	return choice == ChoiceOptedIn, nil",
+    ),
+    (
+        "opt-out user reported as opted in (the reverse)",
+        "	return choice == ChoiceOptedIn, nil",
+        "	_ = choice\n	return true, nil",
+    ),
+    (
+        "a failed consent query is swallowed and reads as opted in",
+        "	if err != nil {\n		return \"\", false, fmt.Errorf(\"querying consent for user %d: %w\", userID, err)\n	}",
+        "	if err != nil {\n		return ChoiceOptedIn, true, nil\n	}",
+    ),
+    (
+        "a failed consent query is swallowed and reads as opted OUT",
+        "	if err != nil {\n		return \"\", false, fmt.Errorf(\"querying consent for user %d: %w\", userID, err)\n	}",
+        "	if err != nil {\n		return ChoiceOptedOut, true, nil\n	}",
+    ),
+    (
+        "corrupt metadata_share defaults to opted in instead of erroring",
+        "	if !parsed.Valid() {\n		return \"\", false, fmt.Errorf(\"consent for user %d has unknown metadata_share %q\", userID, choice)\n	}",
+        "	if !parsed.Valid() {\n		return ChoiceOptedIn, true, nil\n	}",
+    ),
+    (
+        "opted-out user is re-prompted (a prompt is a Share button)",
+        "	if choice == ChoiceOptedOut {\n		// Declined. Stays declined, and stays un-prompted, until a human says\n		// otherwise. See the comment above.\n		return false, nil\n	}",
+        "	if choice == ChoiceOptedOut {\n		return true, nil\n	}",
+    ),
+    (
+        "disclosure staleness inverted, so a stale answer looks current",
+        "	return version < current, nil",
+        "	return version >= current, nil",
+    ),
+    (
+        "an invalid choice is written instead of refused",
+        "	if !choice.Valid() {\n		return fmt.Errorf(\"consent choice %q is not one of %q or %q\", choice, ChoiceOptedIn, ChoiceOptedOut)\n	}",
+        "",
+    ),
+    (
+        "never-asked user is not prompted",
+        "	if !found {\n		return true, nil\n	}\n	if choice == ChoiceOptedOut {",
+        "	if !found {\n		return false, nil\n	}\n	if choice == ChoiceOptedOut {",
+    ),
+]
+
+
+def run(cmd, cwd):
+    return subprocess.run(
+        cmd, cwd=cwd, capture_output=True, text=True, shell=isinstance(cmd, str)
+    )
+
+
+def main():
+    original = CONSENT.read_text()
+    killed, survived, broken = [], [], []
+
+    try:
+        for label, old, new in MUTATIONS:
+            if old not in original:
+                # A replacement that does not land reports as a survivor that
+                # means nothing. Distinguish it, or the number lies.
+                broken.append(f"{label} -- ANCHOR NOT FOUND (mutation never applied)")
+                print(f"BROKEN   {label} (anchor not found)")
+                continue
+
+            mutated = original.replace(old, new, 1)
+            if mutated == original:
+                broken.append(f"{label} -- replacement was a no-op")
+                print(f"BROKEN   {label} (no-op replacement)")
+                continue
+
+            CONSENT.write_text(mutated)
+            proc = run(
+                [
+                    "go",
+                    "test",
+                    "./internal/collab/",
+                    "-run",
+                    "Consent|Disclosure|PublishedField|SetConsent",
+                    "-count=1",
+                ],
+                ROOT,
+            )
+            out = proc.stdout + proc.stderr
+
+            # A mutation that does not compile kills no test, and a guard that
+            # only looks for a test failure will score it SURVIVED -- a lie
+            # about the suite. Detect the build error explicitly.
+            if re.search(r"^(\[|.*\] )?# ", out, re.M) or "cannot use" in out or "undefined:" in out:
+                print(f"BROKEN   {label} (does not compile -- scores nothing)")
+                broken.append(f"{label} -- does not compile")
+            elif proc.returncode != 0:
+                killed.append(label)
+                print(f"KILLED   {label}")
+            else:
+                print(f"SURVIVED {label}  <-- investigate")
+                survived.append(label)
+
+    finally:
+        CONSENT.write_text(original)
+
+    # Confirm the restore actually took, so a killed run cannot leave the tree
+    # mutated for the next commit.
+    if CONSENT.read_text() != original:
+        print("FATAL: consent.go was not restored", file=sys.stderr)
+        return 2
+
+    total = len(MUTATIONS)
+    print(f"\napplied {total} / killed {len(killed)} / survived {len(survived)} / broken {len(broken)}")
+
+    if broken:
+        print("\nBROKEN means the harness itself failed, not that the code is weak:", file=sys.stderr)
+        for b in broken:
+            print(f"  {b}", file=sys.stderr)
+        return 2
+    if survived:
+        print(
+            "\nA survivor in this file is either a missing test or a bug in the guard.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
