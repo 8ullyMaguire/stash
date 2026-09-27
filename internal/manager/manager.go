@@ -16,6 +16,7 @@ import (
 	"github.com/stashapp/stash/internal/dlna"
 	"github.com/stashapp/stash/internal/log"
 	"github.com/stashapp/stash/internal/manager/config"
+	"github.com/stashapp/stash/pkg/auth"
 	"github.com/stashapp/stash/pkg/ffmpeg"
 	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/job"
@@ -62,6 +63,14 @@ type Manager struct {
 
 	Database   *sqlite.Database
 	Repository models.Repository
+
+	// StashForge multi-user surface. UserStore is always present; Auth is
+	// non-nil only when the instance is in multi-user mode, which is what the
+	// GraphQL resolvers type-assert on rather than asking a config question a
+	// second time.
+	UserStore models.UserStore
+	Auth      *auth.SessionStore
+	AuthMode  auth.Mode
 
 	SceneService   SceneService
 	ImageService   ImageService

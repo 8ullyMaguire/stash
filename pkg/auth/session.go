@@ -481,6 +481,66 @@ func apiKeyFrom(r *http.Request) string {
 	return r.URL.Query().Get("apikey")
 }
 
+// EstablishSessionForNewUser mints a session for a user who has just been
+// created, without re-checking a password.
+//
+// Safe only because the caller is the Register path: the account was created
+// by that same call, so establishing a session for it grants nothing the caller
+// did not already have. It exists so a new account arrives logged in -- a user
+// who registers and is then told they are anonymous reads that as a failure
+// rather than as a login prompt.
+//
+// Deliberately not folded into Register: keeping "create the account" and
+// "establish a session" as separate calls means a caller that does not want a
+// session (an admin creating another user's account) simply does not ask, and
+// there is no flag to get wrong.
+//
+// Takes the request rather than a context, because it writes the cookie and
+// therefore needs a ResponseWriter, and because a background caller with no
+// request is exactly the case that should not be able to do this.
+func (s *SessionStore) EstablishSessionForNewUser(w http.ResponseWriter, r *http.Request, userID int) error {
+	user, err := s.users.Find(r.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	// A disabled account must not get a session even here. The check is
+	// repeated rather than assumed: Register creates an enabled user, so today
+	// it cannot fire, and a future path that reuses this method for a disabled
+	// user should not have to rediscover that.
+	if !user.Active() {
+		return ErrUnauthorized
+	}
+
+	res, err := s.mintSession(r.Context(), user, clientIPOf(r), userAgentOf(r), s.now())
+	if err != nil {
+		return err
+	}
+	s.SetSessionCookie(w, res)
+	return nil
+}
+
+// userAgentOf is bounded because the value goes into a database column; a
+// hostile client can send an arbitrarily long header.
+func userAgentOf(r *http.Request) string {
+	ua := r.UserAgent()
+	if len(ua) > 255 {
+		ua = ua[:255]
+	}
+	return ua
+}
+
+func clientIPOf(r *http.Request) string {
+	ip := r.RemoteAddr
+	if h := r.Header.Get("X-Real-IP"); h != "" {
+		ip = h
+	}
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
+	}
+	return ip
+}
+
 // Logout invalidates the presented session.
 func (s *SessionStore) Logout(ctx context.Context, r *http.Request) error {
 	c, err := r.Cookie(sessionCookieName)

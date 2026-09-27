@@ -14,6 +14,7 @@ import (
 	"github.com/stashapp/stash/internal/dlna"
 	"github.com/stashapp/stash/internal/log"
 	"github.com/stashapp/stash/internal/manager/config"
+	"github.com/stashapp/stash/pkg/auth"
 	"github.com/stashapp/stash/pkg/ffmpeg"
 	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/gallery"
@@ -244,6 +245,71 @@ func (s *Manager) postInit(ctx context.Context) error {
 
 	s.RefreshFFMpeg(ctx)
 	s.RefreshStreamManager()
+
+	// StashForge multi-user wiring. MUST come after Database.Open: the user
+	// store reads the users table, and the factory decides between the cookie
+	// store and the database store by counting the rows in it. Any earlier and
+	// the count runs against an unopened database, which fails open as
+	// single-user and silently never offers accounts.
+	if err := s.initStashForgeAuth(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// initStashForgeAuth builds the StashForge auth layer and decides which session
+// store this instance uses.
+//
+// A failure here is fatal rather than degraded. The alternative -- log a warning
+// and leave the cookie store in place -- would run an instance that has accounts
+// in its database while authenticating everyone as the single config user,
+// which is the exact lockout this milestone was built to avoid.
+func (s *Manager) initStashForgeAuth() error {
+	users := sqlite.NewUserStore()
+	s.UserStore = users
+
+	factory := &auth.Factory{
+		Users:    users,
+		Sessions: sqlite.NewUserSessionStore(),
+		Invites:  sqlite.NewInviteStore(),
+		Audit:    sqlite.NewAuditStore(),
+		Config:   s.Config,
+	}
+
+	store, mode, err := factory.Build(session.NewCookieStore(s.Config))
+	if err != nil {
+		return fmt.Errorf("StashForge auth: %w", err)
+	}
+
+	s.SessionStore = store
+	s.AuthMode = mode
+
+	// Keep the concrete multi-user store for the GraphQL resolvers. The
+	// resolvers need Register/Login, which the session.Store interface does not
+	// expose, and re-deriving it by type assertion at every call site is how two
+	// of them end up disagreeing about whether the instance is multi-user.
+	if mode == auth.ModeMultiUser {
+		adapter, ok := store.(*session.HTTPAdapter)
+		if !ok {
+			// The factory said multi-user and handed back something that is not
+			// the adapter. Refusing here beats setting s.Auth to nil and
+			// discovering it as a confusing "accounts disabled" error on the
+			// first registration attempt.
+			return errors.New("StashForge auth: factory returned multi-user mode without the database session store")
+		}
+
+		resolver, ok := adapter.Resolver().(*auth.SessionStore)
+		if !ok {
+			return errors.New("StashForge auth: session adapter is not backed by the database store")
+		}
+		s.Auth = resolver
+	}
+
+	// The plugin cache holds the session store too, so it must be re-registered
+	// after the swap. Without this a plugin's MakePluginCookie keeps writing a
+	// cookie for the store that is no longer in use.
+	s.PluginCache.RegisterSessionStore(store)
 
 	return nil
 }

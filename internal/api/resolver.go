@@ -61,6 +61,9 @@ func (r *Resolver) Performer() PerformerResolver {
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }
+func (r *Resolver) User() UserResolver {
+	return &userResolver{r}
+}
 func (r *Resolver) Scene() SceneResolver {
 	return &sceneResolver{r}
 }
@@ -115,6 +118,7 @@ func (r *Resolver) ConfigResult() ConfigResultResolver {
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+type userResolver struct{ *Resolver }
 
 type galleryResolver struct{ *Resolver }
 type galleryChapterResolver struct{ *Resolver }

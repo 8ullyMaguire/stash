@@ -98,6 +98,20 @@ func (a *HTTPAdapter) VisitedPluginHandler() func(http.Handler) http.Handler {
 	}
 }
 
+// Resolver returns the underlying request-shaped resolver, or nil.
+//
+// The GraphQL register/login resolvers need Register and Login, which the
+// Store interface deliberately does not expose (a session store that could
+// create accounts would be a much larger thing to trust). Exposing the
+// resolver behind a nil-safe accessor keeps that boundary: the caller must
+// check for nil, which is what requireMultiUser in internal/api does.
+func (a *HTTPAdapter) Resolver() SessionResolver {
+	if a == nil {
+		return nil
+	}
+	return a.resolver
+}
+
 // MakePluginCookie returns nil. A nil cookie tells the plugin cache there is no
 // per-session state to carry, and the cache skips writing a Set-Cookie header
 // rather than emitting an empty one.

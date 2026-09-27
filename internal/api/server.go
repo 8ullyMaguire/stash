@@ -202,7 +202,13 @@ func Initialize() (*Server, error) {
 	// register GQL handler with plugin cache
 	// chain the visited plugin handler
 	// also requires the dataloader middleware
-	gqlHandler := visitedPluginHandler(dataloaders.Middleware(http.HandlerFunc(gqlHandlerFunc)))
+	// responseWriterContextMiddleware puts the ResponseWriter and Request into
+	// the context so the login/register resolvers can set the session cookie and
+	// read the User-Agent. Scoped to the GraphQL handler only: a ResponseWriter
+	// in a context that outlives the handler is how a background job ends up
+	// writing to a recycled buffer.
+	gqlHandler := visitedPluginHandler(responseWriterContextMiddleware(
+		dataloaders.Middleware(http.HandlerFunc(gqlHandlerFunc))))
 	pluginCache.RegisterGQLHandler(gqlHandler)
 
 	r.HandleFunc(gqlEndpoint, gqlHandlerFunc)
