@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/remeh/sizedwaitgroup"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/desktop"
 	"github.com/stashapp/stash/internal/dlna"
 	"github.com/stashapp/stash/internal/log"
@@ -305,12 +306,44 @@ func (s *Manager) initStashForgeAuth() error {
 	users := sqlite.NewUserStore()
 	s.UserStore = users
 
+	// The library-access store exists in EVERY mode, not just multi-user: a
+	// single-user instance is trivially allowed everywhere, and a store that
+	// only appears in one mode means every read path needs a nil check.
+	s.LibraryAccessStore = sqlite.NewLibraryAccessStore()
+
+	// The 2FA store is built HERE, not on demand, because the session store is
+	// handed a fixed verifier and re-reading the key per call would be a way for
+	// the key and the store to disagree mid-process.
+	//
+	// The key comes from the session store key. That is a deliberate reuse rather
+	// than a second secret to provision: it is already a per-instance 32-byte
+	// value, it is already required for the instance to run, and a separate
+	// "2FA encryption key" would be one more thing an operator has to configure
+	// correctly before the feature works at all. What this DOES mean, and is
+	// stated here rather than discovered later: rotating the session store key
+	// makes every stored 2FA secret undecryptable, so the recovery path is
+	// unenrol-and-rescan, not a key rotation.
+	totpKey := s.Config.GetSessionStoreKey()
+	if len(totpKey) == 0 {
+		// Refuse rather than seal with an empty key. Sealing with "" would produce
+		// ciphertext that decrypts to a known-empty key for anyone who reads the
+		// config, which is encryption in appearance only.
+		return errors.New("StashForge auth: no instance key configured, cannot protect 2FA secrets")
+	}
+	s.TOTPStore = sqlite.NewTOTPStore(
+		func() ([]byte, error) { return s.Config.GetSessionStoreKey(), nil },
+		collab.DefaultTOTPRequired,
+	)
+
 	factory := &auth.Factory{
 		Users:    users,
 		Sessions: sqlite.NewUserSessionStore(),
 		Invites:  sqlite.NewInviteStore(),
 		Audit:    sqlite.NewAuditStore(),
 		Config:   s.Config,
+		// 2FA is asked about AFTER the store exists, and the session store needs
+		// it to decide whether a login needs a second factor.
+		TOTP: s.TOTPStore,
 	}
 
 	store, mode, err := factory.Build(session.NewCookieStore(s.Config))

@@ -42,6 +42,7 @@ type fakeTOTP struct {
 	spendCalls  int
 	spent       map[int64]bool
 	spendErr    error
+	verifyCalls int
 	// alwaysRefuse makes Verify fail regardless of the code, so a test can prove
 	// a code is never let through without knowing a valid one.
 	alwaysRefuse bool
@@ -49,6 +50,21 @@ type fakeTOTP struct {
 
 func newFakeTOTP() *fakeTOTP {
 	return &fakeTOTP{required: map[int]bool{}, spent: map[int64]bool{}}
+}
+
+// Required and Verify are what make this one fake serve both halves of the hook.
+// The store holds the policy and the secret, so a test that supplied a separate
+// verifier would be testing a wiring the real instance never uses.
+func (f *fakeTOTP) Required(_ context.Context, userID int) (bool, error) {
+	if f.requiredErr != nil {
+		return false, f.requiredErr
+	}
+	return f.required[userID], nil
+}
+
+func (f *fakeTOTP) Verify(_ context.Context, _ int, _ string) error {
+	f.verifyCalls++
+	return f.verifyErr
 }
 
 func (f *fakeTOTP) Secret(context.Context, int) (string, error) { return f.secret, f.secretErr }

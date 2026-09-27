@@ -56,6 +56,16 @@ type TOTPStore interface {
 	// spent. The check and the record happen inside the store, under its lock or
 	// its transaction, so two concurrent logins cannot both be accepted.
 	SpendTOTPStep(ctx context.Context, userID int, step int64) (bool, error)
+	// Required reports whether this user must present a code.
+	//
+	// On the store rather than as a Factory argument, because the answer depends
+	// on data -- "is this the owner" -- that lives in the database the store
+	// already has open. Passing a policy function in separately invites the two
+	// to disagree about who the owner is.
+	Required(ctx context.Context, userID int) (bool, error)
+	// Verify checks a code and, if it is valid, spends its time step so the same
+	// code cannot be used twice in that step.
+	Verify(ctx context.Context, userID int, code string) error
 }
 
 // TOTPRequired returns whether the user must present a code, and whether a

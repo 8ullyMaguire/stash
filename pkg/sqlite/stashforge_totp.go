@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/auth"
 )
@@ -39,7 +41,10 @@ type TOTPStore struct {
 	required func(isOwner bool) bool
 }
 
-var _ auth.TOTPStore = (*TOTPStore)(nil)
+var (
+	_ auth.TOTPStore    = (*TOTPStore)(nil)
+	_ auth.TOTPVerifier = (*TOTPStore)(nil)
+)
 
 func NewTOTPStore(key TOTPInstanceKey, required func(isOwner bool) bool) *TOTPStore {
 	if required == nil {
@@ -218,6 +223,58 @@ func parseSteps(raw string) []int64 {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
+}
+
+// Verify checks a code and, if it is good, spends its time step.
+//
+// THE ORDER IS DELIBERATE: find the matching step, verify arithmetically, and
+// only then spend. Spending first would burn a legitimate user's step on an
+// attacker's wrong guess, which is a denial of service against a single account
+// and is why the record lives behind the arithmetic rather than in front of it.
+//
+// A code that matches nothing at all is the SAME error as a wrong code. Saying
+// "that code is from a different time" tells an attacker how far their clock
+// is off, and with that they can narrow the search.
+func (s *TOTPStore) Verify(ctx context.Context, userID int, code string) error {
+	secret, err := s.Secret(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if secret == "" {
+		// Not enrolled. The caller has already asked Required, so reaching here
+		// means the state changed between the two calls; refusing is the safe
+		// reading of an unanswerable question.
+		return collab.ErrTOTPInvalid
+	}
+
+	// VerifyTOTPDetailed returns the step it matched, which is what the spend
+	// needs. The steps this store has already recorded are passed in as the
+	// in-memory exclusion set so a replayed code is refused HERE, before it can
+	// reach the database at all -- the durable record below is the backstop, not
+	// the first line.
+	used, err := s.UsedSteps(ctx, userID)
+	if err != nil {
+		return err
+	}
+	usedSet := make(map[int64]bool, len(used))
+	for _, st := range used {
+		usedSet[st] = true
+	}
+
+	step, err := collab.VerifyTOTPDetailed(collab.TOTPSecret(secret), code, time.Now(), usedSet)
+	if err != nil {
+		return err
+	}
+
+	// Atomic: refuses a step another login already spent.
+	fresh, err := s.SpendTOTPStep(ctx, userID, step)
+	if err != nil {
+		return err
+	}
+	if !fresh {
+		return collab.ErrTOTPInvalid
+	}
+	return nil
 }
 
 // Required implements the policy hook: owners must use 2FA.

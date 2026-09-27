@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
 	"github.com/stashapp/stash/pkg/session"
@@ -59,6 +60,16 @@ type Factory struct {
 
 	// MultiUser forces the mode. nil means "infer from the user table".
 	MultiUser *bool
+
+	// TOTP is the 2FA repository. nil in single-user mode, and the session store
+	// then does not ask about a second factor at all.
+	//
+	// Optional even in multi-user mode: an instance that has not been upgraded
+	// yet has no TOTP table, and refusing to start over that would make the
+	// upgrade a breaking change. A nil TOTP means "no 2FA", which is a weaker but
+	// running state -- and it is logged, because silently running without 2FA on
+	// an owner account is the failure this exists to prevent.
+	TOTP TOTPStore
 }
 
 // Build returns the session store for this instance and the mode it chose.
@@ -108,8 +119,25 @@ func (f *Factory) Build(cookieStore session.Store) (store session.Store, mode Mo
 	// presents it as a session.Store, and it owns the session cookie. The cookie
 	// name and lifetime come from the session config, so the adapter is built
 	// here rather than inside SessionStore, which must stay HTTP-free.
+	// 2FA is attached here, where the multi-user store is built, rather than at
+	// each call site. A setter that some callers remembered and others did not
+	// would produce an instance where the owner account has a secret nobody
+	// checks -- which reads as "2FA is on" and protects nothing.
+	dbStore := NewSessionStore(f.Users, f.Sessions, f.Invites, f.Audit, f.Config)
+	if f.TOTP == nil {
+		// Not fatal, but said out loud: an owner account with no 2FA store is
+		// exactly the state this project exists to prevent, and it should be
+		// visible in the log rather than discovered in an incident.
+		logger.Warnf("StashForge: no 2FA store configured; logins will not require a second factor")
+	} else {
+		// The store is both halves of the hook: it holds the secret AND performs
+		// the atomic spend, so splitting them would mean the arithmetic and the
+		// replay record could end up in different places.
+		dbStore.SetTOTPVerifier(f.TOTP, f.TOTP, collab.DefaultTOTPRequired)
+	}
+
 	store = session.NewHTTPAdapter(
-		NewSessionStore(f.Users, f.Sessions, f.Invites, f.Audit, f.Config),
+		dbStore,
 		session.DefaultSessionCookieName,
 		f.Config.GetMaxSessionAge(),
 	)

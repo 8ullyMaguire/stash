@@ -69,8 +69,18 @@ type Manager struct {
 	// GraphQL resolvers type-assert on rather than asking a config question a
 	// second time.
 	UserStore models.UserStore
-	Auth      *auth.SessionStore
-	AuthMode  auth.Mode
+
+	// TOTPStore holds the 2FA secrets and the durable single-use record of spent
+	// steps. It is nil in single-user mode, where there is exactly one account
+	// and the config password is the only credential -- so every 2FA call site
+	// has to ask whether it is nil rather than assume it.
+	TOTPStore *sqlite.TOTPStore
+
+	// LibraryAccessStore decides who may read a library. Every read path consults
+	// it; a library with no row in it is private to its owner.
+	LibraryAccessStore *sqlite.LibraryAccessStore
+	Auth               *auth.SessionStore
+	AuthMode           auth.Mode
 
 	// StashForge collaboration surface. The collab stores are present on every
 	// instance, including a single-user one: a single-user instance still needs
