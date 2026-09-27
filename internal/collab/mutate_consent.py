@@ -278,11 +278,16 @@ TOTP_FIXTURES = [
     ("the purge drops steps that are still inside the window",
      "\toldest := totpCounter(now) - TOTPSkew",
      "\toldest := totpCounter(now) - 1000"),
-    # M4 step 4.4: the wizard gate. "The wizard cannot be skipped" is only true
-    # while this comparison is true.
+]
+
+# M4 step 4.4: the wizard gate. "The wizard cannot be skipped" is only true
+# while these comparisons are true. These belong to mode.go, NOT totp.go -- and
+# they were originally appended to TOTP_FIXTURES, which meant every one of them
+# would have mutated the wrong file and reported BROKEN forever.
+MODE_WIZARD_FIXTURES = [
     ("the wizard gate lets an incomplete instance through",
-     "\tif !done {",
-     "\tif false {"),
+     "\t\t// that was never asked.\n\t\treturn ModePrivate, ErrWizardIncomplete{}\n\t}",
+     "\t\t// that was never asked.\n\t\treturn ModePrivate, nil\n\t}"),
     ("the wizard gate is inverted",
      "\tif !done {",
      "\tif done {"),
@@ -291,6 +296,10 @@ TOTP_FIXTURES = [
     ("the gate reads the mode before checking the wizard",
      "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)",
      "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tif m, mErr := g.Mode(ctx); mErr == nil && m == ModePublic {\n\t\treturn m, nil\n\t}\n\tdone, err := g.WizardCompleted(ctx)"),
+    # The gate must return private on refusal, never the row's value.
+    ("the wizard refusal returns the instance's real mode",
+     "\t\treturn ModePrivate, ErrWizardIncomplete{}",
+     "\t\treturn ModePublic, ErrWizardIncomplete{}"),
     # A database failure reported as "wizard incomplete" sends the operator to
     # the setup screen when the real problem is a broken database.
     ("a database failure is reported as the wizard refusal",
@@ -300,6 +309,46 @@ TOTP_FIXTURES = [
      "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, err\n\t}\n\treturn m, nil\n}",
      "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, nil\n\t}\n\tif !m.Valid() {\n\t\treturn ModePublic, nil\n\t}\n\treturn m, nil\n}"),
 ]
+
+
+def preflight():
+    """Verify every fixture before running any of them.
+
+    Added after three consecutive runs reported BROKEN with an anchor not found.
+    Each was a real mistake -- a one-line function written as a braced block, a
+    comment inside a branch, and a list of mode.go fixtures appended to the TOTP
+    list -- and each cost a full sweep to discover, because BROKEN is only
+    reported after every mutation has been applied and tested.
+
+    A broken anchor is a fixture that scores nothing, and a fixture that scores
+    nothing is worse than no fixture: the count says 53 while 6 of them did not
+    run. So the anchors are checked up front, and a mismatch is an error before
+    any file is touched.
+    """
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP)}
+    problems = []
+    total = 0
+    for path, fixtures in (
+        (CONSENT, CONSENT_MUTATIONS),
+        (EXPORTER, EXPORTER_MUTATIONS),
+        (FEDERATION, FEDERATION_MUTATIONS),
+        (MODE, MODE_FIXTURES),
+        (MODE, MODE_WIZARD_FIXTURES),
+        (TOTP, TOTP_FIXTURES),
+    ):
+        for label, old, new in fixtures:
+            total += 1
+            if old not in originals[path]:
+                problems.append(f"{path.name}: {label} -- anchor not found")
+            elif old == new:
+                problems.append(f"{path.name}: {label} -- replacement is a no-op")
+    if problems:
+        print("PREFLIGHT FAILED -- no file was touched:", file=sys.stderr)
+        for p in problems:
+            print(f"  {p}", file=sys.stderr)
+        return 2
+    print(f"preflight ok: {total} fixtures, every anchor lands")
+    return 0
 
 
 def _install_restore_guard(originals):
@@ -350,11 +399,14 @@ def verify_restored(originals):
 
 
 def main():
+    if preflight() != 0:
+        return 2
     work = (
         [(CONSENT, m) for m in CONSENT_MUTATIONS]
         + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
         + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
         + [(MODE, m) for m in MODE_FIXTURES]
+        + [(MODE, m) for m in MODE_WIZARD_FIXTURES]
         + [(TOTP, m) for m in TOTP_FIXTURES]
     )
     originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE, TOTP)}

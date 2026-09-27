@@ -1304,52 +1304,106 @@ the milestone where a mistake is irreversible.
 
 ---
 
-## M4 — Public hosting
+## M4 — Public hosting — IN PROGRESS. Tag: `m4-public-hosting` (not yet cut)
 
-**Exit:** a public instance that is safe to expose. Tag `m4-public-hosting`.
+**Exit:** a public instance that is safe to expose. Steps 4.1, 4.2, 4.3 and 4.4
+are done. Not yet done: the TOTP secret has no at-rest encryption and no
+resolver, and the wizard has no UI.
 
-### Step 4.1 — Mode enforcement
+### Step 4.1 — Mode enforcement. Done
 
-```go
-// Mode is the instance's posture. See spec §2.
-type Mode string
-const (
-    ModePrivate     Mode = "private"     // nothing leaves the host
-    ModeContribute  Mode = "contribute"  // metadata shared, media not served
-    ModePublic      Mode = "public"      // metadata shared, media per access grants
-)
-```
+(`internal/collab/mode.go`, `103_instance_settings.up.sql`)
 
-In `internal/api/authentication.go`, a public mode **refuses to start** over
-plain HTTP, and says which config to change.
+Implemented as refusals, not capabilities. Every method answers "may I" or "must
+I refuse", because a mode built as a capability list is one where forgetting an
+entry silently permits something.
 
-### Step 4.2 — 2FA (TOTP)
+- **A public instance over plain HTTP refuses to start.** The headline. It hands
+  session cookies to anyone on the internet, and a public instance is precisely
+  the one whose users cannot be told to use a VPN. Contribute and private are
+  legitimately served over plain HTTP and are *not* refused — a guard that
+  refuses everything is not a guard, and an operator who cannot run a private
+  instance on a LAN routes around it. Both directions are tested.
+- **Every default fails closed.** A missing settings row reads `private`. An
+  invalid mode on a context is ignored, not taken at face value. A mode outside
+  the three is an error naming the valid set.
+- `instance_settings` is a single row with `CHECK (id = 1)`, so "what is the mode"
+  can never have two answers. It is a table and not a config file because
+  consent and grant rows live in the database, and two sources of truth for a
+  security decision disagree exactly when it matters.
 
-`internal/auth/totp.go`, `github.com/pquerna/otp`. Secret stored encrypted at
-rest; required for `is_owner`, optional otherwise. A TOTP code is
-**single-use within its time step** — replay of the same code inside the window
-must fail, and that is the case worth a test.
+### Step 4.2 — 2FA (TOTP). Done
 
-**Verify:** `TestTOTP_RejectsReplayWithinTimeStep`, `TestTOTP_OwnerRequiredAtSetup`,
-`TestTOTP_SecretNotReturnedAfterSetup`.
+(`internal/collab/totp.go`, `pkg/auth/totp.go`)
 
-### Step 4.3 — Library access grants
+A TOTP code is **single-use within its time step**, which is not what RFC 6238
+does: the specification's `Validate` accepts the same code any number of times
+inside a ±1 step window. For a login second factor that is a real weakness, so
+verification records the step that matched and refuses a step already recorded.
 
-Migration `1109_user_library_access.sql`, resolvers `grantLibraryAccess` /
-owner-only. An ungranted user gets **404, not 403**, for a scene path they can
-see in metadata — the file's existence is itself not disclosed (spec §6.4).
+**Two bugs, both found by the test the plan did not ask for.**
+`TestTOTP_MatchesTheLibraryImplementation` cross-checks the hand-written
+arithmetic against `pquerna/otp`, and without it the replay tests would have been
+a guard around a function that rejects every code:
 
-**Verify:** `TestAccess_UngrantedUserGets404Not403`,
-`TestAccess_MetadataVisibleWhileMediaIsNot`.
+1. **The counter was always zero.** `TOTPStep` is a `time.Duration`, so
+   `int64(TOTPStep)` is 30e9 — nanoseconds — and `Unix()/that` is 0 for any date
+   this century. 2FA rejected every real code while looking entirely healthy.
+2. **Dynamic truncation masked the wrong thing.** RFC 4226 clears the 31st bit
+   by masking only the top byte with `0x7f`; masking a 32-bit word with
+   `0x7fffffff` also clears three other bytes' high bits, so the two disagree
+   most of the time.
 
-### Step 4.4 — First-run wizard
+**At the login boundary** (`pkg/auth/totp.go`), the rule is: a failed 2FA check
+is *the same error value* as a wrong password — not a similar one. A distinct
+"invalid code" tells an attacker the password was correct, which stages the
+attack. The check sits after the password (so a wrong password is not charged
+against the 2FA budget) and before the throttle is cleared (so a valid password
+plus a wrong code cannot reset your own lockout). A store that cannot be read
+refuses the login; it is never read as "no 2FA configured".
 
-A blocking screen that makes the mode choice explicit. The only place defaults
-are set. A mode defaulting to public because nobody read a doc is the failure
-this prevents.
+### Step 4.3 — Library access grants. Done
 
-**Verify:** a browser test that the wizard cannot be skipped, and that mode
-`public` without TLS refuses to start.
+(`internal/collab/access.go`, `pkg/sqlite/stashforge_library_access.go`)
+
+§6.4: metadata and media are **two separate grants**, and the refusal is 404, not
+403, because the ungranted user can already see the scene in metadata — a 403
+confirms a file exists. There is exactly one refusal error in the file and it
+reads `not found`; a test asserts all three causes are byte-identical and that
+the message names no library, user, grant or mode.
+
+**A real bug this step found, pre-existing from 4.1:** `err == sql.ErrNoRows`
+cannot match, because `dbWrapper` wraps the driver error with `%w`. In the access
+store that turned every ungranted request into a **500** — and a 500 tells a
+prober the library exists, which is the exact disclosure §6.4 forbids. The same
+`==` mistake was in both fail-closed paths of the instance-mode store, where it
+was harmless in practice and dangerous in principle: the migration seeds the row,
+so those branches were dead code that every test reported as covered.
+
+### Step 4.4 — First-run wizard. Server side done, UI not
+
+(`collab.RequireWizard`)
+
+The plan asks for "a browser test that the wizard cannot be skipped". A
+client-side gate cannot establish that: the client is whatever bytes the caller
+sent. The property is enforced in the server, where skipping it requires patching
+the binary, and that is where it is tested. The gate refuses *before* reading the
+mode — a mode nobody chose must not become an answer to a question that was never
+asked.
+
+**The UI is not built.** `ui/v2.5` has no test runner at all, so the browser test
+the plan names would also mean introducing a test framework. The server-side
+gate means the security property holds without it; the screen is the friendly
+part. That is a deliberate narrowing and it is the one piece of M4 left.
+
+### What is left in M4
+
+- TOTP secret encryption at rest (the plan says "encrypted"; it is currently
+  stored as base32 in a column, which is a plaintext secret)
+- GraphQL mutations for 2FA setup/enrolment, the mode choice, and
+  `grantLibraryAccess`
+- The `/setup` screen itself
+- A frontend test runner, if the browser test is wanted as written
 
 ---
 
