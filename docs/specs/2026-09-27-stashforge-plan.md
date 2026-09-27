@@ -778,11 +778,52 @@ implementation bug, and it is worth naming because the number is innocent:
 is what three members at the same position produce. Now an explicit `haveGap`,
 and the check moved after the case the sentinel is unreachable for.
 
+**Step 2.4b.3 — the assign decision. Done** (`internal/cluster/assign.go`).
+
+Four outcomes: new cluster, join one clearly, **ambiguous**, or already seen.
+
+**Ambiguous is the feature, not a corner case.** The distance that decides
+"nearer" is the same distance that says nothing about whether two clusters are
+the same person. Clusters at 0.10 and 0.14 with a threshold of 0.15 are both in
+range, and the 0.04 between them measures nothing. The costs are asymmetric:
+an ambiguous state costs a reviewer seconds, a wrong join merges two people and
+**compounds** — every later face inherits the error, the centroid moves toward
+the wrong answer, and the cluster attracts more wrong faces.
+
+**Neither size nor confidence breaks the tie.** Size is the tempting one and it
+is actively harmful: a cluster is bigger because more faces were assigned to it,
+including wrongly-assigned ones, so size makes the first wrong merge the most
+attractive destination for the next. That is corpus convergence on a few giant
+wrong clusters, and the test plants a 6-face cluster against a 1-face one to
+require the outcome stay ambiguous.
+
+**An ambiguous outcome modifies no cluster and names no destination.**
+`ClusterID` is 0, and a test asserts the membership count is unchanged — a
+stage that both joined and flagged has made the decision it says it cannot make.
+
+**The real bug: the margin was a fraction of the wrong number.** It must be a
+fraction of the **threshold** (the engine's noise floor), not of the runner-up.
+Since any candidate is within the threshold, the runner-up form is always the
+*more* permissive one, and its defect is inverted: the required margin shrinks
+as the runner-up gets farther — 0.0025 to separate 0.40 from 0.41, but 0.05 to
+separate 0.10 from 0.14. The implementation comment warned about exactly this
+and the suite could not see it, because every test had a runner-up near the
+threshold where both formulas agree.
+
+**Six mutations, five killed first pass.** The sixth is the margin above; the
+test that separates the formulas asserts both side by side, so a change to
+`DefaultSeparation` fails with a diagnosis instead of silently flipping the
+expected outcome. `candidatesFor` sorts with a cluster-id tiebreak because Go
+randomises map iteration — unsorted, the winner is chosen by luck and a test
+that passes by luck passes by luck forever.
+
+**All twelve mutations across 2.4b.2 and 2.4b.3 now die; none survive, none are
+unscored.**
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
-**Remaining for this exit:** the clustering stage — embedding load, ANN
-candidate selection, the assign-versus-ambiguous decision, and the consolidate
-pass writing merge records.
+**Remaining for this exit:** the embedding load, ANN candidate selection, and the
+consolidate pass writing merge records.
 
 ## M3 — Metadata sharing
 
