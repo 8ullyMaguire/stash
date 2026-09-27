@@ -88,6 +88,12 @@ type Manager struct {
 	// compile error either way.
 	CollabStore *sqlite.CollabProposalStore
 
+	// CollabReputation is the adapter from the row store to
+	// collab.ReputationStore, for the same reason CollabStore exists: they are
+	// different interfaces over different tables, and reaching for the wrong one
+	// should be a compile error.
+	CollabReputation *sqlite.CollabReputationStore
+
 	SceneService   SceneService
 	ImageService   ImageService
 	GalleryService GalleryService

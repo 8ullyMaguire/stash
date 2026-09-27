@@ -474,4 +474,16 @@ var (
 		table:    goqu.T(collabAuditTable),
 		idColumn: goqu.T(collabAuditTable).Col(idColumn),
 	}
+
+	// field_reputation has a THREE-column composite primary key
+	// (user_id, target_type, field) and no `id` of its own, so like
+	// proposal_votes it opts out of the standard find-by-id / destroy path
+	// entirely. Every read and write in stashforge_reputation.go is by the
+	// triple, never by a single id, so the idColumn here is never used -- it is
+	// set to the first key column only because the repository struct requires
+	// one.
+	fieldReputationTableMgr = &table{
+		table:    goqu.T(fieldReputationTable),
+		idColumn: goqu.T(fieldReputationTable).Col("user_id"),
+	}
 )

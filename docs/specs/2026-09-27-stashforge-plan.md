@@ -526,9 +526,52 @@ economics that depend on it.
 table) and `internal/collab/weighting.go` (reputation, decay, Sybil damping,
 tally, correlation flagging), with 151 test cases.
 
-Not yet done: per-field reputation persistence (the `WeightBasis` and
-`Weight` types are in memory only — nothing reads reputation from the
-database). That is the last piece of M2b.
+**Persistence done — M2b is complete.** Migration 95 (`field_reputation`),
+`collab.ReputationStore`, the SQLite row store and adapter, and the instance
+wiring in `manager.go`/`init.go`.
+
+Three decisions in the persistence layer:
+
+*Reputation is per (user, target_type, field),* not per user. A user reliable
+about performer metadata has not been vetted about anything else, and a single
+global score transfers trust between fields that have nothing to do with each
+other. `TestReputationStore_IsPerField` pins it.
+
+*`reputation` is CHECK (>= 0) and the store clamps at zero on a debit.* Two
+mechanisms were specified for a user who keeps losing — decay and negative
+reputation — and only one is the right one. Decay discounts a vote; a negative
+score is a second, stronger mechanism that removes a person from governance
+outright, and one the UI cannot render because nothing displays it. "Not yet
+trusted" has to stay visibly different from "silenced".
+
+*`rejections` is a separate column from `reputation`,* because they answer
+different questions: reputation feeds the weight, rejections feed decay.
+
+The clamp is mutation-tested. Removing `MAX(reputation - 1, 0)` produces a
+CHECK constraint failure, which is precisely the user-visible fault the clamp
+exists to prevent — a losing streak surfacing as a server error rather than as
+"you have been overruled here a few times". The migration's own tests were
+mutation-tested the same way: dropping the CHECK and shrinking the primary key
+to `user_id` alone both fail loudly.
+
+One coupling nearly introduced. `sqlx.StructScan` needs `db:` tags, and the
+first fix put them on `collab.FieldStanding` — which would make the pure
+governance package depend on the database's column names. That is a small
+coupling until a column is renamed, at which point a schema change stops
+compiling in the package that was supposed to know nothing about the database,
+and the fix has to be made in the governance layer. `fieldReputationRow` in the
+store follows the `proposalRow` pattern instead: the row carries the tags, and
+`toStanding()` converts. The row struct has every column the table has, not
+just the ones the service wants, because the SELECT is `table.All()` and a
+missing destination fails at runtime rather than at compile time.
+
+The index test deliberately does NOT assert a query plan. The first version did
+and failed twice over: `EXPLAIN QUERY PLAN`'s first column is `id`, not
+`detail`, and more importantly SQLite will correctly prefer a scan on a
+three-row table whether or not the index exists. A test that asserts the
+planner's choice is a test about data volume, not about the schema — it would
+pass with the index dropped. It asserts the index exists, which is the part
+that is a property of the migration.
 
 **Role wiring done.** `roleOf` in
 `internal/api/resolver_mutation_proposal.go` maps a user row to a role, and

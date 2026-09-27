@@ -279,6 +279,12 @@ func (s *Manager) initStashForgeCollab() {
 	// that interface. Without this line the governance logic is unreachable from
 	// the application and only its unit tests ever run.
 	s.CollabStore = sqlite.NewCollabProposalStore()
+
+	// Same argument, for reputation. Without this line the weighted tally has no
+	// way to read a user's standing, so ComputeWeights would only ever see the
+	// fresh-voter default -- and the weighting would appear to work while doing
+	// nothing, which is the failure mode M2b's own scale bug had.
+	s.CollabReputation = sqlite.NewCollabReputationStore()
 }
 
 // initStashForgeAuth builds the StashForge auth layer and decides which session
