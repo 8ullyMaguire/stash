@@ -1,6 +1,9 @@
 package cluster
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // Step 2.4b.3: the assign decision.
 //
@@ -112,6 +115,22 @@ type stage struct {
 	clusters map[int64][]*testFace
 	// seen maps a membership key to the decision already made for it.
 	seen map[string]Assignment
+
+	// state holds the migration-96 lifecycle value, but ONLY for clusters whose
+	// state is not derivable from membership -- which today means only 'merged'.
+	//
+	// The other three are derived in stateOf rather than stored, because a
+	// stored state has to be written by every constructor in the package and a
+	// constructor that forgets leaves a cluster claiming to be a singleton with
+	// forty faces in it. 'merged' cannot be derived: it is a decision, not a
+	// property of the members, and it is what makes a consolidate pass
+	// idempotent.
+	state map[int64]string
+
+	// keys maps a membership key to the cluster holding it, shared with the
+	// over-merge guard so a face is never a member of two clusters.
+	keys map[string]int64
+
 	next  int64
 }
 
@@ -130,6 +149,8 @@ func newStage(threshold float64, opts ...stageOption) *stage {
 		separation: DefaultSeparation,
 		clusters:   map[int64][]*testFace{},
 		seen:       map[string]Assignment{},
+		state:      map[int64]string{},
+		keys:       map[string]int64{},
 	}
 	for _, o := range opts {
 		o(s)
@@ -145,12 +166,19 @@ func (s *stage) seedCluster(distance float64) int64 {
 func (s *stage) forceClusterAt(distance float64) int64 {
 	s.next++
 	id := s.next
-	s.clusters[id] = []*testFace{{pos: distance, key: "seed"}}
+	seed := &testFace{pos: distance, key: fmt.Sprintf("seed-%d", id)}
+	s.clusters[id] = []*testFace{seed}
+	s.keys[seed.key] = id
 	return id
 }
 
 func (s *stage) forceMembers(id int64, f ...*testFace) {
 	s.clusters[id] = append(s.clusters[id], f...)
+	for _, m := range f {
+		if m.key != "" {
+			s.keys[m.key] = id
+		}
+	}
 }
 
 func (s *stage) size(id int64) int { return len(s.clusters[id]) }
