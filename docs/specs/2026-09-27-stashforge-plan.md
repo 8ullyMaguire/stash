@@ -1675,13 +1675,37 @@ different module without the core's own `go.mod` gaining a `require` and a
 `replace`, and both are visible in review.
 
 **And it must be loadable, which is a separate question from being separate.**
-The module is built to a static binary and referenced by a `source.json` with
-`interface: rpc`:
+The module is built to a static binary and referenced by a `p2p-downloader.yml`
+in the configured plugins path:
 
-```json
-{ "id": "p2p-downloader", "name": "P2P Downloader", "interface": "rpc",
-  "exec": ["./stash-plugin-p2pdownloader"] }
+```yaml
+id: p2p-downloader
+name: P2P Downloader
+description: Fetches files over BitTorrent and ed2k into your library
+version: 1.0.0
+interface: rpc
+exec:
+  - stash-plugin-p2pdownloader
 ```
+
+**CORRECTED 2026-09-27 — it is a `.yml` file, not a `source.json`.** The plan
+above originally specified `source.json` with a JSON manifest, which is the
+shape *stash-box* uses for scraper configs and not what the plugin host reads.
+`pkg/plugin/plugins.go:141` loads every file with `filepath.Ext(fp) == ".yml"`,
+and `pkg/plugin/config.go:19` parses it into `Config` — which is `yaml`-tagged
+throughout, and whose `id` is a **lowercase-unexported** field populated from
+the FILENAME stem rather than from the document.
+
+That last detail is the one that would have bitten hardest, and it is invisible
+from the struct: `Config.id` is unexported, so there is no way to set it from the
+document, and a manifest carrying `"id": "p2p-downloader"` is parsed and
+**ignored**. The plugin's identity comes entirely from the file being named
+`p2p-downloader.yml`. A wrong manifest does not error — it loads, with the
+identity the filename gave it and every field the document supplied.
+
+Which is exactly the failure mode this milestone has already hit four times: a
+document stating something the code does not do, believed by the person writing
+against it. This is the fifth, and it was found by reading the loader.
 
 A module that is separate but never referenced is not a plugin, and that is the
 other half of why the original location was wrong: it failed *both* ways —
@@ -1696,9 +1720,10 @@ grep -rn 'p2pdownloader' --include='*.go' . | grep -v '^./plugins/p2pdownloader/
 # must print nothing
 ```
 
-**Corrected 2026-09-27 — the original seam test was insufficient, and would
-have passed on a non-plugin.** Two changes, both from reading the plugin host
-rather than assuming it.
+**DONE 2026-09-27.** The three seam tests are in
+`internal/api/stashforge_p2p_seam_test.go`; the plugin is at
+`plugins/p2pdownloader/` with its own `go.mod` and `p2p-downloader.yml`. All
+three pass. Mutation-checked by `mutate_seam.py` at the repo root.
 
 **One: the location and the transport.** The original text put the module at
 `pkg/p2pdownloader/`, which is *inside the core module* and therefore not a
@@ -1715,17 +1740,65 @@ asserts the grep is empty — and a Go package *inside the core tree* that impor
 nothing from the core satisfies that grep trivially. The test would have been
 green on something that cannot load and never runs. So:
 
-- `TestP2PDownloaderIsNotImportedByCore` — the grep above is empty.
+- `TestP2PDownloaderIsNotImportedByCore` — the core's `go.mod` gains no
+  `require` or `replace` for the plugin module. Checked on **go.mod**, not on
+  `.go` files: an import path in a `require` block is the only way core code can
+  reach a separate module, and it is a one-line diff to review. A grep for the
+  word "p2pdownloader" across `.go` files would match this very file and say
+  nothing.
 - `TestP2PDownloaderHasItsOwnModule` — the directory has a `go.mod` whose
   module path is not under `github.com/stashapp/stash/`, **and is not inside
-  the core module's directory tree**.
+  the core module's directory tree**. The path check is about review, not the
+  toolchain: a downloader whose module claims to be core reads as core, and is
+  one `replace` away from being imported by it.
 - `TestP2PDownloaderIsNotBundledByCore` — **the half that matters.** The core
-  binary contains no P2P downloader symbol, and the core's plugin manifest
-  registry does not list it. A core that shells out to a *bundled* downloader
-  passes both greps above and is exactly the failure mode worth excluding: the
-  code is outside the import graph but still inside the shipped artifact.
-  Verify with `go tool nm` over the built binary, plus an assertion that no
-  `source.json` in the core tree references the downloader.
+  binary contains nothing from the downloader's module. A core that shells out
+  to a *bundled* downloader passes both checks above and is exactly the failure
+  mode worth excluding: the code is outside the import graph but still inside
+  the shipped artifact.
+- `TestTheDownloaderShipsAManifestTheHostCanRead` — the loadability half.
+  Separate is not the same as installable: a module nobody references is a
+  directory somebody cloned.
+
+**CORRECTED 2026-09-27 — `go tool nm` does not work for this, and two other
+mechanisms did not either.** The original text said to verify with `go tool nm`
+over the built binary. That check **passes on a core that has the downloader
+linked in**, and the mutation harness proved it: with a `replace` in `go.mod`
+and a real import in `cmd/stash/main.go`, the core built successfully and the
+test reported 113,767 symbols, not one of them the downloader's.
+
+The cause is reachability analysis, and it took three attempts to find a marker
+that survives it:
+
+1. **A symbol** — an uncalled function is dead-code-eliminated, and an
+   eliminated symbol is one `nm` cannot report.
+2. **A string constant** (`SeamMarker`) — wrong by the same mechanism, but one
+   step earlier: an equally-unreachable constant is dropped by the compiler
+   before the linker runs. Measured on a 107 MB binary that *did* contain the
+   downloader's code: the marker was absent, the module path was present.
+3. **The module path** — what actually survives. The Go build system embeds it
+   in the binary's own pclntab function-name table for every linked package,
+   and that table is not subject to reachability analysis. It is present whether
+   or not anything calls the code, which is exactly the property needed: "is it
+   in the artifact" must not depend on whether it happens to be reachable.
+
+So the test reads the binary's **bytes** for `stash-plugin-p2pdownloader`, and
+`nm` is kept only as a secondary signal. The shipped check caught the bundled
+mutation at `seam_test.go:227` — the seam assertion itself, not the build
+guard that stands behind it.
+
+**What the harness needed to make the bundled mutation compile**, which is
+worth recording because each piece was discovered by the mutation failing:
+
+- The plugin needs a **non-internal** package. Go's `internal/` rule means the
+  core cannot import `.../internal/rpc` at all, so the obvious blank import is a
+  compile error and the mutation scores `broken`, not `killed`.
+- The import must be **used**, not blank. An unused import is eliminated by the
+  compiler, and the plugin's code goes with it.
+- The manifest's `interface:` check asserts the **value**, not the string's
+  presence. `Contains(text, "interface: rpc")` is defeated by the manifest's own
+  comment block, which mentions that exact string in prose — the mutation
+  replaced the first occurrence, in the comment, and the test passed.
 
 If any of the three fails, the downloader is core code and M5 is incomplete no
 matter how well the transfer protocols work.
