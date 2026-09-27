@@ -454,6 +454,22 @@ var (
 		idColumn: goqu.T(inviteTable).Col(inviteKeyHashColumn),
 	}
 
+	// edit_proposals is keyed by the shared integer `id`, unlike the BLOB- and
+	// hash-keyed auth tables above it.
+	editProposalTableMgr = &table{
+		table:    goqu.T(editProposalsTable),
+		idColumn: goqu.T(editProposalsTable).Col(idColumn),
+	}
+
+	// proposal_votes has a COMPOSITE primary key (proposal_id, user_id) and no
+	// `id` of its own, so it opts out of the standard destroy/find-by-id path
+	// entirely. Its idColumn is the first key column, which is what the
+	// repository's getAll would use — but nothing in this file calls it.
+	proposalVoteTableMgr = &table{
+		table:    goqu.T(proposalVotesTable),
+		idColumn: goqu.T(proposalVotesTable).Col("proposal_id"),
+	}
+
 	collabAuditTableMgr = &table{
 		table:    goqu.T(collabAuditTable),
 		idColumn: goqu.T(collabAuditTable).Col(idColumn),
