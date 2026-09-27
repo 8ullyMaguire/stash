@@ -820,10 +820,52 @@ that passes by luck passes by luck forever.
 **All twelve mutations across 2.4b.2 and 2.4b.3 now die; none survive, none are
 unscored.**
 
+**Step 2.4b.4 — the consolidate pass. Done** (`internal/cluster/consolidate.go`).
+
+Two properties, both **structural rather than disciplinary**:
+
+- **A refused merge leaves nothing.** The tempting implementation writes the
+  record, discovers the guard refuses, and rolls the membership back — and the
+  record survives the rollback, so the queue shows a merge that never happened.
+  `absorb()` consults the guard *before* anything moves, so there is no partial
+  state to roll back and nothing that could survive one by accident. That is an
+  ordering, not clean-up discipline.
+- **A merge moves membership.** The first version appended and left the loser's
+  slice populated, so a face was in two clusters, the loser's centroid still
+  existed, and a reversal would have to guess which copy was authoritative.
+  Marking a loser `merged` does not prevent that — the state is a label, not a
+  lock.
+
+**State is written after every decision, not during.** A pass that is abandoned
+— cancelled job, interrupted action, an early guard refusal — must not have told
+the queue anything. This is only observable when a pass stops early, because a
+pass that *completes* produces an identical final state either way, so
+`consolidateBounded` exists to make the abandoned case reachable and testable.
+
+**The pass is one sweep, not a fixpoint.** A fixpoint would merge further than
+any single pairwise decision justified — the over-merge the guard prevents,
+reintroduced one layer up.
+
+**Two mutations survive, and both are redundancy rather than a missing test.**
+The `j := i + 1` guard is backed by `absorb` refusing a self-merge; the
+state-after-decisions ordering is backed by `absorb` never writing state. Two
+places enforce one guarantee and one edit cannot remove both. Neither was
+papered over with a test that appears to kill it and does not —
+`TestConsolidate_TwoMutationsAreBackedByASecondMechanism` records the redundancy
+and asserts the second mechanisms are still present.
+
+**A stale membership was hiding another mutation.** With the loser's members
+left in place, the already-merged exclusion was not load-bearing: a second pass
+found a candidate pair anyway and was idempotent for an unrelated reason. The
+test that pins it now constructs a cluster marked `merged` that *still holds
+members* — what an import from an older corpus leaves — because after a real
+merge the loser is empty and `liveClusterIDs` skips empty clusters too. A second
+skip that happens to agree is not evidence the first one is load-bearing.
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
-**Remaining for this exit:** the embedding load, ANN candidate selection, and the
-consolidate pass writing merge records.
+**Remaining for this exit:** the embedding load and ANN candidate selection, then
+the GraphQL surface and the job that runs a pass.
 
 ## M3 — Metadata sharing
 
