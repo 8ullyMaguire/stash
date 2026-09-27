@@ -211,6 +211,26 @@ func Initialize() (*Server, error) {
 		dataloaders.Middleware(http.HandlerFunc(gqlHandlerFunc))))
 	pluginCache.RegisterGQLHandler(gqlHandler)
 
+	// The first-run wizard, and the mode read that goes with it. BOTH ARE
+	// UNAUTHENTICATED, deliberately, and that is the one genuinely dangerous
+	// decision in this file.
+	//
+	// The GETs are safe: one reports whether the wizard is done, the other
+	// reports a policy flag. Neither discloses a secret, and both are needed
+	// before a session exists -- the login page must know whether to ask for a
+	// second factor, and that is exactly the situation the wizard resolves.
+	//
+	// The POST is guarded by the instance key, not a session, because the
+	// operator has not logged in yet. Without that guard an unauthenticated
+	// "make this instance public" would be a serious capability to hand anyone
+	// who can reach the port.
+	wizard := newWizardHandler(server.manager.InstanceModeStore, func() []byte {
+		return server.manager.Config.GetSessionStoreKey()
+	})
+	r.Get(wizardEndpoint, wizard.State)
+	r.Post(wizardEndpoint, wizard.Decide)
+	r.Get(modeEndpoint, wizard.Mode)
+
 	r.HandleFunc(gqlEndpoint, gqlHandlerFunc)
 	r.HandleFunc(playgroundEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		setPageSecurityHeaders(w, r, pluginCache.ListPlugins())

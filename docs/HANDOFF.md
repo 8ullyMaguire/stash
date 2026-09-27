@@ -38,6 +38,7 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 - `go build ./...` and `go vet ./...` clean
 - `internal/collab` at 177 top-level tests
 - `pkg/auth` at 71 top-level tests, of which 9 are the 2FA *wiring* tests
+- `internal/api` at 34, of which 17 cover the wizard's refusals
 - `pkg/sqlite` adds 9 2FA store tests, one of which races 20 goroutines
 - `internal/collab/mutate_consent.py`: **63 applied, 63 killed, 0 survived,
   0 broken** (collab + `pkg/auth`)
@@ -140,18 +141,16 @@ is a place where the obvious implementation is wrong:
 **M4 has no UI.** Everything in M4 is server-side and tested; nothing is reachable
 from a browser. In order of what a user would notice first:
 
+- **The wizard has no UI.** The gate is now escapable —
+  `GET/POST /stashforge/wizard` and `GET /stashforge/mode`, guarded by the
+  instance key on the POST — but there is no screen. `curl` works; a browser
+  gets JSON.
 - **2FA enrolment.** The store, the encryption, the login gate and the replay
   guard all exist and are wired. There is no screen to scan a QR code, and no
   recovery codes. `collab.TOTPURIA` produces the provisioning URI, so a resolver
   is a small addition — but until it exists, an account cannot be enrolled, and
   an account that *is* enrolled (by direct DB write) can only be unenrolled the
   same way.
-- **The first-run wizard.** `ModeFromContext` returns `ErrWizardNotCompleted`
-  until `instance_settings.wizard_completed` is set, which is the intended
-  behaviour — but no handler sets it, so a fresh instance refuses every request
-  with no way forward. This is the one gap that makes the current build unusable
-  as a public instance, and it is deliberately a hard refusal rather than a
-  default: a default would let an unconfigured instance serve publicly.
 - **Library grant management.** `LibraryAccessStore` grants, revokes and
   authorises, and the 404-vs-403 distinction is tested. No mutation exposes them.
 - **TLS enforcement.** `collab.RequiresTLS` is implemented and tested; nothing at

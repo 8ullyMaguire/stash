@@ -79,8 +79,16 @@ type Manager struct {
 	// LibraryAccessStore decides who may read a library. Every read path consults
 	// it; a library with no row in it is private to its owner.
 	LibraryAccessStore *sqlite.LibraryAccessStore
-	Auth               *auth.SessionStore
-	AuthMode           auth.Mode
+
+	// InstanceModeStore holds the instance's private/contribute/public decision
+	// and whether the first-run wizard has been completed.
+	//
+	// Always non-nil after init, unlike TOTPStore: the mode gate applies to EVERY
+	// mode, and an instance with no mode store would have no way to record the
+	// decision that makes it startable.
+	InstanceModeStore *sqlite.InstanceModeStore
+	Auth              *auth.SessionStore
+	AuthMode          auth.Mode
 
 	// StashForge collaboration surface. The collab stores are present on every
 	// instance, including a single-user one: a single-user instance still needs
