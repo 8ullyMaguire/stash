@@ -34,26 +34,36 @@ whose verification you cannot run.
 
 ## Current state
 
-**M0 done.** `go build ./...` green, 887 tests passing across 34 packages, 0
-failures — recorded in `docs/BASELINE.md`, which is the number every later
-milestone must not regress.
+**M0 and M1 steps 1.1-1.3 are done**, each committed and tagged.
 
-Two fixes were needed to get there, and both are ones a fresh clone will hit
-again, so they are in `docs/BASELINE.md` and in the plan:
+| | unit (pass/fail) | integration (pass/fail) |
+|---|---|---|
+| `m0-buildable-fork` baseline | 887 / 0 | 1191 / 1 |
+| `m1-user-tables` (migrations 87-90) | 887 / 0 | 1199 / 1 |
+| `m1-user-store` (auth + store) | **911 / 0** | **1211 / 1** |
 
-1. `go get github.com/enetx/http@v1.0.29`. The build failed on a clean
-   checkout because `enetx/http2`'s `go1.27`-tagged file needs a field the
-   pinned `enetx/http v1.0.28` does not have — **dependency skew within one
-   module family**, not toolchain skew. My first diagnosis said toolchain and
-   was wrong; the plan is corrected.
-2. Codegen is mandatory and gitignored: `make generate-backend` for
-   `internal/api/generated_*.go` (`.gitignore:22`), and `pnpm run gqlgen` for
-   the frontend's `src/core/generated-graphql.ts`. A fresh clone that reports a
-   wall of `undefined: GalleryResolver` is missing codegen, not broken source.
+The one integration failure at every point is `TestStudioQueryFast`, the
+pre-existing unregistered-`mod` bug. See `docs/BASELINE.md`.
 
-Next up is **M1, user accounts** — plan Steps 1.1 through 1.5, starting with
-migrations `1100_users.sql`, `1101_invite_keys.sql`, `1102_user_sessions.sql`,
-`1103_collab_audit.sql`.
+Three M0/M1 fixes are recorded in `docs/BASELINE.md` and were all diagnosed
+wrong the first time:
+
+1. `go get github.com/enetx/http@v1.0.29`. Not toolchain skew -- it is
+   dependency skew inside the enetx module family, where `http2`'s go1.27 file
+   needs a field the pinned `http` fork lacks.
+2. `make generate-backend` and `pnpm run gqlgen` are mandatory; the generated
+   files are gitignored, so a fresh clone reports a wall of
+   `undefined: GalleryResolver`.
+3. Migrations must be **contiguous** -- golang-migrate rejects a gap outright.
+   StashForge's continue from upstream's 86.
+
+`appSchemaVersion` is bumped in the same commit as any migration (86 -> 90 so
+far), and a test asserts the recorded version matches it.
+
+Next up is **M1 step 1.4**: the session layer -- a `SessionStore` implementing
+Stash's existing `pkg/session` surface so a legacy single-password install keeps
+working, with invite create/redeem and login lockout. Then M2, the
+edit/vote/draft model.
 
 ## The seven milestones
 

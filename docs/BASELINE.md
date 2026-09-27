@@ -26,6 +26,18 @@ go test -count=1 -json ./... 2>/dev/null | <count pass/fail/skip>
 | **Tests failing** | **0** |
 | Tests skipped | 0 |
 
+This is the floor, not the target. StashForge adds tests, so the count should
+only ever go up. Where it stands at each tag:
+
+| tag | unit pass/fail | integration pass/fail |
+|---|---|---|
+| `m0-buildable-fork` | 887 / 0 | 1191 / 1 |
+| `m1-user-tables` | 887 / 0 | 1199 / 1 |
+| `m1-user-store` | 911 / 0 | 1211 / 1 |
+
+The integration failure at every row is the same pre-existing one, described
+below.
+
 `go test` prints `test result:` lines only in verbose mode. To count non-verbose,
 use `-json` and tally the `Action` field — a `grep "test result"` returns zero
 and looks like "no tests exist" rather than "the flag was wrong".
