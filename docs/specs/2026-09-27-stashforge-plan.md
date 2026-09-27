@@ -522,10 +522,41 @@ is what makes a public instance safe, and a public instance is where weighted
 voting starts to matter — so the access model is in place before the
 economics that depend on it.
 
+**Status: governance core done.** `internal/collab/roles.go` (the five-role
+table) and `internal/collab/weighting.go` (reputation, decay, Sybil damping,
+tally, correlation flagging), with 151 test cases.
+
+Not yet done: the weighted decision function in `Evaluate`, per-field
+reputation persistence, and the `ResolveRole` wiring into the resolvers. Those
+are the next step and are listed below.
+
 **Verify:** `go test ./internal/collab/ -run 'TestWeight|TestDecay|TestSybil|TestRole'`
 must be table-driven over the full cross-product, not a handful of cases. The
 flat path's existing tests must still pass unchanged — that is the proof it is
 a fallback and not dead code.
+
+Three decisions the tests forced, all of which were wrong before they were right:
+
+1. **The basis-point scale was off by 4x.** The first constant made reputation
+   100 return the floor (2500) rather than 10000, so *every* voter looked like a
+   newcomer and the weighting did nothing. It passed the obvious checks. The
+   scale is now fixed by an explicit property — `ReputationToBasis(100) ==
+   10000` — so a fresh voter is exactly 1.0 and an M2 quorum threshold carries
+   over without rescaling. A magic constant that is nearly right is worse than
+   one that is obviously wrong, because the failure is silent.
+2. **Damping applied to the wrong neighbour.** The group test read
+   `basis[i-1%len(basis)]`, which Go parses as `i-(1%len)` and not `(i-1)%len`,
+   so the "is this ballot the same as its group" test was meaningless. The group
+   position already encodes sameness, so it now reads `position > 1` directly.
+3. **A test asserting the wrong sign.** `TestTallyWeightedNotCounted` asserted
+   `Net > 0` for a ballot order where the established user votes *against* two
+   newcomers — so it asserted nothing about weighting and failed. It now asserts
+   the weighted total against the flat count, which is the property the test
+   exists to check.
+
+The minority-dissent case is worth keeping: damping the minority direction would
+make a coordinated bloc *cheaper* to execute, the exact inverse of the intent.
+`TestSybilDoesNotDampMinorityDissent` pins that.
 
 ### Step 2.4b — Identity clustering (milestone M2c)
 
