@@ -43,7 +43,7 @@ type WeightedPolicy struct {
 	// property that makes the audit row meaningful. A tally computed from state
 	// that is not in the policy cannot be re-derived from the record.
 	Decay DecayPolicy
-	Sybil  SybilPolicy
+	Sybil SybilPolicy
 
 	// MinVoters is re-used from Policy rather than redeclared, and the reason is
 	// worth stating: a distinct-voter floor that exists for the flat path and
@@ -105,8 +105,8 @@ type WeightedInput struct {
 	// than taking a VoteCount would let the two paths disagree about whether a
 	// withdrawn proposal can be approved, and that is a real bug rather than a
 	// theoretical one.
-	Withdrawn  bool
-	Superseded bool
+	Withdrawn         bool
+	Superseded        bool
 	ModeratorApproved bool
 
 	// AuthorID is excluded from the tally unless AllowSelfAccept. The
@@ -273,8 +273,8 @@ func withoutAuthor(votes []WeightBasis, authorID int) []WeightBasis {
 // keeps the "recompute, never store" rule holding on both paths.
 func flatVoteCount(in WeightedInput) VoteCount {
 	v := VoteCount{
-		Withdrawn:          in.Withdrawn,
-		Superseded:         in.Superseded,
+		Withdrawn:         in.Withdrawn,
+		Superseded:        in.Superseded,
 		ModeratorApproved: in.ModeratorApproved,
 	}
 	for _, b := range in.Votes {

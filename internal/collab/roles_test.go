@@ -260,10 +260,10 @@ func TestCanAny(t *testing.T) {
 // with no migration and no error. This test is what makes that visible.
 func TestResolveRolePreservesM2Behaviour(t *testing.T) {
 	tests := []struct {
-		name       string
-		isOwner    bool
+		name        string
+		isOwner     bool
 		isModerator bool
-		want       Role
+		want        Role
 	}{
 		{"owner maps to admin", true, false, RoleAdmin},
 		{"owner who is also moderator is still admin", true, true, RoleAdmin},

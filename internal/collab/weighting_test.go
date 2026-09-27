@@ -407,8 +407,8 @@ func TestFullCrossProduct(t *testing.T) {
 		{Enabled: false, Factor: 0.5, MinWeight: 1000},
 		{Enabled: true, Factor: 0.5, MinWeight: 1000},
 		{Enabled: true, Factor: 0.9, MinWeight: 0},
-		{Enabled: true, Factor: 0, MinWeight: 1000},    // nonsense, must clamp
-		{Enabled: true, Factor: 2, MinWeight: -5},      // nonsense, must clamp
+		{Enabled: true, Factor: 0, MinWeight: 1000}, // nonsense, must clamp
+		{Enabled: true, Factor: 2, MinWeight: -5},   // nonsense, must clamp
 	}
 	sybils := []SybilPolicy{
 		{Enabled: false, DiminishingReturns: 8000, GroupWindow: 10},

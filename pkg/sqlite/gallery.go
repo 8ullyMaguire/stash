@@ -31,6 +31,17 @@ const (
 
 type galleryRow struct {
 	ID            int         `db:"id" goqu:"skipinsert"`
+	// LibraryID is the sharing scope this row belongs to. Migration 105.
+	//
+	// Scan-only, and deliberately not carried onto the models type: which
+	// library a row is in is a SERVING decision, not metadata about the row,
+	// and putting it on models.Scene would make every metadata query carry a
+	// column the UI has no use for and a future exporter would publish.
+	//
+	// It must exist here because the SELECT is table.All() and sqlx fails at
+	// RUNTIME -- not compile time -- on a column with no destination. That is
+	// the failure this comment is standing next to.
+	LibraryID null.Int `db:"library_id,omitempty"`
 	Title         zero.String `db:"title"`
 	Code          zero.String `db:"code"`
 	Date          NullDate    `db:"date"`

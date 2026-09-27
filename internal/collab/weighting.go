@@ -193,8 +193,8 @@ type Weight struct {
 
 	// Group is the correlation group this ballot was placed in, and Position is
 	// its 1-based position within it. Both zero when damping is off.
-	Group     int
-	Position  int
+	Group    int
+	Position int
 
 	// Decayed is true when the decay policy reduced this voter's basis.
 	Decayed bool

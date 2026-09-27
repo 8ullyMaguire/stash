@@ -132,8 +132,8 @@ type Capabilities struct {
 	// ManageRoles assigns roles, and ManageSettings and ManagePeers configure
 	// the instance. The only capabilities that are about the instance rather
 	// than about content.
-	ManageRoles     bool
-	ManageSettings  bool
+	ManageRoles    bool
+	ManageSettings bool
 	ManagePeers    bool
 }
 
@@ -273,15 +273,15 @@ func (c Capability) String() string {
 // granted, discovered only by a user reporting they cannot do something they
 // should be able to.
 var capabilityFields = map[Capability]func(Capabilities) bool{
-	CapBrowse:               func(c Capabilities) bool { return c.BrowseTiered },
-	CapVote:                 func(c Capabilities) bool { return c.Vote },
-	CapPropose:              func(c Capabilities) bool { return c.Propose },
-	CapWithdrawOwn:          func(c Capabilities) bool { return c.WithdrawOwn },
-	CapSeeModerationQueue:   func(c Capabilities) bool { return c.SeeModerationQueue },
-	CapModerate:             func(c Capabilities) bool { return c.Moderate },
-	CapManageRoles:          func(c Capabilities) bool { return c.ManageRoles },
-	CapManageSettings:       func(c Capabilities) bool { return c.ManageSettings },
-	CapManagePeers:          func(c Capabilities) bool { return c.ManagePeers },
+	CapBrowse:             func(c Capabilities) bool { return c.BrowseTiered },
+	CapVote:               func(c Capabilities) bool { return c.Vote },
+	CapPropose:            func(c Capabilities) bool { return c.Propose },
+	CapWithdrawOwn:        func(c Capabilities) bool { return c.WithdrawOwn },
+	CapSeeModerationQueue: func(c Capabilities) bool { return c.SeeModerationQueue },
+	CapModerate:           func(c Capabilities) bool { return c.Moderate },
+	CapManageRoles:        func(c Capabilities) bool { return c.ManageRoles },
+	CapManageSettings:     func(c Capabilities) bool { return c.ManageSettings },
+	CapManagePeers:        func(c Capabilities) bool { return c.ManagePeers },
 }
 
 // Can reports whether r holds c.

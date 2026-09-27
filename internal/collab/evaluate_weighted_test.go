@@ -31,9 +31,9 @@ func TestEvaluateWeightedPrecedenceMatchesFlatPath(t *testing.T) {
 	established := func(id int) WeightBasis { return basis(id, 1, 100) }
 
 	tests := []struct {
-		name  string
-		in    WeightedInput
-		want  Decision
+		name string
+		in   WeightedInput
+		want Decision
 	}{
 		{
 			name: "withdrawn is rejected before any arithmetic",

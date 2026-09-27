@@ -23,14 +23,14 @@ type fakeTargets struct {
 	audit    []collab.AuditEntry
 
 	// Injection points, nil in the happy path.
-	readErr     error
-	writeErr    error
-	auditErr    error
-	markErr     error
-	writeCount  int
-	auditCount  int
+	readErr       error
+	writeErr      error
+	auditErr      error
+	markErr       error
+	writeCount    int
+	auditCount    int
 	lastDeciderID int
-	markRejects int
+	markRejects   int
 }
 
 func newFakeTargets() *fakeTargets {
