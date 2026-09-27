@@ -1304,11 +1304,12 @@ the milestone where a mistake is irreversible.
 
 ---
 
-## M4 — Public hosting — IN PROGRESS. Tag: `m4-public-hosting` (not yet cut)
+## M4 — Public hosting — COMPLETE. Tag: `m4-public-hosting`
 
-**Exit:** a public instance that is safe to expose. Steps 4.1, 4.2, 4.3 and 4.4
-are done. Not yet done: the TOTP secret has no at-rest encryption and no
-resolver, and the wizard has no UI.
+**Exit, met:** a public instance that is safe to expose. Steps 4.1, 4.2, 4.3 and
+4.4 are all done — server, GraphQL and screen. The two items this section used
+to list as outstanding (TOTP at-rest encryption, the wizard UI) are closed; see
+step 4.4 and "What is left in M4" for what each turned out to need.
 
 ### Step 4.1 — Mode enforcement. Done
 
@@ -1495,9 +1496,10 @@ prober the library exists, which is the exact disclosure §6.4 forbids. The same
 was harmless in practice and dangerous in principle: the migration seeds the row,
 so those branches were dead code that every test reported as covered.
 
-### Step 4.4 — First-run wizard. Server side done, UI not
+### Step 4.4 — First-run wizard. DONE, server and screen
 
-(`collab.RequireWizard`)
+(`collab.RequireWizard`, `internal/api/stashforge_wizard.go`,
+`ui/v2.5/src/components/Setup/StashForgeWizard.tsx`)
 
 The plan asks for "a browser test that the wizard cannot be skipped". A
 client-side gate cannot establish that: the client is whatever bytes the caller
@@ -1506,19 +1508,45 @@ the binary, and that is where it is tested. The gate refuses *before* reading th
 mode — a mode nobody chose must not become an answer to a question that was never
 asked.
 
-**The UI is not built.** `ui/v2.5` has no test runner at all, so the browser test
-the plan names would also mean introducing a test framework. The server-side
-gate means the security property holds without it; the screen is the friendly
-part. That is a deliberate narrowing and it is the one piece of M4 left.
+**The screen exists now**, at `/stashforge/wizard` — a route **separate from the
+upstream `/setup`**, which is the paths-and-credentials config wizard. Sharing one
+screen would mean an operator who re-runs configuration lands in the sharing
+decision, which the server refuses with `wizard_already_completed`.
+
+It calls the HTTP endpoint rather than GraphQL, and that is forced rather than
+chosen: there is no session to send. `POST /stashforge/wizard` is the only
+unauthenticated POST in the application, authenticated by possession of the
+instance key. **The mode is chosen once here**; changing a live instance's mode
+is a separate authenticated operation that deliberately does not exist yet,
+rather than riding on an endpoint whose whole purpose is to be called once.
+
+The TLS warning uses `window.isSecureContext`, not `location.protocol`, because
+the instance may be behind a TLS-terminating proxy where the browser sees
+`https` and the Go server saw `http`. It is advisory either way — the server is
+the authority, and `collab.ModeErrors` is what actually refuses.
+
+**Still no browser test.** `ui/v2.5` has no test runner, so the test the plan
+names would mean introducing a framework. The security property holds without it,
+because it was never in the client.
+
+### M4 — COMPLETE. Tag: `m4-public-hosting`
+
+**Nothing is left.** The previous revision of this list had four items; two were
+already done and are now recorded as such, and the other two are closed above.
+
+What M4 is, in one paragraph: a private instance is the default and the server
+refuses to *start* as public over plain HTTP; a public mode is refused until
+somebody has been through the wizard, so "public" always means "chosen"; 2FA is
+single-use within its time step, sealed at rest, and has no read path that
+returns a secret; and media is served only to a holder of an explicit library
+grant, through a gate that answers 404 for every refusal so the answer never
+confirms a file exists.
 
 ### What is left in M4
 
-**One item, and it is the only one that is not server-side.**
-
-- **The `/setup` screen itself.** The wizard's server gate
-  (`collab.RequireWizard`) is done and tested; `ui/v2.5` has no test runner, so
-  the browser test the plan names would mean introducing a framework. The
-  security property holds without it.
+**Nothing.** Kept as a section so a reader who has read an older revision of
+this document can see what changed and why. The items below are the ones that
+were on the previous list and are now closed or corrected.
 
 **DONE since the previous revision of this list:**
 

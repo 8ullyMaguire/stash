@@ -29,7 +29,7 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 | M2b governance v2: roles, weighted ballots | done | — |
 | M2c identity clustering (plan 2.4b) | done | `m2c-identity-clustering` |
 | **M3 metadata sharing (consent, exporter, federation)** | **done** | `m3-metadata-sharing` |
-| **M4 public hosting: mode, 2FA, library grants** | **library grants now ENFORCED**; no UI — see below | — |
+| **M4 public hosting: mode, 2FA, library grants** | **done** | `m4-public-hosting` |
 
 ## Verified state at this tag
 
@@ -204,11 +204,16 @@ from a browser. In order of what a user would notice first:
     a grant row.
   - **A signed-URL request has no user id** and is therefore refused on a public
     instance. Deliberate: a device that cannot send a cookie cannot send a grant.
-- **Still no UI.** Everything in M4 is server-side and tested; nothing is
-  reachable from a browser. The one remaining M4 item is **the `/setup` screen** —
-  the wizard's server gate (`collab.RequireWizard`) is done, and `ui/v2.5` has no
-  test runner, so the browser test the plan names would mean introducing a
-  framework. The security property holds without it.
+- **M4 IS COMPLETE.** The wizard screen exists at `/stashforge/wizard`
+  (`ui/v2.5/src/components/Setup/StashForgeWizard.tsx`) — a route **separate
+  from the upstream `/setup`**, which is the paths-and-credentials wizard.
+  Sharing one screen would drop an operator re-running configuration into the
+  sharing decision, which the server refuses with `wizard_already_completed`.
+  It calls the HTTP endpoint, not GraphQL, because there is no session to send.
+  **The mode is chosen once; changing a live mode is a separate authenticated
+  operation that deliberately does not exist yet.** The only thing M4 does not
+  have is a browser test, and `ui/v2.5` still has no test runner — the security
+  property never lived in the client.
 - ~~**GraphQL for 2FA, libraries, grants, consent.**~~ **Done** —
   `graphql/schema/types/hosting.graphql`,
   `internal/api/resolver_mutation_hosting.go`, `internal/api/models_hosting.go`,
