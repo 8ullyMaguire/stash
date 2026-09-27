@@ -432,4 +432,12 @@ var (
 		table:    goqu.T(savedFilterTable),
 		idColumn: goqu.T(savedFilterTable).Col(idColumn),
 	}
+
+	// StashForge. The users table is not a normal content table: nothing
+	// joins to it except invite_keys and user_sessions, and it must not
+	// participate in any cascade delete that a content deletion could trigger.
+	userTableMgr = &table{
+		table:    goqu.T(userTable),
+		idColumn: goqu.T(userTable).Col(idColumn),
+	}
 )

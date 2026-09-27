@@ -82,6 +82,7 @@ type storeRepository struct {
 	SceneMarker    *SceneMarkerStore
 	Performer      *PerformerStore
 	SavedFilter    *SavedFilterStore
+	User           *UserStore
 	Studio         *StudioStore
 	Tag            *TagStore
 	Group          *GroupStore
@@ -123,6 +124,7 @@ func NewDatabase() *Database {
 		Tag:            tagStore,
 		Group:          NewGroupStore(blobStore),
 		SavedFilter:    NewSavedFilterStore(),
+		User:           NewUserStore(),
 	}
 
 	ret := &Database{
