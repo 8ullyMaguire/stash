@@ -67,11 +67,20 @@ wrong the first time:
 `appSchemaVersion` is bumped in the same commit as any migration (86 -> 90 so
 far), and a test asserts the recorded version matches it.
 
-Next up is **M1 step 1.5**: wire `SessionStore` into the HTTP layer
-(`internal/api/session.go` login/logout handlers and
-`internal/api/authentication.go`) behind a registry that picks the cookie store
-for a legacy install and the database store otherwise. Then M2, the
-edit/vote/draft model.
+**M1 is complete.** Next up is the plan's M1 step 1.5 — GraphQL `register` /
+`login` / `logout` / `me` resolvers, with the concurrency case that matters: an
+invite key must stay single-use when two registrations race it. Then M2, the
+edit/vote/quorum model.
+
+### M5 is a plugin, and that is a testable claim
+
+The owner requires the P2P downloader to be an **easy-to-install plugin, not
+core code**. The docs previously said "a plugin" while describing it as
+`pkg/p2pdownloader/` in this repo, which is core code wearing a plugin's name.
+The requirement is now non-negotiable #11 and is enforced by a named test rather
+than by wording: the downloader is its own Go module, the core never imports it,
+and `go build ./...` in the core must pass with the plugin directory deleted. If
+it cannot be removed by deleting a directory, M5 is not done.
 
 ### Mutation checking is not optional here
 
@@ -124,7 +133,8 @@ tests passed with the entire control deleted. Assert on the *distinction*.
 8. **The first sync after consent is a dry run.** Nothing is sent until the
    user confirms. A silently published private library cannot be recalled.
 9. **Path sanitisation before any transfer code** (M5). A peer-supplied
-   filename is untrusted input; `SanitizeJoin` and its tests land first.
+   filename is untrusted input; `SanitizeJoin` and its tests land first, inside
+   the plugin module, before a single byte of transfer code.
 10. **Mutation-check the security guards.** Delete the quorum threshold, make
     the opt-out a no-op, remove the traversal guard — each must fail a named
     test. A guard that kills no mutant is not a guard.
