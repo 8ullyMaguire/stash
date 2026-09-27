@@ -75,6 +75,17 @@ type Policy struct {
 	// AllowSelfAccept lets a proposal's author accept it with their own vote.
 	// Off by default: an author-vote is not a second opinion.
 	AllowSelfAccept bool
+
+	// Weighted is the M2b arithmetic: reputation-weighted ballots, decay and
+	// Sybil damping. Added in M2b and left at its zero value by DefaultPolicy,
+	// which is why M2's behaviour is unchanged by its arrival.
+	//
+	// The two halves are independently optional. Weighted.Threshold == 0 keeps
+	// flat counting; QuorumThreshold == 0 keeps moderator-only; both zero is
+	// fully manual. Every combination is a supported mode, which is what makes
+	// the migration possible: an instance that has not chosen a reputation
+	// model has to be able to keep running the one it has.
+	Weighted WeightedPolicy
 }
 
 // DefaultPolicy returns the proposed defaults, noted in the spec as

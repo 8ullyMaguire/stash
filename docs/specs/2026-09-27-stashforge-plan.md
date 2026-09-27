@@ -526,9 +526,34 @@ economics that depend on it.
 table) and `internal/collab/weighting.go` (reputation, decay, Sybil damping,
 tally, correlation flagging), with 151 test cases.
 
-Not yet done: the weighted decision function in `Evaluate`, per-field
-reputation persistence, and the `ResolveRole` wiring into the resolvers. Those
-are the next step and are listed below.
+Not yet done: per-field reputation persistence (the `WeightBasis` and
+`Weight` types are in memory only — nothing reads reputation from the
+database), and the `ResolveRole` wiring into the resolvers, which currently
+still use M2's ad-hoc role booleans.
+
+The decision function is now done: `internal/collab/evaluate_weighted.go`.
+`Evaluate` was EXTENDED rather than replaced, with `Policy.Weighted` at its
+zero value by `DefaultPolicy`, so M2's behaviour is unchanged by its arrival.
+`Weighted.Threshold == 0` falls through to the flat path, and
+`QuorumThreshold == 0` keeps moderator-only. Every combination is a supported
+mode, which is what makes the migration possible at all.
+
+A fourth bug the tests caught, and the same shape as the second one: excluding
+the author's ballot also decremented `Voters`, because the filter was applied
+before tallying. The effect is that `MinVoters` becomes a tool for excluding
+authors from their own proposals' quorum — a proposer with a popular correction
+would need one more supporter than a proposer nobody agrees with, which is
+backwards. The ballot is now excluded from the arithmetic and not from the
+headcount. Both this and the `Tally` defect are a filter applied to the wrong
+collection, where the intent was to move a sum and not a count.
+
+A fixture worth noting: the first version of `TestEvaluateWeightedThreshold`
+wrote a comment working out why its total was 20000, and was wrong about the
+damping (the `-1` breaks the run, so both `+1` ballots are undamped and the net
+is 10000). A fixture whose arithmetic you have to argue about is one that will
+be argued about again, so the test now pins `Tally.Net` directly — otherwise a
+change to the damping constants would silently move every threshold in the
+table and the assertions would still pass.
 
 **Verify:** `go test ./internal/collab/ -run 'TestWeight|TestDecay|TestSybil|TestRole'`
 must be table-driven over the full cross-product, not a handful of cases. The
