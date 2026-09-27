@@ -17,7 +17,7 @@ passes and a tag exists — not when the code looks finished.
    has silently become a different product. `go test ./...` on an untouched
    tree is the M0 baseline; every later milestone re-runs it and the count may
    only go up.
-2. **Migrations are additive and numbered from 1100.** Never edit an applied
+2. **Migrations are additive and numbered contiguously from 87.** Never edit an applied
    migration. Never renumber.
 3. **SQLite is the only store.** No Postgres, no sqlc. The `users` table and its
    peers go in `pkg/sqlite/migrations/` like every other migration.
@@ -154,7 +154,7 @@ Create, in `pkg/sqlite/migrations/`, exactly as specified in spec §4:
 | `1100_users.sql` | `users` |
 | `1101_invite_keys.sql` | `invite_keys` |
 | `1102_user_sessions.sql` | `user_sessions` + index |
-| `1103_collab_audit.sql` | `collab_audit` (moved up from 1108 — it is needed to record account actions) |
+| `90_collab_audit.sql` | `collab_audit` (it is needed to record account actions, so it ships in M1) |
 
 Field types and constraints are verbatim from spec §4. `users.is_owner` gets
 exactly one row; enforce with a partial unique index:
@@ -296,14 +296,17 @@ resolves it, and the field is actually applied. Tag `m2-quorum`.
 
 | File | Contents |
 |---|---|
-| `1103_edit_proposals.sql` | `edit_proposals` + both indexes |
-| `1104_proposal_votes.sql` | `proposal_votes` with the composite PK |
-| `1105_proposal_score_view.sql` | the `proposal_scores` view from spec §4 |
+| `91_edit_proposals.sql` | `edit_proposals` + both indexes |
+| `92_proposal_votes.sql` | `proposal_votes` with the composite PK |
+| `93_proposal_score_view.sql` | the `proposal_scores` view from spec §4 |
 
-Note the renumbering: `collab_audit` is 1103 in M1, so proposals start at 1106.
+Note the renumbering: M1 landed as migrations 87-90 (`users`, `invite_keys`,
+`user_sessions`, `collab_audit`), so proposals start at 91. golang-migrate
+rejects a gap outright -- the original plan said 1100 and had to be renumbered
+mid-implementation.
 Keep one number per file, never reuse.
 
-**Verify:** apply 1100…1107 in order to an empty database; the view exists and
+**Verify:** apply 91…93 in order to an empty database; the view exists and
 returns a row for a seeded proposal.
 
 ### Step 2.2 — Governance, as a pure module
