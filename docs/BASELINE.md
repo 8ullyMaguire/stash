@@ -76,6 +76,37 @@ github.com/enetx/http v1.0.28 => v1.0.29
 Nothing under `$GOMODCACHE` is edited — that is a local cache, and the change
 would not survive `go clean -modcache` or appear in review.
 
+## A pre-existing integration failure, so nobody chases it
+
+`TestStudioQueryFast` fails in `pkg/sqlite` and has nothing to do with
+StashForge. Verified by running the suite at the `m0-buildable-fork` tag, before
+any of these migrations existed:
+
+| | at `m0-buildable-fork` | with M1 migrations |
+|---|---|---|
+| integration tests passing | 1191 | 1199 (+8 new) |
+| failing | 1 | 1 (the same one) |
+| skipped | 0 | 0 |
+
+The cause is `no such function: mod`. Stash's generated ORDER BY clauses use a
+deterministic scatter sort:
+
+```sql
+ORDER BY mod((studios.id + 26819649) * (studios.id + 26819649) * 52959209
+             + (studios.id + 26819649) * 1047483763, 2147483647) ASC
+```
+
+but `mod` is never registered in `pkg/sqlite/driver.go` — the `ConnectHook`
+registers `regexp`, `durationToTinyInt`, `basename` and `phash_distance`, and
+that is all. So any `Find` query with a non-trivial filter errors at run time.
+Upstream presumably runs on a build where something else supplies it, or the
+test is simply not run in CI.
+
+This is a real bug in the fork and it is recorded rather than fixed, because
+fixing it is a separate change from adding user accounts and mixing them would
+make this commit's diff unreviewable. The fix is one line in the `ConnectHook`:
+register a deterministic integer `mod`.
+
 ## Reading order for anyone verifying this
 
 ```bash

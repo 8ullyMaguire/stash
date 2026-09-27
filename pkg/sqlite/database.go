@@ -34,7 +34,13 @@ const (
 	cacheSizeEnv = "STASH_SQLITE_CACHE_SIZE"
 )
 
-var appSchemaVersion uint = 86
+// The schema version the running binary expects. It must equal the highest
+// migration number in migrationsBox: golang-migrate orders by the numeric
+// prefix, and database.go refuses to open a database whose recorded version
+// differs from this. Bump it in the same commit that adds a migration -- a
+// migration that lands without the bump is applied but then reported as a
+// version mismatch on every subsequent open.
+var appSchemaVersion uint = 90
 
 //go:embed migrations/*.sql
 var migrationsBox embed.FS
