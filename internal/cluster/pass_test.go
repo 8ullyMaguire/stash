@@ -646,20 +646,33 @@ func TestPassIsIdempotentForOneFace(t *testing.T) {
 	}
 }
 
-// TestPassConsolidateCannotMergeWhatAssignSeparated is a finding, not a
-// coverage gap, and it is pinned here so nobody re-derives it.
+// TestPassConsolidateCannotMergeWhatAssignSeparated is a finding about the
+// PASS, pinned here so nobody re-derives it.
 //
-// The two stages' conditions are the same inequality, negated:
+// # The claim, scoped correctly
+//
+// A pass that runs assign before consolidate never merges. The two stages'
+// conditions are the same inequality, negated:
 //
 //   - assign keeps two clusters APART when the loser's nearest member is
 //     farther than the JOIN threshold from the winner's centroid;
 //   - absorb merges them only when every loser member is CLOSER than that
-//     same JOIN threshold from the same same centroid.
+//     same JOIN threshold from the same centroid.
 //
-// So a pair that survived assign is exactly a pair absorb refuses, and a pair
-// absorb would accept is exactly a pair assign already joined. No configuration
-// of the two thresholds makes a merge reachable, and this is true of the
-// STAGES, not of the pass -- the pass only chooses where to put the knobs.
+// So a pair that survived assign is exactly a pair absorb refuses.
+//
+// # What this is NOT
+//
+// It is NOT a property of `absorb`, and an earlier version of this comment said
+// it was, which was wrong. Given clusters PLANTED directly -- bypassing assign
+// -- absorb merges in 77 of 80 combinations. `merge_reachability_test.go` proves
+// that in both directions and is the test to read for the mechanism; this one
+// covers only the pass, where the answer is 0 merges in 100 combinations.
+//
+// The distinction is load-bearing: it means the merge stage is not dead code, it
+// means the pass simply never presents it with a mergeable pair, and it means a
+// change to assign that merged more freely would make consolidate live without
+// touching consolidate at all.
 //
 // The evidence is in the numbers below rather than in the claim. A sweep over
 // the whole feasible region (angles 65-100 degrees against join thresholds

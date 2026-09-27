@@ -139,10 +139,17 @@ def failing_tests(output):
 # the change a future fix would make, and which that test will then fail on, so
 # the signal is not lost.
 EXPECTED_SURVIVORS = {
-    "M11 merge failures silently ignored": "merge-persistence path, unreachable: "
-    "assign separates exactly what absorb refuses",
+    "M11 merge failures silently ignored":
+        "merge PERSISTENCE, not absorb. absorb itself merges readily on planted "
+        "clusters (77 of 80, see merge_reachability_test.go) but a real pass "
+        "merged in 0 of 100 shape x threshold combinations: assign keeps every "
+        "pair apart, and the only clusters absorb sees are the ones assign made. "
+        "So this code is unreachable FROM THE PASS. A pass-level test that "
+        "merged would make it live, and TestAPassNeverMergesWhatAssignSeparated "
+        "is what would say so.",
     "M12 stored-id map not chained, so a second merge lands on a dead id":
-    "merge-persistence path, unreachable: same reason",
+        "same reason as M11 -- the chained stored-id map is only read on a merge "
+        "that the pass never performs.",
 }
 
 

@@ -292,21 +292,45 @@ Two more, both silent:
    reach. A per-sample failure is a skip; only an unreadable *target* stops a
    target.
 
-**Consolidate cannot merge anything assign separated, and that is structural.**
-The two stages' conditions are the same inequality, negated. Assign keeps
-clusters apart when the loser's nearest member is farther than the join
-threshold from the winner's centroid; `absorb` merges only when every loser
-member is *closer* than that same threshold from that same centroid. A pair that
-survived assign is exactly a pair absorb refuses. Verified by sweep — angles
-65–100° against join thresholds 0.3–0.6 and merge thresholds to 1.5 produced no
-merge at any setting, and the one shape that could satisfy both (an outlier
-dragging the centroid across the gap) still fails because absorb measures the
-*member*, not the centroid. Pre-existing, not introduced here, and pinned by
-`TestPassConsolidateCannotMergeWhatAssignSeparated` so a future change to absorb
-fails loudly. The pass's `MergeThreshold` knob is therefore a control that can
-never admit a merge, which is a real problem and a **design decision for the
-owner**: fixing it means relaxing the guard's re-check for merges specifically,
-trading a safety property for a working merge path.
+**A pass never merges what assign separated — and the reason I first gave was
+wrong.** I claimed the two stages' conditions were "the same inequality,
+negated", and that no configuration admits a merge. The first half holds; the
+explanation does not, and the mistake was scoping a property of the *pipeline*
+as a property of `absorb`.
+
+Both measurements, pinned in `merge_reachability_test.go`:
+
+* `absorb` on **planted** clusters (assign bypassed) merges in **77 of 80**
+  combinations of 8 shapes x 10 join thresholds. The guard is not conditional
+  code and the merge path is not dead.
+* A real **pass** merges in **0 of 100** combinations of 4 shapes x 5 join
+  x 5 merge thresholds.
+
+Both are true, and the gap between them is the entire finding: the only clusters
+`absorb` ever sees are the ones `assign` produced, and assign's defining property
+is that it kept them apart. So the merge stage is not dead code — the pass simply
+never presents it with a mergeable pair, and a change to *assign* that merged more
+freely would make consolidate live without touching consolidate.
+
+The guard's boundary is measured, not assumed: a planted loser sits 0.368 from
+the winner's centroid at 60 degrees, 1.000 at 90, 1.632 at 120, and is admitted
+when that is under the join threshold. So the same pair merges at `join 0.5` and
+is refused at `join 0.3` — **`MergeThreshold` is a live control after all**, which
+is the opposite of what I reported earlier.
+
+The two surviving mutants (M11, M12) are about merge *persistence through the
+store*, not `absorb`. They are unreachable *from the pass*, and the harness now
+records that with the numbers attached rather than a claim.
+
+**How the wrong claim survived its own evidence:** the probe that should have
+disproved it reported "0 of 80 merged" — which agreed with the conclusion it was
+meant to test, and was *vacuous*. It planted clusters with `forceClusterAt`,
+which seeds a 1-D `Scalar` point, and `CosineGeometry` correctly refuses a
+width-1 embedding, so every combination "refused" for a reason that had nothing
+to do with the guard. **A probe whose result matches the hypothesis is the one
+result a probe must never report without a second reason for the answer** — ask
+what else could produce it, and log one known-good case so the probe has shown
+it can succeed at all.
 
 **The test fixture was lying about the geometry.** `angVec` set two components
 and left 510 at zero — a 512-wide vector that was 2-dimensional. In a 2-plane,
