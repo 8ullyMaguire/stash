@@ -41,7 +41,8 @@ whose verification you cannot run.
 | `m0-buildable-fork` baseline | 887 / 0 | 1191 / 1 |
 | `m1-user-tables` (migrations 87-90) | 887 / 0 | 1199 / 1 |
 | `m1-user-store` (auth + store) | 911 / 0 | 1211 / 1 |
-| `m1-session-store` (sessions, invites) | **940 / 0** | **1211 / 1** |
+| `m1-session-store` (sessions, invites) | 940 / 0 | 1211 / 1 |
+| `m1-auth-wiring` (stores, adapter, factory) | **962 / 0** | **1253 / 1** |
 
 `pkg/session.Store` is now an **interface**; the old concrete cookie store was
 renamed `CookieStore` and kept for installs with no user database. `Authenticate`
@@ -96,7 +97,7 @@ tests passed with the entire control deleted. Assert on the *distinction*.
 | M2 | Edit proposals, quorum, moderation, audit |
 | M3 | Consent, exporter (dry-run first), commons endpoint, federation |
 | M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard |
-| M5 | P2P downloader plugin (BitTorrent + ed2k + Kademlia) |
+| M5 | P2P downloader **as an installable plugin** (BitTorrent + ed2k + Kademlia) |
 | M6 | The 850 upstream issues, capability by capability |
 
 ## Non-negotiables
@@ -127,6 +128,17 @@ tests passed with the entire control deleted. Assert on the *distinction*.
 10. **Mutation-check the security guards.** Delete the quorum threshold, make
     the opt-out a no-op, remove the traversal guard — each must fail a named
     test. A guard that kills no mutant is not a guard.
+11. **The P2P downloader is a PLUGIN, not core code.** It must install into a
+    stock StashForge the same way any other plugin does — drop a directory
+    containing `source.json` into the configured plugins path, or point the UI
+    at a release URL — with **no rebuild of the main binary and no import from
+    the core tree**. Concretely, which means all of it lives under
+    `pkg/p2pdownloader/` in its own Go module (`go.mod` of its own), the core
+    tree does not import it, and `go build ./...` in the core must still succeed
+    with the plugin directory deleted. If the downloader cannot be removed by
+    deleting a directory, it is core code wearing a plugin's name, and M5 is not
+    done. See the check in non-negotiable #11's test,
+    `TestP2PDownloaderIsNotImportedByCore`.
 
 ## Facts that must not be re-derived (already verified against source)
 

@@ -405,10 +405,25 @@ submission id. An instance may consume a peer's commons for *identification*
 
 ## 7. The P2P downloader plugin
 
-A **Stash plugin**, not core code. The plugin system is the documented
-extension point and keeps a peer-to-peer client out of the security-critical
-binary. Shipped in this repo as `pkg/p2pdownloader/` and installed as a plugin,
-so it is also the worked example of "a plugin can do this".
+A **Stash plugin**, not core code — the owner's requirement is "easy to
+install", and the plugin system is Stash's documented extension point. A
+peer-to-peer client does not belong in the security-critical binary that holds
+a private library.
+
+**What "easy to install" has to mean here, concretely:** a user drops the
+plugin's directory (containing `source.json`) into the configured plugins path,
+or pastes a release URL into the UI's plugin installer, and the downloader
+appears — on a **stock StashForge build, with no recompilation and no new host
+capability**. The plugin is a separate Go module, the core tree never imports
+it, and the milestone is not complete until a test proves the core still builds
+and still contains no reference to it. Shipping it as `pkg/p2pdownloader/`
+*inside the core module* would satisfy the wording "a plugin" while being core
+code with an extra directory; the separate module is what makes the claim true.
+
+It is also the worked example of "a plugin can do this", which is why the
+library-integration half uses only what the plugin API already exposes: the
+`tasks` surface runs the download and streams progress, and a finished file
+enters the library the same way any other new file does — by being scanned.
 
 Scope is what the owner asked for: everything a P2P downloader normally does.
 

@@ -562,10 +562,62 @@ this prevents.
 
 ---
 
-## M5 — P2P downloader plugin
+## M5 — P2P downloader, as an installable plugin
 
-**Exit:** a plugin that can fetch a file over BitTorrent or ed2k into a stash
-path and get it scanned and linked. Tag `m5-p2p-downloader`.
+**Exit:** a plugin that installs into a **stock, unmodified StashForge** the way
+any other plugin does — a directory with `source.json` in the configured plugins
+path, or a release URL the UI fetches — and can fetch a file over BitTorrent or
+ed2k into a stash path and get it scanned and linked. No rebuild of the main
+binary, no import from the core tree. Tag `m5-p2p-downloader`.
+
+### Step 5.0 — Prove the seam BEFORE writing any transfer code
+
+The whole point of "plugin" is that it can be removed by deleting a directory.
+A downloader that only *claims* to be a plugin — because the types live in
+`pkg/` and the core imports them — is core code, and the milestone is not done.
+So the isolation is established and tested first, while there is nothing to
+untangle:
+
+```bash
+cd pkg/p2pdownloader && go mod init github.com/stashapp/stash-plugin-p2pdownloader
+```
+
+Its own `go.mod` is what enforces it: a package in the core tree cannot import a
+different module without the core's own `go.mod` gaining a `require` and a
+`replace`, and both are visible in review.
+
+**Verify, before implementing transfers:**
+
+```bash
+# the core must not know the plugin exists
+go build ./... && go vet ./...        # passes with pkg/p2pdownloader absent
+grep -rn 'p2pdownloader' --include='*.go' . | grep -v '^./pkg/p2pdownloader/'
+# must print nothing
+```
+
+Named test `TestP2PDownloaderIsNotImportedByCore` asserts the grep above is
+empty, and `TestP2PDownloaderHasItsOwnModule` asserts the directory has a
+`go.mod` whose module path is not under `github.com/stashapp/stash/`. If either
+fails, the downloader is core code and M5 is incomplete no matter how well the
+transfer protocols work.
+
+The plugin's manifest, per `pkg/plugin/plugins.go`'s `Plugin` struct:
+
+```json
+{
+  "id": "p2p-downloader",
+  "name": "P2P Downloader",
+  "description": "Fetches files over BitTorrent and ed2k into your library",
+  "url": "https://github.com/stashapp/stash-plugin-p2pdownloader",
+  "version": "1.0.0",
+  "tasks": [{"name": "download", "description": "Fetch a magnet, torrent or ed2k link"}],
+  "settings": []
+}
+```
+
+`tasks` is the integration surface: Stash's plugin task API already runs a
+plugin operation in-process via jsRPC and streams progress, which is exactly
+what a download needs, so the plugin needs no new host capability at all.
 
 ### Step 5.1 — Evaluate `anacrolix/torrent` first
 
@@ -600,7 +652,7 @@ Windows reserved names and trailing dots/spaces, and verify the final path with
 **Verify, before implementing transfers:**
 
 ```bash
-go test ./pkg/p2pdownloader/ -run TestSanitizeJoin -v
+cd pkg/p2pdownloader && go test ./... -run TestSanitizeJoin -v
 ```
 
 Cases: `../../etc/passwd`, `/etc/passwd`, `a/../../b`, a name with a NUL, a
@@ -620,11 +672,30 @@ eMule protocol: eDonkey2000 server + Kademlia (Kad) node list, eHash (MD4)
 chunk hashes, the eMule extended handshake. No Go library provides this, so it
 is written against the protocol description.
 
-### Step 5.5 — Library integration
+### Step 5.5 — Library integration, through the plugin API only
 
-On completion, move into a configured path, then **let the normal scanner find
-it** — do not hand-insert scan rows. Link to the scene by fingerprint
-(phasher/osher), matching the way stash already links.
+This is where the plugin boundary gets tested for real. A plugin cannot call
+Stash's internals — it has jsRPC, the `tasks` surface, and whatever the host
+deliberately exposes. So the integration is:
+
+- On completion, move the file into a **configured stash path** the plugin was
+  given as a setting. The plugin writes the file; it does not move it into place
+  on the host's behalf, and it does not need to.
+- Then **let the normal scanner find it.** Do not hand-insert scan rows, do not
+  call the scanner's Go API, do not write to `files` — a finished download
+  enters the library exactly the way a file copied in by hand does.
+- Link to the scene by fingerprint (phasher/osher) the way stash already links,
+  using the plugin API's query surface if the host exposes it, or by letting the
+  scanner's own fingerprint match do it. Either is acceptable; reaching into
+  `pkg/sqlite` is not.
+
+The test that proves the boundary held is
+`TestP2PDownloaderLibraryIntegrationUsesNoCoreImports`, which asserts the
+plugin module's import graph contains no `github.com/stashapp/stash/...` path
+outside the documented plugin interface. If a future change needs a new
+capability from the host, that is a real finding about the host — it means M5
+needs a host change, and the goal prompt's "the plugin needs no new host
+capability" is what is under test.
 
 **Verify:** `TestLibrary_CompletedFileIsScannedAndLinked`,
 `TestLibrary_UnmatchedFileDoesNotAttachToNearestScene`,
