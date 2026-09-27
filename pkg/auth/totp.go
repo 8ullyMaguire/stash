@@ -209,12 +209,33 @@ func (s *SessionStore) checkSecondFactor(ctx context.Context, user *models.User,
 		if code == "" {
 			return ErrTOTPRequired
 		}
-		if err := collab.VerifyTOTP(collab.TOTPSecret(secret), code, s.now(), nil); err != nil {
+		// The arithmetic AND the spend, and the spend is not optional.
+		//
+		// The version here called collab.VerifyTOTP with a nil used-set and then
+		// returned nil, with a comment claiming the store owned the spend. It
+		// did not -- SpendTOTPStep was never called on this path, so a code was
+		// good forever within its step. The comment was true of the store and
+		// false of the code that called it, which is the shape of a bug that
+		// reviews miss: the mechanism exists, is tested in isolation, and is not
+		// on the path. TestWiring_TheRealArithmeticHoldsTheSingleUseRule is the
+		// test that caught it, and it can only exist because it drives a real
+		// verifier rather than a stub that agreed with itself.
+		step, err := collab.VerifyTOTPDetailed(collab.TOTPSecret(secret), code, s.now(), nil)
+		if err != nil {
 			return fmt.Errorf("%w: %v", ErrTOTPInvalid, err)
 		}
-		// The store owns the spend record, so two concurrent logins cannot both
-		// be accepted. collab.VerifyTOTP with a nil used-set only proves the
-		// arithmetic; the durable single-use check is the store's.
+		fresh, err := s.totpStore.SpendTOTPStep(ctx, userID, step)
+		if err != nil {
+			// A store that cannot record the spend has not verified anything, so
+			// the login is refused. Failing open here would mean the single-use
+			// rule silently stops applying the first time the database is busy.
+			return fmt.Errorf("%w: %v", ErrTOTPStoreUnavailable, err)
+		}
+		if !fresh {
+			// Already spent. Reported as an invalid code, because "that code was
+			// already used" tells an attacker their guess was right.
+			return fmt.Errorf("%w: replayed one-time code", ErrTOTPInvalid)
+		}
 		return nil
 	}
 
