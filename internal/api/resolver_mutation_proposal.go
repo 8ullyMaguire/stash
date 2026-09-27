@@ -87,8 +87,64 @@ func currentUserIDInt(ctx context.Context) int {
 	return u.ID
 }
 
+// isModerator is M2's moderator predicate, kept as the reference the role
+// table is proven against rather than deleted.
+//
+// Both call sites now ask roleOf(u).Can(collab.CapModerate) instead. isModerator
+// remains because TestRoleOfAgreesWithM2ModeratorPredicate is the check that
+// makes that a refactor rather than a silent change of who may moderate: if
+// somebody later adds a role or edits a capability, that test fails and names
+// the users whose access moved.
 func isModerator(u *models.User) bool {
 	return u != nil && (u.IsModerator || u.IsOwner)
+}
+
+// roleOf resolves a stash user to a collab role, the M2b entry point.
+//
+// The mapping is total and every branch is decided, because the alternative --
+// a lookup table of user roles that does not yet exist -- would mean two
+// sources of truth: the is_moderator/is_owner columns, and a roles table
+// nobody has written. Those would drift on the first promotion.
+//
+// So roles are DERIVED from the existing columns rather than stored, and
+// collab.ResolveRole is where that decision is written down. This function adds
+// only the nil case, which is a role question rather than a flag question:
+//
+//	nil user        -> PUBLIC      no user record exists for an anonymous visitor
+//	is_owner        -> ADMIN       the instance owner
+//	is_moderator    -> STEWARD     can curate, cannot change the rules
+//	otherwise       -> CONTRIBUTOR  from collab.ResolveRole, which is the one
+//	                                place that mapping is written down
+//	                                silently remove that from every existing
+//	                                user at upgrade time, with no migration and
+//	                                no error
+//
+// Two of these are worth arguing about, which is why the comments are here
+// rather than only in roles.go.
+//
+// Why not five distinct columns. STEWARD and CONTRIBUTOR are the same as far as
+// the database is concerned, and SUBSCRIBER has no M2 representation at all. A
+// new column per role would mean a migration plus a decision about what
+// CONTRIBUTOR users gain relative to SUBSCRIBER ones, and that decision belongs
+// to an instance operator, not to the schema. The mapping above is the one that
+// changes nobody's access at upgrade time; the distinctions the five-role model
+// draws become real when an instance starts assigning them, which needs its own
+// storage and its own migration.
+//
+// Why the public role is not a user row. A logged-out visitor has no row to
+// look up, and giving them one would mean a row that can authenticate, or a
+// sentinel account every anonymous request is attributed to, and attributing
+// anonymous votes to one account is precisely how a Sybil attack looks from
+// the inside. PUBLIC exists so "may an unauthenticated visitor do X" is a
+// question with an answer rather than a nil check.
+func roleOf(u *models.User) collab.Role {
+	if u == nil {
+		// The only case ResolveRole does not cover, and the one that must not
+		// be papered over by passing (false, false): that would yield
+		// CONTRIBUTOR, and an anonymous visitor would be able to propose.
+		return collab.RolePublic
+	}
+	return collab.ResolveRole(u.IsOwner, u.IsModerator)
 }
 
 // proposer returns a collab.Proposer over the adapter.
@@ -174,7 +230,7 @@ func (r *queryResolver) ModerationQueue(ctx context.Context, limit *int, offset 
 	if err != nil {
 		return nil, err
 	}
-	if !isModerator(u) {
+	if !collab.Can(roleOf(u), collab.CapModerate) {
 		return nil, errNeedModerator
 	}
 	page, pageOffset := proposalPaging(limit, offset)
@@ -398,7 +454,7 @@ func (r *mutationResolver) Moderate(ctx context.Context, proposalID string, appr
 	if err != nil {
 		return nil, err
 	}
-	if !isModerator(u) {
+	if !collab.Can(roleOf(u), collab.CapModerate) {
 		return nil, errNeedModerator
 	}
 

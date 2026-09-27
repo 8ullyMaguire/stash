@@ -528,8 +528,47 @@ tally, correlation flagging), with 151 test cases.
 
 Not yet done: per-field reputation persistence (the `WeightBasis` and
 `Weight` types are in memory only — nothing reads reputation from the
-database), and the `ResolveRole` wiring into the resolvers, which currently
-still use M2's ad-hoc role booleans.
+database). That is the last piece of M2b.
+
+**Role wiring done.** `roleOf` in
+`internal/api/resolver_mutation_proposal.go` maps a user row to a role, and
+both moderation gates now ask `collab.Can(roleOf(u), collab.CapModerate)`
+instead of M2's `isModerator(u)`.
+
+Roles are **derived** from the existing `is_owner`/`is_moderator` columns, not
+stored. A stored role would be a second source of truth against two columns
+that already exist, and the two would drift on the first promotion — and the
+drift would be invisible, because both would still be plausible.
+
+`roleOf` delegates to `collab.ResolveRole` rather than repeating the mapping.
+The first version reimplemented all four branches; that is two places to change
+one decision, which is how the subscriber/contributor argument ends up
+recorded twice and meaning two things.
+
+The nil case is the only thing `roleOf` adds, and it is the case that must not
+be folded in: `ResolveRole(false, false)` returns CONTRIBUTOR, so passing
+`(false, false)` for an anonymous visitor would let an unauthenticated
+request propose edits.
+
+**The equivalence test is the point of this commit.**
+`TestRoleOfAgreesWithM2ModeratorPredicate` runs the new check and M2's
+predicate side by side over every row the database can represent and fails if
+they disagree. Re-expressing a permission check in a new vocabulary is worth
+nothing if the people who could moderate before cannot moderate now, and the
+failure mode of getting that wrong is a moderator finding out during an
+incident.
+
+It was also **mutation-tested**: flipping `RoleSteward.Moderate` to false makes
+it fail with
+
+    roleOf(moderator).Can(CapModerate) = false, but M2's isModerator = true;
+    the moderation gate changed for this user
+
+naming the affected user rather than just reporting a boolean mismatch. A
+permission test that has never been observed to fail is not evidence that the
+permission is unchanged — it is evidence that the test agrees with whatever the
+code currently does. The file was restored and re-verified clean immediately
+after.
 
 The decision function is now done: `internal/collab/evaluate_weighted.go`.
 `Evaluate` was EXTENDED rather than replaced, with `Policy.Weighted` at its
