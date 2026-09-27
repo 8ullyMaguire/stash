@@ -147,6 +147,36 @@ func TestInstanceModeStore_ModeChangedByIsRecorded(t *testing.T) {
 	})
 }
 
+// TestInstanceModeStore_AMissingRowReadsAsPrivateAndUnconfigured exercises the
+// fail-closed path, which no other test reaches: the migration seeds the row, so
+// in normal operation ErrNoRows never fires and the branch is dead code that
+// looks tested.
+//
+// Both sites had `err == sql.ErrNoRows`, which cannot match a wrapped driver
+// error, so deleting the row produced an internal error instead of a private
+// posture. The consequence was the worst available: a missing settings row made
+// the instance refuse to start rather than fail quiet, and the operator's only
+// symptom was a startup error naming a query.
+func TestInstanceModeStore_AMissingRowReadsAsPrivateAndUnconfigured(t *testing.T) {
+	store := sqlite.NewInstanceModeStore()
+
+	runWithRollbackTxn(t, "missing row fails closed", func(t *testing.T, ctx context.Context) {
+		require.NoError(t, exec(t, ctx, "DELETE FROM instance_settings WHERE id = 1"))
+
+		mode, err := store.Mode(ctx)
+		require.NoError(t, err, "a missing settings row must read as private, not as an error")
+		assert.Equal(t, collab.ModePrivate, mode)
+
+		done, err := store.WizardCompleted(ctx)
+		require.NoError(t, err, "a missing settings row means the wizard has not run")
+		assert.False(t, done)
+
+		// And startup must still succeed in private: an unconfigured instance
+		// is a private instance, not a broken one.
+		require.NoError(t, store.CheckStartup(ctx, "http"))
+	})
+}
+
 // TestInstanceModeStore_CompleteWizardIsOneStatement: the crash-between-two-
 // writes failure the single statement rules out. Both halves of the state are
 // written together, so a reader never sees "wizard done, no mode chosen" or the

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/stashapp/stash/internal/collab"
@@ -41,7 +42,12 @@ func (s *InstanceModeStore) Mode(ctx context.Context) (collab.Mode, error) {
 	var mode string
 	err := dbWrapper.Get(ctx, &mode, "SELECT mode FROM instance_settings WHERE id = 1")
 	if err != nil {
-		if err == sql.ErrNoRows {
+		// errors.Is, NOT ==. dbWrapper wraps with %w, so a direct comparison
+		// never matches. This path is the fail-closed one -- it is what stops a
+		// missing row from reading as anything but private -- so a comparison
+		// that cannot match means a missing row surfaces as an internal error
+		// and the instance will not start.
+		if errors.Is(err, sql.ErrNoRows) {
 			// The migration seeds this row, so a miss is an anomaly rather than
 			// a normal state. Private is the answer that cannot cause harm.
 			return collab.ModePrivate, nil
@@ -64,7 +70,10 @@ func (s *InstanceModeStore) WizardCompleted(ctx context.Context) (bool, error) {
 	var done bool
 	err := dbWrapper.Get(ctx, &done, "SELECT wizard_completed FROM instance_settings WHERE id = 1")
 	if err != nil {
-		if err == sql.ErrNoRows {
+		// errors.Is for the same reason as above: == cannot match a wrapped
+		// driver error, and "wizard has not run" must not read as an internal
+		// error.
+		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
 		return false, fmt.Errorf("reading wizard_completed: %w", err)
