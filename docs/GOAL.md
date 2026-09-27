@@ -34,7 +34,8 @@ whose verification you cannot run.
 
 ## Current state
 
-**M0, all of M1, and M2 steps 2.1-2.3 are done**, each committed and tagged.
+**M0, all of M1, and M2 steps 2.1-2.4 are done**, each committed and tagged.
+The suite is now fully green: no failing test at any milestone.
 
 | | unit (pass/fail) | integration (pass/fail) |
 |---|---|---|
@@ -45,7 +46,12 @@ whose verification you cannot run.
 | `m1-auth-wiring` (stores, adapter, factory) | 962 / 0 | 1253 / 1 |
 | `m1-graphql-auth` (register/login/logout/me) | 962 / 0 | 1267 / 1 |
 | `m2-governance` (rules + migrations 92-94) | 984 / 0 | 1285 / 1 |
-| `m2-proposal-path` (vocabulary + proposer) | **1000 / 0** | **1287 / 1** |
+| `m2-proposal-path` (vocabulary + proposer) | 1000 / 0 | 1287 / 1 |
+| `m2-apply-path` (applier + sqlite targets) | 969 / 0 | **2287 / 0** |
+
+The `1` failure in every row above is the same test, and it is now fixed. The
+counts jump sharply in the last row because that commit also fixed the
+long-standing `TestStudioQueryFast` failure -- see the note below.
 
 `pkg/session.Store` is now an **interface**; the old concrete cookie store was
 renamed `CookieStore` and kept for installs with no user database. `Authenticate`
@@ -85,12 +91,64 @@ supersession) and whether it is accepted (`Evaluate(Policy, VoteCount)`). The
 decision is a function of two values with no I/O, so it is tested in every
 combination rather than a few hand-picked ones.
 
-**Next up is M2 step 2.4 — applying an accepted proposal.** This is the step the
-plan flags as the one where the design can go wrong: apply must be idempotent
-and atomic, two workers applying the same proposal must not double-mutate or
-write two audit rows, and a value that became invalid between proposal and apply
-must reject the proposal rather than corrupt the target. Then 2.5 (GraphQL +
-UI).
+**M2 step 2.4 (the apply path) is done.** Apply is idempotent and atomic: the
+write is a single `UPDATE ... WHERE col IS ?`, so of N concurrent workers
+exactly one matches and the losers report already-correct having done nothing.
+One accepted proposal produces exactly one audit row, however many workers run.
+A value that became invalid between proposal and apply is rejected without
+touching the target.
+
+Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2.
+
+### Four bugs the apply path exposed, and one it did not
+
+The apply step is where a design meets a database, and four defects surfaced
+that no amount of pure-logic testing would have found:
+
+1. **The sqlite proposal store validated nothing.** `ValidateValue` lived only
+   in the collab service, so any caller reaching the store directly wrote rows
+   no proposer is allowed to write. A rule enforced one layer up is one call
+   path from being skipped.
+2. **`ReadField` scanned into a pointer to an anonymous struct** and silently
+   returned NULL for every value, with no error. Apply then believed every
+   target already held the proposed value and no-opped on everything. This is
+   why the tests read the value back through the applier rather than trusting
+   the returned outcome.
+3. **`MarkRejected` hardcoded `decided_by = 0`**, which is a foreign key, so
+   every rejection lost both its status change and its audit row.
+4. **Rejecting an *accepted* proposal whose target had been deleted overwrote
+   its status to `rejected`.** The status column says what people decided; three
+   people approving an edit is still an approval after the row is gone.
+   `ErrAlreadyDecided` is now tolerated and the audit row records the failure to
+   apply.
+
+The fifth, found while fixing the suite's last red test, is worse and older.
+
+### The random sort was not random, and never had been
+
+`getRandomSort` shipped calling `mod()`, a Postgres function SQLite does not
+have, so every `random_*` sort failed at runtime. The comment directly above it
+had always specified the `%` operator, so the SQL had drifted from its own
+documentation. `TestStudioQueryFast` was the suite's one permanently red test.
+
+Fixing that exposed the real defect. The polynomial `x*x*P1 + x*P2` evaluates
+to about 3.8e22 against an int64 ceiling of 9.2e18, so the arithmetic
+overflowed for **every** id; SQLite degraded it to float64, and at that
+magnitude the trailing `% 2147483647` became a no-op because the float spacing
+exceeds the modulus. Every row's sort key came back as the constant `1`.
+A "random" sort that silently returned id order, for every seed, on every
+table — with valid SQL and no error.
+
+The fix reduces `x` modulo 417314, the largest value for which the product
+still fits int64, before squaring. The old `% = 1e8` seed cap existed only to
+keep the polynomial in range; with the reduction moved to the per-id term it
+became harmful (seeds a period apart would produce near-identical orders) and
+was removed.
+
+It survived because `getRandomSort` had no test of its own. The new tests
+execute the fragment against a real connection and assert `typeof(key)` is
+`integer` — that single assertion is what turns a silent overflow into a
+failure.
 
 ### M5 is a plugin, and that is a testable claim
 
