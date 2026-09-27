@@ -127,6 +127,11 @@ func Initialize() (*Server, error) {
 	r.Use(cors.AllowAll().Handler)
 	r.Use(RequestIPMiddleware)
 	r.Use(authenticateHandler())
+	// Immediately after authentication, and BEFORE anything that could serve a
+	// file: the media gate reads the user id off the request context, so it has
+	// to be here or the gate has nothing to ask about. See
+	// stashforge_user_context.go for why the id is resolved here at all.
+	r.Use(withRequestUserID(mgr.Repository.TxnManager))
 	visitedPluginHandler := mgr.SessionStore.VisitedPluginHandler()
 	r.Use(visitedPluginHandler)
 

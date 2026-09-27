@@ -260,6 +260,10 @@ func (s *Manager) postInit(ctx context.Context) error {
 	// which does not exist until the schema is at version 94.
 	s.initStashForgeCollab()
 
+	// And the same again, for the media gate: it reads library_id on seven
+	// target tables, which exist from migration 105.
+	s.initStashForgeMedia()
+
 	return nil
 }
 
@@ -293,6 +297,21 @@ func (s *Manager) initStashForgeCollab() {
 	// fresh-voter default -- and the weighting would appear to work while doing
 	// nothing, which is the failure mode M2b's own scale bug had.
 	s.CollabReputation = sqlite.NewCollabReputationStore()
+}
+
+// initStashForgeMedia wires the media access gate's store (M4 step 4.3).
+//
+// Separate from initStashForgeCollab and from initStashForgeAuth, and called
+// from the same place, because it is a SERVING concern rather than a governance
+// or an auth one: it is the only store the media routes consult, and putting it
+// with the proposal stores would suggest it belongs to the commons.
+//
+// The order matters in one specific way. This runs AFTER Database.Open, because
+// a store that reads library_id before migration 105 exists fails open in a way
+// that looks exactly like the gate being switched off -- every request 404s and
+// the log says nothing about a missing table.
+func (s *Manager) initStashForgeMedia() {
+	s.MediaScopeStore = sqlite.NewMediaScopeStore()
 }
 
 // initStashForgeAuth builds the StashForge auth layer and decides which session

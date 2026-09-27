@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/manager"
 	"github.com/stashapp/stash/internal/manager/config"
 	"github.com/stashapp/stash/internal/static"
@@ -84,8 +85,18 @@ func (rs sceneRoutes) Routes() chi.Router {
 		r.Get("/scene_marker/{sceneMarkerId}/preview", rs.SceneMarkerPreview)
 		r.Get("/scene_marker/{sceneMarkerId}/screenshot", rs.SceneMarkerScreenshot)
 	})
-	r.Get("/{sceneHash}_thumbs.vtt", rs.VttThumbs)
-	r.Get("/{sceneHash}_sprite.jpg", rs.VttSprite)
+	// These two are OUTSIDE the /{sceneId} block, so they never see SceneCtx
+	// and never saw its gate -- a hole, found by listing every media route
+	// and recording which middleware each one passes rather than by reading
+	// the handlers (all of which looked correct). They serve a generated
+	// sprite and thumbnail strip keyed only by a hash, so the hash is
+	// resolved to a scene and the scene is checked.
+	// See stashforge_scene_hash_routes.go.
+	r.Route("/{sceneHash}*", func(r chi.Router) {
+		r.Use(sceneHashCtx)
+		r.Get("_thumbs.vtt", rs.VttThumbs)
+		r.Get("_sprite.jpg", rs.VttSprite)
+	})
 
 	return r
 }
@@ -593,6 +604,13 @@ func (rs sceneRoutes) SceneCtx(next http.Handler) http.Handler {
 		})
 		if scene == nil {
 			http.Error(w, http.StatusText(404), 404)
+			return
+		}
+
+		// §6.4's gate, BEFORE the handler opens the file. One call here
+		// covers every media route under this middleware, so a route added
+		// later cannot forget it. See stashforge_media_gate.go.
+		if !allowMedia(w, r, collab.TargetScene, int64(scene.ID)) {
 			return
 		}
 

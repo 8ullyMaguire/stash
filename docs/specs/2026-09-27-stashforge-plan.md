@@ -1362,9 +1362,10 @@ against the 2FA budget) and before the throttle is cleared (so a valid password
 plus a wrong code cannot reset your own lockout). A store that cannot be read
 refuses the login; it is never read as "no 2FA configured".
 
-### Step 4.3 — Library access grants. Domain and store done, NOT ENFORCED
+### Step 4.3 — Library access grants. DONE: domain, store, and ENFORCED
 
-(`internal/collab/access.go`, `pkg/sqlite/stashforge_library_access.go`)
+(`internal/collab/access.go`, `internal/collab/media_scope.go`,
+`pkg/sqlite/stashforge_library_access.go`, `pkg/sqlite/stashforge_media_scope.go`)
 
 §6.4: metadata and media are **two separate grants**, and the refusal is 404, not
 403, because the ungranted user can already see the scene in metadata — a 403
@@ -1372,23 +1373,114 @@ confirms a file exists. There is exactly one refusal error in the file and it
 reads `not found`; a test asserts all three causes are byte-identical and that
 the message names no library, user, grant or mode.
 
-**Not enforced, and not until migration 105 exists.** The gate is real, tested,
-and unreachable. `Decide(ctx, mode, userID, libraryID)` needs a library id, and
-`grep -rln 'library_id' pkg/sqlite/migrations/*.sql` returns exactly one file:
-101. `library_id` is in `libraries` and `user_library_access` and in none of
-scenes, images, galleries, performers, tags, studios or movies. No request
-context carries a user id either. So no serving path can call it, and "a private
-library" is a phrase in a comment rather than a thing in the database. 101's own
-rationale — "every target row hangs off a library" — describes the intended
-design and is false of the schema it heads; it is left in place because editing an
-applied migration breaks its checksum, and the correction lives in
-`docs/HANDOFF.md` where a reader will actually see it.
+**This step was recorded as "not enforced, and cannot be until migration 105
+exists" for a full milestone. It is now enforced.** The blocker was real and is
+now closed; the three pieces below are what closed it.
 
-105 needs: `library_id` on the seven target tables, nullable with NULL meaning
-"not in a library" and NOT silently meaning public (the same reasoning as 101's
-`is_private`); a user id in the request context; a `Decide` call in
-`imageRoutes.serveImage` and the scene stream path, before any file handle is
-opened; and a backfill, or the migration fails on a populated instance.
+#### Migration 105 — library_id on the target tables
+
+`library_id` is now on all seven target tables, plus `is_default` on
+`libraries`, plus a backfill into one owner-owned library so an instance that
+upgrades does not come back with its own media 404ing.
+
+**Two things every document in this repo got wrong, both found by running the
+migration rather than by reading it:**
+
+1. **The seventh target table is `groups`, not `movies`.** Migration
+   `65_movie_group_rename` renamed it. The plan's step 4.3, GOAL.md's
+   non-negotiable and migration 101's own comment all still say `movies`, and
+   the first version of 105 failed to apply with `no such table: movies`. A
+   table list written in prose rots silently; only a migration that names the
+   table reports it, so the integration test walks the list.
+2. **A row with no library is the SCANNER'S NORMAL OUTPUT, not an anomaly.**
+   Every newly-scanned row arrives with `library_id` NULL, because the scanner
+   writes through a path that knows nothing about libraries. The plan's framing
+   ("NULL is a refusal") would therefore 404 the owner's own newly-scanned
+   files, and the fix that gets shipped under that pressure is "make NULL mean
+   allow" — which is the fail-open, reached by a different road.
+
+So **NULL resolves to the DEFAULT library**, not to "unrestricted". A row in no
+library belongs to a library the owner owns, and the owner bypasses the grant
+check by ownership. Every other user still needs an explicit
+`user_library_access` row. Fail-closed where it counts, and a working instance
+afterwards. `TestMediaScope_NoDefaultLibraryMeansNoOwnershipBypass` is the
+positive control that proves the substitution is not a loophole.
+
+#### The user id in the request context
+
+`withRequestUserID` in `internal/api/stashforge_user_context.go`, wired
+immediately after `authenticateHandler()`. It resolves the username the
+authentication middleware already established into an int64, once per request,
+in its own short read transaction.
+
+**A signed-URL request has a username and no id**, and this is recorded rather
+than discovered later: a device that cannot present a cookie cannot present a
+grant either, so §6.4 applies literally and such a request is refused on a
+public instance. The alternative — resolving the signature to an id — is a small
+change to the same middleware and is deliberately NOT taken here, because it
+would give a grant-bypassing capability to a URL handed to a television.
+
+#### The gate, and where it goes
+
+`allowMedia` in `internal/api/stashforge_media_gate.go`, called from the
+per-target `*Ctx` middlewares (scene, image, gallery, performer, studio, tag,
+group) — **not** from each serving handler. There are ~20 media routes; a
+handler-level gate is 20 edits and the 21st is the one somebody forgets, and a
+missing call is a silent leak rather than a crash. With the middleware, a route
+added later without a gate is a route with no `*Ctx`, which is visible in review
+as a missing line in a route block.
+
+It runs **before any file is opened**, which is a security property rather than
+tidiness: an ffmpeg transcode started for a request that is then refused is a
+process an ungranted user can start at will, and a 404 does not close a process
+that is already running.
+
+**A store failure is a 500, deliberately, and every refusal is a 404.** A
+database outage reported as "not found" sends an operator hunting a phantom
+attack instead of a broken disk.
+
+#### The two routes the coverage test found
+
+`/{sceneHash}_thumbs.vtt` and `/{sceneHash}_sprite.jpg` are registered OUTSIDE
+the `/{sceneId}` block, so they never saw `SceneCtx` and never saw the gate. They
+serve a **generated sprite and thumbnail strip** of a video's frames, keyed only
+by a hash — so on a public instance a user with no grant could fetch the frames
+of any scene whose hash they knew. `sceneHashCtx` resolves the hash to a scene
+and checks the scene.
+
+Found by listing every media route and recording which middleware each one
+passes, not by reading the handlers, all of which looked correct.
+
+#### What the gate's own tests found
+
+1. **`allowMedia` would have PANICKED, not refused.** It read
+   `manager.GetInstance()`, which panics when no instance exists, so the
+   `mgr == nil` guard was dead code — reached never, looking exactly like a guard
+   that works. Added `manager.MaybeGetInstance()` for refusal paths, with the
+   rule written down: **a refusal path asks MaybeGetInstance; everything else
+   asks GetInstance, because everything else genuinely cannot proceed.**
+2. **The grant-error case of the fail-closed table passed vacuously.** The
+   fixture used the owner for all four store-error cases, and ownership
+   short-circuits BEFORE the grant is consulted — so the grant read never
+   happened and the planted error was never reached. A fixture whose subject
+   never visits the code it names is a fixture that reports coverage.
+3. **Three "remove the gate" mutations did not COMPILE** (the `collab` import
+   became unused) and so killed no test. The harness scored them `broken` and
+   refused to count them as kills, which is the project's standing rule. They
+   were rewritten to also drop the import, so the mutation is a real edit to
+   working code.
+4. **"Answer 403 instead of 404" SURVIVED**, because the only test touching that
+   line returned before reaching it — with no store configured, `allowMedia`
+   refuses at the top, and the 403-vs-404 decision lives at the bottom on the
+   path needing a whole application. Fixed by extracting `writeMediaRefusal`, a
+   one-caller function that exists to make the property reachable.
+5. **"Ungate the two sprite routes" SURVIVED**, because the test checked that
+   `sceneHashCtx` *calls* the gate and not that the route table *reaches* it. A
+   function nobody calls is not a gate. Both halves are now tested, with the
+   route registration itself as the positive control.
+
+Current: `python3 internal/api/mutate_media_gate.py` — **6 applied, 6 killed,
+0 survived, 0 broken**.
 
 **A real bug this step found, pre-existing from 4.1:** `err == sql.ErrNoRows`
 cannot match, because `dbWrapper` wraps the driver error with `%w`. In the access

@@ -377,8 +377,8 @@ func (r *mutationResolver) settle(ctx context.Context, p *models.EditProposal, d
 	}
 
 	decision := collab.Evaluate(collab.DefaultPolicy(), collab.VoteCount{
-		Net:     score.Net,
-		Voters:  score.Voters,
+		Net:      score.Net,
+		Voters:   score.Voters,
 		SelfVote: score.AuthorVoted,
 	})
 

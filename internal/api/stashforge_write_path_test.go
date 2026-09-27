@@ -369,7 +369,6 @@ func f(ctx context.Context) error {
 	}
 }
 
-
 // TestClusterFieldResolversAreActuallyWired reads the GENERATED executor
 // rather than testing behaviour, and the reason is that the behaviour cannot
 // fail.
@@ -379,7 +378,7 @@ func f(ctx context.Context) error {
 // render twenty rows. That is the right design, and it creates a trap: if
 // gqlgen.yml lacks `resolver: true` for those fields, gqlgen generates
 //
-//     return obj.Members, nil
+//	return obj.Members, nil
 //
 // which compiles, leaves the field in the schema, keeps the type looking right,
 // and returns an empty list to every client that selects it. No test that does
@@ -391,8 +390,8 @@ func f(ctx context.Context) error {
 //
 // It already happened once. The first attempt configured
 //
-//     member_count:
-//       resolver: true
+//	member_count:
+//	  resolver: true
 //
 // and gqlgen matched config keys against the GraphQL field name, which is
 // `memberCount`. An unrecognised key is silently ignored -- no warning, no

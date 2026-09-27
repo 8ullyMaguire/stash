@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/static"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
@@ -78,6 +79,13 @@ func (rs tagRoutes) TagCtx(next http.Handler) http.Handler {
 		})
 		if tag == nil {
 			http.Error(w, http.StatusText(404), 404)
+			return
+		}
+
+		// §6.4's gate, BEFORE the handler opens the file. One call here
+		// covers every media route under this middleware, so a route added
+		// later cannot forget it. See stashforge_media_gate.go.
+		if !allowMedia(w, r, collab.TargetTag, int64(tag.ID)) {
 			return
 		}
 

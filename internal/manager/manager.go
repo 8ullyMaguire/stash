@@ -79,13 +79,23 @@ type Manager struct {
 	// LibraryAccessStore decides who may read a library; a library with no grant
 	// row is private to its owner.
 	//
-	// CONSTRUCTED BUT NOT YET CONSULTED. Decide() has no caller outside this
-	// package's own store, so no media path enforces grants yet. An earlier
-	// version of this comment said "every read path consults it", which was
-	// false -- and a comment asserting an invariant nothing upholds is worse than
-	// no comment, because the next reader trusts it. Making the read paths call
-	// Decide() is the remaining work for step 4.3.
+	// This is the ADMINISTRATION surface -- granting, revoking, listing. The
+	// SERVING decision goes through MediaScopeStore below, which additionally
+	// resolves which library a row is in. Both are needed and they answer
+	// different questions: this one is "does this grant row exist", that one is
+	// "may this caller have this file".
 	LibraryAccessStore *sqlite.LibraryAccessStore
+
+	// MediaScopeStore is what every media-serving route asks: which library is
+	// this row in, who owns it, and may this caller have it (M4 step 4.3,
+	// spec §6.4).
+	//
+	// The nil test for this is against the CONCRETE POINTER at the call site,
+	// not against an interface -- a nil *sqlite.MediaScopeStore in an interface
+	// is a non-nil interface, and `gate == nil` would be false (HANDOFF.md #9).
+	// allowMedia in internal/api/stashforge_media_gate.go does that, and refuses
+	// when it is nil rather than passing the request through.
+	MediaScopeStore *sqlite.MediaScopeStore
 
 	// InstanceModeStore holds the instance's private/contribute/public decision
 	// and whether the first-run wizard has been completed.
@@ -143,6 +153,29 @@ func GetInstance() *Manager {
 	if instance == nil {
 		panic("manager not initialized")
 	}
+	return instance
+}
+
+// MaybeGetInstance returns the Manager, or nil when the process has none.
+//
+// # WHY THIS EXISTS
+//
+// GetInstance PANICS when there is no instance, which is the right behaviour
+// for code that cannot work without one -- a handler deep in a request that
+// assumes a running server. It is the WRONG behaviour for a security control
+// that is supposed to fail closed, because a panic is not a refusal: it is an
+// uncontrolled exit, it is recovered by the middleware into a 500, and in a
+// goroutine it takes the process down.
+//
+// M4's media gate hit exactly this. It read
+// `if mgr == nil || mgr.MediaScopeStore == nil` and the first clause was dead
+// code: GetInstance had already panicked. A guard that cannot be reached looks
+// exactly like a guard that works, which is why it needs a test that calls the
+// function with no Manager -- and that test is the one that found this.
+//
+// So the rule is: a refusal path asks MaybeGetInstance. Everything else asks
+// GetInstance, because everything else genuinely cannot proceed.
+func MaybeGetInstance() *Manager {
 	return instance
 }
 

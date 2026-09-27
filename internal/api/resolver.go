@@ -82,6 +82,7 @@ func (r *Resolver) PersonCluster() PersonClusterResolver {
 // pipeline writes, so a resolver holding a handle would be a second writer to a
 // table it does not own.
 type personClusterResolver struct{ *Resolver }
+
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }
