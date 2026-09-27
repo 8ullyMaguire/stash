@@ -26,6 +26,7 @@ const (
 	userDisabledAtColumn   = "disabled_at"
 	userIsOwnerColumn      = "is_owner"
 	userReputationColumn   = "reputation"
+	userIsModeratorColumn  = "is_moderator"
 )
 
 type userRow struct {
@@ -42,6 +43,7 @@ type userRow struct {
 	CreatedAt    Timestamp   `db:"created_at" goqu:"skipinsert"`
 	DisabledAt   null.Time   `db:"disabled_at" goqu:"skipinsert"`
 	IsOwner      bool        `db:"is_owner"`
+	IsModerator  bool        `db:"is_moderator"`
 	Reputation   int         `db:"reputation"`
 }
 
@@ -53,18 +55,20 @@ func (r *userRow) fromUser(u models.User, passwordHash []byte) {
 	r.CreatedAt = Timestamp{Timestamp: u.CreatedAt}
 	r.DisabledAt = null.TimeFromPtr(u.DisabledAt)
 	r.IsOwner = u.IsOwner
+	r.IsModerator = u.IsModerator
 	r.Reputation = u.Reputation
 }
 
 func (r *userRow) resolve() *models.User {
 	return &models.User{
-		ID:         r.ID,
-		Username:   r.Username,
-		Email:      r.Email.Ptr(),
-		CreatedAt:  r.CreatedAt.Timestamp,
-		DisabledAt: r.DisabledAt.Ptr(),
-		IsOwner:    r.IsOwner,
-		Reputation: r.Reputation,
+		ID:          r.ID,
+		Username:    r.Username,
+		Email:       r.Email.Ptr(),
+		CreatedAt:   r.CreatedAt.Timestamp,
+		DisabledAt:  r.DisabledAt.Ptr(),
+		IsOwner:     r.IsOwner,
+		IsModerator: r.IsModerator,
+		Reputation:  r.Reputation,
 	}
 }
 
@@ -247,13 +251,59 @@ func (qb *UserStore) Destroy(ctx context.Context, id int) error {
 // row, so authored proposals and audit history survive. A hard delete would
 // silently rewrite history.
 func (qb *UserStore) SetDisabled(ctx context.Context, id int, disabled bool) error {
+	actor, err := qb.Find(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Disabling the last owner would leave an instance nobody can administer:
+	// no moderator appointments, no user management, no way back short of
+	// editing the database by hand. Refused, and the reason is the only way an
+	// operator learns why their button did nothing.
+	if disabled && actor.IsOwner {
+		return models.ErrCannotDisableOwner
+	}
+
 	var ts null.Time
 	if disabled {
 		ts = null.TimeFrom(time.Now())
 	}
-	_, err := dbWrapper.Exec(ctx, fmt.Sprintf(
+	_, err = dbWrapper.Exec(ctx, fmt.Sprintf(
 		"UPDATE %s SET %s = ? WHERE %s = ?", userTable, userDisabledAtColumn, idColumn),
 		ts, id)
+	return err
+}
+
+// SetModerator appoints or removes a moderator.
+//
+// The owner check is here rather than in the resolver on purpose. A governance
+// invariant that lives in a call site is one forgotten check away from being
+// violated, and the resolver is exactly the layer a future refactor rewrites.
+// It takes the acting user so the store can authorise, not just mutate.
+func (qb *UserStore) SetModerator(ctx context.Context, actorID, id int, moderator bool) error {
+	actor, err := qb.Find(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if !actor.IsOwner {
+		return models.ErrNotOwner
+	}
+
+	// The owner is not a moderator, and cannot make themselves one. Removing
+	// the flag is allowed -- but the schema's single-owner index means an
+	// instance always keeps exactly one administrator, so this is a role
+	// change and not a way to resign.
+	target, err := qb.Find(ctx, id)
+	if err != nil {
+		return err
+	}
+	if target.IsOwner && moderator {
+		return models.ErrOwnerIsNotModerator
+	}
+
+	_, err = dbWrapper.Exec(ctx, fmt.Sprintf(
+		"UPDATE %s SET %s = ? WHERE %s = ?", userTable, userIsModeratorColumn, idColumn),
+		moderator, id)
 	return err
 }
 

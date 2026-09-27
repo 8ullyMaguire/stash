@@ -28,12 +28,17 @@ var ErrNotOwner = errors.New("owner privileges required")
 // auth is a single shared username/password in config -- so this is new
 // ground rather than a refactor of an existing type.
 type User struct {
-	ID           int
-	Username     string
-	Email        *string
-	CreatedAt    time.Time
-	DisabledAt   *time.Time
-	IsOwner      bool
+	ID         int
+	Username   string
+	Email      *string
+	CreatedAt  time.Time
+	DisabledAt *time.Time
+	IsOwner    bool
+	// IsModerator is separate from IsOwner on purpose: the owner appoints
+	// moderators, and being the owner does not confer moderation powers. That
+	// separation is what makes "the owner cannot overrule a vote" expressible
+	// at all, so the two must never be collapsed into one flag.
+	IsModerator  bool
 	Reputation   int
 	SessionCount int
 }
@@ -90,8 +95,16 @@ type UserWriter interface {
 	SetPasswordHash(ctx context.Context, id int, hash []byte) error
 
 	// SetDisabled withdraws or restores the ability to log in, keeping the
-	// row. Returns ErrNotOwner if a non-owner attempts it.
+	// row. Refuses to disable the owner, since an instance with no
+	// administrator has no recovery path short of editing the database.
 	SetDisabled(ctx context.Context, id int, disabled bool) error
+
+	// SetModerator appoints or removes a moderator. actorID is the user
+	// performing the change and is authorised here rather than at the call
+	// site, because a governance invariant held in a resolver is one forgotten
+	// check away from being violated. Refuses a non-owner (ErrNotOwner) and
+	// refuses to make the owner a moderator (ErrOwnerIsNotModerator).
+	SetModerator(ctx context.Context, actorID, id int, moderator bool) error
 
 	// AddReputation adjusts the stored reputation. Deltas are applied by the
 	// caller after a quorum accepts a proposal; this is the only sanctioned
@@ -99,7 +112,15 @@ type UserWriter interface {
 	AddReputation(ctx context.Context, id int, delta int) error
 }
 
-// UserStore is the full interface, as used by the API and session layers.
+// ErrOwnerIsNotModerator is returned when the owner is made a moderator. The
+// owner is not a moderator by virtue of being the owner, and collapsing the two
+// roles is what makes "the owner cannot overrule a quorum" unexpressible.
+var ErrOwnerIsNotModerator = errors.New("the instance owner is not a moderator")
+
+// ErrCannotDisableOwner is returned when the last administrator would be
+// disabled. The result is an instance nobody can administer.
+var ErrCannotDisableOwner = errors.New("the instance owner cannot be disabled")
+
 type UserStore interface {
 	UserReader
 	UserWriter

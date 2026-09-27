@@ -1,0 +1,65 @@
+# StashForge — account management.
+#
+# These four mutations and one query are the entire multi-user surface. They are
+# present on a single-user instance too, and there they return the same errors as
+# the HTTP login form: an instance that never opted into accounts must not offer
+# a registration path that silently does nothing.
+
+"An account on this instance. Never includes the password hash: there is no
+field for it, so no resolver can leak it by forgetting to omit one."
+type User {
+  id: ID!
+  username: String!
+  "Null when the user never set one. Never exposed for another user unless public."
+  email: String
+  createdAt: Timestamp!
+  "True when the account may not log in. Only the owner can see this."
+  disabled: Boolean!
+  "The instance owner. Grants user management, paths, settings and moderator
+  appointment -- and nothing else. There is no field for overruling a vote."
+  isOwner: Boolean!
+  "True when this user is a moderator. Assigned by the owner."
+  isModerator: Boolean!
+  reputation: Int!
+}
+
+"A successful login. The session id is NOT in the response body: the server sets
+it as an HttpOnly cookie, so a page that renders this response cannot read the
+session out of the DOM, out of localStorage, or out of a JS variable."
+type AuthPayload {
+  user: User!
+}
+
+input RegisterInput {
+  username: String!
+  password: String!
+  "Required on every instance that already has one account. On an instance with
+  no accounts the first registration needs no key, because there is nobody to
+  issue one -- otherwise the instance could never be bootstrapped."
+  inviteKey: String
+  email: String
+}
+
+input LoginInput {
+  username: String!
+  password: String!
+}
+
+type Query {
+  "The currently authenticated user, or null when anonymous. Anonymous is the
+  normal state of most requests, so this is not an error."
+  me: User
+}
+
+type Mutation {
+  "Create an account. Requires an invite key unless this instance has no
+  accounts yet."
+  register(input: RegisterInput!): AuthPayload!
+
+  "Authenticate. Sets the session cookie. Every failure mode returns the same
+  error, so the form cannot be used to enumerate accounts."
+  login(input: LoginInput!): AuthPayload!
+
+  "Destroy the current session and clear its cookie."
+  logout: Boolean!
+}

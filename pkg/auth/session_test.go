@@ -153,6 +153,13 @@ func (f *fakeUserStore) SetDisabled(_ context.Context, id int, disabled bool) er
 	return nil
 }
 
+// SetModerator and SetDisabled on the fake enforce nothing: the owner checks
+// live in the real store, and a fake that reimplements them would be testing the
+// fake. The real store's version is covered by the sqlite integration tests.
+func (f *fakeUserStore) SetModerator(_ context.Context, _, _ int, _ bool) error {
+	return nil
+}
+
 func (f *fakeUserStore) AddReputation(context.Context, int, int) error { return nil }
 
 func (f *fakeUserStore) hashFor(id int) string {

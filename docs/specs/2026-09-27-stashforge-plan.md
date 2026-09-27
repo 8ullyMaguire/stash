@@ -296,17 +296,18 @@ resolves it, and the field is actually applied. Tag `m2-quorum`.
 
 | File | Contents |
 |---|---|
-| `91_edit_proposals.sql` | `edit_proposals` + both indexes |
-| `92_proposal_votes.sql` | `proposal_votes` with the composite PK |
-| `93_proposal_score_view.sql` | the `proposal_scores` view from spec §4 |
+| `92_edit_proposals.sql` | `edit_proposals` + both indexes |
+| `93_proposal_votes.sql` | `proposal_votes` with the composite PK |
+| `94_proposal_score_view.sql` | the `proposal_scores` view from spec §4 |
 
 Note the renumbering: M1 landed as migrations 87-90 (`users`, `invite_keys`,
-`user_sessions`, `collab_audit`), so proposals start at 91. golang-migrate
+`user_sessions`, `collab_audit`), and 91 is the moderator flag added for
+the GraphQL `User` type, so proposals start at 92. golang-migrate
 rejects a gap outright -- the original plan said 1100 and had to be renumbered
 mid-implementation.
 Keep one number per file, never reuse.
 
-**Verify:** apply 91…93 in order to an empty database; the view exists and
+**Verify:** apply 92…94 in order to an empty database; the view exists and
 returns a row for a seeded proposal.
 
 ### Step 2.2 — Governance, as a pure module

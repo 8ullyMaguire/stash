@@ -393,6 +393,126 @@ func TestAuditStore_NilDetailStillRecordsTheAction(t *testing.T) {
 	})
 }
 
+// --- moderator and disable guards -----------------------------------------
+
+// The owner is NOT a moderator by virtue of being the owner, and the store
+// refuses to make them one. Collapsing the two roles is what would make "the
+// owner cannot overrule a quorum" unexpressible, so the refusal is enforced at
+// the store rather than assumed at the call site.
+func TestUserStore_OwnerCannotBeMadeModerator(t *testing.T) {
+	runWithRollbackTxn(t, "owner-moderator", func(t *testing.T, ctx context.Context) {
+		owner := mustCreateOwner(ctx, t)
+		store := sqlite.NewUserStore()
+
+		err := store.SetModerator(ctx, owner, owner, true)
+		assert.ErrorIs(t, err, models.ErrOwnerIsNotModerator,
+			"the owner must not be appointable as a moderator")
+
+		got, err := store.Find(ctx, owner)
+		require.NoError(t, err)
+		assert.False(t, got.IsModerator, "the flag must be unchanged after a refusal")
+	})
+}
+
+// A non-owner must not be able to appoint moderators. This is the actual
+// privilege escalation the actorID parameter exists to prevent.
+func TestUserStore_NonOwnerCannotAppointModerators(t *testing.T) {
+	runWithRollbackTxn(t, "non-owner-appoint", func(t *testing.T, ctx context.Context) {
+		owner := mustCreateOwner(ctx, t)
+		alice := mustCreateUser(ctx, t, "alice-moderator-try")
+		bob := mustCreateUser(ctx, t, "bob-moderator-try")
+		store := sqlite.NewUserStore()
+
+		err := store.SetModerator(ctx, alice, bob, true)
+		assert.ErrorIs(t, err, models.ErrNotOwner, "a non-owner must not appoint a moderator")
+
+		got, err := store.Find(ctx, bob)
+		require.NoError(t, err)
+		assert.False(t, got.IsModerator, "the target must be unchanged after a refusal")
+		_ = owner
+	})
+}
+
+func TestUserStore_OwnerAppointsModerator(t *testing.T) {
+	runWithRollbackTxn(t, "appoint", func(t *testing.T, ctx context.Context) {
+		owner := mustCreateOwner(ctx, t)
+		bob := mustCreateUser(ctx, t, "bob-appointee")
+		store := sqlite.NewUserStore()
+
+		require.NoError(t, store.SetModerator(ctx, owner, bob, true))
+		got, err := store.Find(ctx, bob)
+		require.NoError(t, err)
+		assert.True(t, got.IsModerator)
+
+		// ...and can be removed again.
+		require.NoError(t, store.SetModerator(ctx, owner, bob, false))
+		got, err = store.Find(ctx, bob)
+		require.NoError(t, err)
+		assert.False(t, got.IsModerator)
+	})
+}
+
+// Disabling the owner would leave an instance nobody can administer. There is
+// no recovery path short of editing the database by hand, so it is refused.
+func TestUserStore_OwnerCannotBeDisabled(t *testing.T) {
+	runWithRollbackTxn(t, "disable-owner", func(t *testing.T, ctx context.Context) {
+		owner := mustCreateOwner(ctx, t)
+		store := sqlite.NewUserStore()
+
+		err := store.SetDisabled(ctx, owner, true)
+		assert.ErrorIs(t, err, models.ErrCannotDisableOwner,
+			"disabling the owner would leave the instance unadministrable")
+
+		got, err := store.Find(ctx, owner)
+		require.NoError(t, err)
+		assert.True(t, got.Active(), "a refused disable must leave the account active")
+	})
+}
+
+func TestUserStore_NonOwnerCanBeDisabledAndReenabled(t *testing.T) {
+	runWithRollbackTxn(t, "disable-user", func(t *testing.T, ctx context.Context) {
+		mustCreateOwner(ctx, t)
+		alice := mustCreateUser(ctx, t, "alice-disable")
+		store := sqlite.NewUserStore()
+
+		require.NoError(t, store.SetDisabled(ctx, alice, true))
+		got, err := store.Find(ctx, alice)
+		require.NoError(t, err)
+		assert.False(t, got.Active(), "a disabled user must not be Active")
+
+		require.NoError(t, store.SetDisabled(ctx, alice, false))
+		got, err = store.Find(ctx, alice)
+		require.NoError(t, err)
+		assert.True(t, got.Active(), "re-enabling must restore the account")
+	})
+}
+
+func TestUserStore_IsModeratorSurvivesRoundTrip(t *testing.T) {
+	runWithRollbackTxn(t, "moderator-roundtrip", func(t *testing.T, ctx context.Context) {
+		owner := mustCreateOwner(ctx, t)
+		bob := mustCreateUser(ctx, t, "bob-roundtrip")
+		store := sqlite.NewUserStore()
+		require.NoError(t, store.SetModerator(ctx, owner, bob, true))
+
+		// Read it back the way a resolver would: by username.
+		got, err := store.FindByUsername(ctx, "bob-roundtrip")
+		require.NoError(t, err)
+		assert.True(t, got.IsModerator,
+			"is_moderator must be selected and mapped, not left at its zero value")
+	})
+}
+
+// mustCreateOwner inserts the instance's single owner. The partial unique index
+// permits only one, so every test that needs an owner creates it here and never
+// assumes a shared fixture.
+func mustCreateOwner(ctx context.Context, t *testing.T) int {
+	t.Helper()
+
+	owner := &models.User{Username: "owner-" + t.Name(), IsOwner: true}
+	require.NoError(t, sqlite.NewUserStore().Create(ctx, owner, []byte("hash")))
+	return owner.ID
+}
+
 // mustCreateUser inserts a real user row and returns its id.
 //
 // A dedicated instance per fixture, never a fixed or shared row: a test that
