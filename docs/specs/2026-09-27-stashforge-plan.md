@@ -862,10 +862,68 @@ members* — what an import from an older corpus leaves — because after a real
 merge the loser is empty and `liveClusterIDs` skips empty clusters too. A second
 skip that happens to agree is not evidence the first one is load-bearing.
 
+**Step 2.4b.5 — the embedding. Done** (`internal/cluster/embedding.go`).
+
+Every distance in this milestone is a function of an embedding, so an embedding
+bug does not fail here — it fails *there*, as clusters that merge people who do
+not look alike, with a green suite and a plausible-looking distance in the log.
+So the file is mostly about **refusing** bad vectors.
+
+**Dimension is the hazard, because the model decides it.** A vector's length is
+not this code's decision, and every distance function compares two of them. A
+mismatch panics, truncates silently, or — the dangerous one — compares a
+**prefix** and returns a number that looks real while every threshold in the
+milestone was calibrated against the other dimension. Mismatches are refused,
+never reconciled.
+
+Zero vectors, NaN and infinity are refused at the boundary for one reason: they
+compare as false against every threshold, so a face carrying a NaN matches
+nothing and nothing is reported. The zero-`Detector` shape from 2.4b.0, one
+layer down. `CosineDistance` is 0..2 not 0..1, clamped because floating point
+yields 1.0000000000000002 for identical vectors, and the tests pin the endpoints
+so the real range is discoverable from the test names.
+
+**`Attach` verified the caller's word for the hash.** The first version took an
+`actualDigest` argument — a caller attesting to the file's hash while the
+function checked the attestation, so passing the expected digest for a model that
+was never hashed produced a "verified" embedder over arbitrary bytes. The check
+was theatre, and a test caught it. It now computes the digest itself, streaming
+through `io.Copy` into the hash because a face model is tens of megabytes.
+
+**The detector's pin policy is not reimplemented.** `normalizeDigest` originally
+duplicated `checkDigestWellFormed` and emitted a sentinel that does not exist,
+because the detector expresses that condition as an `UnavailableError` *reason*.
+Two copies of "is this a usable pin" drift invisibly. One vocabulary for the
+whole feature, so a caller that reports an unverified *detector* does not learn
+a second dialect for an unverified *embedder*. `ReasonDigestUnreadable` is a
+third reason rather than a fold into "unverified": fix the pin, get the right
+file, and fix the permissions are different operator actions, and collapsing the
+first two re-downloads a model whose pin is a typo.
+
+A model that changes its **output width** between calls is refused: every
+distance it feeds is calibrated against the width it had before.
+
+**Four of eight mutations survived the first pass**, all from the same cause —
+the tests checked *outcomes*, not *ordering* or *resulting state*:
+
+| Mutation | Why the outcome test could not see it |
+|---|---|
+| runtime loaded before the digest check | both orders produce the same error |
+| `modelReady` left true after a refusal | invisible until a later caller checks the flag, not the error |
+| output-width check removed | needs a model whose width *changes*, so no constant-width fixture reaches it |
+
+The fixture now counts runtime calls; the tests assert the count is zero, the
+flag is false, and the width is stable.
+
+**A mutation that did not express the defect it names.** The first load-ordering
+mutation deleted the comment above the call instead of moving it, producing two
+`LoadModel` invocations rather than a reorder. The test passed and I recorded a
+false "SURVIVED". Rewritten as a real move of the block, it is killed.
+
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
-**Remaining for this exit:** the embedding load and ANN candidate selection, then
-the GraphQL surface and the job that runs a pass.
+**Remaining for this exit:** ANN candidate selection, then the GraphQL surface
+and the job that runs a pass.
 
 ## M3 — Metadata sharing
 
