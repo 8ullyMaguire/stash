@@ -112,7 +112,13 @@ type stage struct {
 	separation float64
 
 	// clusters maps id to the members, in insertion order.
-	clusters map[int64][]*testFace
+	clusters map[int64][]Point
+
+	// geom supplies the arithmetic. Never nil: newStage defaults it to
+	// ScalarGeometry, and a nil geometry would panic on the first comparison --
+	// which is the right outcome, because a guard that measured everything as
+	// 0.0 would admit everything.
+	geom Geometry
 	// seen maps a membership key to the decision already made for it.
 	seen map[string]Assignment
 
@@ -131,7 +137,7 @@ type stage struct {
 	// over-merge guard so a face is never a member of two clusters.
 	keys map[string]int64
 
-	next  int64
+	next int64
 }
 
 type stageOption func(*stage)
@@ -147,7 +153,8 @@ func newStage(threshold float64, opts ...stageOption) *stage {
 	s := &stage{
 		threshold:  threshold,
 		separation: DefaultSeparation,
-		clusters:   map[int64][]*testFace{},
+		clusters:   map[int64][]Point{},
+		geom:       ScalarGeometry{},
 		seen:       map[string]Assignment{},
 		state:      map[int64]string{},
 		keys:       map[string]int64{},
@@ -166,17 +173,17 @@ func (s *stage) seedCluster(distance float64) int64 {
 func (s *stage) forceClusterAt(distance float64) int64 {
 	s.next++
 	id := s.next
-	seed := &testFace{pos: distance, key: fmt.Sprintf("seed-%d", id)}
-	s.clusters[id] = []*testFace{seed}
-	s.keys[seed.key] = id
+	seed := Scalar(distance, fmt.Sprintf("seed-%d", id))
+	s.clusters[id] = []Point{seed}
+	s.keys[seed.Key] = id
 	return id
 }
 
-func (s *stage) forceMembers(id int64, f ...*testFace) {
+func (s *stage) forceMembers(id int64, f ...Point) {
 	s.clusters[id] = append(s.clusters[id], f...)
 	for _, m := range f {
-		if m.key != "" {
-			s.keys[m.key] = id
+		if m.Key != "" {
+			s.keys[m.Key] = id
 		}
 	}
 }
@@ -184,12 +191,12 @@ func (s *stage) forceMembers(id int64, f ...*testFace) {
 func (s *stage) size(id int64) int { return len(s.clusters[id]) }
 
 // assign decides where a face goes.
-func (s *stage) assign(f *testFace) Assignment {
+func (s *stage) assign(f Point) Assignment {
 	// A rescan re-derives the candidates so the caller can see the current
 	// state, but it does not re-decide. Duplicated decisions are not harmless
 	// here: each ambiguous outcome is a row in a review queue, and duplicates
 	// of one conflict bury the real ones.
-	if prev, ok := s.seen[f.key]; ok && f.key != "" {
+	if prev, ok := s.seen[f.Key]; ok && f.Key != "" {
 		return Assignment{
 			Kind:       AssignAlreadySeen,
 			ClusterID:  prev.ClusterID,
@@ -205,10 +212,10 @@ func (s *stage) assign(f *testFace) Assignment {
 		// Nothing in range. This is the normal outcome for a first face, not a
 		// failure, and it must not produce a warning.
 		s.next++
-		s.clusters[s.next] = []*testFace{f}
+		s.clusters[s.next] = []Point{f}
 		out := Assignment{Kind: AssignNew, ClusterID: s.next}
-		if f.key != "" {
-			s.seen[f.key] = out
+		if f.Key != "" {
+			s.seen[f.Key] = out
 		}
 		return out
 
@@ -220,8 +227,8 @@ func (s *stage) assign(f *testFace) Assignment {
 			Distance:   cands[0].Distance,
 			Candidates: cands,
 		}
-		if f.key != "" {
-			s.seen[f.key] = out
+		if f.Key != "" {
+			s.seen[f.Key] = out
 		}
 		return out
 	}
@@ -245,8 +252,8 @@ func (s *stage) assign(f *testFace) Assignment {
 			Distance:   best.Distance,
 			Candidates: cands,
 		}
-		if f.key != "" {
-			s.seen[f.key] = out
+		if f.Key != "" {
+			s.seen[f.Key] = out
 		}
 		return out
 	}
@@ -264,13 +271,24 @@ func (s *stage) assign(f *testFace) Assignment {
 // Sorted because the review UI lists them in this order and a reviewer's eye
 // goes to the first. An unsorted list makes the engine's preference the
 // default answer even while the state says "ambiguous".
-func (s *stage) candidatesFor(f *testFace) []Candidate {
+func (s *stage) candidatesFor(f Point) []Candidate {
 	var cands []Candidate
 	for id, members := range s.clusters {
 		if len(members) == 0 {
 			continue
 		}
-		if d := s.distanceTo(f, members); d <= s.threshold {
+		d, err := s.distanceTo(f, members)
+		if err != nil {
+			// A cluster whose centroid cannot be computed is SKIPPED, not
+			// fatal. One corrupt row in a 40,000-face index must not stop the
+			// other 39,999 -- the alternative turns a single bad embedding into
+			// a library that cannot be clustered at all. The face is then
+			// reported as new-or-ambiguous rather than silently joined, which
+			// is the safe direction: a face wrongly kept out is a review queue
+			// row, a face wrongly joined is a wrong identity.
+			continue
+		}
+		if d <= s.threshold {
 			cands = append(cands, Candidate{ClusterID: id, Distance: d})
 		}
 	}
@@ -287,18 +305,19 @@ func (s *stage) candidatesFor(f *testFace) []Candidate {
 }
 
 // distanceTo is the distance from a face to a cluster: the mean embedding, the
-// same arithmetic the over-merge guard uses, so the two agree by construction.
-func (s *stage) distanceTo(f *testFace, members []*testFace) float64 {
-	return centroidOf(members).distanceTo(f)
+// same arithmetic Membership uses, so the two agree by construction.
+//
+// An error means the cluster's centre is unmeasurable -- a corrupt member, or a
+// pair of vectors that cancel. The caller SKIPS such a cluster rather than
+// failing, for the reason given at the call site.
+func (s *stage) distanceTo(f Point, members []Point) (float64, error) {
+	c, err := s.geom.Centroid(members)
+	if err != nil {
+		return 0, err
+	}
+	return s.geom.Distance(f, c)
 }
 
-func (s *stage) join(f *testFace, c Candidate) {
+func (s *stage) join(f Point, c Candidate) {
 	s.clusters[c.ClusterID] = append(s.clusters[c.ClusterID], f)
-}
-
-// centroidOf is the mean position. Shared with the over-merge guard so the two
-// cannot drift: a centroid computed two different ways in the same package is
-// a bug waiting for a threshold change to expose it.
-func centroidOf(faces []*testFace) centroid {
-	return meanOf(faces)
 }

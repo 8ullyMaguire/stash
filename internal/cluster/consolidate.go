@@ -38,10 +38,10 @@ import (
 // other. It is not a struct scan target -- the store row is -- because the
 // cluster package has no business knowing column names.
 type MergeRecord struct {
-	WinnerID int64
-	LoserID  int64
-	Kind     string
-	Reason   string
+	WinnerID  int64
+	LoserID   int64
+	Kind      string
+	Reason    string
 	DecidedBy int64
 }
 
@@ -148,7 +148,24 @@ func (s *stage) consolidateBounded(mergeThreshold float64, reason string, limit 
 				continue
 			}
 
-			if s.centroidDistance(winner, loser) > mergeThreshold {
+			// A pair whose centres cannot be compared is SKIPPED, and counted
+			// separately from a refusal.
+			//
+			// Skipping rather than failing: one corrupt member in a
+			// 40,000-face index must not stop the pass. But not silently either,
+			// because "this pass found no mergeable pairs" and "this pass could
+			// not measure half of them" are different reports and an operator
+			// told the first will go looking for a threshold that is fine.
+			//
+			// Skipping is also the safe direction: not merging leaves two
+			// clusters a human can join, while merging a pair on a guess
+			// produces a wrong identity.
+			d, err := s.centroidDistance(winner, loser)
+			if err != nil {
+				res.Skipped++
+				continue
+			}
+			if d > mergeThreshold {
 				continue
 			}
 
@@ -220,14 +237,29 @@ func (s *stage) stateOf(id int64) string {
 }
 
 // centroidDistance is the distance between two clusters' centroids.
-func (s *stage) centroidDistance(a, b int64) float64 {
-	ca := centroidOf(s.clusters[a])
-	cb := centroidOf(s.clusters[b])
-	d := float64(ca) - float64(cb)
-	if d < 0 {
-		return -d
+//
+// The CONSOLIDATE threshold is keyed on this and not on the diameter. That is a
+// real distinction and it is the reason both measurements exist: consolidate
+// asks "are these two groups the same person", which is a question about where
+// they sit, while the over-merge guard asks "has this cluster stopped being one
+// person", which is a question about how wide it is. Using the diameter for
+// consolidate would refuse merges that the guard considers healthy, and using
+// the centroid for the guard would admit the bimodal cluster the twins in
+// membership_cosine_test.go exist to catch.
+//
+// An error means one of the two centres is unmeasurable, and the caller SKIPS
+// the pair: a corrupt member must not stop every other pair from being
+// considered, and refusing to merge is the safe direction when in doubt.
+func (s *stage) centroidDistance(a, b int64) (float64, error) {
+	ca, err := s.geom.Centroid(s.clusters[a])
+	if err != nil {
+		return 0, err
 	}
-	return d
+	cb, err := s.geom.Centroid(s.clusters[b])
+	if err != nil {
+		return 0, err
+	}
+	return s.geom.Distance(ca, cb)
 }
 
 // absorb moves every face from loser into winner, refusing if the over-merge
@@ -238,6 +270,23 @@ func (s *stage) centroidDistance(a, b int64) float64 {
 // rollback by accident. That is the structural reason a refused merge cannot
 // leave a trace -- not a discipline about cleaning up, but an ordering.
 func (s *stage) absorb(winner, loser int64) error {
+	// A cluster cannot be merged into itself.
+	//
+	// The port removed this. It had been implicit in the scalar guard -- the
+	// second line of the j-loop only ever reached a different id -- and moving
+	// to Membership made it explicit-by-accident instead: forceCluster
+	// pre-loads the winner's members AND their keys, so every one of the loser's
+	// (identical) members is then already claimed and addMember returns nil for
+	// all of them. The merge "succeeded" and doubled the membership.
+	//
+	// Migration 98's CHECK catches it in the database, which is the last line of
+	// defence rather than the first. The refusal belongs here, where the
+	// mistake is made, and the test that pins it is
+	// TestAbsorb_RefusesToMergeAClusterIntoItself.
+	if winner == loser {
+		return fmt.Errorf("cluster %d cannot be merged into itself", winner)
+	}
+
 	members := s.clusters[loser]
 	if len(members) == 0 {
 		return fmt.Errorf("cluster %d has no members to merge", loser)
@@ -246,17 +295,19 @@ func (s *stage) absorb(winner, loser int64) error {
 	// Try every face. A partial absorption would be worse than none: some faces
 	// in the winner and some in a cluster marked 'merged' is a state the UI
 	// cannot render and a reversal cannot reconstruct.
-	prospective := append(append([]*testFace{}, s.clusters[winner]...), members...)
+	prospective := append(append([]Point{}, s.clusters[winner]...), members...)
 
 	// The over-merge guard, run over the PROSPECTIVE membership. Reusing
-	// guard.addMember rather than reimplementing the check is deliberate: the
-	// rules that decide whether a cluster may grow are the rules in
-	// overmerge.go, and a second implementation of them in this file is a rule
-	// that will drift from the first.
+	// Membership.addMember rather than reimplementing the check is deliberate:
+	// the rules that decide whether a cluster may grow are the rules in
+	// guard.go, and a second implementation of them in this file is a rule that
+	// will drift from the first.
 	//
-	// The guard is keyed by int rather than int64, so the ids are projected.
-	// The projection is a test-fixture concern and lives in the guard's own
-	// constructor rather than being scattered through this file.
+	// It is the PORTED guard, over the stage's own geometry. The previous
+	// version constructed the scalar guard inline, which meant the consolidate
+	// path checked merges with |a - b| while the assign path checked them with
+	// cosine -- the same merge, two arithmetic systems, and a pair that
+	// consolidate accepted could be one that assign's own guard would refuse.
 	//
 	// Only the WINNER's existing members are pre-loaded. Pre-loading the loser's
 	// as well and then adding them was the first version, and it failed with
@@ -265,13 +316,8 @@ func (s *stage) absorb(winner, loser int64) error {
 	// claimed it. The prospective membership is the QUESTION being asked; the
 	// index's existing claims are the ANSWER being checked against, and mixing
 	// the two makes the check answer itself.
-	pg := &guard{
-		threshold: s.threshold,
-		clusters:  map[int][]*testFace{},
-		keys:      map[string]int{},
-		next:      1,
-	}
-	pg.forceCluster(append([]*testFace{}, s.clusters[winner]...))
+	pg := newMembershipWith(s.threshold, s.geom)
+	pg.forceCluster(append([]Point{}, s.clusters[winner]...))
 
 	for _, m := range members {
 		if err := pg.addMember(1, m); err != nil {
@@ -281,9 +327,9 @@ func (s *stage) absorb(winner, loser int64) error {
 
 	// Committed. Update both the guard's bookkeeping and the stage's own.
 	for _, m := range members {
-		if m.key != "" {
-			if owner, ok := s.keys[m.key]; ok && owner == loser {
-				s.keys[m.key] = winner
+		if m.Key != "" {
+			if owner, ok := s.keys[m.Key]; ok && owner == loser {
+				s.keys[m.Key] = winner
 			}
 		}
 	}

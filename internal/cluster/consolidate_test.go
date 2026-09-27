@@ -30,8 +30,8 @@ func TestConsolidate_MergesTwoCloseClustersAndRecordsIt(t *testing.T) {
 	s := newStage(0.5, withSeparation(0))
 	a := s.seedCluster(0.0)
 	b := s.seedCluster(0.05)
-	s.forceMembers(a, &testFace{pos: 0.0, key: "a-face"})
-	s.forceMembers(b, &testFace{pos: 0.05, key: "b-face"})
+	s.forceMembers(a, Scalar(0.0, "a-face"))
+	s.forceMembers(b, Scalar(0.05, "b-face"))
 
 	res := s.consolidate(0.2, "automatic pass")
 
@@ -93,20 +93,39 @@ func TestConsolidate_ARefusedMergeLeavesNoTrace(t *testing.T) {
 	// A pair close enough for the pass to CONSIDER and far enough that
 	// absorbing one would strand a member.
 	//
-	// The geometry, because it is not obvious: seedCluster adds a face, so each
-	// cluster starts with one. a ends up with faces at 0.0 and 0.0 (centroid
-	// 0.0); b with 0.05, 0.05 and 0.80 (centroid 0.267). The pair is 0.267
-	// apart, inside a 0.3 merge threshold, so the pass tries. Absorbing gives a
-	// combined centroid of 0.160, and b's face at 0.80 is then 0.640 from it --
-	// past the stage's 0.5 threshold, so the guard refuses.
+	// The geometry, because it is not obvious. seedCluster(d) adds a face AT
+	// d, so each cluster starts with one and the member list has to be read
+	// including it:
+	//
+	//   a: seed 0.0 + a-face 0.0                -> centroid 0.0
+	//   b: seed 0.05 + b-face 0.05 + 0.80      -> centroid 0.30
+	//
+	// The pair is 0.30 apart. The comparison is `> 0.30`, so this is EXACTLY on
+	// the boundary, and in float32 the centroid computes as 0.30000001192 --
+	// just over. Which means the pair is not considered at all and the guard is
+	// never asked, so this test proves nothing about refusals.
+	//
+	// The first version of this fixture computed the centroid in float64 as
+	// 0.267, comfortably inside the threshold, and the test passed. Porting the
+	// stage to float32 Point moved it to 0.30000001 and the pair stopped being
+	// considered -- a test that had been exercising a refusal silently stopped
+	// exercising anything, and nothing failed until the precondition assertion
+	// below was read closely enough to notice a count of zero.
+	//
+	// b is seeded at 0.05 and given 0.05 and 0.75, so the centroid is
+	// (0.05 + 0.05 + 0.75) / 3 = 0.2833 -- inside the threshold with room to
+	// spare, and far enough from the boundary that float32 rounding cannot
+	// decide the outcome. Absorbing gives a combined centroid of
+	// (0 + 0 + 0.05 + 0.05 + 0.75) / 5 = 0.17, and b's face at 0.75 is then
+	// 0.58 from it -- past the stage's 0.5 threshold, so the guard refuses.
 	//
 	// That is a cluster already holding two people, which is exactly what a
 	// consolidation pass must not resolve by merging harder.
 	s := newStage(0.5, withSeparation(0))
 	a := s.seedCluster(0.0)
 	b := s.seedCluster(0.05)
-	s.forceMembers(a, &testFace{pos: 0.0, key: "a-face"})
-	s.forceMembers(b, &testFace{pos: 0.05, key: "b-face"}, &testFace{pos: 0.80, key: "b-stranger"})
+	s.forceMembers(a, Scalar(0.0, "a-face"))
+	s.forceMembers(b, Scalar(0.05, "b-face"), Scalar(0.75, "b-stranger"))
 
 	facesBefore := countFaces(s)
 	statesBefore := s.stateOf(a) + "/" + s.stateOf(b)
@@ -115,10 +134,21 @@ func TestConsolidate_ARefusedMergeLeavesNoTrace(t *testing.T) {
 
 	// The precondition, asserted: this pass must actually try the merge, or the
 	// test below proves nothing about refusals.
+	//
+	// The distance is computed explicitly rather than passed to Fatalf as a
+	// second value, because centroidDistance now returns an error: an
+	// unmeasurable pair is skipped rather than merged, so a failure here has to
+	// say WHICH of the two things went wrong.
+	gap, gapErr := s.centroidDistance(a, b)
 	if res.Refused == 0 {
+		if gapErr != nil {
+			t.Fatalf("the pass refused nothing and the pair could not be "+
+				"measured at all (%v); it was skipped, so the refusal "+
+				"count is zero for a reason that is not the guard", gapErr)
+		}
 		t.Fatalf("the pass refused nothing; centroids are %.3f apart under a "+
 			"0.30 threshold, so the pair should have been considered and then "+
-			"declined", s.centroidDistance(a, b))
+			"declined", gap)
 	}
 	if res.Merged != 0 {
 		t.Fatalf("a refused pair was merged anyway: %d merges", res.Merged)
@@ -207,8 +237,8 @@ func TestConsolidate_MergedClustersBecomeSettledNotAmbiguous(t *testing.T) {
 		}
 	}
 	if s.stateOf(survivor) == "ambiguous" {
-		t.Errorf("the surviving cluster is 'ambiguous'; a merge is a decision "+
-			"that has been made, and every merged cluster in the review queue "+
+		t.Errorf("the surviving cluster is 'ambiguous'; a merge is a decision " +
+			"that has been made, and every merged cluster in the review queue " +
 			"is a queue nobody can work through")
 	}
 }
@@ -299,8 +329,8 @@ func TestConsolidate_NoFaceIsAMemberOfTwoClusters(t *testing.T) {
 	s := newStage(0.5, withSeparation(0))
 	a := s.seedCluster(0.0)
 	b := s.seedCluster(0.05)
-	s.forceMembers(a, &testFace{pos: 0.0, key: "a-face"})
-	s.forceMembers(b, &testFace{pos: 0.05, key: "b-face"})
+	s.forceMembers(a, Scalar(0.0, "a-face"))
+	s.forceMembers(b, Scalar(0.05, "b-face"))
 
 	before := countFaces(s)
 	s.consolidate(0.2, "automatic pass")
@@ -310,9 +340,9 @@ func TestConsolidate_NoFaceIsAMemberOfTwoClusters(t *testing.T) {
 	dupes := []string{}
 	for id, members := range s.clusters {
 		for _, m := range members {
-			owners[m.key]++
-			if owners[m.key] > 1 {
-				dupes = append(dupes, m.key)
+			owners[m.Key]++
+			if owners[m.Key] > 1 {
+				dupes = append(dupes, m.Key)
 			}
 		}
 		_ = id
@@ -367,7 +397,7 @@ func TestConsolidate_AlreadyMergedClustersAreExcludedFromLaterPasses(t *testing.
 
 	// Put a face back into the absorbed cluster, simulating an import that
 	// marked it merged without clearing it.
-	s2.forceMembers(y, &testFace{pos: 0.05, key: "imported"})
+	s2.forceMembers(y, Scalar(0.05, "imported"))
 	if len(s2.clusters[y]) == 0 {
 		t.Fatal("test setup failed: the absorbed cluster has no members to check")
 	}
@@ -419,8 +449,8 @@ func TestAbsorb_RefusesToMergeAClusterIntoItself(t *testing.T) {
 	}
 
 	if err := s.absorb(a, a); err == nil {
-		t.Errorf("a cluster was merged into itself; migration 98 refuses this "+
-			"with a CHECK, and a self-referential record makes the member "+
+		t.Errorf("a cluster was merged into itself; migration 98 refuses this " +
+			"with a CHECK, and a self-referential record makes the member " +
 			"count read as doubled")
 	}
 	if got := len(s.clusters[a]); got != before {

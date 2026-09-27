@@ -186,13 +186,33 @@ type CosineGeometry struct{}
 // one more than is needed.
 const EmbeddingDim = 512
 
+// Distance checks the width against EmbeddingDim, not merely against each
+// other.
+//
+// CosineDistance compares its two arguments' widths to EACH OTHER, so a 2-wide
+// vector measured against another 2-wide vector passes -- which is why the
+// first version of the guard admitted a short embedding as a cluster's first
+// face and only discovered it when the second face arrived. The self-comparison
+// that catches NaN cannot catch this one, because the self-comparison of a
+// malformed vector is perfectly well-formed.
 func (CosineGeometry) Distance(a, b Point) (float64, error) {
-	da, err := CosineDistance(a.Vector, b.Vector)
-	if err != nil {
-		return 0, err
+	if n := len(a.Vector); n != EmbeddingDim {
+		return 0, fmt.Errorf("%w: width %d, want %d", ErrWrongWidth, n, EmbeddingDim)
 	}
-	return da, nil
+	if n := len(b.Vector); n != EmbeddingDim {
+		return 0, fmt.Errorf("%w: width %d, want %d", ErrWrongWidth, n, EmbeddingDim)
+	}
+	return CosineDistance(a.Vector, b.Vector)
 }
+
+// ErrWrongWidth is an embedding that is not the width the engine produces.
+//
+// Distinct from ErrInvalidEmbedding (which is about VALUES -- NaN, infinity,
+// all zeroes) because the two have different origins: a wrong width is a
+// decode or version fault, a bad value is a corrupt row. Both are unmeasurable,
+// and both are refused, but an operator reading the error needs to know which
+// to go and look for.
+var ErrWrongWidth = errors.New("embedding has the wrong width")
 
 func (CosineGeometry) Centroid(faces []Point) (Point, error) {
 	if len(faces) == 0 {

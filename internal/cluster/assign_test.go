@@ -35,7 +35,7 @@ import "testing"
 func TestAssign_AFaceWithNoCloseClusterStartsANewOne(t *testing.T) {
 	s := newStage(0.5)
 
-	got := s.assign(&testFace{pos: 0.0, key: "new"})
+	got := s.assign(Scalar(0.0, "new"))
 
 	if got.Kind != AssignNew {
 		t.Errorf("a face with no cluster in range created %v, want AssignNew; a "+
@@ -59,7 +59,7 @@ func TestAssign_JoinsWhenExactlyOneClusterIsClearlyNearest(t *testing.T) {
 	near := s.seedCluster(0.10)
 	far := s.seedCluster(0.40)
 
-	got := s.assign(&testFace{pos: 0.0, key: "f"})
+	got := s.assign(Scalar(0.0, "f"))
 
 	if got.Kind != AssignJoin {
 		t.Fatalf("a face 0.10 from one cluster and 0.40 from another, margin "+
@@ -101,7 +101,7 @@ func TestAssign_TwoCloseClustersAreAmbiguousNotAGuess(t *testing.T) {
 			gap, requiredM)
 	}
 
-	got := s.assign(&testFace{pos: 0.0, key: "f"})
+	got := s.assign(Scalar(0.0, "f"))
 
 	if got.Kind != AssignAmbiguous {
 		t.Fatalf("a face %.2f from one cluster and %.2f from another (gap %.2f, "+
@@ -144,10 +144,10 @@ func TestAssign_AmbiguousIsNotResolvedByClusterSize(t *testing.T) {
 	big := s.seedCluster(0.10)
 	// Make `big` genuinely bigger.
 	for i := 0; i < 5; i++ {
-		s.forceMembers(big, &testFace{pos: 0.10, key: "big" + string(rune('A'+i))})
+		s.forceMembers(big, Scalar(0.10, "big"+string(rune('A'+i))))
 	}
 
-	got := s.assign(&testFace{pos: 0.0, key: "f"})
+	got := s.assign(Scalar(0.0, "f"))
 
 	if got.Kind != AssignAmbiguous {
 		t.Errorf("a 6-face cluster 0.10 away beat a 1-face cluster 0.14 away "+
@@ -172,7 +172,7 @@ func TestAssign_AnAmbiguousOutcomeLeavesTheClustersAlone(t *testing.T) {
 	b := s.seedCluster(0.14)
 
 	before := s.size(a) + s.size(b)
-	s.assign(&testFace{pos: 0.0, key: "f"})
+	s.assign(Scalar(0.0, "f"))
 
 	if after := s.size(a) + s.size(b); after != before {
 		t.Errorf("cluster membership changed from %d to %d during an AMBIGUOUS "+
@@ -188,8 +188,8 @@ func TestAssign_TheSameFaceIsNotAssignedTwice(t *testing.T) {
 	s := newStage(0.5)
 	s.seedCluster(0.10)
 
-	first := s.assign(&testFace{pos: 0.0, key: "same"})
-	second := s.assign(&testFace{pos: 0.0, key: "same"})
+	first := s.assign(Scalar(0.0, "same"))
+	second := s.assign(Scalar(0.0, "same"))
 
 	if second.Kind != AssignAlreadySeen {
 		t.Errorf("a rescan of a face already assigned produced %v, want "+
@@ -213,7 +213,7 @@ func TestAssign_CandidatesAreReportedInDistanceOrder(t *testing.T) {
 	s.seedCluster(0.10)
 	s.seedCluster(0.25)
 
-	got := s.assign(&testFace{pos: 0.0, key: "f"})
+	got := s.assign(Scalar(0.0, "f"))
 	if len(got.Candidates) != 3 {
 		t.Fatalf("got %d candidates, want 3", len(got.Candidates))
 	}
@@ -240,8 +240,8 @@ func TestAssign_CandidatesAreReportedInDistanceOrder(t *testing.T) {
 // Separate them with a runner-up far from the threshold and a gap in the
 // middle: clusters at 0.20 and 0.30, threshold 0.5.
 //
-//   threshold-relative: gap 0.10, required 0.5*0.5 = 0.25 -> NOT enough -> ambiguous
-//   runner-up-relative: required 0.30*0.5 = 0.15 -> 0.10 < 0.15 -> also ambiguous
+//	threshold-relative: gap 0.10, required 0.5*0.5 = 0.25 -> NOT enough -> ambiguous
+//	runner-up-relative: required 0.30*0.5 = 0.15 -> 0.10 < 0.15 -> also ambiguous
 //
 // Still agreeing. The formulas cross where second == threshold. Push the
 // runner-up above the threshold's useful range -- but then it would not be a
@@ -256,8 +256,8 @@ func TestAssign_CandidatesAreReportedInDistanceOrder(t *testing.T) {
 // Take second just under the threshold: clusters at 0.02 and 0.49, threshold
 // 0.5.
 //
-//   threshold-relative: gap 0.47, required 0.25 -> enough -> JOIN
-//   runner-up-relative: gap 0.47, required 0.49*0.5 = 0.245 -> enough -> JOIN
+//	threshold-relative: gap 0.47, required 0.25 -> enough -> JOIN
+//	runner-up-relative: gap 0.47, required 0.49*0.5 = 0.245 -> enough -> JOIN
 //
 // The crossing point is second = threshold, and below that the runner-up
 // formula demands LESS. So the permissive direction is: a runner-up far below
@@ -265,8 +265,8 @@ func TestAssign_CandidatesAreReportedInDistanceOrder(t *testing.T) {
 // the engine choose between two clusters it can barely distinguish from the
 // face. Take second = 0.10, best = 0.08, threshold 0.5:
 //
-//   threshold-relative: gap 0.02, required 0.25 -> AMBIGUOUS
-//   runner-up-relative: gap 0.02, required 0.05 -> 0.02 < 0.05 -> AMBIGUOUS
+//	threshold-relative: gap 0.02, required 0.25 -> AMBIGUOUS
+//	runner-up-relative: gap 0.02, required 0.05 -> 0.02 < 0.05 -> AMBIGUOUS
 //
 // Both ambiguous again, because the gap is small either way. The real
 // discriminator needs gap BETWEEN the two required margins: 0.25*second < gap
@@ -275,8 +275,8 @@ func TestAssign_CandidatesAreReportedInDistanceOrder(t *testing.T) {
 //
 // Clusters at 0.10 and 0.20, threshold 0.5, gap 0.10:
 //
-//   threshold-relative: required 0.25, gap 0.10 -> AMBIGUOUS
-//   runner-up-relative: required 0.20*0.5 = 0.10, gap 0.10 -> 0.10 >= 0.10 -> JOIN
+//	threshold-relative: required 0.25, gap 0.10 -> AMBIGUOUS
+//	runner-up-relative: required 0.20*0.5 = 0.10, gap 0.10 -> 0.10 >= 0.10 -> JOIN
 //
 // That is the pair. Identical inputs, opposite outcomes, decided entirely by
 // which number the margin is a fraction of.
@@ -309,7 +309,7 @@ func TestAssign_TheMarginIsMeasuredAgainstTheThresholdNotTheRunnerUp(t *testing.
 	near := s.seedCluster(best)
 	far := s.seedCluster(second)
 
-	got := s.assign(&testFace{pos: 0.0, key: "f"})
+	got := s.assign(Scalar(0.0, "f"))
 
 	if got.Kind != AssignAmbiguous {
 		t.Errorf("clusters %.2f and %.2f from the face, threshold %.2f, gap "+

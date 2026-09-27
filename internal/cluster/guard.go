@@ -282,10 +282,15 @@ func (g *Membership) validate(f Point) error {
 	if len(f.Vector) == 0 {
 		return fmt.Errorf("%w: face %q has no embedding", ErrUnusableFace, f.Key)
 	}
-	if want := EmbeddingDim; len(f.Vector) != want {
-		return fmt.Errorf("%w: face %q has width %d, want %d",
-			ErrUnusableFace, f.Key, len(f.Vector), want)
-	}
+	// The self-comparison, which is where the NaN and zero-vector traps live.
+	//
+	// The WIDTH check is deliberately not here. It belongs to the geometry --
+	// CosineGeometry knows it expects 512 components and ScalarGeometry has no
+	// notion of a width at all. Putting it in the guard meant the guard could
+	// not be used with any geometry but the production one, which is precisely
+	// what the scalar property tests are for. CosineGeometry.Distance performs
+	// the check instead, so a Geometry added later gets the right behaviour for
+	// free rather than silently admitting short vectors.
 	if _, err := g.geom.Distance(f, f); err != nil {
 		return fmt.Errorf("%w: face %q has an unusable embedding: %v",
 			ErrUnusableFace, f.Key, err)

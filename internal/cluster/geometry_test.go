@@ -84,7 +84,7 @@ func TestScalarGeometry_MatchesTheHandArithmetic(t *testing.T) {
 }
 
 func TestCosineGeometry_DiameterIsNotDistanceToCentroid(t *testing.T) {
-	const dim = 8
+	const dim = EmbeddingDim
 	g := CosineGeometry{}
 
 	// Two faces 0.6 apart. Their centroid is 0.3 from each, so an
@@ -129,7 +129,7 @@ func TestCosineGeometry_DiameterIsNotDistanceToCentroid(t *testing.T) {
 }
 
 func TestCosineGeometry_CentroidIsNormalised(t *testing.T) {
-	const dim = 4
+	const dim = EmbeddingDim
 	g := CosineGeometry{}
 
 	// Two nearby unit vectors. Their mean is shorter than 1 -- and the shorter
@@ -140,8 +140,8 @@ func TestCosineGeometry_CentroidIsNormalised(t *testing.T) {
 	//
 	// This test fails if the normalisation is removed, and the failure it
 	// produces is a threshold that loosens as a cluster tightens.
-	a := Point{Vector: []float32{1, 0, 0, 0}, Key: "a"}
-	b := Point{Vector: []float32{0.99, 0.1, 0, 0}, Key: "b"}
+	a := Point{Vector: append(make([]float32, EmbeddingDim-1), 1), Key: "a"}
+	b := Point{Vector: append([]float32{0.99, 0.1}, make([]float32, EmbeddingDim-2)...), Key: "b"}
 	b.Vector = normalize(b.Vector)
 
 	c, err := g.Centroid([]Point{a, b})
@@ -245,12 +245,12 @@ func TestGeometry_OverMergePropertiesHoldForBothImplementations(t *testing.T) {
 			name: "cosine",
 			g:    CosineGeometry{},
 			near: []Point{
-				{Vector: axisAngle(8, 0, 30), Key: "a"},
-				{Vector: unitVec(8, 0), Key: "b"},
+				{Vector: axisAngle(EmbeddingDim, 0, 30), Key: "a"},
+				{Vector: unitVec(EmbeddingDim, 0), Key: "b"},
 			},
 			far: []Point{
-				{Vector: axisAngle(8, 0, 150), Key: "c"},
-				{Vector: unitVec(8, 0), Key: "d"},
+				{Vector: axisAngle(EmbeddingDim, 0, 150), Key: "c"},
+				{Vector: unitVec(EmbeddingDim, 0), Key: "d"},
 			},
 		},
 	}
@@ -309,7 +309,7 @@ func TestGeometry_OverMergePropertiesHoldForBothImplementations(t *testing.T) {
 }
 
 func TestCosineGeometry_DiameterRefusesRatherThanGuessingWhenAPairIsBad(t *testing.T) {
-	const dim = 4
+	const dim = EmbeddingDim
 	g := CosineGeometry{}
 
 	// One member has a NaN component. The diameter is then UNKNOWN -- not
@@ -319,7 +319,7 @@ func TestCosineGeometry_DiameterRefusesRatherThanGuessingWhenAPairIsBad(t *testi
 	faces := []Point{
 		{Vector: unitVec(dim, 0), Key: "a"},
 		{Vector: unitVec(dim, 1), Key: "b"},
-		{Vector: []float32{float32(math.NaN()), 0, 0, 0}, Key: "corrupt"},
+		{Vector: append([]float32{float32(math.NaN())}, make([]float32, EmbeddingDim-1)...), Key: "corrupt"},
 	}
 	d, err := g.Diameter(faces)
 	if err == nil {
