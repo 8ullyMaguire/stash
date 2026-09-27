@@ -17,9 +17,11 @@ deliberate: a survivor in this file is either a missing test or a bug, and both
 are worth stopping for.
 """
 
+import atexit
 import pathlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -27,12 +29,16 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 CONSENT = ROOT / "internal/collab/consent.go"
 EXPORTER = ROOT / "internal/collab/exporter.go"
+MODE = ROOT / "internal/collab/mode.go"
 FEDERATION = ROOT / "internal/collab/federation.go"
 
 # Which file each mutation applies to, and the test selection that must kill it.
 TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
            "SubmissionID|AssertNo|Federation|Commons|SignSubmission|MakeSubmission|"
-           "SummarizePeers|RedactPeerKey")
+           "SummarizePeers|RedactPeerKey|"
+           # M4: the mode rules. CheckStartup and the media refusal, the two
+           # fail-closed defaults, and RequestScheme.
+           "Mode|CheckStartup|MediaNotFound|RequestScheme")
 
 # (file, label, old, new) -- each removes or inverts one safety property.
 CONSENT_MUTATIONS = [
@@ -162,14 +168,115 @@ FEDERATION_MUTATIONS = [
 ]
 
 
+MODE_FIXTURES = [
+    # The whole point of step 4.1: public over plain HTTP must refuse to start.
+    (MODE, "public mode no longer requires TLS",
+     "\treturn m == ModePublic\n}",
+     "\treturn false\n}"),
+    (MODE, "public mode served over http",
+     "func ModeErrors(m Mode, scheme string) error {\n\tif !m.Valid() {",
+     "func ModeErrors(m Mode, scheme string) error {\n\tif true {"),
+    (MODE, "any scheme counts as secure",
+     '\treturn strings.EqualFold(strings.TrimSpace(scheme), "https")',
+     '\treturn true'),
+    (MODE, "contribute also refuses plain http (over-refusal is still a change)",
+     "func (m Mode) RequiresTLS() bool { return m == ModePublic }",
+     "func (m Mode) RequiresTLS() bool { return true }"),
+    (MODE, "contribute starts serving media",
+     "func (m Mode) ServesMedia() bool { return m == ModePublic }",
+     "func (m Mode) ServesMedia() bool { return m != ModePrivate }"),
+    (MODE, "private mode accepts anonymous proposals",
+     "func (m Mode) AcceptsAnonymousProposals() bool { return m == ModePublic }",
+     "func (m Mode) AcceptsAnonymousProposals() bool { return true }"),
+    # A grant is what authorises media in public mode; dropping it is a leak.
+    (MODE, "media served without a grant",
+     "\tif !hasGrant {\n\t\treturn ErrMediaNotServed\n\t}",
+     "\tif false {\n\t\treturn ErrMediaNotServed\n\t}"),
+    (MODE, "private and contribute serve media to a grantee",
+     "\tif !m.ServesMedia() {",
+     "\tif false {"),
+    # Undifferentiated 404: distinguishing them discloses that the file exists.
+    (MODE, "no-grant refusal names itself",
+     "var ErrMediaNotServed = errors.New(\"not found\")",
+     "var ErrMediaNotServed = errors.New(\"no library access grant for this file\")"),
+    # Fail closed. Every one of these flips a default to permissive.
+    (MODE, "an absent mode defaults to public",
+     "\treturn ModePrivate\n}",
+     "\treturn ModePublic\n}"),
+    (MODE, "an invalid mode on the context is taken at face value",
+     "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok && m.Valid() {\n\t\treturn m\n\t}",
+     "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok {\n\t\treturn m\n\t}"),
+    # The wizard's veto over an unchosen public mode.
+    (MODE, "the wizard no longer gates a public mode",
+     "\tif mode == ModePublic && !wizardCompleted {",
+     "\tif false {"),
+    (MODE, "the wizard gate applies to every mode",
+     "\tif mode == ModePublic && !wizardCompleted {",
+     "\tif !wizardCompleted {"),
+    # Store-side fail-closed: a missing row must not mean \"public\".
+    (MODE, "a missing settings row is public",
+     "\t\tif err == sql.ErrNoRows {\n\t\t\t// The migration seeds this row",
+     "\t\tif err == sql.ErrNoRows {\n\t\t\treturn ModePublic, nil\n\t\t}\n\t\tif false {\n\t\t\t// The migration seeds this row"),
+]
+
+
+def _install_restore_guard(originals):
+    """Make the restore happen even if this process is killed mid-run.
+
+    try/finally handles an exception, but NOT SIGINT or SIGTERM: the default
+    disposition of both terminates immediately without unwinding, and SIGKILL
+    cannot be handled at all. The interrupted run that prompted this left
+    `return true, nil` in consent.go and `DryRun: false` in exporter.go sitting
+    in the working tree -- the two mutations in the project that would publish a
+    user who declined.
+
+    So the restore is registered three ways: a finally block, an atexit hook, and
+    a signal handler. A SIGKILL still defeats all three, which is why
+    `verify_restored` is also run before anything is committed.
+    """
+    def restore():
+        for path, text in originals.items():
+            try:
+                if path.read_text() != text:
+                    path.write_text(text)
+                    print(f"restored {path.name}", file=sys.stderr)
+            except OSError:
+                pass
+
+    atexit.register(restore)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, lambda s, f: (restore(), sys.exit(130)))
+        except (ValueError, OSError):
+            pass  # not on the main thread; the finally block still applies
+    return restore
+
+
+def verify_restored(originals):
+    """Fail loudly if the tree is still mutated. Called after the run and by
+    verify_tree.py before any commit."""
+    dirty = [p.name for p, t in originals.items() if p.read_text() != t]
+    if dirty:
+        print(
+            "FATAL: these files are not at their original content: "
+            + ", ".join(dirty)
+            + "\nRun: git checkout -- internal/collab/",
+            file=sys.stderr,
+        )
+        return 2
+    return 0
+
+
 def main():
     work = (
         [(CONSENT, m) for m in CONSENT_MUTATIONS]
         + [(EXPORTER, m) for m in EXPORTER_MUTATIONS]
         + [(FEDERATION, m) for m in FEDERATION_MUTATIONS]
+        + [(MODE, m) for m in MODE_MUTATIONS]
     )
-    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION)}
+    originals = {p: p.read_text() for p in (CONSENT, EXPORTER, FEDERATION, MODE)}
     killed, survived, broken = [], [], []
+    _install_restore_guard(originals)
 
     try:
         for path, (label, old, new) in work:
@@ -210,13 +317,12 @@ def main():
     finally:
         for path, text in originals.items():
             path.write_text(text)
+        _restore = None
 
-    # Confirm the restore actually took, so a killed run cannot leave the tree
-    # mutated for the next commit.
-    for path, text in originals.items():
-        if path.read_text() != text:
-            print(f"FATAL: {path.name} was not restored", file=sys.stderr)
-            return 2
+    # Confirm the restore actually took, so an interrupted run cannot leave the
+    # tree mutated for the next commit.
+    if verify_restored(originals) != 0:
+        return 2
 
     total = len(work)
     print(f"\napplied {total} / killed {len(killed)} / survived {len(survived)} / broken {len(broken)}")
