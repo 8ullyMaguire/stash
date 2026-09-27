@@ -1075,7 +1075,72 @@ runs in a row.
 
 **Exit:** clusters created, browsable, and unnameable without complaint.
 
-**Remaining for this exit:** the GraphQL surface and the job that runs a pass.
+
+**Step 2.4b.8 — the GraphQL surface. Done**
+(`graphql/schema/types/cluster.graphql`, `internal/api/resolver_cluster.go`).
+
+**The bug: both field resolvers were generated as dead code.** `personClusterModel`
+deliberately leaves `members` nil and `memberCount` zero so that listing twenty
+clusters does not read every member of every cluster to render twenty rows. With
+no `resolver: true` in `gqlgen.yml`, gqlgen generated
+
+    return obj.Members, nil
+
+which compiles, keeps both fields in the schema, leaves the types right, and
+returns an empty list to every client. **No test failed**, because the resolvers
+were never called: correct bodies, correct comments, no calls. This is
+"referenced != used" in its purest form.
+
+The config key is the **GraphQL** field name. The first attempt wrote
+`member_count:`, gqlgen ignored it with no warning, and `members` (already the
+right case) wired correctly while `memberCount` did not — the worst shape, since
+the half that works is not the half anyone queries first.
+
+Two tests read **generated output** rather than behaviour, because the behaviour
+cannot fail: one asserts the executor calls the resolver *and* does not contain
+`return obj.Members`; the other is line-based over the YAML, because the question
+is about indentation and a parser would answer the more forgiving question. Both
+verified load-bearing — reverting the generated call, and flipping
+`resolver: true` to false, each kill exactly one.
+
+**The actor comes from the session, not the argument.** A browser mutation that
+can pass its own `actor` string is a mutation that can lie about who named a
+face, and that string is the only record of who decided two appearances are the
+same person. The argument exists for the pipeline's unauthenticated passes.
+
+## The gap this exit has not closed
+
+**`internal/cluster` is imported by nothing.** Every stage — detector, candidates,
+assign, consolidate, over-merge — is reachable only from its own test. There is no
+production orchestrator, and `testFace` is a **1-D scalar stand-in**: `pos float64`
+with `distanceTo` as `|a - b|`, with a comment saying a real embedding distance
+is a cosine distance and a monotone stand-in will serve.
+
+That comment is right about the tests and wrong about the consequence. A monotone
+stand-in is sufficient **only if** something supplies real vectors at the
+boundary. Nothing does. So the properties proven by steps 2.4b.2 through 2.4b.6 —
+separation margin, ambiguity, over-merge compounding — hold for arithmetic on a
+line, and the cosine implementation they will actually run against is
+`candidates.go`'s, reached by no production path.
+
+**This is a milestone-shape decision, not a coding one, and it belongs to the
+owner.** The two honest paths:
+
+1. **Write the pass** (`cluster.Pass` in `internal/cluster`, driving real
+   `[]float32` embeddings through candidates → assign → over-merge → consolidate,
+   writing through `ClusterStore`, wrapped as a `job.JobExec`). The stages'
+   logic moves from `pos float64` to real vectors, and each existing test needs a
+   real-vector twin — the scalar tests stay as the property tests they are good
+   for. This is the plan's intent and it is the larger change.
+2. **Ship what exists** and mark the exit partial, leaving the stages explicitly
+   unreachable.
+
+Not proceeding without a decision: (1) rewrites the core of four tested
+components, and (2) leaves a suite of green tests covering a subsystem with no
+entry point, which is the exact shape this project's fixture discipline exists
+to prevent.
+
+**Exit status: the store and the surface are done. The pass is not.**
 
 ## M3 — Metadata sharing
 
