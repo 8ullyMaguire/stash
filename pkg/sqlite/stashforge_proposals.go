@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/guregu/null.v4"
 
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/models"
 )
 
@@ -51,6 +52,21 @@ func (qb *EditProposalStore) selectDataset() *goqu.SelectDataset {
 func (qb *EditProposalStore) Create(ctx context.Context, p *models.EditProposal) (*models.EditProposal, error) {
 	if p.Status == "" {
 		p.Status = models.ProposalOpen
+	}
+
+	// Validate HERE as well as in the collab service. The service is the
+	// user-facing path and validates there, but the store is the last thing
+	// before SQL, and anything that reaches it directly -- an importer, a
+	// migration, a test, a future caller -- would otherwise write a row no
+	// proposer is allowed to write. A rule enforced only one layer up is a rule
+	// one call path away from being skipped; Found by
+	// TestApply_RealDatabaseRejectsInvalidValue, which could create a rating
+	// of 9 that the service would have refused.
+	if err := collab.ValidateValue(p.TargetType, p.Field, p.NewValue); err != nil {
+		return nil, fmt.Errorf("creating edit proposal: %w", err)
+	}
+	if err := collab.ValidateValue(p.TargetType, p.Field, p.OldValue); err != nil {
+		return nil, fmt.Errorf("creating edit proposal: %w", err)
 	}
 
 	if _, err := dbWrapper.Exec(ctx, fmt.Sprintf(
@@ -164,7 +180,11 @@ func (qb *EditProposalStore) SetStatus(ctx context.Context, id int, status model
 		return err
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return fmt.Errorf("proposal %d is not open; a decided proposal cannot be re-decided", id)
+		// Wrapped so callers can errors.Is it. The applier relies on this
+		// sentinel: an accepted proposal that cannot be applied must KEEP its
+		// accepted status, because that is what the voters decided.
+		return fmt.Errorf("proposal %d is not open; a decided proposal cannot be re-decided: %w",
+			id, collab.ErrAlreadyDecided)
 	}
 	return nil
 }
