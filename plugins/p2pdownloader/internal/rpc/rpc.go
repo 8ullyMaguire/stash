@@ -78,6 +78,12 @@ type StashServerConnection struct {
 
 // PluginInput is the host's Run argument.
 type PluginInput struct {
+	// proposer is the consent gate, injected by tests. Unexported, and
+	// therefore not part of the wire format: a test hook that were exported
+	// would be a field the host could set, which is a gate a plugin could
+	// override -- the exact property 7.1 denies it.
+	proposer Proposer
+
 	ServerConnection StashServerConnection `json:"server_connection"`
 	Args             ArgsMap               `json:"args"`
 }
@@ -121,6 +127,19 @@ type Runner struct {
 	// different things to write in a task list, and a download that ends
 	// because someone stopped it must not read like a policy failure.
 	cause error
+
+	// gate overrides the consent gate for this Runner.
+	//
+	// ON THE RUNNER AND NOT ONLY ON THE INPUT, because the input crosses the
+	// wire: an unexported field is invisible to json, so a PluginInput carrying
+	// a test proposer arrives at the server as a PluginInput without one. A test
+	// that injects a gate into the input it SENDS would then be testing a run
+	// that refuses immediately -- which returns fast, and so silently satisfies
+	// any assertion that Run merely has to return.
+	//
+	// Nil in production, and nil means "ask core over the host API", so this
+	// field cannot weaken the gate: leaving it unset is the real path.
+	gate Proposer
 }
 
 // NewRunner returns a Runner with its fields initialised.
@@ -151,7 +170,7 @@ func (r *Runner) Run(input PluginInput, output *PluginOutput) error {
 	cause := r.cause
 	r.mu.Unlock()
 
-	result, err := Download(ctx, input)
+	result, err := downloadWithGate(ctx, input, r.gate)
 	if err == nil {
 		output.Output = result
 		return nil
@@ -272,20 +291,49 @@ type DownloadResult struct {
 // BitTorrent client, and so step 5.2's path sanitisation has somewhere to sit
 // that is not buried inside a protocol library.
 //
-// It BLOCKS on the context, and that is a contract rather than an
-// implementation detail: the host calls Run asynchronously and closes the
-// client the moment Run returns, so a Download that returned immediately would
-// give the host a finished task that fetched nothing. The wait here stands in
-// for a real transfer until step 5.3 replaces it, and it waits on the CONTEXT
-// rather than a fixed duration so a Stop ends it promptly — which is what
-// TestStopUnblocksRun measures.
+// # THE CONSENT GATE COMES FIRST, AND THAT IS THE WHOLE POINT
+//
+// The gate is the first thing that happens, before any transfer machinery is
+// touched, and the ordering is the design. A downloader built transfer-first
+// and gated afterwards is a downloader that already holds every permission the
+// gate could have withheld, and §7.1 exists precisely to prevent that.
+//
+// It BLOCKS on the context once past the gate, and that is a contract rather
+// than an implementation detail: the host calls Run asynchronously and closes
+// the client the moment Run returns, so a Download that returned immediately
+// would give the host a finished task that fetched nothing. The wait here
+// stands in for a real transfer until step 5.3 replaces it, and it waits on the
+// CONTEXT rather than a fixed duration so a Stop ends it promptly — which is
+// what TestStopUnblocksRun measures.
 func Download(ctx context.Context, input PluginInput) (*DownloadResult, error) {
+	return downloadWithGate(ctx, input, input.proposer)
+}
+
+// downloadWithGate is Download with the consent gate supplied explicitly, which
+// is how Run injects one that survives the wire.
+func downloadWithGate(ctx context.Context, input PluginInput, override Proposer) (*DownloadResult, error) {
 	locator, err := LocatorFrom(input.Args)
 	if err != nil {
-		// Validated BEFORE the wait. A missing locator is a refusal, and
-		// refusing instantly is the right behaviour: there is no transfer to
-		// wait for, and a client that is told immediately can show the error
-		// while the operator is still looking at the form.
+		// Validated BEFORE the gate. A malformed locator is refused locally,
+		// because asking core's gate about `file:///etc/passwd` spends an
+		// operator's trust on a question with an obvious answer.
+		return nil, err
+	}
+
+	// Core decides. See consent.go for why a refusal here has to end the run
+	// even though core's own gate already refused to store anything: the plugin
+	// holds the magnet either way, and a refused proposal followed by a transfer
+	// is the failure mode with the gate working perfectly.
+	objectID, err := ObjectIDFrom(input.Args)
+	if err != nil {
+		return nil, err
+	}
+
+	gate := override
+	if gate == nil {
+		gate = proposerFor(input)
+	}
+	if err := gateDownload(ctx, gate, objectID, locator); err != nil {
 		return nil, err
 	}
 
@@ -293,6 +341,68 @@ func Download(ctx context.Context, input PluginInput) (*DownloadResult, error) {
 	// context rather than a timer.
 	<-ctx.Done()
 	return nil, fmt.Errorf("%w: %s", ErrTransferNotImplemented, locator)
+}
+
+// ObjectIDFrom reads the object a locator is being proposed for.
+//
+// REQUIRED, and not defaulted. A proposal with no object would leave core to
+// decide about something unspecified, and the gate's own answer to that is a
+// refusal — so the plugin asks first and gets a specific error rather than a
+// round trip whose outcome is already decided.
+//
+// Read from Args rather than from a struct field because PluginInput is the
+// HOST's type, redeclared here to match its wire format. A field the host does
+// not send is a field that always arrives as zero, and a plugin that reads an
+// object id from one would propose against object 0 forever — which core
+// refuses, silently, for a reason that names neither the plugin nor the bug.
+func ObjectIDFrom(args ArgsMap) (int64, error) {
+	for _, key := range []string{"object_id", "objectId"} {
+		v, ok := args[key]
+		if !ok {
+			continue
+		}
+		switch n := v.(type) {
+		case float64: // every JSON number decodes as float64
+			if n != float64(int64(n)) {
+				return 0, fmt.Errorf("%s is %v, which is not a whole object id. "+
+					"A fractional id means the caller sent something that is not "+
+					"an object", key, n)
+			}
+			return int64(n), nil
+		case int64:
+			return n, nil
+		case int:
+			return int64(n), nil
+		}
+		return 0, fmt.Errorf("%s is %T, which is not an object id", key, v)
+	}
+	return 0, fmt.Errorf("no object id was given, so there is no object to " +
+		"propose a locator for. A locator is a pointer TO something; without an " +
+		"object it points at nothing and core would refuse it anyway")
+}
+
+// proposerFor returns the consent gate for this run.
+//
+// A test-only `proposer` field on PluginInput is honoured first, and it is
+// deliberately a field on the input rather than a package-level variable: a
+// package-level test hook is shared state that leaks between tests, so a
+// parallel test and a serial one race on the same gate and one of them ends up
+// consulting a stub that belongs to the other. A field travels with the value it
+// applies to.
+//
+// It is a function rather than a field so the Runner stays a value with no
+// hidden dependency, and so a test can drive the whole Download path with a
+// scripted core. Right now it reads the proposer out of the input's server
+// connection, which means a run launched with no connection to the host has no
+// gate — and gateDownload refuses in that case, by design.
+func proposerFor(input PluginInput) Proposer {
+	if input.proposer != nil {
+		return input.proposer
+	}
+	if input.ServerConnection.Host == "" {
+		return nil
+	}
+	return newHTTPProposer(input.ServerConnection)
 }
 
 // ErrTransferNotImplemented is what the unimplemented transfer path returns.

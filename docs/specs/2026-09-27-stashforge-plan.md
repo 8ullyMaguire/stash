@@ -1810,18 +1810,66 @@ and writes nothing. Building the transfer path first would mean retrofitting
 the gate onto a component that already has every permission, which is the
 failure mode §7.1 exists to prevent.
 
-The plugin's manifest, per `pkg/plugin/plugins.go`'s `Plugin` struct:
+**DONE 2026-09-27.** The deciding side is `internal/collab/locator.go`; the
+obeying side is `plugins/p2pdownloader/internal/rpc/consent.go`. 14/14
+mutations killed by `internal/collab/mutate_locator.py`, 23/23 in the plugin's
+`mutate_rpc.py`, 6/6 in `mutate_seam.py`.
 
-```json
-{
-  "id": "p2p-downloader",
-  "name": "P2P Downloader",
-  "description": "Fetches files over BitTorrent and ed2k into your library",
-  "url": "https://github.com/stashapp/stash-plugin-p2pdownloader",
-  "version": "1.0.0",
-  "tasks": [{"name": "download", "description": "Fetch a magnet, torrent or ed2k link"}],
-  "settings": []
-}
+**The split is two problems, and only one of them is about the database.**
+Core deciding not to store a locator is the easy half. The half that is
+invisible from core's side is the plugin *obeying*: the plugin holds the magnet
+in memory either way, and a refused proposal followed by a transfer is exactly
+§7.1's failure with the gate having worked perfectly. So the invariant is
+**no transfer starts without a granted proposal for that exact locator**, and
+every way of not having a grant is a refusal — including a nil answer, an
+unreachable core, and a plugin built with no way to ask.
+
+**Two refusals, not one, and the asymmetry is the owner's requirement.** A
+locator may be *stored* at any tier except `quarantined` and `denied`; handing
+it to a client additionally requires `third_party_permitted`. Storing a magnet
+in your own library redistributes nothing, and a BitTorrent client seeds what it
+downloads — so acting is redistribution and storage is not. The acting gate
+re-reads the object's tier at the moment of the act, because the denormalised
+tier on the locator is the value from when it was written and consent can be
+revoked in between.
+
+**The scheme check is duplicated across the module boundary on purpose.** The
+plugin cannot import core's `LocatorScheme` — separate module, and importing the
+core to share five constants would put a `require` in the core's `go.mod` and
+make the downloader core code. So the set is written out again in the plugin,
+`file:`/`ftp:`/`gopher:` are refused *by name* rather than merely unrecognised,
+and `magnet:`/`ed2k://` are matched by prefix before URL parsing because neither
+is a URL and `url.Parse` misreads both.
+
+Duplication nobody can type-check needs a test, so
+`TestThePluginAndCoreAgreeOnLocatorSchemes` **reads core's source** rather than
+copying its list — a copied list is exactly what goes stale, and it would keep
+passing after core changed. Both divergence directions are unsafe but only one
+is dangerous: a scheme core accepts and the plugin refuses is merely annoying,
+while a scheme the *plugin* accepts and core refuses means the plugin fetches
+something the gate would not have permitted.
+
+It immediately found a real divergence: the plugin advertised `torrent` in its
+scheme list while its own parser refused it. `torrent:` is not a scheme anything
+speaks — a .torrent is fetched over http or https — so it was a lie in the
+error message and a trap for the next reader. **The one deliberate exception is
+written out in the test rather than filtered quietly**, because a test that hides
+its own exceptions is a test whose next failure gets read as a bug in the code.
+
+And the refusals for `file:`/`ftp:`/`gopher:`/`data:`/`javascript:` are asserted
+directly, independently of what core's list contains, so that adding `file` to
+the plugin "to match a new core behaviour" cannot pass.
+
+**The plugin's manifest, per `pkg/plugin/plugins.go`'s `Plugin` struct:**
+
+```yaml
+id: p2p-downloader
+name: P2P Downloader
+description: Fetches files over BitTorrent and ed2k into your library
+version: 1.0.0
+interface: rpc
+exec:
+  - stash-plugin-p2pdownloader
 ```
 
 `tasks` is the integration surface: Stash's plugin task API already runs a

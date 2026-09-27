@@ -263,6 +263,47 @@ func binaryContains(t *testing.T, bin, needle string) bool {
 	return strings.Contains(string(body), needle)
 }
 
+// manifestExec reads the `exec:` list out of a plugin manifest, skipping
+// comments and blank lines.
+//
+// Hand-parsed rather than pulling in a YAML library, and the reason is worth
+// stating: a test that depends on a parser is a test that fails when the parser
+// is upgraded, and this file's whole job is to be trusted when something else
+// is suspicious. The subset here is a flat list of scalars under one key, which
+// is four lines of code and no ambiguity.
+//
+// Comments are skipped because the manifest is MOSTLY a comment block explaining
+// why each field is what it is -- which is exactly why a substring check over
+// the file keeps passing when the value under the key is wrong.
+func manifestExec(text string) []string {
+	var entries []string
+	inExec := false
+
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if !inExec {
+			if strings.HasPrefix(trimmed, "exec:") {
+				inExec = true
+			}
+			continue
+		}
+
+		// A list item is "- value". Anything else ends the list: a new key at
+		// column zero, or a comment (already skipped) is not an item.
+		if strings.HasPrefix(trimmed, "- ") {
+			entries = append(entries, strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			continue
+		}
+		break
+	}
+
+	return entries
+}
+
 // TestTheDownloaderShipsAManifestTheHostCanRead is the loadability half.
 //
 // Being separate is not the same as being installable. A module that is outside
@@ -307,12 +348,34 @@ func TestTheDownloaderShipsAManifestTheHostCanRead(t *testing.T) {
 			filepath.Base(matches[0]))
 	}
 
-	// The binary the manifest runs. Named bare, because the host searches $PATH
-	// and then the plugins directory, and "./x" breaks on Windows where the
-	// extension is not written.
-	if !strings.Contains(text, "stash-plugin-p2pdownloader") {
-		t.Errorf("%s does not name the plugin binary in its exec. The host "+
-			"would start nothing", filepath.Base(matches[0]))
+	// The binary the manifest runs, asserted on the VALUE under `exec` and not
+	// on the string appearing anywhere in the file.
+	//
+	// `Contains(text, "stash-plugin-p2pdownloader")` is defeated by the
+	// manifest's own comment block, which names the binary in prose. The
+	// mutation "exec points at /usr/bin/nothing" survived that check for exactly
+	// this reason -- the comment still satisfied it. So the exec list is read
+	// as YAML, comments excluded, and each entry is checked.
+	//
+	// Named BARE, which is what the host documents: it searches $PATH and then
+	// the plugins directory (pkg/plugin/config.go:44), so "./x" also works and
+	// breaks on Windows where the extension is not written.
+	execEntries := manifestExec(text)
+	if len(execEntries) == 0 {
+		t.Errorf("%s has no exec entry, so the host starts nothing. `interface: "+
+			"rpc` with no command is a plugin the host cannot launch",
+			filepath.Base(matches[0]))
+	}
+	for _, entry := range execEntries {
+		base := entry
+		if i := strings.LastIndexAny(base, "/\\"); i >= 0 {
+			base = base[i+1:]
+		}
+		if base != "stash-plugin-p2pdownloader" {
+			t.Errorf("%s runs %q, which is not the downloader. The host would "+
+				"start something else, or nothing",
+				filepath.Base(matches[0]), entry)
+		}
 	}
 
 	// The interface must be rpc and NOT the other two, asserted by value rather

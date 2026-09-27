@@ -32,6 +32,6 @@
 // The standard library is the only dependency, so a `go build` here cannot reach
 // the network. That is worth preserving: a build that can fail because a proxy
 // is down is a build whose failure says nothing about the code.
-module github.com/stashapp/stash/plugins/p2pdownloader
+module github.com/stashapp/stash-plugin-p2pdownloader
 
 go 1.23

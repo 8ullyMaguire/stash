@@ -45,6 +45,6 @@ id: p2p-downloader
 name: P2P Downloader
 description: Fetches files over BitTorrent and ed2k into your library
 version: 1.0.0
-interface: raw
+interface: rpc
 exec:
-  - /usr/bin/nothing
+  - stash-plugin-p2pdownloader

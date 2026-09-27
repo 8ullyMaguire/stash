@@ -75,12 +75,26 @@ func testSocket(t *testing.T) (net.Conn, net.Conn) {
 // pkg/plugin/rpc.go configures its own.
 func dialAsHost(t *testing.T) *rpc.Client {
 	t.Helper()
+	return dialAsHostWithGate(t, grantingProposer())
+}
+
+// dialAsHostWithGate starts a server whose Runner consults the given gate.
+//
+// The gate goes on the RUNNER, not in the PluginInput the test sends: the input
+// crosses the jsonrpc wire, where an unexported field does not survive. A test
+// that put its stub in the input it sent would get a server-side input with no
+// gate, the consent check would refuse, and Run would return at once — which
+// satisfies "Run blocks" by failing rather than by blocking.
+func dialAsHostWithGate(t *testing.T, gate Proposer) *rpc.Client {
+	t.Helper()
 
 	clientConn, serverConn := testSocket(t)
 
 	go func() {
 		srv := rpc.NewServer()
-		if err := srv.RegisterName(serviceName, NewRunner()); err != nil {
+		runner := NewRunner()
+		runner.gate = gate
+		if err := srv.RegisterName(serviceName, runner); err != nil {
 			t.Errorf("registering %s: %v", serviceName, err)
 			return
 		}
@@ -135,8 +149,15 @@ func TestRunBlocksUntilTheTransferFinishes(t *testing.T) {
 	client := dialAsHost(t)
 	defer client.Close()
 
+	// An object id and a GRANTING gate. Without both, the consent check refuses
+	// and Run returns immediately -- which would make this test pass for entirely
+	// the wrong reason: it is asserting that Run BLOCKS, and a refusal also
+	// returns. The gate tests in consent_test.go cover the refusal path.
 	input := PluginInput{
-		Args: ArgsMap{"url": "magnet:?xt=urn:btih:0000000000000000000000000000000000000000"},
+		Args: ArgsMap{
+			"url":       "magnet:?xt=urn:btih:0000000000000000000000000000000000000000",
+			"object_id": float64(7),
+		},
 	}
 
 	type result struct {
@@ -176,7 +197,10 @@ func TestStopUnblocksRun(t *testing.T) {
 	go func() {
 		out := PluginOutput{}
 		runDone <- client.Call("RPCRunner.Run", PluginInput{
-			Args: ArgsMap{"url": "magnet:?xt=urn:btih:0000000000000000000000000000000000000000"},
+			Args: ArgsMap{
+				"url":       "magnet:?xt=urn:btih:0000000000000000000000000000000000000000",
+				"object_id": float64(7),
+			},
 		}, &out)
 	}()
 
@@ -310,6 +334,9 @@ func TestLocatorFromRefusesRatherThanGuessing(t *testing.T) {
 func TestTheWireTypesRoundTrip(t *testing.T) {
 	cookie := &http.Cookie{Name: "session", Value: "abc123"}
 
+	// NO proposer here on purpose: the field is unexported, so json cannot see
+	// it, and the round trip is what proves the wire format is unchanged by a
+	// test hook existing in the struct at all.
 	in := PluginInput{
 		ServerConnection: StashServerConnection{
 			Scheme:        "https",
@@ -375,8 +402,17 @@ func TestDownloadReportsThatItIsAStub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
+	// An object id AND a granting proposer, because the consent gate runs first
+	// and refuses without both. That refusal is correct -- spec 7.1 puts the gate
+	// ahead of the transfer -- so the test has to get past it to reach the stub
+	// it is actually about. TestTheGateRefusesBeforeAnyTransfer covers the
+	// other direction.
 	_, err := Download(ctx, PluginInput{
-		Args: ArgsMap{"url": "magnet:?xt=urn:btih:abc"},
+		Args: ArgsMap{
+			"url":       "magnet:?xt=urn:btih:abc",
+			"object_id": float64(7),
+		},
+		proposer: grantingProposer(),
 	})
 	if err == nil {
 		t.Fatal("Download succeeded before any transfer code exists")

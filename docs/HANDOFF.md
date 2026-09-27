@@ -267,7 +267,78 @@ after `Database.Open` and the test will tell you if you did not.**
   plain HTTP no longer starts, and a store that cannot be read stops the boot
   rather than defaulting to a posture nobody chose.
 
-**M5 and M6 are unstarted.**
+**M5 is in progress: steps 5.0 and 5.0a are done.**
+
+The downloader is at `plugins/p2pdownloader/`, its own module, and the seam is
+proved by four tests in `internal/api/stashforge_p2p_seam_test.go` rather than
+by a grep — because a package inside the core tree that imports nothing from
+the core satisfies a grep trivially, so the original check would have been
+green on something that cannot load and never runs.
+
+**`go tool nm` does not work for "is this in the binary", and two other
+mechanisms did not either.** It passed on a core that HAD the downloader linked
+in: 113,767 symbols, none of them the plugin's. An uncalled function is
+dead-code-eliminated, so `nm` cannot see it; an equally-unreachable string
+constant is dropped by the compiler before the linker runs — measured on a
+107 MB binary that did contain the downloader, where the marker was absent and
+the module path was present. What survives reachability analysis is the module
+path, in the binary's pclntab name table, so the test reads **bytes**.
+
+**Three mutation harnesses, and the bugs they found in the harnesses
+themselves:**
+
+- `mutate_seam.py` (repo root) — 6/6 killed, and the bundled case is caught by
+  the seam assertion at `seam_test.go:227`, not by the build guard behind it.
+- `internal/collab/mutate_locator.py` — 14/14 killed.
+- `plugins/p2pdownloader/mutate_rpc.py` — 23/23 killed.
+
+Three classes of harness bug that each produced a **false green or a false
+result**, and all three are worth checking for in any new one:
+
+1. A mutation that **does not compile** is scored `broken`, not `killed`. Four
+   of the locator mutations were `broken` on the first run — deleting a map key
+   leaves a syntax error — and a harness that counted them as kills would have
+   reported 14/14 while testing 10.
+2. A **tautological mutation** is a no-op, so the test passes and the mutation
+   is reported as a survivor. Two of the consent mutations were
+   `x == nil || x != nil`, which is always true. Rewritten to actually change
+   behaviour, both kill.
+3. `mutate_seam.py` used `dirname(__file__)` as the repo root, so with the
+   harness in `internal/api` it appended a `require` to `internal/api/go.mod` —
+   **creating a nested module** — and built a second copy of the plugin. Its own
+   "the core still builds" check caught it. A harness that writes into the repo
+   must know exactly where the repo is.
+4. `mutate_seam.py` restored with `git checkout`, which **cannot restore an
+   untracked file** — and every file the seam mutations touch is untracked,
+   because the plugin is work in progress. So it left `interface: raw` in the
+   manifest and core's module path in the plugin's `go.mod`, and reported a clean
+   tree while doing it. The go.mod one made the plugin unbuildable and read as a
+   plugin bug. It now snapshots before mutating and **compares byte for byte
+   afterwards**; a restore that cannot fail is not a restore.
+5. `mutate_rpc.py` unpacked mutations with `entry[:4]`, which shifts every field
+   left by one for the multi-edit form and put the file tag in the `expect` slot.
+   The symptom was `unscored` with a message naming missing source text, which
+   pointed at the code instead of at the harness. It now unpacks by shape.
+
+**Two verdicts beyond killed/survived, both added after they were needed:**
+`broken` (does not compile — NOT a kill) and `no-op` (changes no bytes — a
+harness bug reported as a survivor). And some defects need **several edits** to
+exist at all: dropping `file:` from the plugin's named refusals changes nothing
+because the value is still refused as an unknown scheme, and accepting it in the
+URL switch changes nothing because the prefix check fires first. Reported as two
+mutations, both survive and both are reported as holes that are not holes.
+
+**The consent gate is two problems, and the second is invisible from core.**
+Core's half is `internal/collab/locator.go`; the plugin's is
+`plugins/p2pdownloader/internal/rpc/consent.go`. The plugin holds the magnet in
+memory whether or not core grants, so a refusal that does not end the transfer
+is §7.1's failure with the gate working perfectly. Invariant: **no transfer
+without a granted proposal for that exact locator**, and every way of not
+having a grant refuses — nil answer, unreachable core, or a plugin with no gate
+at all.
+
+**M5 steps 5.1–5.5 remain**: `anacrolix/torrent` evaluation, path sanitisation,
+BitTorrent, ed2k, library integration. **M6 is unstarted.**
 
 The push destination is still unset: the only remote is `upstream` =
 `github.com/stashapp/stash`, which is the upstream project. Everything here is
