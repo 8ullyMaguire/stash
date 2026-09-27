@@ -48,18 +48,26 @@ The suite is now fully green: no failing test at any milestone.
 | `m2-governance` (rules + migrations 92-94) | 984 / 0 | 1285 / 1 |
 | `m2-proposal-path` (vocabulary + proposer) | 1000 / 0 | 1287 / 1 |
 | `m2-apply-path` (applier + sqlite targets) | 969 / 0 | **2287 / 0** |
+| `m2c-identity-clustering` (plan 2.4b, steps 0-9) | 643 / 0 | **1111 / 0** |
 
-The `1` failure in every row above is the same test, and it is now fixed. The
-counts jump sharply in the last row because that commit also fixed the
-long-standing `TestStudioQueryFast` failure -- see the note below.
+Rows 1-4 are sequential snapshots of M2. The `1` failure in each of those rows is
+the same test, and it is now fixed: `TestStudioQueryFast`, the pre-existing
+unregistered-`mod` bug (see `docs/BASELINE.md`). The jump in the
+`m2-apply-path` row is the apply milestone's own growth.
+
+The `m2c-identity-clustering` row is a different milestone (plan step 2.4b), counted
+the same way as the rows above it: 643 top-level unit and 1111 top-level
+integration. Those are **not** comparable to the 2287 in the `m2-apply-path` row,
+which is a subtest-inclusive count — the same tree counted that way today gives
+2788 integration and 1410 unit. The column header is what makes the rows look
+like one series, so the counting method is stated here: use
+`go test ... -v | grep -c '^--- PASS'` for the figures in this table, and never mix
+it with a count that includes subtests.
 
 `pkg/session.Store` is now an **interface**; the old concrete cookie store was
 renamed `CookieStore` and kept for installs with no user database. `Authenticate`
 returns a username, not a row id, because the string lands in the same context
 slot upstream's signed-URL path uses.
-
-The one integration failure at every point is `TestStudioQueryFast`, the
-pre-existing unregistered-`mod` bug. See `docs/BASELINE.md`.
 
 Three M0/M1 fixes are recorded in `docs/BASELINE.md` and were all diagnosed
 wrong the first time:
@@ -97,6 +105,15 @@ exactly one matches and the losers report already-correct having done nothing.
 One accepted proposal produces exactly one audit row, however many workers run.
 A value that became invalid between proposal and apply is rejected without
 touching the target.
+
+**M2c — identity clustering (plan step 2.4b) is done** (`9007da929`, `1257cd4e0`,
+`860490144`). Seven files across three packages now import `internal/cluster`, and
+`cluster.Pass` runs the stages on real 512-wide embeddings and writes through
+`cluster.Store` to the database. The gap the plan recorded — "imported by nothing",
+stages reachable only from their own tests — is closed, and *how* it was closed is
+the milestone's finding: the store implemented three of the four methods the pass's
+interface needed, and no build said so, because no file imported both packages.
+Step 2.4b.9 below has the detail, including one claim this step had to retract.
 
 Then **M2 step 2.5 — GraphQL + UI**, which is the last step in M2. **Done**
 (`4e43ea0f`, `836cbb08`).

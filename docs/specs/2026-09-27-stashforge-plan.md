@@ -1108,39 +1108,81 @@ can pass its own `actor` string is a mutation that can lie about who named a
 face, and that string is the only record of who decided two appearances are the
 same person. The argument exists for the pipeline's unauthenticated passes.
 
-## The gap this exit has not closed
+## Step 2.4b.9 — the pass, and the gap this exit had not closed. Done
 
-**`internal/cluster` is imported by nothing.** Every stage — detector, candidates,
-assign, consolidate, over-merge — is reachable only from its own test. There is no
-production orchestrator, and `testFace` is a **1-D scalar stand-in**: `pos float64`
-with `distanceTo` as `|a - b|`, with a comment saying a real embedding distance
-is a cosine distance and a monotone stand-in will serve.
+(`internal/cluster/pass.go`, `observe.go`, `embedding_store.go`,
+`internal/manager/task/face_clustering.go`, `internal/manager/manager_tasks_face.go`,
+`pkg/sqlite/cluster_store_adapter.go`.)
 
-That comment is right about the tests and wrong about the consequence. A monotone
-stand-in is sufficient **only if** something supplies real vectors at the
-boundary. Nothing does. So the properties proven by steps 2.4b.2 through 2.4b.6 —
-separation margin, ambiguity, over-merge compounding — hold for arithmetic on a
-line, and the cosine implementation they will actually run against is
-`candidates.go`'s, reached by no production path.
+The gap this section used to describe is **closed**, and it was closed by
+following path 1 above — the plan's own intent, the larger change.
 
-**This is a milestone-shape decision, not a coding one, and it belongs to the
-owner.** The two honest paths:
+**`internal/cluster` is now imported by seven files across three packages**, and
+`cluster.NewPass` has a real production caller. Verified by asking the tree, not
+by reading the diff:
 
-1. **Write the pass** (`cluster.Pass` in `internal/cluster`, driving real
-   `[]float32` embeddings through candidates → assign → over-merge → consolidate,
-   writing through `ClusterStore`, wrapped as a `job.JobExec`). The stages'
-   logic moves from `pos float64` to real vectors, and each existing test needs a
-   real-vector twin — the scalar tests stay as the property tests they are good
-   for. This is the plan's intent and it is the larger change.
-2. **Ship what exists** and mark the exit partial, leaving the stages explicitly
-   unreachable.
+    grep -rl 'stashapp/stash/internal/cluster' --include=*.go . | grep -v internal/cluster/
 
-Not proceeding without a decision: (1) rewrites the core of four tested
-components, and (2) leaves a suite of green tests covering a subsystem with no
-entry point, which is the exact shape this project's fixture discipline exists
-to prevent.
+The stages run on real 512-wide `[]float32` embeddings through
+candidates → assign → guard → consolidate, writing through `cluster.Store`. The
+pass declares that interface itself rather than importing `pkg/sqlite`, because
+layering runs database-below-domain and a pass reaching for the store would be
+the one place in the tree with the arrows backwards. The scalar `testFace` stays
+as the property test it is good for; every stage gained a real-vector twin.
 
-**Exit status: the store and the surface are done. The pass is not.**
+**Two things this step found that no test in the tree had been looking for.**
+
+*The store implemented three of the four methods the pass's interface needed, and
+no build reported it.* `AddMember` took sqlite's own `Member` rather than
+`cluster.StoredMember`, and `MergeCluster` — the only method that is not a single
+statement — did not exist. Both halves had thorough fake-backed tests and both were
+green, because **no file imported both packages**, so the compiler never had to
+compare them. This is step 2.5's lesson arriving again in the same shape, one
+level up. The cure is the same too: `var _ cluster.Store = (*ClusterStoreAdapter)(nil)`
+in a **non-test** file, so every build checks the seam. The rule worth keeping is
+to write the outside-construction test *first*, against the real implementation of
+whatever the module will be given.
+
+*`MergeLimit: 0` documented "no cap" and `consolidateBounded` read it as a hard
+limit of zero.* The loop never ran, the pass reported "merged 0, refused 0,
+skipped 0", and nothing errored. Found because mutation M12 *survived* — and the
+region it pointed at turned out to be dead code. A surviving mutant is a claim
+about the harness until proven otherwise, and here it was the only thing looking.
+
+**And one claim this step had to retract.** The first pass reported that
+"consolidate cannot merge anything assign separated, and the two stages'
+conditions are the same inequality negated". The first half holds. The
+explanation did not: it scoped a property of the *pipeline* as a property of
+`absorb`, and `absorb` plainly does not have it. Measured both ways and pinned in
+`internal/cluster/merge_reachability_test.go`:
+
+* `absorb` on **planted** clusters, assign bypassed — **77 of 80** combinations
+  merge (8 shapes x 10 join thresholds).
+* a real **pass** — **0 of 100** (4 shapes x 5 join x 5 merge thresholds).
+
+Both true, and the gap between them is the whole finding: the only clusters
+`absorb` ever sees are the ones `assign` produced, and assign's defining property
+is that it kept them apart. So the merge stage is not dead code — the pass simply
+never hands it a mergeable pair, and a change to *assign* that merged more freely
+would make consolidate live without touching consolidate. The guard's boundary is
+measured, not assumed: a planted loser sits 0.368 from the winner's centroid at 60
+degrees, 1.000 at 90, 1.632 at 120, so `MergeThreshold` **is** a live control —
+the opposite of what was first reported, and no owner decision is pending on it.
+
+**How the wrong claim survived its own evidence**, and the rule that follows: the
+probe that should have disproved it reported "0 of 80 merged", agreeing with the
+conclusion it was meant to test, and it was **vacuous** — it planted fixtures
+with `forceClusterAt`, which seeds a 1-D `Scalar` point, and `CosineGeometry`
+correctly refuses a width-1 embedding, so every case "refused" for a reason
+unrelated to the guard. A probe must carry at least one case it is *expected* to
+reach, and log it. If nothing is ever admitted, the probe is broken, not the
+system.
+
+**Exit status: done.** The store, the surface, the pass, and a production entry
+point that runs it. The observation stage that feeds it (decoder, detector,
+embedder, and the lister's store) is not wired to a model, so the mutation refuses
+explicitly rather than queueing a pass that would find nothing —
+`ErrObserverNotWired`, surfaced by the `faceClustering: ID!` mutation.
 
 ## M3 — Metadata sharing
 
