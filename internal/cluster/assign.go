@@ -149,6 +149,17 @@ func withSeparation(f float64) stageOption {
 	return func(s *stage) { s.separation = f }
 }
 
+// withGeometry replaces the arithmetic the stage uses.
+//
+// The default is ScalarGeometry so that a caller who does not think about
+// geometry cannot accidentally get a panic from a nil, but the PRODUCTION
+// caller -- the pass -- sets CosineGeometry. This is the seam the pass exists
+// to use: the decision rules here are properties of any monotone metric, and
+// the pass runs them on cosine.
+func withGeometry(g Geometry) stageOption {
+	return func(s *stage) { s.geom = g }
+}
+
 func newStage(threshold float64, opts ...stageOption) *stage {
 	s := &stage{
 		threshold:  threshold,
