@@ -40,7 +40,7 @@ const (
 // differs from this. Bump it in the same commit that adds a migration -- a
 // migration that lands without the bump is applied but then reported as a
 // version mismatch on every subsequent open.
-var appSchemaVersion uint = 95
+var appSchemaVersion uint = 98
 
 //go:embed migrations/*.sql
 var migrationsBox embed.FS
