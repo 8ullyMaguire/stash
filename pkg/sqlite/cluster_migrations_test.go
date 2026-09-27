@@ -16,6 +16,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stashapp/stash/pkg/sqlite"
 )
 
 func TestPersonClusters_TablesExist(t *testing.T) {
@@ -381,4 +383,117 @@ func insertCluster(t *testing.T, ctx context.Context, handle string) int64 {
 	require.NoError(t, exec(t, ctx,
 		"INSERT INTO person_clusters (handle) VALUES (?)", handle))
 	return scalar(t, ctx, "SELECT id FROM person_clusters WHERE handle = ?", handle).(int64)
+}
+
+
+// TestClusterMember_UniquenessIsScopedToTheCluster is the test for migration
+// 100, and it exists because a schema VERSION does not check anything.
+//
+// Migration 97 ended person_cluster_members with a UNIQUE over
+// (target_type, target_id, frame_index, face_left, face_top) -- no cluster_id.
+// The comment above it stated the intent ("a face appears in a given target at a
+// given frame once, so re-detecting must UPDATE rather than add a second") and
+// the constraint implemented a BROADER rule: one face, one cluster, ever.
+//
+// That makes the `ambiguous` state unrepresentable, and §7.1 defines ambiguous
+// as one embedding matching two distinct candidates -- two cluster_ids for one
+// appearance. The store could not record a conflict, the UI could not be shown
+// both candidates, and ClustersForTarget could never return more than one row,
+// which is the query whose multi-row result IS the signal.
+//
+// A version test would have watched 98 become 99 become 100 and reported green
+// throughout, because the version matched and the migration applied. What
+// actually broke was a CONSTRAINT SEMANTICS question, and that is what this
+// asserts.
+func TestClusterMember_UniquenessIsScopedToTheCluster(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		// Two clusters, so the "two distinct candidates" case is expressible.
+		store := sqlite.NewClusterStore()
+
+		a, err := store.CreateCluster(ctx, nil)
+		assert.NoError(t, err)
+		b, err := store.CreateCluster(ctx, nil)
+		assert.NoError(t, err)
+
+		// The SAME crop into the same cluster twice is still a duplicate, and
+		// refusing it is the property migration 97 was actually for.
+		err = store.AddMember(ctx, sqlite.Member{
+			ClusterID: a, TargetType: "scene_uniq_a", TargetID: 1, FrameIndex: 0,
+			Distance: 0.1, Embedding: []byte{1},
+		})
+		assert.NoError(t, err)
+
+		err = store.AddMember(ctx, sqlite.Member{
+			ClusterID: a, TargetType: "scene_uniq_a", TargetID: 1, FrameIndex: 0,
+			Distance: 0.1, Embedding: []byte{1},
+		})
+		assert.Error(t, err,
+			"re-detecting the same crop into the same cluster added a second "+
+				"row; a rescan inflates the cluster size and crosses the "+
+				"'three or more appearances' threshold with one face seen thrice")
+
+		// The SAME crop into a DIFFERENT cluster is the ambiguous state, and it
+		// must be recordable.
+		err = store.AddMember(ctx, sqlite.Member{
+			ClusterID: b, TargetType: "scene_uniq_a", TargetID: 1, FrameIndex: 0,
+			Distance: 0.2, Embedding: []byte{2},
+		})
+		assert.NoError(t, err,
+			"one face cannot be claimed by two clusters; §7.1's ambiguous "+
+				"state is exactly that, and it is unrepresentable")
+
+		claimants, err := store.ClustersForTarget(ctx, "scene_uniq_a", 1, 0)
+		assert.NoError(t, err)
+		assert.Len(t, claimants, 2,
+			"ClustersForTarget cannot report a conflict, so the UI is never "+
+				"shown both candidates and has nothing to render")
+
+		// And the per-cluster member lists are each still one row.
+		membersA, err := store.Members(ctx, a)
+		assert.NoError(t, err)
+		assert.Len(t, membersA, 1)
+
+		membersB, err := store.Members(ctx, b)
+		assert.NoError(t, err)
+		assert.Len(t, membersB, 1)
+	})
+}
+
+// TestPersonClusterNames_ExistsAndRefusesAnEmptyName pins migration 99.
+//
+// The name column is the whole point of the milestone and the audit table is
+// what makes a rename a record rather than an overwrite, so their absence is
+// not something a schema-version test would notice.
+func TestPersonClusterNames_ExistsAndRefusesAnEmptyName(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		assert.Equal(t, int64(1),
+			count(t, ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+				"person_cluster_names"),
+			"the name audit table must exist; a name with no record of who set "+
+				"it is the state the whole design exists to prevent")
+
+		// The CHECK holds for a writer that is not the store -- which is the
+		// point of having it in the schema rather than only in Go.
+		store := sqlite.NewClusterStore()
+		id, err := store.CreateCluster(ctx, nil)
+		assert.NoError(t, err)
+
+		assert.Error(t, exec(t, ctx,
+			`INSERT INTO person_cluster_names (cluster_id, name, actor) VALUES (?, ?, ?)`,
+			id, "", "alice"),
+			"an empty name was accepted; an empty string is not an unnamed "+
+				"cluster, it is a name that was set to nothing")
+
+		assert.Error(t, exec(t, ctx,
+			`INSERT INTO person_cluster_names (cluster_id, name, actor) VALUES (?, ?, ?)`,
+			id, "Alice", ""),
+			"an empty actor was accepted; an attribution that might be missing "+
+				"is not an attribution")
+
+		// A real one works, so the two failures above are the CHECK and not a
+		// broken table.
+		assert.NoError(t, exec(t, ctx,
+			`INSERT INTO person_cluster_names (cluster_id, name, actor) VALUES (?, ?, ?)`,
+			id, "Alice", "alice"))
+	})
 }
