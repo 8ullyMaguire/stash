@@ -1007,6 +1007,63 @@ func mustRead(r io.Reader, n int) ([]byte, error) {
 	return buf[:read], err
 }
 
+// # WHY NO CLIENT VERSION TAG IS SENT, AND WHAT IT WOULD TAKE TO FIND ONE
+//
+// Three of the five public servers answer an otherwise-correct login with
+//
+//	ERROR : Your edonkey client is too old, please update it
+//
+// which is a refusal to serve a client that claims nothing about itself. eMule
+// sends its version in the login request's tag list and those servers check
+// for it. This client sends an empty tag list, so it is asked to update.
+//
+// # THE OBVIOUS FIX WAS TRIED AND THE RESULT IS NOT TRUSTWORTHY
+//
+// Every plausible encoding was tried against 91.208.162.87: tag 0x01, 0x02,
+// 0x0B and 0x11 through 0x20, each as a Str-family string, as a length-prefixed
+// string, and as a uint16 and uint32. Every one of them produced no answer at
+// all, where the empty tag list produced the "too old" message.
+//
+// That looks like a clean result and it is not. Those servers RATE LIMIT by
+// source address, and the sweep was faster than the limit:
+//
+//   - a 16-probe parallel sweep against one host finished in 0.87s, which is
+//     physically impossible against a server whose normal first-byte latency
+//     is about 3s. The threads were being refused, not answered.
+//   - a probe loop then drove 91.208.162.87 to complete silence for over 45
+//     seconds, including the BASELINE packet that had answered moments
+//     earlier. A baseline that stops answering means the measurement is
+//     measuring the rate limit.
+//   - 193.187.90.12 changed behaviour mid-sweep: it first said "too old", then
+//     answered with only a lowid warning, then went silent for the same
+//     untagged packet.
+//
+// # SO THE TAG IS NOT YET KNOWN
+//
+// The honest position is that the tag id and encoding are unestablished, and
+// the reason is a measurement problem rather than a protocol one: these servers
+// cannot be probed in a loop from one address.
+//
+// What it would take, in order of preference:
+//
+//  1. A reference client. Run a real eMule or aMule against one of these
+//     servers, capture the login request it sends, and read the tag list out
+//     of the capture. One run answers the question definitively, and it is
+//     the only method that does not depend on the server continuing to answer.
+//  2. A server with no rate limit and no version check, if one can be found.
+//     The working server (85.17.116.222, ed2k-rust) accepts a client that
+//     claims nothing, so it cannot be used to discover what a version tag
+//     looks like — it has no opinion on the question.
+//  3. Probing from several source addresses, slowly. This works in principle
+//     and is what the sweep should have been; it needs addresses this host
+//     does not have.
+//
+// Until one of those is done, the tag stays unsent. Sending a guessed tag is
+// worse than sending none: an empty tag list produces a clear, actionable
+// refusal naming the problem, and a malformed tag produces silence — which
+// looks identical to a server that is down, and is the failure this file has
+// already spent a day being bitten by.
+
 // frameBytes builds a framed packet as bytes.
 //
 // The size is len(body)+1 because the header's Size field COUNTS THE OPCODE
