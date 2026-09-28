@@ -65,6 +65,8 @@ SERVER = os.path.join("internal", "ed2kwire", "server.go")
 OBFUSCATE = os.path.join("internal", "ed2kwire", "obfuscate.go")
 TAG = os.path.join("internal", "ed2kwire", "tag.go")
 EXTHELLO = os.path.join("internal", "ed2kwire", "exthello.go")
+SEARCH = os.path.join("internal", "ed2kwire", "search.go")
+SEARCHRESULT = os.path.join("internal", "ed2kwire", "searchresult.go")
 
 # The suite's own timeout. Without it, a mutation that makes a read block
 # forever hangs the sweep rather than failing it, and a hang is not a kill.
@@ -347,7 +349,122 @@ MUTATIONS = [
     ("exthello: more tags than the limit are accepted",
      EXTHELLO, "if len(tags) > maxExtHelloTags {", "if false {",
      "MoreTagsThan"),
+    # ---- the search request, which is a plain packet where the extended
+    # ---- hello is a compressed one ----
+    #
+    # The compressor is the probe that matters. A search tag list is PLAIN,
+    # and routing it through EncodeExtHello produces a packet a server
+    # cannot read -- answered with silence, with nothing in this package
+    # pointing at the cause. That is the same shape as the OP_HELLO mistake
+    # this package made against every real server, so the probe that would
+    # have caught it gets to exist.
+    ("search: the request is compressed like an extended hello",
+     SEARCH, "return encodeTagList(TagList{{",
+     "return EncodeExtHello(TagList{{", "SearchRequestIsNotCompressed"),
+
+    # The count is four bytes, as parseTagList reads. Third packet to carry
+    # a tag list in this package, and the second to have gotten the width
+    # wrong on a first attempt.
+    ("search: the tag count is written as a byte again",
+     TAG, "binary.LittleEndian.PutUint32(count[:], uint32(len(tags)))",
+     "count[0] = byte(len(tags)); _ = binary.LittleEndian.Uint32",
+     "SearchRequestIsNotCompressed|TagCountIsWrittenAsFourBytes"),
+
+    # A string tag carries its own uint16 length. Writing the value bare
+    # makes the reader take the first two bytes of the KEYWORD as a length,
+    # and the resulting error names a string length nobody chose.
+    ("search: a length-prefixed string is written without its length",
+     TAG, "if wireType == tagTypeString {", "if false {",
+     "KeywordSurvives|SearchRequestIsNotCompressed"),
+
+    # The type byte's high bit marks a name-carrying tag. A round trip
+    # cannot see this, because parseTag masks it off -- so the byte-level
+    # assertion is what has to carry it.
+    ("search: the type byte's high bit is not set on write",
+     TAG, "w.WriteByte(wireType | 0x80)", "w.WriteByte(wireType)",
+     "SearchRequestIsNotCompressed"),
+
+    # An empty keyword is a request for the server's whole index. It is
+    # refused, and a caller that does not get refused is disconnected for
+    # asking a question nobody asked.
+    ("search: an empty keyword is sent anyway",
+     SEARCH, 'if r.Keyword == "" {', "if false {",
+     "EmptyKeyword"),
+
+    # The NUL terminator is part of the wire form. Without it the server
+    # reads the keyword as running into whatever follows it, and the
+    # length-prefix assertion above is what notices.
+    ("search: the keyword is not NUL-terminated",
+     SEARCH, "Value: append([]byte(r.Keyword), 0),", "Value: []byte(r.Keyword),",
+     "KeywordSurvivesBytesThatLookLikeFraming"),
+
+    # 0x33 is OP_SEARCHRESULT -- what the server sends BACK. Sending it
+    # is a client volunteering results nobody asked for.
+    ("search: the opcode is the RESULT opcode",
+     SEARCH, "const opSearchRequest byte = 0x16", "const opSearchRequest byte = 0x33",
+     "SearchOpcodeIsNotTheResultOpcode"),
+    # ---- the search RESULT, decoded from a REAL capture ----
+    #
+    # These probes are different in kind from every other one here. The
+    # request side round-trips through our own encoder; this side has no
+    # encoder at all, because a stranger writes the bytes. So the tests
+    # cannot be made to agree with a wrong decoder, and a survivor is
+    # either a hole or a detail the capture happens not to exercise.
+    #
+    # The fixture is testdata/searchresult_live.bin: a real OP_SEARCHRESULT
+    # from 85.17.116.222:6082, 27,950 compressed bytes inflating to 40,828
+    # and holding 299 results.
+
+    # THE 22 BYTES. A 16-byte read is the obvious boundary and is wrong:
+    # it lands two bytes early and the next count comes out as 988,510,410.
+    ("searchresult: a result's file ID is 16 bytes, not 22",
+     SEARCHRESULT, "const fileIDLen = 16 + 4 + 2", "const fileIDLen = 16",
+     "EachResultIsFollowedByTwentyTwoBytes|GoldenFirstResult"),
+
+    # The header is 26 bytes, not 24, because the file ID it carries is 18
+    # and not 16. Getting it wrong puts the first tag count at the wrong
+    # offset and reports 332,452 tags.
+    ("searchresult: the header is 24 bytes, not 26",
+     SEARCHRESULT, "const searchResultHeaderLen = 4 + 4 + 18",
+     "const searchResultHeaderLen = 4 + 4 + 16",
+     "CapturedSearchResultDecodes|StrFamilyTypeByte"),
+
+    # The loop guard. The capture ends one byte after its 300th entry's
+    # tags, and a guard on the COUNT alone lets that entry be built from a
+    # four-byte read of a one-byte tail. With `off < len` it decoded a 300th
+    # result named "5\x00Walt Disney..." -- a name with a stray length byte
+    # in front of it, which is what a misaligned walk looks like.
+    ("searchresult: the loop only guards the tag count, not the whole result",
+     SEARCHRESULT, "for off+4+fileIDLen <= len(plain) {", "for off < len(plain) {",
+     "CapturedSearchResultDecodes|LastResultIsComplete"),
+
+    # A result with no room for its file ID ends the list. Making it an
+    # error instead refuses 299 real results over one trailing byte, which
+    # is the failure the first version had.
+    ("searchresult: no room for a file ID is an error rather than the end",
+     SEARCHRESULT, """		if off+fileIDLen > len(plain) {
+			break
+		}""", """		if off+fileIDLen > len(plain) {
+			return nil, fmt.Errorf("search result %d has no room for "+
+				"its file ID", len(results)+1)
+		}""",
+     "TruncatedResultIsRefused"),
+
+    # The port is the confirmation that the 22-byte layout is right, and a
+    # decoder that stops before the port cannot be shown to have read it.
+    ("searchresult: the port is not read from the file ID",
+     SEARCHRESULT, "r.Port = binary.LittleEndian.Uint16(plain[off+20 : off+22])",
+     "r.Port = 0", "EachResultIsFollowedByTwentyTwoBytes|GoldenFirstResult"),
+
+    # The hash is the file's identity. A decoder that reads it from the
+    # wrong offset produces 299 DIFFERENT wrong values, so a count-based
+    # test sees nothing wrong -- which is why the golden test pins it as
+    # hex.
+    ("searchresult: the hash is not read from the file ID",
+     SEARCHRESULT, "copy(r.Hash[:], plain[off:off+16])",
+     "copy(r.Hash[:], plain[off:off+8])", "CapturedHashIsSixteenBytes|GoldenFirstResult"),
 ]
+
 
 
 def tests_matching(run_pat):
@@ -405,7 +522,7 @@ def main():
     # point still restores every file, because restoration does not depend on
     # the loop reaching its own epilogue.
     originals = {}
-    for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO):
+    for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO, SEARCH, SEARCHRESULT):
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
             print("FATAL: %s does not exist under %s" % (rel, REPO))

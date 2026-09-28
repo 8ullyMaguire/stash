@@ -432,3 +432,94 @@ func wireTypeFor(t Tag) (byte, error) {
 		return tagTypeString, nil
 	}
 }
+
+// encodeTagList renders tags in the wire shape parseTagList reads: a uint32
+// count followed by that many tags.
+//
+// # WHY THIS IS NOT EncodeExtHello
+//
+// It looks like the same function and is not. EncodeExtHello zlib-COMPRESSES
+// its tag list, because that is what an eMule extended hello carries. A search
+// request's tag list is plain and uncompressed, and compressing it produces a
+// payload a server cannot read -- a request that is silently wrong, answered
+// with silence.
+//
+// So the two are separate rather than one function with a flag. A flag would
+// have been the smaller diff and the wrong shape: "compress or not" is not a
+// variation on a wire format, it is two different wire formats that happen to
+// share a tag encoder.
+//
+// # THE COUNT IS FOUR BYTES, AND THIS IS THE SECOND TIME
+//
+// The extended hello's first version wrote a single byte and every decode
+// read a uint32 spanning the count and the first three bytes of the first
+// tag. It is written as four here, by construction, and
+// TestTheTagCountIsWrittenAsFourBytes exists to keep it that way.
+func encodeTagList(tags TagList) ([]byte, error) {
+	var out bytes.Buffer
+	var count [4]byte
+	binary.LittleEndian.PutUint32(count[:], uint32(len(tags)))
+	out.Write(count[:])
+	for _, t := range tags {
+		if err := writeTag(&out, t); err != nil {
+			return nil, err
+		}
+	}
+	return out.Bytes(), nil
+}
+
+// tagIDSearchKeyword is 0x01, the string tag carrying a search's keyword.
+//
+// # 0x01, WHICH IS ALSO THE CLIENT-NAME TAG
+//
+// The same id means two different things depending on the packet: in a
+// server's info tag list 0x01 is its name, and in a search request 0x01 is
+// the keyword. That is the protocol's choice, not an ambiguity in this code,
+// and it is worth stating because the temptation is to "fix" it by using a
+// different id -- which would send the server a tag it does not recognise and
+// return nothing, with no error to point at.
+const tagIDSearchKeyword byte = 0x01
+
+// parseTagListAt is parseTagList, and it also reports how many bytes it read.
+//
+// # WHY THIS EXISTS RATHER THAN A CALLER ADDING 4
+//
+// A search result is a REPEATED structure: a tag list, then 22 bytes of file
+// identity, then another tag list, and so on to the end of the packet. To walk
+// it a caller needs to know where each list ENDED, not just what it contained,
+// and parseTagList returns only the tags.
+//
+// # AND THE COUNTED SIZE IS NOT THE CONSUMED SIZE
+//
+// A tag list's own byte length is not derivable from its tags by summing
+// their values: a tagTypeString's Value includes its uint16 length prefix, and
+// a Str-family type carries its length in the type byte. So re-deriving the
+// consumed length from the parsed tags is possible only by duplicating the
+// type-width rules that parseTag already implements — and a second copy of
+// those rules is a second thing to get wrong. The walk is here instead.
+func parseTagListAt(payload []byte) (TagList, int, error) {
+	off := 0
+	if len(payload) < 4 {
+		return nil, 0, fmt.Errorf("a tag list needs a four-byte count and "+
+			"the payload is %d bytes", len(payload))
+	}
+	count := binary.LittleEndian.Uint32(payload[:4])
+	off += 4
+
+	if int(count) > (len(payload)-off)/2 {
+		return nil, 0, fmt.Errorf("the tag list claims %d tags but the "+
+			"payload has room for at most %d (the smallest tag is two "+
+			"bytes)", count, (len(payload)-off)/2)
+	}
+
+	tags := make(TagList, 0, count)
+	for i := uint32(0); i < count; i++ {
+		tag, n, err := parseTag(payload[off:])
+		if err != nil {
+			return nil, 0, fmt.Errorf("tag %d of %d: %w", i+1, count, err)
+		}
+		off += n
+		tags = append(tags, tag)
+	}
+	return tags, off, nil
+}
