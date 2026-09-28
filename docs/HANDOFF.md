@@ -342,6 +342,58 @@ becomes `0x1A` and `0x1A - 0x10` is 10. Three tags agree — `0x9A`/"Hw-004.mp4"
 makes the masked and wire conventions agree. **The mistake produces a
 plausible number, not an error**, which is why the test comment says so.
 
+### M5 step 4 CLOSED: every gate in the spec's "Done means" passes
+
+Run as written on 2026-09-28, all green. Recording the commands, because the
+spec's §5 is the authority and "it seems fine" is not the same claim.
+
+```
+go build ./...                                       clean
+go vet ./...                                         clean
+gofmt -l internal/ed2kwire/                          clean
+go test ./... -count=1                               9 packages ok, no network
+grep goed2k in internal/ed2k/ (imports only)         EMPTY  <- the §0 rule
+python3 internal/ed2kwire/mutate_ed2kwire.py         36 killed, 1 covered, 0 survived
+go test -tags ed2klive ./internal/ed2kwire/          ok, 44.7s, with real input
+```
+
+**66 tests in `ed2kwire`, 0 skips. 37 mutation probes.**
+
+**The live gate needs two environment variables, and the tests say so rather
+than skipping.** Run bare, two Kad tests FAIL in 0.00s with:
+
+> `ED2K_LIVE_NODES_DAT is not set, so there is no contact list to bootstrap
+> from. This test FAILS rather than skipping, because a live test that skips
+> reports ok having proved nothing.`
+
+That is the design working: a live test that quietly skips is the failure mode
+this package was built to avoid. With both variables set:
+
+```
+ED2K_LIVE_SERVERS=85.17.116.222:6082
+ED2K_LIVE_NODES_DAT=/tmp/nodes.dat     # curl -o /tmp/nodes.dat \
+                                        #   https://upd.emule-security.org/nodes.dat
+-> ok  44.650s
+```
+
+**Live results on this run**, all against the real network:
+
+- **ed2k login** to `85.17.116.222:6082` — accepted (23.1s, the server's own
+  handshake latency).
+- **Kad bootstrap** — 179 contacts parsed, 179 advertising Kad2+, and **33 of
+  40** completed the hello. The 7 declines are reported honestly and are not
+  ours: `the answer is not a Kad packet: unsupported kad protocol header`.
+- **Search decode** — the 299-result capture still decodes.
+
+**A correction to this file, and it matters for anyone reading the git log.**
+An earlier revision said commits here are local-only and "there is nowhere to
+push". Both halves were wrong: `origin` → `8ullyMaguire/stash` is the fork, it
+is writable, and a dry run succeeds. `upstream` → `stashapp/stash` really is
+read-only (`403`) and must not be pushed to. **This branch is pushed** to
+`origin/develop` at `867703ea3`. The `git pushall` in an earlier revision is
+not a command on this host — that is another repository's convention — and
+chasing it cost a minute.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
@@ -465,13 +517,17 @@ consent gate"*. Commits on this milestone, all green at the time:
 **The working tree is clean.** `internal/ed2k/` and `internal/rpc/ed2k_gate_test.go`
 are committed, not untracked.
 
-**The branch is `develop`, not `main`, and there is nowhere to push.** Previous
-revisions of this file said `main`; that was wrong and cost a confusing minute
-(`git pushall` is not a command on this host). The only remote is `upstream` →
-`https://github.com/stashapp/stash.git`, which is **read-only**: a dry-run push
-returns `403 Permission to stashapp/stash.git denied to 8ullyMaguire`. So
-commits here are local-only, and "committed" in this document means committed
-to `develop` on this machine, not published anywhere. A second worktree exists
+**The branch is `develop`, not `main`, and `origin` CAN be pushed.** An earlier
+revision of this file said there was nowhere to push and that the only remote
+was the read-only `upstream`. Both were wrong: `origin` →
+`https://github.com/8ullyMaguire/stash.git` is the fork, it is writable, and a
+dry-run push succeeds. `upstream` → `stashapp/stash` really is read-only
+(`403 Permission denied to 8ullyMaguire`) and must not be pushed to.
+
+So: **commits are pushed to `origin/develop`**, with `git push origin develop`.
+The `git pushall` mentioned in an earlier revision is not a command on this
+host — that was a different repository's convention — and chasing it cost a
+minute. A second worktree exists
 at `~/code-local/worktrees/m6` on branch `m6-upstream-issues` — it is a
 different milestone and is not part of M5.
 
