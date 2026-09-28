@@ -260,3 +260,39 @@ func UploadForbiddenFor(tier string) Policy {
 			"programming error, and this is the safe way for it to behave",
 	}
 }
+
+// The tier names, exported.
+//
+// Deliberately through accessors rather than as exported constants, and the
+// reason is the module boundary: these strings are DATA duplicated from core's
+// `internal/collab`, not part of this package's vocabulary. Exporting them as
+// constants would invite a caller to compare a tier against a constant instead
+// of calling `Decide`, which is the one function that knows the full table --
+// and a tier added to core would then be silently unhandled at the call site
+// rather than falling through to the restrictive branch.
+//
+// The accessors are for the OTHER direction: a caller that HOLDS a tier string
+// (from the host, over the plugin seam) and needs to ask what it is. That is a
+// real question with a real answer, and `TestTheTierStringsMatchTheCore` is what
+// keeps these in step with core's source.
+var (
+	// TierUnverified is where every object starts. Nobody has asserted anything
+	// about it, so it is the common case and the one whose refusal matters most.
+	TierUnverified = tierUnverified
+
+	// TierSelfPublished is the creator permitting redistribution explicitly.
+	TierSelfPublished = tierSelfPublished
+
+	// TierPerformerClaimed is a claim by a party with standing.
+	TierPerformerClaimed = tierPerformerClaimed
+
+	// TierThirdPartyPermitted is third-party permission, already gated at
+	// hand-off.
+	TierThirdPartyPermitted = tierThirdPartyPermitted
+
+	// TierQuarantined and TierDenied are refused by the consent gate before a
+	// transfer starts. `Decide` handles them so a bypass of the gate does not
+	// also become a publish.
+	TierQuarantined = tierQuarantined
+	TierDenied      = tierDenied
+)

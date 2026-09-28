@@ -1982,7 +1982,19 @@ input, and deletes a user's file. The mutation is killed by
 `TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
 
 **A mutation harness needs a timeout, and a `survived` row needs reading before
-the code does.** A sixth verdict makes the second half mechanical: `covered`
+the code does.** For the
+wiring packages, add two more:
+
+- **A build failure is not a kill.** A mutation that does not compile proves
+  nothing, and a harness that counts it as a kill reports confidence it has not
+  earned. `internal/torrent`'s harness has a `SKIP` verdict for it, and it caught
+  two of my own malformed probes the first time round.
+- **A test that reads back your own return value cannot test a wiring.** In
+  `internal/torrent` fourteen tests all asserted that the reported `Decision`
+  agreed with the policy — and all fourteen passed with the upload control
+  removed, because the decision is *computed from* the policy. The fix is a
+  read-back of what the far side received, which the decision structurally
+  cannot see. A sixth verdict makes the second half mechanical: `covered`
 means no test noticed **and the whole suite still passed** with the mutation
 applied, which is a verified claim that another layer refuses the same input
 rather than my judgement that it does. Only `survived` — the suite failed and

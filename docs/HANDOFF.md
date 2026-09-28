@@ -532,7 +532,76 @@ And when a `survived` row is real: **apply the mutation, run `-v`, read the FAIL
 lines**, and retarget. Five consecutive rows were the same mis-pointing — I had
 named a test that passed while a different one caught the mutation.
 
-### Seven mutation harnesses, 108 mutations, 0 survivors
+### A test that asserts on your own decision cannot catch a broken wiring
+
+The `internal/torrent` package exists to bind three decisions together: the
+consent policy says whether a torrent may seed, the storage gate says where bytes
+land, and `anacrolix/torrent` uploads opportunistically by default. Its first
+test file had fourteen tests, all green, all asserting that the reported
+`Decision` agreed with the policy.
+
+I mutated the implementation to `spec.DisallowDataUpload = false` -- always
+allow upload, the exact bug the package exists to prevent -- and **every one of
+them still passed.** `Decision.UploadAllowed` is computed *from* the policy, so
+asserting the two agree compares a value with its own source. The reported
+decision was perfectly consistent with the policy and the client was being told
+the opposite.
+
+The fix is a read-back: `AppliedSpec` records what the client was *given*, which
+`Decision` structurally cannot see. The first version of that also passed for a
+second reason, and the reason generalises:
+
+- `spec.Storage = nil` (bypassing the gate) also passed. Because
+  `DefaultStorage` is the gate, the library called the gate anyway and the gate
+  refused. The bytes were safe, the config was wrong, and nothing noticed.
+- Ignoring the gate's error entirely also passed, for the same reason — a lower
+  layer refused the identical input.
+
+That is defence in depth, and it is worth having. It is **not** evidence the
+wiring is tested, and a harness that reports those as kills is lying. They are
+`covered`, and they are only `covered` if a whole-suite re-run passes with the
+mutation applied.
+
+**The rule:** a test whose subject is a *wiring* must observe the far side of the
+wiring. A test that reads back your own return value is a test of your return
+value.
+
+### A sentinel you already have can hide a distinction you need
+
+The gate refuses the same input in two places, and both wrapped
+`storage.ErrRefused`:
+
+- the up-front check, before the client is told the torrent exists
+- the library's call to `OpenTorrent` during `AddTorrentSpec`
+
+`errors.Is(err, storage.ErrRefused)` is true for both, so the test could not tell
+them apart, and the only observable difference was the error **message**. The
+first version of the test asserted on that message, which is a test that stops
+testing the thing the moment someone improves the wording.
+
+`ErrRefusedUpFront` now wraps `ErrRefused` and adds the distinction that matters:
+whether the client ever held the torrent. The up-front refusal means nothing was
+announced and nothing is cached; the later one means cleanup. A caller acts
+differently on each, and a sentinel is the only way to say so.
+
+The general shape: **`errors.Is` on a shared sentinel is a category, not an
+outcome.** When one error can arise in two places with different consequences, it
+is two errors.
+
+### `x/time/rate` nil is not a library's "unlimited" idiom everywhere
+
+`NewDefaultClientConfig` sets `UploadRateLimiter` to an *unlimited* limiter, so
+"leave it nil" was never available — and setting it to nil would have **panicked**:
+`config.go:278` calls `cfg.UploadRateLimiter.Burst()` with no nil check, on every
+`NewClient`. The download side does handle nil explicitly
+(`EffectiveDownloadRateLimit`), which is what makes the asymmetry easy to assume
+away.
+
+My test asserted the upload limiter was nil, on the reasoning that a client-wide
+upload limit is a permission-shaped knob. The *reasoning* was right and the
+*assertion* was wrong: it failed, and the fix was `rate.Inf`, not nil.
+
+### Eight mutation harnesses
 
 ```bash
 python3 mutate_seam.py                                  # 6
