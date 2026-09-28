@@ -279,3 +279,30 @@ go test -tags ed2klive ./internal/ed2kwire/     reported honestly, including fai
 And the plugin's advertisement stays honest: a granted, well-formed ed2k link
 still ends in `ErrTransferNotImplemented` until there is a transfer, and
 `TestTheDownloadStubStillReportsTheTransferIsUnimplemented` says so.
+
+---
+
+## 6. What comes next, and where it is specified
+
+Step 5.4 ends at `ErrTransferNotImplemented`: a granted ed2k link resolves
+its gate and then stops, which is the honest state but not a download.
+
+The next step is the **transfer** — request a part from a source, verify it,
+and retire that sentinel — and it is specified in
+[`2026-09-28-ed2k-transfer-plan.md`](2026-09-28-ed2k-transfer-plan.md).
+
+Two things differ about it, and both are worth stating here because they
+change how it should be read:
+
+1. **No capture is needed to start it.** Every milestone in this plan was
+   blocked on observing real bytes. The transfer's request framing is already
+   proven by the login, the extended hello and the search.
+2. **But its opcodes are unverified, and that plan says so in its own text.**
+   This package has never seen a source-side packet. The transfer plan marks
+   every such constant TO BE VERIFIED and makes a live test the thing that
+   confirms or refutes them — the same role the captures played here, and the
+   same reason a wrong constant produces silence rather than an error.
+
+The opcodes for search (`0x16`) and the result (`0x33`) **were** confirmed
+against a real server before they were written down, which is the standard
+this package holds itself to.
