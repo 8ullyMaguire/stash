@@ -53,6 +53,7 @@ REPO = os.path.dirname(os.path.dirname(ROOT))
 ED2K = os.path.join(PKG, "ed2k.go")
 EHASH = os.path.join(PKG, "ehash.go")
 PARSE = os.path.join(PKG, "parse.go")
+VERIFY = os.path.join(PKG, "verify.go")
 
 # BUILD_ERRORS must be COMPLETE, not representative.
 #
@@ -384,6 +385,39 @@ MUTATIONS = [
     ("ed2k: String rendered one byte short, truncating the hash",
      ED2K, "\t\tout[2*i] = hexdigits[b>>4]", "\t\tif i == 0 {\n\t\t\tout[0] = hexdigits[b>>4]\n\t\t\tcontinue\n\t\t}\n\t\tout[2*i] = hexdigits[b>>4]",
      "TestTheHashIsAnArrayNotAString"),
+
+    # ---- VerifyBytes / VerifyPart ----
+    # The gate. A mutation here that SURVIVES means bad bytes can be
+    # accepted, which is the one failure this file exists to prevent.
+    ("verify: the size check dropped, so a short file is hashed and compared",
+     VERIFY, "if int64(len(got)) != wantSize {", "if false {",
+     "TestTheSizeIsCheckedBeforeTheHash"),
+    ("verify: the size check accepts a LARGER file, so truncation is not caught",
+     VERIFY, "if int64(len(got)) != wantSize {",
+     "if int64(len(got)) < wantSize {",
+     "TestTheSizeIsCheckedBeforeTheHash|TestVerifyBytesRefusesDifferentBytesByName"),
+    ("verify: an all-zero link hash is compared instead of refused",
+     VERIFY, "if want.IsZero() {", "if false {",
+     "TestAnAllZeroHashInALinkIsRefusedRatherThanCompared"),
+    ("verify: the hash comparison inverted, so wrong bytes are ACCEPTED",
+     VERIFY, "if sum != want {", "if sum == want {",
+     "TestVerifyBytesRefusesDifferentBytesByName|TestVerifyBytesAcceptsTheBytesItNamed"),
+    ("verify: the hash comparison dropped entirely, so any bytes pass",
+     VERIFY, "if sum != want {", "if false {",
+     "TestVerifyBytesRefusesDifferentBytesByName|TestAnAllZeroHashInALinkIsRefusedRatherThanCompared"),
+    ("verify: an empty part accepted, so a transfer can advance without bytes",
+     VERIFY, "if len(got) == 0 {", "if false {",
+     "TestVerifyPartRefusesEmptyBytesButVerifyBytesDoesNot"),
+    ("verify: an all-zero expected part hash is compared rather than refused",
+     VERIFY, "if want.IsZero() {", "if false {",
+     "TestAZeroExpectedPartHashIsRefusedRatherThanCompared"),
+    ("verify: the part comparison inverted, so a wrong window is accepted",
+     VERIFY, "if got2 != want {", "if got2 == want {",
+     "TestVerifyPartNamesThePartSoAFailedWindowIsAttributable"),
+    ("verify: the part comparison dropped, so any window is accepted",
+     VERIFY, "if got2 != want {", "if false {",
+     "TestVerifyPartNamesThePartSoAFailedWindowIsAttributable|TestAZeroExpectedPartHashIsRefusedRatherThanCompared"),
+
 ]
 
 
@@ -423,7 +457,18 @@ def main():
     # point still restores every file, because restoration does not depend on
     # the loop reaching its own epilogue.
     originals = {}
-    for rel in (ED2K, EHASH, PARSE):
+    # DERIVED FROM THE PROBE LIST, NOT TYPED BY HAND.
+    #
+    # The list was once (ED2K, EHASH, PARSE) and adding a probe against a
+    # fourth file meant adding a fourth name here -- and forgetting. The
+    # restore then wrote an EMPTY string for a key it did not have, which
+    # truncated verify.go to 0 bytes, and the harness died with a KeyError
+    # on the next restore. Two things broke at once, and the file was gone.
+    #
+    # So the set of files is whatever the probes name. A probe cannot exist
+    # for a file whose original is not held, which makes the destructive
+    # failure structurally impossible rather than merely unlikely.
+    for rel in sorted({m[1] for m in MUTATIONS}):
         with open(os.path.join(REPO, rel)) as fh:
             originals[rel] = fh.read()
 

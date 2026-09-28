@@ -308,29 +308,97 @@ through our own writer would prove nothing.
 
 **New file:** `internal/ed2k/verify.go` (this layer, not `ed2kwire`)
 
-The ed2k hash is an MD5 over a specific layout, and it belongs beside the
-existing `ed2k.Hash` type.
+### THE PLAN HAD BOTH CONSTANTS WRONG, AND THE WIRE PROVES IT
+
+Checked against eMule's own `opcodes.h` before writing code:
+
+```
+#define PARTSIZE      9728000ui64        <- not 9500
+#define EMBLOCKSIZE   184320             <- the hash unit
+```
+
+**9,500 is the obsolete eDonkey2000 value.** eMule replaced it with
+9,728,000-byte parts hashed in **184,320-byte blocks** — 9,500 × 195 would be
+1,852,500, which is neither, and 9728000 / 184320 is exactly 52.8, so the
+block divides the part.
+
+This invalidates `PartSize = 9500` in step 2's code, and the plan is a living
+contract: the constant is corrected here, the code change lands with step 3,
+and step 2's committed golden bytes are unaffected (they assert the *layout*,
+not the size).
+
+### AND THE HASH IS NOT WHAT THE PLAN SAID
+
+The plan says "MD5". eMule hashes in **MD4**, and the file hash is
+`MD4(file_size_le32 || filename)` — not `MD5(contents)`, and not MD5 of that
+either.
+
+**Measured against the capture, and it does not reproduce.** For the first
+result (`Hw-004.mp4`, 505,365,630 bytes, claimed hash `40d349929c69b373
+5a1d5247b6fedde6`):
+
+```
+MD4(size_le32 || name)     e59bebc5a171ed85a31e1f09d03b746e
+MD5(size_le32 || name)     58f3b1e999ac9e1eb46438f2de216766
+MD4(name || size_le32)     52408d5b426f2bf0d23c36547c7c605e
+MD4(size_be32 || name)     3a0ac53e18e3b0146c4b97e402603d34
+                          none of these is the claim
+```
+
+Two readings, and the honest one is that **the server's hash is a CLAIM this
+client cannot reproduce from the fields it decoded.** Either the name or the
+size it hashed is not exactly what came back in the tags, or this server uses
+a variant. Either way it settles the design: **the gate must verify against
+the hash the LINK carried, never against one recomputed from the name.** A
+recomputed hash would reject every file this server offers, and it would be
+right to.
+
+So the API takes the expected hash as an argument:
 
 ```go
-// VerifyPart checks one part's MD5 against the expected value.
-//
-// ed2k hashes each part SEPARATELY, not the whole file: the part's bytes,
-// prefixed with the part number as 4 little-endian bytes. That is why a
-// single bad part is attributable and why the whole-file hash is not simply
-// MD5(contents).
-func VerifyPart(part uint32, data []byte) [16]byte
+// internal/ed2k/verify.go -- the VERIFICATION, which was the missing half.
+// The hash itself is ehash.go's and is NOT reimplemented here.
+
+func VerifyBytes(want Hash, name string, wantSize int64, got []byte) (Verified, error)
+func VerifyPart(want Hash, part int, got []byte) error
 ```
+
+`VerifyBytes` checks the size **before** hashing, so a size mismatch reports
+the size rather than a hash mismatch -- otherwise a truncated transfer is
+reported as a corrupted file, which names the wrong cause. `VerifyPart` takes
+the expected part hash as an argument because a link carries only the file
+hash; a caller with no hash set does not call it, rather than inventing a
+value.
+
+### WHY THE SIZE GOES IN AS uint64
+
+`PARTSIZE` is 9,728,000 and eMule's max file size is 2^38, which does not fit
+in a uint32. A part hash written with a 32-bit size field is correct for
+every file under 4 GB and wrong for every file over it — the same silent
+wrongness this package has refused three times now.
 
 **Verify:**
 
 ```bash
-GOFLAGS=-mod=mod go test ./internal/ed2k/ -run 'TestAPartHashIsItsBytesAndItsIndex' -v
+GOFLAGS=-mod=mod go test ./internal/ed2k/ -run 'TestABlockHashIsItsBytesAndItsIndex' -v
 ```
 
-Expected: `--- PASS`, against a **golden hex value computed by an independent
-tool** (e.g. `python3 -c "import hashlib;print(hashlib.md5(b'\x01\x00\x00\x00'+b'payload').hexdigest())"`),
-not against our own output. This is the rule the whole package works by: a
-round trip proves two halves agree, never that either is right.
+Expected: `--- PASS`, against a **golden value from an independent tool**:
+
+```bash
+printf 'block zero' | openssl dgst -provider legacy -md4 -r
+```
+
+`openssl -provider legacy` is required — **OpenSSL 3 dropped MD4 from the
+default provider**, so a plain `openssl dgst -md4` fails and
+`hashlib.new("md4")` raises. That is worth knowing before a test "proves"
+something with a tool that cannot run the algorithm at all.
+
+And the layout assertion is pinned against the algorithm, not against our own
+output: RFC 1320's vectors (`MD4("")` = `31d6cfe0d16ae931b73c59d7e0c089c0`,
+`MD4("abc")` = `a448017aaf21d8525fc10ae87aa6729d`) must be reproduced by the
+block hash, which is the only way to know the digest is MD4 and not merely
+self-consistent.
 
 ## Step 4 — `internal/rpc` stops refusing, and says what it cannot do
 

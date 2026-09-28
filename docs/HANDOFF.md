@@ -632,6 +632,61 @@ redundant with the other despite reading as if one might be — which is worth
 stating, because this package's habit when two guards look similar is to
 delete one and re-measure.
 
+### M5 step 5, step 3 CLOSED: the hash gate, and the harness destroyed a file
+
+`83d58c18c`. 51 tests in `ed2k`, 89 in `ed2kwire`, whole plugin green.
+
+**The plan wanted a new file implementing the ed2k hash, and
+`internal/ed2k/ehash.go` had already implemented it** -- correctly, with the
+part boundary, both branches of the file hash, the exact-multiple edge case
+measured on real byte counts, the 8-byte part-hash prefix and the folder-link
+tree. The draft was deleted rather than written. The draft was also **wrong**
+in a way that would have looked fine: it said the file hash is MD4 over the
+part hashes concatenated, and eMule uses MD4 over the first EIGHT bytes of
+each part hash. It would have disagreed with every real client on every file
+over one part, by producing a plausible sixteen bytes.
+
+So the rule this milestone runs on: **before adding a file, find out what
+already exists.** A second implementation of a constant is a second chance
+to disagree with the first, which is the defect `ehash.go`'s longest comment
+is already about.
+
+**Two plan constants were wrong, and citing eMule's `opcodes.h` is what
+caught them.** `PARTSIZE` is **9,728,000**, not the 9,500 the plan and the
+committed `part.go` both said -- 9,500 is the obsolete eDonkey2000 value,
+and it looks obviously right, which is why it survived being written down
+twice. `EMBLOCKSIZE` is 184,320. Both now pinned by a test, because the
+round-trip test deliberately no longer uses `PartSize`.
+
+**The link's hash is never recomputed from the name.** The plan proposed
+verifying by recomputing MD4(size || name). Measured against the live
+capture, the server's claimed hash does not reproduce that way -- for
+`Hw-004.mp4` the claim is `40d34992...` and MD4 gives `e59bebc5...`, MD5
+gives `58f3b1e9...`, and neither is it. So "recompute and compare" would
+reject every file this server offers, and it would be right to. The link's
+hash is the only authority available.
+
+**The harness TRUNCATED verify.go TO ZERO BYTES, and this is the second
+time this harness has destroyed something.** `originals` was seeded from a
+hardcoded tuple `(ED2K, EHASH, PARSE)`; a probe against a fourth file never
+got its original saved, so the per-probe restore wrote an **empty string**
+and the next restore raised `KeyError`. The file is gone and the run is
+over, in that order, which is why the crash is the recoverable half.
+
+The fix is structural, not another name to remember: `originals` is now
+**derived from the probe list**, so a probe cannot exist for a file whose
+original is not held. Restored from the commit; the file was 0 bytes.
+
+**And a preflight that refuses to run the harness** if any probe's pattern
+is absent from the file it names. A stale pattern is a silent no-op -- the
+probe runs, the suite passes, the verdict reads SURVIVED, and the next
+reader goes looking for a hole in a test when the defect is in the probe.
+That is the third stale-pattern survivor in this repo, so it is now checked
+mechanically instead of by eye. It immediately flagged one probe whose
+`old == new` -- a no-op that would have read as a survivor -- and that was a
+false positive of the preflight's own, since a probe may carry an identical
+pair as a position anchor.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
