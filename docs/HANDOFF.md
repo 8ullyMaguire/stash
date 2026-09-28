@@ -394,6 +394,68 @@ read-only (`403`) and must not be pushed to. **This branch is pushed** to
 not a command on this host — that is another repository's convention — and
 chasing it cost a minute.
 
+### M5 step 5: the transfer — SPEC AND PLAN WRITTEN, no code yet
+
+`docs/specs/2026-09-28-ed2k-transfer-plan.md`, at `ad074b7ea`. This is the
+last honest refusal in the plugin: `internal/rpc/rpc.go:383` returns
+`ErrTransferNotImplemented` at the end of a granted ed2k link. Replacing it
+is the next feature, and per the standing instruction the spec and plan come
+before any code.
+
+**Writing the plan caught two of my own errors, which is the argument for
+spending the time on it.**
+
+**It named a sentinel that does not exist.** The draft used `ErrNoAnswer`
+for a peer that answers nothing. The package has four real ones —
+`ErrNotAServer`, `ErrTruncatedPacket`, `ErrRefused` in `server.go`, and
+`ErrNotZlib` in `exthello.go` — and the draft had invented a fifth that
+reads as plausible. A plan that names a symbol which is not in the tree
+teaches the implementer to trust the plan instead of checking the code. It is
+corrected to `ErrRefused` and **the mistake is recorded in the document**
+rather than quietly fixed, because a spec that hides its own errors cannot be
+used to catch anyone else's.
+
+**It asserted opcodes this package has never observed.** This is the more
+important one. Step 5.4's constants were all confirmed against a real server
+before being written down; the transfer's are not, because **no source-side
+packet has ever been seen here.** `0x33` is the last confirmed opcode and
+everything above it in the plan is a published eDonkey2000 value taken on
+trust. The plan now marks them as placeholders that cannot be copied past a
+check, and makes the live test the thing that confirms or refutes them. A
+wrong opcode here produces **silence, not an error**, which is exactly why it
+must be marked rather than assumed.
+
+**A check of my own was wrong in the other direction too.** `Hash`, `UserID`
+and `Port` looked absent from `SearchResult` to a regex, because comment lines
+sit above the fields. Worth remembering: "my check says it is missing" is a
+claim about the check.
+
+**The order is forced, and the plan says why.** A source is a stranger, so the
+transfer is part-by-part in 9500-byte windows rather than a stream — one
+unbounded read gives a stranger an unbounded write, and per-part
+verification is what makes a failed download attributable instead of a
+mystery. The first milestone is **one part round-tripping**, not a whole file,
+because a whole-file test hides a bug in the part loop behind a long run. And
+the first concrete problem is resolving a `SearchResult` into a *reachable*
+source: `UserID`/`Port` is the only handle a server hands us.
+
+**Deliberately out of scope, each named as its own future step:** Kad source
+lookup (a second protocol — `OP_KAD2_SEARCH_SOURCE_REQ`,
+`OP_START_TRANSFER`), persisting a resume index, multi-source and parallel
+transfer, and progress reporting (the host's concern). A Kad-only file will
+still not download, and the error will say so **by name** rather than being a
+blanket refusal.
+
+**The handshake refactor is step 6, not step 1** — after the feature works.
+Refactoring `Dial` and adding a feature in one commit produces a diff where
+neither can be reviewed, and the refactor inherits the feature's test
+coverage. The transfer is the second caller that makes the extraction honest.
+
+**No code written yet.** This is the spec and plan only, per the standing
+workflow. Next concrete step is step 1 of the plan: `source.go` and
+`DialSource`, verified by `go build ./... && echo CLEAN` and a
+silent-peer test.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
