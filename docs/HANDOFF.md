@@ -592,6 +592,46 @@ having.
 
 **85 tests in the package, 0 skips. 52 mutation probes, 10 of them new.**
 
+### M5 step 5, step 2 CLOSED: 50 killed, 0 survived
+
+`ad652725a`. The one-window milestone is finished: `PYEXIT=0`, 88 tests, 0
+skips, whole plugin green, branch in sync with `origin/develop`.
+
+**Two survivors in this milestone, and they were both about the harness
+rather than the code.** That is now four of them in this package — two stale
+`-run` patterns, one real untested guard, one probe guarding a real risk that
+is not yet reachable — and **all four look identical in the output**. So the
+survivor line now prints how many tests its pattern actually ran. That does
+not resolve the ambiguity (one test can still be the wrong one) but it makes
+the unambiguous case visible, and a zero there is a broken pattern rather
+than a hole.
+
+**The real hole was a 24-byte guard nobody exercised.** The fixed-header
+length check on a part answer survived mutation, meaning no test sent a
+payload too short to hold it. It is not decorative: without it a 20-byte
+answer has `payload[20:24]` read four bytes past the end — **a slice
+panic**, the one thing a wire decoder must never do with a stranger's bytes.
+The test that closes it loops every length from 0 to 23, plus the 23-byte
+boundary named on its own and the 24-byte header-only case refused for a
+*different* reason (empty window, not short payload). A guard nobody
+exercises is indistinguishable from a guard nobody needs, and only one of
+those is safe.
+
+**A 36-second test is now 4.** `DialSource` reads a peer's opening burst
+until it goes quiet, so every dial cost half the budget; at the 3s override
+this test file used, the 24-iteration loop took **36 seconds**. A suite
+people are told to run, which is slow, is a suite that gets run less often —
+the worst outcome a test can have. 300ms is ample for a loopback listener,
+and the tests that genuinely need patience set their own budget.
+
+**Both answer checks are independently load-bearing**, verified rather than
+assumed: turning the length-mismatch check off is caught by
+`TestAShortAnswerIsRefusedRatherThanTruncated`, and turning the range check
+off is caught by `TestAnAnswerForTheWrongRangeIsRefused`. Neither is
+redundant with the other despite reading as if one might be — which is worth
+stating, because this package's habit when two guards look similar is to
+delete one and re-measure.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
