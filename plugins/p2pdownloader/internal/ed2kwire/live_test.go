@@ -124,7 +124,21 @@ func TestLiveAServerAcceptsOurHello(t *testing.T) {
 // where the Kad network is, and it is served over HTTP by the same
 // infrastructure.
 func TestLiveKadNodesDatDownloads(t *testing.T) {
-	const url = "https://www.emule-security.org/nodes.dat"
+	// # THE HOST MOVED, AND THE OLD ONE 404s
+	//
+	// This was www.emule-security.org. eMule Security moved the file to the
+	// upd. subdomain, which is also the URL aMule ships as its default in
+	// amule.conf -- so upd. is the one that will still be there in a year
+	// and www. is the one that was there when this was written.
+	//
+	// # WHY ONE URL AND NOT A LIST
+	//
+	// A list of mirrors would make this test more likely to pass, and it
+	// would also make it stop reporting the thing it exists to report: that
+	// a public contact list is reachable and parseable. One URL that works is
+	// a finding. Three that work is a coincidence, and the next one to rot
+	// takes the test with it.
+	const url = "https://upd.emule-security.org/nodes.dat"
 
 	// Not using net/http here on purpose: a fetch that cannot be bounded is
 	// the same unbounded-read hazard the packet reader has, and the point of
@@ -158,16 +172,64 @@ func TestLiveKadNodesDatDownloads(t *testing.T) {
 	}
 	t.Logf("%d nodes, first: %s", len(nodes), nodes[0].Addr())
 
-	// Spot-check that the addresses are plausible rather than mirrored. A
-	// byte-order slip produces valid-looking IPs in the wrong order, and
-	// 0.0.0.0 or a multicast address in a contact list is the tell.
+	// Spot-check that the addresses are plausible rather than mirrored.
+	//
+	// # THE OLD CHECK HERE WAS INSUFFICIENT, AND IT MISSED A REAL BUG
+	//
+	// It only rejected unspecified and multicast addresses, on the reasoning
+	// that a byte-order slip produces 0.0.0.0. It does not. A mirrored IPv4
+	// address is a perfectly valid unicast address on a perfectly real
+	// network -- 84.123.58.218 mirrored is 218.58.123.84, which belongs to
+	// somebody. Every one of the 154 contacts passed this check while every
+	// one of them was reversed, and Kad was dialling 127.0.0.1.
+	//
+	// LOOPBACK is the check that catches it, because a mirrored address very
+	// often is not loopback and the ones that are -- 1.0.0.127, 79.43.8.127,
+	// 1.161.251.127 reversed -- came out of a real list that contains none.
+	// Three loopback addresses in a row is not a coincidence.
+	//
+	// The saturation check is here too, and for the same reason: 240.0.0.0/4
+	// is reserved and no contact list contains it, but a mirrored address
+	// lands there by accident.
+	var loops, reserved int
 	for i, n := range nodes {
-		if n.IP.IsUnspecified() || n.IP.IsMulticast() {
-			t.Errorf("node %d (%s) is unspecified or multicast, which a "+
-				"real contact list does not contain. Suspect the address "+
-				"byte order", i, n.Addr())
+		v4 := n.IP.To4()
+		if v4 == nil {
+			t.Errorf("node %d (%s) is not IPv4. A real nodes.dat is IPv4 "+
+				"and a non-IPv4 result means the address width is wrong, "+
+				"not that the list contains IPv6", i, n.Addr())
 			break
 		}
+		if v4[0] == 127 {
+			loops++
+		}
+		if v4[0] >= 240 || (v4[0] == 0 && v4[1] == 0) {
+			reserved++
+		}
+		if n.IP.IsUnspecified() || n.IP.IsMulticast() {
+			t.Errorf("node %d (%s) is unspecified or multicast, which a "+
+				"real contact list does not contain", i, n.Addr())
+			break
+		}
+	}
+
+	// A handful out of 154 is conceivable. Half is a byte-order bug, and the
+	// threshold is a tenth rather than an exact count so this does not become
+	// a test that fails the day a list happens to contain one odd entry.
+	if loops > len(nodes)/10 {
+		t.Errorf("%d of %d contacts decoded to 127.x.x.x, and the file "+
+			"contains no loopback addresses. Every one of them is a "+
+			"byte-reversed address, which means the decoder is reversing "+
+			"bytes the library has already reversed", loops, len(nodes))
+	}
+	if reserved > len(nodes)/10 {
+		t.Errorf("%d of %d contacts decoded into the reserved range "+
+			"(240.0.0.0/4 or 0.0.x.x), which no contact list contains. "+
+			"Suspect the address byte order", reserved, len(nodes))
+	}
+	if loops == 0 && reserved == 0 {
+		t.Logf("all %d addresses are ordinary unicast, as they should be",
+			len(nodes))
 	}
 }
 

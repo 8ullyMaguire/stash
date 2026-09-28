@@ -118,7 +118,7 @@ MUTATIONS = [
     # the server is talking and the client calls it silent.
         ("server: a server that spoke is still called silent",
      SERVER, "s.heardAnything = true\n\t\theard = true",
-     "\\t\\t_ = heard", "StallsMidPacket|SaidNothing|StaysSilent"),
+     "\t\t_ = heard", "StallsMidPacket|SaidNothing|StaysSilent"),
 
     # ---- the counts, which were swapped ----
     # 0x40 is the server's OWN totals and 0x34 is a larger network count.
@@ -158,7 +158,7 @@ MUTATIONS = [
     # -- and a SKIP reads as "nothing wrong" in a summary line.
     ("server: a timeout is success even when nothing was heard",
      SERVER, "if !s.heardAnything {\n\t\t\t\t\treturn fmt.Errorf(\"the server accepted the connection \"+\n\t\t\t\t\t\t\"and then said nothing at all: %w\", err)\n\t\t\t\t}",
-     "\\t\\t\\tif false {\\n\\t\\t\\t}",
+     "\t\t\tif false {\n\t\t\t}",
      "StallsMidPacket|SaidNothing|NeverSpoke|SaysNothingAtAll"),
 
     # ---- the deadlines, which were guesses ----
