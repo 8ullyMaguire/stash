@@ -153,7 +153,19 @@ func (t *ImportTask) unzipFile() error {
 	defer r.Close()
 
 	for _, f := range r.File {
-		fn := filepath.Join(t.BaseDir, f.Name)
+		// stash#7240: f.Name is attacker-controlled. filepath.Join cleans the
+		// path but does not contain it -- an entry named
+		// "../../../../arbitrary.txt" cleans to a valid path well outside
+		// BaseDir. SafeJoin is the containment check; there is no other
+		// permitted way to turn an archive entry name into a write path.
+		fn, err := fsutil.SafeJoin(t.BaseDir, f.Name)
+		if err != nil {
+			// Refuse the whole archive rather than skipping the entry: a zip
+			// carrying a traversal entry is not a zip worth extracting, and
+			// a partial extraction leaves the caller unable to tell a
+			// truncated import from a complete one.
+			return fmt.Errorf("refusing to extract %s: %w", t.TmpZip, err)
+		}
 
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(fn, os.ModePerm); err != nil {
