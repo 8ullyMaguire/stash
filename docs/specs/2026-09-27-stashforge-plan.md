@@ -2370,6 +2370,350 @@ capabilities (C15, C17, C20) unblock the most downstream fixes.
 
 ---
 
+---
+
+## M7 — The mesh: discovery, preservation, trust, curation, ranking
+
+**Spec:** §6a.1–§6a.22 · **Ledger:** `docs/requirements.csv` R010–R073
+**Added 2026-09-28 by owner directive.** This phase does not replace M0–M6; it
+sits after them and is built on their machinery. Each step below names its
+requirements, and the ledger's `status` column is the record of what is built.
+
+**Read §6a before starting.** Three constraints shape every step and each has
+a test named in the step that touches it:
+
+1. **Computed, never stored** (plan ground rule 4, non-negotiable #4). A
+   completion score, an Elo rating and a replication count are all *views*.
+   Any step that adds such a column has failed the rule, not "optimized" it.
+2. **Proposals are the only write path to shared content** (#5). A merge, an
+   identification solve and a Stash-app sync write all become typed field
+   proposals. A step that adds a direct write path has failed the rule.
+3. **Reward never grants access** (§6a.10). Reputation feeds ballot weight;
+   it never grants a trust level or unlocks content.
+
+**Migration numbering continues from 106** (verified: highest applied is
+`106_libraries_owner_name_unique`, 108 files in the directory including `.down`
+pairs), so this phase starts at **107**. Never edit an applied migration.
+
+### The dependency order, and why it is this one
+
+**The federation protocol (§6a.20, R059) is first**, and that is the one
+ordering decision worth arguing. Taste-based peering, cross-instance
+discovery and replication scheduling all need the wire format; building any of
+them first means inventing a private protocol three times. What the protocol
+*needs from* the rest is only schema, so the first step publishes schemas and
+the wire format together, before any algorithm that depends on them.
+
+Then: **federation protocol → trust levels → recommendations → preservation
+→ curation/identification → ranking → ecosystem.** Preservation sits after
+recommendations because a replica target is chosen by taste similarity
+(§6a.9), and choosing where to place bytes before there is a taste to match
+is how you end up storing everything on whoever answers first.
+
+### Step 7.1 — Schemas and the federation protocol's wire format (R059)
+
+**New migrations** `107_mesh_instance_profile`, `108_mesh_peer`,
+`109_mesh_replication`, in `pkg/sqlite/migrations/`.
+
+```sql
+-- 107_mesh_instance_profile.sql
+-- The instance's own identity in the mesh, and the gravity it publishes.
+CREATE TABLE mesh_instance_profile (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),  -- exactly one row
+  instance_id     TEXT NOT NULL UNIQUE,                -- stable public id
+  display_name    TEXT NOT NULL,
+  taste_profile   BLOB,                                -- derived, published
+  gravity         BLOB,                                -- operator-set axes
+  updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+-- taste_profile is a PUBLISHED view, not a stored score: see step 7.4 for
+-- what publishes it. The column holds the last published DERIVATION of local
+-- records and is rebuilt from them; it is not a counter that is incremented.
+
+-- 108_mesh_peer.sql
+-- A peered instance. The capability columns are that peer's CLAIMS about
+-- itself and are never used to size an allocation or skip a verification.
+CREATE TABLE mesh_peer (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  instance_id    TEXT NOT NULL UNIQUE,
+  endpoint       TEXT NOT NULL,
+  public_key     BLOB NOT NULL,                       -- signing key
+  claimed_store_bytes   INTEGER,                       -- a claim
+  claimed_bandwidth_bps INTEGER,                       -- a claim
+  trust_profile  BLOB,                                 -- a claim
+  agreed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at     TIMESTAMP
+);
+CREATE INDEX idx_mesh_peer_active ON mesh_peer(revoked_at, endpoint);
+
+-- 109_mesh_replication.sql
+-- A replica of a scene on this instance. health is a CHECK, not a counter.
+CREATE TABLE mesh_replica (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  scene_id     INTEGER NOT NULL,
+  source_endpoint TEXT NOT NULL,       -- who supplied it
+  replica_path TEXT NOT NULL,          -- under the storage root, sanitized
+  manifest_hash BLOB NOT NULL,         -- what we must still verify
+  health       TEXT NOT NULL DEFAULT 'pending'
+    CHECK (health IN ('pending','verified','corrupt','missing')),
+  verified_at  TIMESTAMP,
+  UNIQUE (scene_id, source_endpoint)
+);
+CREATE INDEX idx_mesh_replica_health ON mesh_replica(health);
+```
+
+**`scene_id` is namespaced by `source_endpoint`** (§6a.6): a peer's
+`scene 412` is not this instance's `scene 412`, and a replica row that does
+not carry its origin is a merge bug waiting to happen.
+
+**The wire format** is a document, not code: `docs/FEDERATION.md`, specifying
+the peering handshake, the taste-profile exchange, capability advertisement,
+replication coordination and the cross-instance query. It cites §6a.2, §6a.6,
+§6a.9, §6a.16 and names every opcode's source, the way `part.go` does.
+
+**New package** `internal/mesh/` — the protocol types, the framing, and
+**nothing else**. No storage policy, no scheduling, no ranking; those are
+later steps and putting them here is what makes the wire format reusable.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go build ./... && echo CLEAN
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestAProfileClaimIsLabelledAClaim' -v
+```
+
+Expected: `CLEAN` and one `--- PASS`. The test asserts that
+`mesh_peer.claimed_store_bytes` **cannot** be reached by any sizing code path —
+a grep-level guard, because the first version of a mesh node sizes a buffer
+from a stranger's number and nothing notices for a week.
+
+### Step 7.2 — Trust levels, and the opt-in that separates them (R025–R028, R062, R066)
+
+**New migration** `110_access_levels`.
+
+The distinction that must not be blurred: §5.3's trust tier is **vote
+weighting**; this is **access**. A column for the latter must not be readable
+by the former's code, or reputation starts buying access.
+
+Access levels are **earned from the audit log** (§4.2), not stored as a mutable
+number: a view over approved edits, verification consistency, ident solves,
+quests and preservation contributions. A user at level 4 has *also* consented,
+per instance, revocably (§6a.11) — and that consent is the one stored thing
+here, because a consent cannot be recomputed from a vote.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestReputationNeverGrantsAnAccessLevel' -v
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestLevelFourDoesNotEnableViewingOnItsOwn' -v
+```
+
+Expected: both `--- PASS`. The first is the §6a.10 firewall as a test: a user
+with maximal reputation and no verification record stays at level 0. The
+second is the §6a.11 resolution as a test: level 4 with no consent gets
+`ErrConsentRequired`, not content.
+
+### Step 7.3 — Recommendations as a view (R010–R013, R014, R015, R061, R064, R065, R071, R073)
+
+**No migration.** A completion column or a `recommendation_score` would fail
+ground rule 4, and the absence is asserted.
+
+`internal/discovery/` builds the ranking from records: the taste fingerprint
+(§6a.3), gravity (§6a.8), peer similarity (§6a.2). Gravity is a **config
+value over a view's parameters** — replacing it takes effect immediately,
+which is the gravity slider.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestNoRecommendationScoreColumnExists' -v
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestGravityChangesTheRankingWithoutAWrite' -v
+```
+
+Expected: both pass. The second is the load-bearing one: two instances with
+different gravity, same records, different order, **and no row changed** — the
+only way to prove §6a.5 is a view rather than a cache.
+
+### Step 7.4 — Preservation: the default of three (R018–R024, R072, R063)
+
+The brief's central mechanism, and the one with a hard consent interaction.
+
+`internal/preservation/` schedules a replica onto a peered instance with
+capacity and similar taste, health-checks it, and repairs it. **A replica
+counts as healthy only after manifest verification**, never after the peer
+says it accepted the bytes (§6a.2) — the capability profile is a claim, and
+this is the same posture §7's transfer layer takes toward a peer-supplied
+name.
+
+**The opt-out test is the step's reason to exist.** Non-negotiable #7 makes
+opt-out a hard stop in the publish path, and replication is a publish path:
+a user's `opted-out` scene is never a replication subject, and no popularity
+or bounty overrides it.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/preservation/ -run 'TestAnOptedOutSceneIsNeverAReplicationSubject' -v
+GOFLAGS=-mod=mod go test ./internal/preservation/ -run 'TestAReplicaIsHealthyOnlyAfterManifestVerification' -v
+```
+
+Expected: both pass. The first asserts the refusal **at the scheduling
+boundary**, so a bug in a later step cannot reintroduce it.
+
+### Step 7.5 — Identification board and duplicates (R029–R033, R031, R032)
+
+Snapshot collages (R029) are generated over keyframes, 12–24 evenly spaced,
+and are **replicated even when the content is not** (§6a.9) so identification
+works on an instance that may not hold the file.
+
+A solved identification **writes a typed field proposal** (§6a.13), not a row.
+This is the constraint that makes the board work inside the governance model
+rather than beside it, and it is the step's reason to exist.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/ident/ -run 'TestASolvedIdentificationWritesAProposalNotAField' -v
+```
+
+Expected: `--- PASS`, and the test asserts the audit log gained a proposal row
+and the target field is **unchanged** until the ordinary governance path
+accepts it.
+
+### Step 7.6 — Completion, quests, ranking (R034–R044, R039)
+
+Completion score as a view (§6a.15); quests as a **query over completion**, so
+a quest whose gap is closed is complete with no write. Elo per §6a.16, with
+the plan-level choice of Glicko-2 or TrueSkill made here and recorded, on the
+single requirement that it compute from a vote set.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/rank/ -run 'TestARatingIsRecomputableFromItsVotes' -v
+```
+
+Expected: `--- PASS` — delete every vote, and the rating view returns zero
+rather than a stale number. That is the difference between a rating and a
+counter.
+
+### Step 7.6a — Gamification, as a view over the audit log (R023, R033, R050–R053)
+
+XP, levels, badges and streaks are **derived from the audit log** (§4.2), not
+a counter column. Streaks in particular are the trap: a streak is a count, and
+a stored streak is the counter rule with a holiday hat on it. It is a view
+whose first column is `date(decided_at)`.
+
+Guilds (R052) and mentorship (R053) are **low priority and deliberately so**:
+both are human-coordination features that generate moderation load without
+feeding any mechanism above. They are in the ledger and in the spec, and they
+earn their implementation when the rest of the phase is proven.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/gamify/ -run 'TestAStreakIsRecomputedFromTheAuditLog' -v
+GOFLAGS=-mod=mod go test ./internal/gamify/ -run 'TestNoBadgeGrantsAnAccessLevel' -v
+```
+
+Expected: both pass. The second is §6a.10's firewall for this step: with the
+maximum badge set, a user's access level is unchanged.
+
+### Step 7.3b — Home feed, entity surfaces and boards (R014, R015, R016, R017, R049, R067, R068)
+
+The **home feed** (R014) is a composition of the surfaces already built, not a
+new one (§6a.7): personalized recommendations from 7.3, mesh trending
+aggregated across peers (R068), new quests from 7.6, ident-board highlights
+from 7.5. **Entity pages** (R015) render the §6a.4 surfaces — similar-to,
+users-like-you-also-liked, appears-in, curated-by, preservation status.
+
+Community-made **boards and lists** (R016, R049) and the **recommendation
+API** (R017) complete the surface. A board is an editorial ordering over
+entities — **an ordering, not a score**: if a board ever grows a `rank` column
+that an author edits, it has become a stored counter and left the model
+(ground rule 4).
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestABoardIsAnOrderingWithNoStoredRank' -v
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestTheFeedComposesExistingSurfaces' -v
+```
+
+Expected: both pass. The second asserts every feed item names the surface it
+came from, so a new feed source cannot appear unlabelled.
+
+### Step 7.6c — Completion inputs, named (R069, R070)
+
+Snapshot coverage (R069) and performer/source links (R070) are **inputs to the
+completion view**, not columns on it (§6a.15). They are listed separately
+because they are the two inputs most likely to be implemented as counters —
+"how many snapshots does this scene have" is a number someone will put in a
+column, and it must be a `COUNT` in the view.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/curate/ -run 'TestCompletionInputsAreCountsInTheView' -v
+```
+
+
+### Step 7.7 — Ecosystem surfaces (R054–R058, R060)
+
+REST alongside the existing GraphQL (§10), webhooks, SDKs, a developer sandbox,
+Stash-app two-way sync (R057) — where **sync writes through the proposal
+path**, exactly as §6a.13 requires of the ident board.
+
+SEO pages (R060) are gated on the same consent state as the public read
+endpoint (§6a.21): an `opted-out` entity is neither indexed nor reachable.
+
+**Mobile app and browser extension are NOT in this plan** (§6a.22) — separate
+repositories, and core exposes only the API they need.
+
+### Step 7.7a — The directory, extended rather than rebuilt (R045–R048, R046, R047)
+
+The directory **already exists** in the fork (site, studio, performer
+entities) and this step extends it: site/network profiles with pricing and
+payment methods (R045), studio profiles carrying roster and completion score
+(R046), structured reviews with a verified-usage flag (R047), and
+**claim-and-confirm verified badges** (R048) — a studio or performer claims,
+an existing trusted user confirms, and *no operator grants a badge*, because
+an operator-granted badge is the owner being an admin over content (#6).
+
+**This step is placed after 7.7 rather than folded into it because it is
+already half-built.** The work is extending existing entities, not creating a
+new subsystem, and the honest scope is the fields above — not a directory
+engineered from nothing, which is what the brief's §10 would have implied.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/directory/ -run 'TestAVerifiedBadgeIsConfirmedNotGranted' -v
+```
+
+Expected: `--- PASS` — a badge proposed by the instance owner is
+`pending_confirmation` and confers nothing until a non-owner trusted user
+confirms it.
+
+### Step 7.8 — The gate
+
+```
+go build ./...                                  clean
+go vet ./...                                    clean
+gofmt -l internal/                             clean
+go test ./... -count=1                          green, pass count may only rise
+python3 internal/mesh/mutate_mesh.py            0 survived, PYEXIT=0
+```
+
+Plus the three firewall tests, run by name because they are the phase's
+substance rather than its coverage:
+
+```
+go test ./internal/mesh/     -run 'TestReputationNeverGrantsAnAccessLevel'
+go test ./internal/preservation/ -run 'TestAnOptedOutSceneIsNeverAReplicationSubject'
+go test ./internal/ident/    -run 'TestASolvedIdentificationWritesAProposalNotAField'
+```
+
 ## Verification, per milestone
 
 Every milestone ends with all four green:
@@ -2407,4 +2751,7 @@ worked.
 - Any change to upstream's scanner, ffmpeg pipeline, or player beyond what a
   milestone explicitly names. Those are the parts that work; M6 touches them
   only where a mapped issue requires it.
-- Mobile clients. The GraphQL surface is enough.
+- **Mobile clients and the browser extension.** Spec §6a.22: separate
+  repositories. Core exposes only the API they need (M7 step 7.7). The M5-era
+  line "Mobile clients. The GraphQL surface is enough" is superseded — the
+  surface is the deliverable, not the client.

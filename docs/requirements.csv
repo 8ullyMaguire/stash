@@ -1,0 +1,74 @@
+id,thread,title,source,priority,status,spec_section,plan_step,depends_on,notes
+R001,foundation,Fork of upstream stash with local private library,existing,M4,shipped,1,milestone §1,,Built and shipped. Baseline recorded in BASELINE.md
+R002,foundation,Users sessions invite keys rate limiting auth migration,existing,M1,shipped,9,milestone §9,,Users table plus argon2id; legacy hashPassword not used
+R003,foundation,Edit proposals with per-field values and typed ballots,existing,M2,shipped,4,milestone §4,,Commons §8.1-8.5 replaced flat net-vote counting
+R004,foundation,Audit log and notifications for every state change,existing,M2,shipped,4.2,milestone §4.2,,Every state change appends to collab_audit
+R005,foundation,Consent exporter dry-run first and commons endpoint,existing,M3,shipped,6,milestone §6,,Opt-out is a hard stop in the publish path not a query filter
+R006,foundation,Metadata sharing federation transport,existing,M3,shipped,6.5,milestone §6.5,,Opt-in per peer with a per-peer key
+R007,foundation,Mode enforcement TLS requirement 2FA access grants wizard,existing,M4,tested,8,milestone §8,R002,Server side done no UI. step 4.3 NOT enforced: library_id is on no target table
+R008,foundation,Public hosting mode with the wizard,existing,M4,tested,8,milestone §8,R007,No UI yet. Behaviour is server-side only
+R009,foundation,P2P downloader as an installable plugin (BitTorrent ed2k Kad),existing,M5,tested,7,milestone §7,R005,Plugin host is three transports; verified against pkg/plugin/config.go
+R010,discovery,Recommendations for performers scenes studios sites tags lists,new,high,specified,6a.5,step 7.3,R003,Draft §4. Spec owns 5 mentions of recommend/discover but no ranked surface exists; no recommendation table in migrations
+R011,discovery,Personal taste fingerprint from votes tags and curation,new,high,specified,6a.5,step 7.3,R003,Draft §2 §9. Genuinely new: taste/gravity has ZERO spec mentions. Portable across instances
+R012,discovery,Instance taste gravity and personal gravity slider,new,high,specified,6a.5,step 7.3,R011,Draft §1 §4. Bends ranking toward instance theme while respecting personal taste
+R013,discovery,Cross-instance discovery ranked by local gravity plus peer similarity,new,high,specified,6a.5,step 7.3,R010 R011 R012,Depends on federation R006 existing
+R014,discovery,Home feed personalized plus mesh trending,new,medium,specified,6a.5,step 7.3,R010,Depends on recommendations R010
+R015,discovery,Entity pages with similar-to and users-like-you-also-liked,new,medium,specified,6a.5,step 7.3,R010,Appears-in and curated-by and preservation-status surfaces
+R016,discovery,Discovery boards community lists rankings guides,new,low,specified,6a.5,step 7.3b,R003,Community-made lists; overlaps the existing directory work R031
+R017,discovery,Recommendation API for third-party discovery,new,low,specified,6a.5,step 7.3b,R010,Public API surface over the ranking
+R018,preservation,Minimum three replicas for a scene by default,new,high,specified,6a.9,step 7.4,R006,"Draft §3. Core new idea. preservation has 6 spec mentions but all are about the audit trail, not content replicas"
+R019,preservation,Per-instance min and max replica counts and opt-outs,new,high,specified,6a.9,step 7.4,R018,Operator controls incl. storage budget and retention
+R020,preservation,Replication scheduling to peers with capacity and similar taste,new,high,specified,6a.9,step 7.4,R018 R011,Automatic; the mesh schedules rather than the operator
+R021,preservation,Health checks manifest verification and automatic repair,new,high,specified,6a.9,step 7.4,R020,Detect a missing replica and restore it
+R022,preservation,Metadata always replicated; content replication follows policy,new,medium,specified,6a.9,step 7.4,R018 R019,Two different policies for two different objects
+R023,preservation,Preservation quest and badge for hosting replicas,new,low,specified,6a.9,step 7.4,R018 R028,Gamification of preservation; rarity-weighted
+R024,preservation,Emergency preservation rules and per-scene overrides,new,low,specified,6a.9,step 7.4,R019,Global default plus per-scene override plus emergency
+R025,trust,Trust levels 0-5 from public to steward,new,high,specified,6a.11,step 7.2,R003,"Draft §6. Spec has 47 mentions of trust/tier/reputation but those are vote-weighting tiers, not access levels. GENUINELY NEW use of the word"
+R026,trust,Opt-in content viewing unlocked by trust,new,high,specified,6a.11,step 7.2,R025,High-trust users explicitly opt in. Never automatic on reaching a level
+R027,trust,Low-trust users get collages and metadata for identification,new,high,specified,6a.11,step 7.2,R025 R029,Metadata access is not gated on content access
+R028,trust,Reputation earned via edits verification identification preservation,new,high,specified,6a.11,step 7.2,R003 R031,Trust is earned by contribution not purchased
+R029,identification,Snapshot collage 12-24 evenly spaced frames per scene,new,high,specified,6a.13,step 7.5,R005,Draft §8. ident/collage has only 2 spec mentions. Hover-scrubbable storyboard
+R030,identification,Identification board which-was-that with voting and bounties,new,high,specified,6a.13,step 7.5,R029 R003,Draft §5. Solved queries become canonical links feeding R010
+R031,identification,Duplicate detection via perceptual hashing and metadata similarity,new,high,specified,6a.13,step 7.5,R005 R030,"Spec has 12 mentions but for proposals and merges, not perceptual hashing. New mechanism"
+R032,identification,Merge duplicates and multi-user verification of important edits,new,medium,specified,6a.13,step 7.5,R031 R003,Merge is governance-gated not a free action
+R033,identification,Detective reputation solve streaks and badges,new,low,specified,6a.13,step 7.5,R030,Gamification of identification
+R034,curation,Completion score per entity from missing metadata,new,high,specified,6a.15,step 7.6,R003,Draft §7. Curation has 12 spec mentions (quests exist in plan) but no completion-score mechanism
+R035,curation,Curation quests with progress bars everywhere,new,high,specified,6a.15,step 7.6,R034 R028,Add birthdates for 5 performers; link 10 unlinked scenes
+R036,curation,Bounties for high-impact gaps,new,medium,specified,6a.15,step 7.6,R035 R028,Bonus XP for rare performers and lost studios
+R037,curation,Federated joint curation campaigns between similar instances,new,low,specified,6a.15,step 7.6,R035 R011,Requires peers with similar taste
+R038,curation,Adopt a site or performer as primary curator,new,low,specified,6a.15,step 7.6,R028,Long-lived ownership of one entity
+R039,ranking,Pairwise Elo voting for performers scenes studios sites tags,new,high,specified,6a.16,step 7.6,R003 R028,Draft §9. elo/ranking has ZERO spec mentions. Glicko-2 or TrueSkill named as candidates
+R040,ranking,Multiple leaderboards overall by genre era studio country instance,new,medium,specified,6a.16,step 7.6,R039,Local mesh and global scopes
+R041,ranking,Time decay on rankings,new,medium,specified,6a.16,step 7.6,R039,Rankings reflect current relevance
+R042,ranking,Federated rankings across instances,new,medium,specified,6a.16,step 7.6,R039 R006,Local instance peer-mesh and global
+R043,ranking,Gamified voting streaks daily matchups bracket tournaments,new,low,specified,6a.16,step 7.6,R039 R028,Retention mechanic
+R044,ranking,Annual awards community vote plus Elo plus reviews,new,low,specified,6a.16,step 7.6,R039 R033,Drives attention not governance
+R045,directory,Site and network profiles URL pricing payment methods features,new,medium,specified,6a.17,step 7.7a,R003,Draft §10. directory/reviews has 16 spec mentions: the directory largely EXISTS. Extend not create
+R046,directory,Studio profiles with roster notable scenes completion score,new,medium,specified,6a.17,step 7.7a,R034 R045,Extends the existing studio entity
+R047,directory,User reviews and ratings with verified usage flags,new,medium,specified,6a.17,step 7.7a,R045 R028,Structured review attached to a site
+R048,directory,Verified badges studios and performers claim profiles,new,low,specified,6a.17,step 7.7a,R045 R028,Claim-and-confirm rather than operator-granted
+R049,directory,User lists best-of collections and guides,new,low,specified,6a.17,step 7.3b,R016,Editorial lists
+R050,gamification,XP levels badges and streaks,new,medium,specified,6a.10,step 7.6a,R028,Draft §12. gamification has ZERO spec mentions. Whichever reputation R028 defines is what XP draws from
+R051,gamification,Leaderboards for curators voters reviewers identifiers preservationists,new,low,specified,6a.10,step 7.6a,R050,Local mesh and global scopes
+R052,gamification,Guilds for niche or studio teams,new,low,specified,6a.10,step 7.6a,R050,Collective archive completion
+R053,gamification,Mentorship experienced editors guide new contributors,new,low,specified,6a.10,step 7.6a,R028 R050,Deliberate low priority; moderation load
+R054,ecosystem,Public API GraphQL and REST with SDKs and webhooks,new,medium,specified,6a.18,step 7.7,R010 R006,Draft §11. The GraphQL surface already exists (§10); REST SDKs and webhooks are new
+R055,ecosystem,Browser extension overlaying scores on an adult site,new,low,specified,6a.18,step 7.7,R039 R017,Out of core scope; a separate repository
+R056,ecosystem,Mobile app for voting quests and the ident board,new,low,specified,6a.18,step 7.7,R025 R030 R035,Out of core scope; a separate repository
+R057,ecosystem,Stash app two-way sync push edits pull metadata,new,high,specified,6a.18,step 7.7,R005 R003,Already a client of stash-box; extend to StashForge instances
+R058,ecosystem,Developer sandbox with sample data,new,low,specified,6a.18,step 7.7,R054,Test environment for third-party tools
+R059,ecosystem,Federation protocol open spec for peering and replication,new,high,specified,6a.18,step 7.1,R006 R018,Draft §11. The wire format that R018/R020/R013 all depend on
+R060,ecosystem,SEO public pages for every entity,new,low,specified,6a.18,step 7.7,R003,Draft §10. Zero spec mentions. Privacy trade-off: do NOT index consented-out material
+R061,governance,Instance theme and gravity operator control,new,high,specified,6a.12,step 7.3,R012,Operator sets the theme the instance bends toward
+R062,governance,Trust thresholds for content access operator control,new,high,specified,6a.12,step 7.2,R025 R026,Operator sets the ceiling
+R063,governance,Federation agreements which peers to trust,new,high,specified,6a.12,step 7.4,R018 R059,Operator controls the peer set
+R064,governance,High-trust subset delegation for gravity tuning,new,low,specified,6a.12,step 7.3,R025 R061,Delegated not operator-only
+R065,governance,Portable taste fingerprint users carry between instances,new,medium,specified,6a.12,step 7.3,R011 R057,Never carries content or identity credentials
+R066,trust,Trust and reputation attestation across instances,new,medium,specified,6a.11,step 7.2,R025 R059,Attested claims not shared account state
+R067,discovery,Guild and team discovery surfaces,new,low,specified,6a.5,step 7.3b,R052,Cross-referenced with gamification R052
+R068,discovery,Mesh trending aggregated across peers,new,medium,specified,6a.5,step 7.3b,R010 R006,Cross-instance trending
+R069,curation,Snapshot coverage as a completion-score input,new,medium,specified,6a.15,step 7.6c,R029 R034,Collage coverage counts toward completion
+R070,curation,Performer and source links as completion-score inputs,new,medium,specified,6a.15,step 7.6c,R034,Unlinked scenes are the canonical gap
+R071,discovery,Recommendation surfaces for instances themselves,new,low,specified,6a.5,step 7.3,R010 R063,Discover which instances share your taste
+R072,preservation,Preferred peer instances for replication,new,medium,specified,6a.9,step 7.4,R019 R063,Operator names preferred peers
+R073,discovery,Users can see how recommendations differ across instances,new,low,specified,6a.5,step 7.3,R013 R065,Same fingerprint two lenses

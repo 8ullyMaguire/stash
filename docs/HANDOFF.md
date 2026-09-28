@@ -38,6 +38,71 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 
 ---
 
+## RESUME HERE — THE MESH (M7) IS SPECIFIED, AND A LIVE BUG WAS FIXED
+
+**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `39789d2fe`.**
+
+### The ledger is the thing to read first
+
+**`docs/requirements.csv` — one row per requirement, R001–R073.** Nine are the
+foundation that already exists (6 `shipped`, 3 `tested`); 64 are the mesh, all
+`specified`. The `status` column is updated at the end of every turn that
+builds something, and `plan_step` says which M7 step owns each row.
+
+**Three status values, and I introduced one of them.** `specified` did not
+exist before this pass, because a requirement that lives in §6a is neither
+built nor unimplemented and the old vocabulary had no honest word for it.
+Reject the value if you would rather mislabel those 64 rows.
+
+### The mesh, in one paragraph
+
+The fork is being steered from "a private library with a governance kernel"
+toward **a federated, discovery-first, preservation-first archive**. §6a.1–6a.22
+is new; §§1–14 are untouched and §6a is written to respect all eleven
+non-negotiables. The dedupe probe is what decided what was genuinely new:
+**federation, trust, curation, dedupe and quorum were already owned by the
+spec**; **Elo/ranking, gamification, taste-and-gravity and SEO had zero
+mentions**; **ident/collage had two**.
+
+### Three decisions I made, and why
+
+**The federation protocol (R059) is step 7.1, before anything that depends on
+it.** Taste peering, cross-instance discovery and replication all need the
+wire format, and building any of them first means inventing a private protocol
+three times.
+
+**"Trust" in the brief is not "trust" in the spec, and the two are now
+separately named.** The spec's 47 mentions of trust tier are **vote
+weighting** (§5.3); the brief's levels 0–5 are **access**. Neither is derived
+from the other, and §6a.11 says so in the spec because a future reader will
+otherwise wire one to the other and make reputation buy access.
+
+**Opt-in content viewing was the one genuine tension, and it is resolved rather
+than deferred.** A trust level is a *ceiling* on what an instance may offer;
+enabling viewing is a *separate per-instance consent*, revocable, stored
+(the one thing here that cannot be recomputed from records, because a consent
+is not a vote).
+
+### What the live test found, before all of this
+
+**284 of 299 search-result names carried a two-byte length prefix** — fixed in
+`39789d2fe`, with 5 tests and a mutation probe that reverts the fix to the
+original bug. The live source test still **fails by design**: 5 of 25 handles
+accept TCP, **0 complete an ed2k handshake**, so Kad source lookup is blocking
+for M5's transfer, not deferred.
+
+### Not yet done
+
+- **Nothing in M7 is built.** Every one of the 64 mesh rows is `specified`.
+  Step 7.1 is the first thing to implement and its verification is named.
+- M7's migration numbers are **107–110**; 106 is the highest applied (verified).
+- The `spec-intake` audit found and I fixed: a heading-level defect (6a.N
+  subsections read as top-level siblings), a CSV quoting defect (unquoted
+  commas in `notes` shifted cells — caught by parsing, not by eye), and a
+  duplicated column name from an in-place edit.
+
+---
+
 ## RESUME HERE — STEP 4 DONE, AND THE LIVE TEST FOUND A REAL BUG
 
 **Last updated 2026-09-28, at a clean milestone. Branch `develop` at `ccdf72236`.**

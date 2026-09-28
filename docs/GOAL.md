@@ -24,6 +24,7 @@ Kademlia) that fetches into the library and gets files scanned and linked.
 | Publish here (per milestone) | `~/code/go/stash` |
 | Spec | `~/code-local/go/stash/docs/specs/2026-09-27-stashforge-spec.md` |
 | Plan (executable, per-step) | `~/code-local/go/stash/docs/specs/2026-09-27-stashforge-plan.md` |
+| **Requirements ledger** | `~/code-local/go/stash/docs/requirements.csv` — one row per requirement, R001–R073, with a `status` column updated as work lands |
 | Upstream issue research | `~/secondbrain/10-Projects/stashforge/research/` |
 | Upstream remote | `https://github.com/stashapp/stash.git` |
 | Base commit | `b6b09dd5` (develop) |
@@ -405,6 +406,7 @@ the worst failure a job can have.
 | M4 | Mode enforcement, TLS requirement, 2FA, access grants, wizard — **server side done, no UI**, and step 4.3 is **not enforced**: `library_id` is on no target table, so `LibraryAccessStore.Decide` has nothing to be called with. Migration 105 is the work. |
 | M5 | P2P downloader **as an installable plugin** (BitTorrent + ed2k + Kademlia) |
 | M6 | The 850 upstream issues, capability by capability |
+| M7 | **The mesh** — federation, discovery, preservation, trust levels, curation, ranking (§6a). Led by `docs/requirements.csv`. |
 
 ## Non-negotiables
 
