@@ -337,8 +337,67 @@ without a granted proposal for that exact locator**, and every way of not
 having a grant refuses — nil answer, unreachable core, or a plugin with no gate
 at all.
 
-**M5 steps 5.1–5.5 remain**: `anacrolix/torrent` evaluation, path sanitisation,
-BitTorrent, ed2k, library integration. **M6 is unstarted.**
+**M5 steps 5.1 and 5.2 are done. 5.3–5.5 remain**: BitTorrent, ed2k, library
+integration. **M6 is unstarted.**
+
+### `anacrolix/torrent` v1.61.0 is adopted, and its path-safety function is not
+
+`docs/decisions/0001-torrent-library.md`. DHT, BEP 47 v2 / BEP 9 magnet metadata
+and rate limiting are all covered. Super-seeding and sparse are **not** — no
+option for either exists — and neither is needed for a corpus of untracked,
+self-published material.
+
+**`storage.ToSafeFilePath` is documented as "ensuring the result won't escape
+into parent directories" and does not.** Its whole implementation is 29 lines
+and it checks whether the **first component** of the joined path is `..`.
+Measured on v1.61.0: `../../etc/passwd` and `a/../../b` are refused;
+`/etc/passwd`, `..\..\windows`, `con` and `trailing.` all return **nil error**.
+And it never touches the filesystem, so it cannot see a symlink — the one case
+§5.2 names as "never via a symlink" and which no pure-string function can catch.
+
+**So `internal/paths.SanitizeJoin` is not a parallel implementation of something
+the library offers; it is the only path safety this downloader has.** This is
+the sixth prose-versus-implementation mismatch in this project and the first in
+a third-party library — harder to spot precisely because the claim is typed as
+documentation rather than as a comment.
+
+The dependency also drags cgo sqlite in through the storage backends, which is
+part of why the plugin ships as its own static binary. It must appear in the
+plugin's `go.mod` and **not** in the core's.
+
+### `internal/paths` — three findings the plan's seven cases did not cover
+
+`..\..\windows` (the same attack, other separator), the Windows reserved names,
+and **a symlink in a subdirectory** — the first-component case is obvious enough
+that a check written for it looks complete.
+
+`EvalSymlinks` on both sides, walking up to the first existing component: a
+downloader resolves names for files that are not there, so resolving the whole
+path fails constantly; and a *resolved* root against an *unresolved* child
+rejects every legitimate file on macOS, where `/tmp` is a symlink.
+
+Containment is `filepath.Rel`, never a prefix — `/data/downloads-evil` starts
+with `/data/downloads`. And `Rel` has a subtlety worth knowing: a component
+merely *beginning* with dots is not a traversal, so `HasPrefix(rel, "..")`
+wrongly rejects `..leading.dots`. The legitimate-names test found that in the
+test helper before it could reach the production check.
+
+**`EnsureRoot` is asserted on the FILE still existing, not on the error.** A
+plausible "fix" for "accepted a regular file" is `os.RemoveAll` then
+`MkdirAll` — it compiles, returns nil for every input, and deletes a user's
+file. That mutation is killed by
+`TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
+
+### Four mutation harnesses, 55 mutations, 0 survivors
+
+```bash
+python3 mutate_seam.py                                  # 6
+python3 internal/collab/mutate_locator.py               # 14
+(cd plugins/p2pdownloader && python3 internal/paths/mutate_paths.py)  # 12
+(cd plugins/p2pdownloader && python3 mutate_rpc.py)      # 23
+```
+
+Run them **serially**. They edit real files and restore them.
 
 The push destination is still unset: the only remote is `upstream` =
 `github.com/stashapp/stash`, which is the upstream project. Everything here is

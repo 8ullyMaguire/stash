@@ -1878,50 +1878,101 @@ what a download needs, so the plugin needs no new host capability at all.
 
 ### Step 5.1 — Evaluate `anacrolix/torrent` first
 
-Before hand-rolling anything:
+**DONE 2026-09-27.** Decision recorded in
+`docs/decisions/0001-torrent-library.md`: adopt `anacrolix/torrent@v1.61.0` for
+the whole BitTorrent surface. Kademlia DHT, BEP 47 v2 / BEP 9 magnet metadata,
+and rate limiting are all covered. Super-seeding and sparse are **not** — no
+option for either exists in the module — and neither is needed for a corpus of
+untracked, self-published material. ed2k is hand-rolled in 5.4 because nothing
+in Go provides it.
 
-```bash
-go get github.com/anacrolix/torrent@latest
-# Does it cover: Kademlia DHT, BEP 47 v2, super-seeding, sparse, rate limiting?
-```
+**The finding that matters: the library's path-safety function is not
+path-safety.** `storage.ToSafeFilePath` is documented as "ensuring the result
+won't escape into parent directories". Its whole implementation is 29 lines
+(`storage/safe-path.go`) and it checks whether the **first component** of the
+joined path is `..`. Measured on v1.61.0 with `go run`:
 
-If it covers the BitTorrent surface, use it and hand-roll only ed2k, which no
-Go library provides. Write down the decision in
-`docs/decisions/0001-torrent-library.md` with the specific gap, if any. Do not
-adopt a library for a surface you then spend the milestone reimplementing.
+| Input | Result |
+|---|---|
+| `["..", "..", "etc", "passwd"]` | error `escapes root dir` |
+| `["a", "..", "..", "b"]` | error `escapes root dir` |
+| `["/etc/passwd"]` | `"/etc/passwd"`, **nil error** |
+| `["..\..\windows"]` | `"..\..\windows"`, **nil error** |
+| `["con"]` | `"con"`, nil error |
+| `["trailing."]` | `"trailing."`, nil error |
+| `["", "x"]` | `"x"`, nil error — the empty component is silently dropped |
+
+And it never touches the filesystem, so it cannot see a symlink — the one case
+the plan calls out by name as "never via a symlink", and which no pure-string
+function can ever catch.
+
+**So step 5.2 is not a parallel implementation of something the library
+provides — it is the only path safety this downloader has.** That is the
+sixth prose-versus-implementation mismatch in this project, and the first in a
+third-party library, which is harder to notice precisely because the claim is
+typed as documentation rather than as a comment.
+
+The dependency also pulls cgo sqlite (`modernc.org/sqlite`,
+`zombiezen.com/go/sqlite`, `go-llsqlite/crawshaw`) in through the storage
+backends. That cost is real and is part of why the plugin ships as its own
+static binary rather than being linked into the core. `anacrolix/torrent` must
+appear in the plugin's `go.mod` and **not** in the core's.
 
 ### Step 5.2 — Path sanitisation FIRST, before any transfer code
 
-This is the test that is written before the feature, because a peer-supplied
-filename is untrusted input and this is the bug class that owns a box.
+**DONE 2026-09-27.** `plugins/p2pdownloader/internal/paths/sanitize.go`, with
+the test written first as the plan requires. 12/12 mutations killed by
+`internal/paths/mutate_paths.py`.
 
-```go
-// SanitizeJoin resolves name under root and guarantees the result is inside
-// root. A torrent file named "../../etc/cron.d/x" must resolve under root or
-// be rejected -- never outside, and never via a symlink.
-func SanitizeJoin(root, name string) (string, error)
-```
+The checks run cheap-structural-first and filesystem-last, because a torrent
+with ten thousand files in it should not pay ten thousand syscalls to be
+rejected on its first component: NUL, absolute, `..` component, Windows
+reserved name, trailing dot/space, then the symlink walk.
 
-Rules: reject absolute paths, reject any `..` component, reject NUL, reject
-Windows reserved names and trailing dots/spaces, and verify the final path with
-`filepath.EvalSymlinks` is still under the root.
+**Three things the plan's seven cases did not cover, each from a measured
+gap in the library's own function:** `..\..\windows` (the same attack with the
+other separator), the Windows reserved names, and **a symlink in a
+subdirectory** — the first-component case is obvious enough that a check
+written for it looks complete, and the attack with more innocent directories in
+front of it is the same one.
 
-**Verify, before implementing transfers:**
+**`EvalSymlinks` is applied to both sides, and the walk stops at the first
+existing component.** A downloader resolves names for files that are not there
+— that is the normal case — so `EvalSymlinks` on the whole path fails
+constantly, and the answer is to resolve the deepest existing ancestor and
+re-append the rest. Comparing a *resolved* root against an *unresolved* child
+rejects every legitimate file on macOS, where `/tmp` is a symlink to
+`/private/tmp`.
 
-```bash
-cd plugins/p2pdownloader && go test ./... -run TestSanitizeJoin -v
-```
+**Containment is `filepath.Rel`, never a string prefix**, and the difference is
+a test: `/data/downloads-evil` starts with `/data/downloads` and is a different
+directory. The one subtlety `Rel` introduces is that a component merely
+*beginning* with dots is not a traversal — `rel` for `/a/b/..leading.dots` is
+the string `..leading.dots`, and a naive `HasPrefix(rel, "..")` rejects it. The
+legitimate-names test found this in the test helper first, and the production
+check was already correct.
 
-Cases: `../../etc/passwd`, `/etc/passwd`, `a/../../b`, a name with a NUL, a
-symlink pointing outside the root, a name with a trailing dot, and a
-legitimate nested path that must succeed. **No transfer code lands until these
-pass.**
+**`EnsureRoot` is separate and never destroys anything.** Creating a missing
+directory is normal on first run; a root that is a file, or a symlink, or is
+not creatable, is not. The property is asserted on the FILE still existing
+rather than on the error returned, because a plausible "fix" for the first
+version — `os.RemoveAll` then `MkdirAll` — compiles, returns nil for every
+input, and deletes a user's file. The mutation is killed by
+`TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
 
 ### Step 5.3 — BitTorrent
 
 Per spec §7: metainfo parsing, magnet + BEP 9 metadata fetch, Kademlia DHT
 (BEP 5) discovery, peer wire protocol, multi-connection, piece verification,
 resume, rate limits.
+
+The library covers the protocol surface. What it does **not** decide, and what
+5.3 must answer explicitly rather than by leaving the library's default: whether
+a given torrent is allowed to **seed**. `ClientConfig.NoUpload`,
+`ClientConfig.Seed` and `Torrent.AllowDataUpload` / `DisallowDataUpload` all
+exist, and spec §7.1's storage-vs-acting distinction says the answer is a
+decision, not a default. The consent gate answers whether a locator may be
+acted on; whether the bytes may leave afterwards is the next question.
 
 ### Step 5.4 — ed2k
 
