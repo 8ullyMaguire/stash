@@ -5,9 +5,8 @@ before touching anything. Written for a cold start: no context from the session
 that produced it.
 
 Last updated: **M5 in progress** — steps 5.3, 5.4 and 5.5 committed. Branch
-`main` at `8bcbcc941` plus the step-5.4 completion commit. **Read "RESUME
-HERE" below before anything else**; it carries the verified numbers and the
-exact next task.
+**`develop`** at `644deb212`. **Read "RESUME HERE" below before anything else**;
+it carries the verified numbers and the exact next task.
 
 ---
 
@@ -43,9 +42,8 @@ from this section; everything below it is background.**
 
 ### Where the branch is
 
-`main` at `8bcbcc941` — *"M5 step 5.4: the ed2k tests, and the two bugs they
-found"* — plus the commit that finished 5.4's parser work and closed the ed2k
-advertisement. Commits on this milestone, all green at the time:
+`develop` at `644deb212` — *"M5 step 5.4: validate the ed2k locator before the
+consent gate"*. Commits on this milestone, all green at the time:
 
 | Commit | What |
 |---|---|
@@ -53,9 +51,20 @@ advertisement. Commits on this milestone, all green at the time:
 | `e72cf063e` | M5 step 5.5 — the library hand-off, through the plugin API only |
 | `a7b2dcf07` | M5 step 5.4 — the ed2k locator parser and eHash, plus a resume handoff |
 | `8bcbcc941` | M5 step 5.4 — the ed2k tests, and the two bugs they found |
+| `644deb212` | M5 step 5.4 — validate the ed2k locator before the consent gate |
 
 **The working tree is clean.** `internal/ed2k/` and `internal/rpc/ed2k_gate_test.go`
 are committed, not untracked.
+
+**The branch is `develop`, not `main`, and there is nowhere to push.** Previous
+revisions of this file said `main`; that was wrong and cost a confusing minute
+(`git pushall` is not a command on this host). The only remote is `upstream` →
+`https://github.com/stashapp/stash.git`, which is **read-only**: a dry-run push
+returns `403 Permission to stashapp/stash.git denied to 8ullyMaguire`. So
+commits here are local-only, and "committed" in this document means committed
+to `develop` on this machine, not published anywhere. A second worktree exists
+at `~/code-local/worktrees/m6` on branch `m6-upstream-issues` — it is a
+different milestone and is not part of M5.
 
 ### Verified state, re-checked just now
 
