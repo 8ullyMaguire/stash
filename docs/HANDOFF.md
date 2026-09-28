@@ -632,6 +632,69 @@ redundant with the other despite reading as if one might be — which is worth
 stating, because this package's habit when two guards look similar is to
 delete one and re-measure.
 
+### M5 step 5, step 4 CLOSED: a file that is proven before it is written
+
+`7a7191227`. New package `internal/ed2ktransfer`, 15 tests. ed2k 51,
+ed2kwire 89, rpc 36; all 10 packages green.
+
+**The transfer plan's step 4 was two error sentinels, and the interesting
+work was making them true.** The ed2k transfer now exists: it requests a
+window, checks the hash *before* writing, writes to a temporary, verifies the
+bytes on disk, and renames into place.
+
+**The invariant is about ORDER, so the tests attack the order directly.**
+Five mutations, each applied and each killing exactly the test that claims
+the ordering:
+
+| mutation | killed by |
+|---|---|
+| verify moved *after* the rename | `TestAHashMismatchLeavesNoFileAtAll` |
+| drop the before-write hash check | `TestAnAnswerForAnotherFileIsRefused...` |
+| drop the EARLY name check | `TestAHostileNameIsRefusedWithoutAskingTheSource` |
+| `ErrNoFile` no longer named | `TestASourceThatDoesNotHaveTheFileSaysSoByName` |
+| existing-file check dropped | `TestAnExistingFileIsNotReplaced` |
+
+The strongest of these is the name test: not "no file was written" but
+**"the stranger was never asked"**. A name escaping the root is an attack,
+and an attack should not cost a network round trip.
+
+**`storage.Gate` could not be used and `paths.SanitizeJoin` could.** The Gate
+is libtorrent's — `OpenTorrent(info *metainfo.Info)`, and an ed2k file has no
+`metainfo.Info`. Widening it would put an ed2k-shaped hole in a
+torrent-shaped defence. But the *name* is peer-supplied here too, and that is
+the same bug class: `ed2k://|file|../../etc/passwd|...` is well-formed and the
+name is what lands on disk. The name is resolved **twice** — once to refuse
+early, once for the path that is actually written.
+
+**One part is not a simplification, it is the only provable case.**
+`ehash.go`'s multi-part branch hashes the part hashes' first eight bytes, so a
+multi-part file can only be verified once *every* part is in hand. A one-part
+file is the case where "these bytes are this part" and "these bytes are this
+file" are the same claim.
+
+**A new refusal, and a real cost paid deliberately: the rename will not
+replace an existing file.** This transfer has no resume index, so it cannot
+tell whether what is there is the same file, a previous version, or an
+operator's edit. A later milestone with a resume index removes the refusal by
+being able to answer the question.
+
+**`rpc`'s blanket error is split, because it covered two different
+problems.** `ErrTransferNotImplemented` applied equally to a magnet and to an
+ed2k link. The ed2k transfer now exists; what is missing is the step that
+*finds a source*. So ed2k returns `ErrNoED2KSource` by name and the magnet
+keeps the blanket error, which is honest for it.
+`TestTheDownloadStubStillReportsTheTransferIsUnimplemented` changed name *and*
+meaning — a test that keeps its old name while asserting new behaviour is a
+lie, and the name is what a reader trusts when they skip the assertion.
+Verified from both ends: the new name passes, the old one reports "no tests
+to run", and swapping either path fails a test.
+
+**Two smaller things that were easy to get wrong.** `fsync` happens *before*
+the verify, or the hash reads bytes that are still in a buffer and proves
+something that never existed. And `freeBytes` is `bavail`, not `bfree`:
+`bfree` includes the root reserve, so filling to it makes every other process
+on the machine fail to write.
+
 ### M5 step 5, step 3 CLOSED: the hash gate, and the harness destroyed a file
 
 `83d58c18c`. 51 tests in `ed2k`, 89 in `ed2kwire`, whole plugin green.
