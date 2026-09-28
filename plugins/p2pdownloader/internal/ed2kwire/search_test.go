@@ -285,3 +285,123 @@ func TestTheKeywordSurvivesBytesThatLookLikeFraming(t *testing.T) {
 		}
 	}
 }
+
+// # THE TWO WRITES THIS FILE EXISTS TO PIN
+//
+// Both of these survive a full-suite mutation today, and both were
+// invisible while they were wrong for the same reason: the tests built
+// requests with a keyword short enough to hide each defect.
+
+// TestTheKeywordIsNULTerminated: the byte a server reads to stop.
+//
+// # APPEND, NOT THE STRING'S OWN BYTES
+//
+// eMule string tags are NUL-terminated. The length prefix says how long the
+// text is, and the terminator is what a server scanning for the end of the
+// string actually reads -- and a server that walks off the end of a
+// non-terminated string does not error, it keeps reading the rest of the
+// packet as keyword. So a missing terminator is a wrong search, not a failed
+// one, which is the failure mode with no log line anywhere.
+func TestTheKeywordIsNULTerminated(t *testing.T) {
+	// Build returns the BARE TAG LIST -- the protocol byte, size and opcode
+	// are added by Server.Search when it frames the packet. An earlier
+	// version of this test skipped nine bytes for a header that is not
+	// there and read a tag count of 1,953,396,066 out of the length
+	// prefix, which is the same class of mistake this whole file is
+	// about: reading a field at an offset belonging to another layer.
+	raw, err := SearchRequest{Keyword: "ubuntu"}.Build()
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+
+	// The keyword is the last thing in the payload, so the terminator is
+	// the final byte -- and it must be NUL, not the last letter.
+	if got := raw[len(raw)-1]; got != 0 {
+		t.Errorf("the request ends in 0x%02X, not 0x00. The keyword tag is "+
+			"the last field, so a server reading to its terminator walks "+
+			"off the end of the packet and keeps going.\n\n"+
+			"A missing terminator is not a failed search but a WRONG "+
+			"one: the server reads the remaining bytes as keyword "+
+			"text, finds nothing, and answers nothing. There is no "+
+			"error to log.", got)
+	}
+
+	// And the length prefix COUNTS the terminator: the wire reads
+	// 82 01 07 00 for "ubuntu" -- type, id, length 7, six letters, NUL. A
+	// reader expecting 6 would slice one byte short and lose the very
+	// terminator the check above exists to require.
+	//
+	// parseTag keeps the two length bytes INSIDE Value, so the decoded
+	// value is 9 bytes and not 7. That is deliberate in tag.go: Value is
+	// the tag's bytes as they appeared, not a re-interpretation of them.
+	tags, err := parseTagList(raw)
+	if err != nil {
+		t.Fatalf("decoding our own request: %v", err)
+	}
+	for _, tag := range tags {
+		if tag.ID != tagIDSearchKeyword {
+			continue
+		}
+		const prefixLen = 2
+		if got := len(tag.Value) - prefixLen; got != len("ubuntu")+1 {
+			t.Errorf("the keyword text is %d bytes, want %d (six letters "+
+				"plus their terminator). eMule's string length "+
+				"prefix INCLUDES the NUL", got, len("ubuntu")+1)
+		}
+		if !bytes.HasSuffix(tag.Value[prefixLen:], []byte{0}) {
+			t.Errorf("the keyword text %q does not end in NUL",
+				tag.Value[prefixLen:])
+		}
+		return
+	}
+	t.Fatal("no keyword tag in the request we just built")
+}
+
+// TestATagCountOverTwoFiftyFiveUsesAllFourBytes: a zeroed array hides the
+// bug, and only a big enough list exposes it.
+//
+// # WHY EVERY EXISTING TEST MISSED THIS
+//
+// The count is written into a zero-initialised [4]byte, and for a
+// little-endian uint32 below 256 only byte 0 is non-zero. Writing
+// count[0] = byte(n) therefore produces BYTE-IDENTICAL output to the real
+// PutUint32 for every list shorter than 256 tags -- and a keyword search
+// carries exactly one tag.
+//
+// # AND THIS IS NOT COSMETIC
+//
+// The four bytes before a tag list are what a server reads to find out how
+// far to walk. A count that is 0x01 0x01 0x01 0x00 for three tags says 65,537
+// tags follow, so the server keeps reading a list that ended at tag three --
+// and the result is silence, with nothing to log.
+func TestATagCountOverTwoFiftyFiveUsesAllFourBytes(t *testing.T) {
+	// 300 tags: byte 0 is 0x2C, and bytes 1..3 must be zero. A one-byte
+	// write gives the same answer, so the mutation is caught by the LENGTH
+	// of the encoded list rather than by the count field alone.
+	tags := make(TagList, 300)
+	for i := range tags {
+		tags[i] = Tag{ID: byte(i), Type: 0x03, Value: []byte{0x01, 0x00, 0x00, 0x00}}
+	}
+
+	raw, err := encodeTagList(tags)
+	if err != nil {
+		t.Fatalf("encoding 300 tags: %v", err)
+	}
+
+	// 4 count bytes + 300 tags of 6 bytes each (2 header + 4 value).
+	const want = 4 + 300*6
+	if len(raw) != want {
+		t.Errorf("300 tags encoded to %d bytes, want %d. A count that "+
+			"does not match the list it introduces is how a reader "+
+			"loses the stream", len(raw), want)
+	}
+
+	// And the count itself must read back as 300.
+	if got := binary.LittleEndian.Uint32(raw[:4]); got != 300 {
+		t.Errorf("the encoded count is %d, want 300. Only byte 0 is set "+
+			"for a list this size, so a one-byte write is "+
+			"indistinguishable from the real one -- which is exactly "+
+			"why the LENGTH assertion above is the one that bites",
+			got)
+	}
+}

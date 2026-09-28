@@ -434,9 +434,9 @@ MUTATIONS = [
     # four-byte read of a one-byte tail. With `off < len` it decoded a 300th
     # result named "5\x00Walt Disney..." -- a name with a stray length byte
     # in front of it, which is what a misaligned walk looks like.
-    ("searchresult: the loop only guards the tag count, not the whole result",
-     SEARCHRESULT, "for off+4+fileIDLen <= len(plain) {", "for off < len(plain) {",
-     "CapturedSearchResultDecodes|LastResultIsComplete"),
+    ("searchresult: the loop condition does not guard the four-byte count",
+     SEARCHRESULT, "for off+4 <= len(plain) {", "for off < len(plain) {",
+     "CapturedSearchResultDecodes|LastResultIsComplete|StrFamilyTypeByte"),
 
     # A result with no room for its file ID ends the list. Making it an
     # error instead refuses 299 real results over one trailing byte, which
@@ -454,7 +454,9 @@ MUTATIONS = [
     # decoder that stops before the port cannot be shown to have read it.
     ("searchresult: the port is not read from the file ID",
      SEARCHRESULT, "r.Port = binary.LittleEndian.Uint16(plain[off+20 : off+22])",
-     "r.Port = 0", "EachResultIsFollowedByTwentyTwoBytes|GoldenFirstResult"),
+     "r.Port = 0",
+     "EachResultIsFollowedByTwentyTwoBytes|GoldenFirstResult|"
+     "CapturedSearchResultDecodes|LastResultIsComplete"),
 
     # The hash is the file's identity. A decoder that reads it from the
     # wrong offset produces 299 DIFFERENT wrong values, so a count-based

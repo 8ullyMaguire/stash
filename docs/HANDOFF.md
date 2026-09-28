@@ -246,6 +246,102 @@ were open when this section was last written are closed:
    on them, which is worse than not decoding.
 3. ~~**The ed2k client version tag**~~ — same answer, same reason.
 
+### M5 step 4: search — PROVEN against a live server
+
+`internal/ed2kwire/search.go` and `searchresult.go`, at `f50307621`. The step
+after the extended hello: ask a server which files it holds, and read the
+answer.
+
+**A live search works end to end.** Against `85.17.116.222:6082` for the
+keyword "ubuntu", the server answered with one `0x33` frame of 27,950
+compressed bytes that inflated to 40,828 and held **299 results**. The decoder
+reads all 299 — names, sizes, types, source counts, 299 distinct file hashes
+— consuming every byte but one.
+
+```
+[count:4] [token:4] [fileid:18]        the header, 26 bytes
+  repeated per result:
+[tagcount:4] [tags...] [hash:16] [userid:4] [port:2]
+```
+
+**The two directions are asymmetric, and that is the first thing to know.** A
+request is one packet we build, plain and uncompressed. A result is packets a
+stranger decides the shape of, and arrives zlib-compressed under protocol byte
+`0xD4` (PACKEDPROT). Reading one as the other is wrong at the first byte, and
+a *compressed request* is answered with silence — the same shape of failure as
+the OP_HELLO mistake this package made against every real server.
+
+**Three things the capture taught that no amount of reading would have.**
+
+**A result's file ID is 22 bytes, not 16.** Sixteen looks obvious — it is the
+hash, and the hash is a hash. The other six are a 4-byte user ID and a 2-byte
+port, and stopping at 16 lands the next tag count two bytes early, where it
+reads as **988,510,410**: not an error, and impossible, which is the worst
+kind. The port is what settled it — **4662** on the first result is eMule's
+standard Kad port, a value nobody would have guessed.
+
+**The header's file ID is 18 bytes, so the header is 26 and not 24.** The
+first version assumed 16 for symmetry with a result's ID and read the first
+tag count two bytes early: 332,452 tags in a five-tag list.
+
+**A result with no room for its own identity ends the list.** The capture's
+300th entry has five complete tags and **one byte left**. A loop guarding only
+the four-byte count decodes it from that tail and produces a 300th result
+named `5\x00Walt Disney...` — a stray length byte in front of the name, which
+is what a misaligned walk looks like, and how it was spotted. So a result with
+no room for its file ID **breaks**, while a result whose *tags* are cut short is
+an **error**. The asymmetry is deliberate: the first version errored on the
+former, which made a real answer undecodable over one trailing byte and cost the
+caller 299 good results to learn it.
+
+**And the wider guard I first reached for turned out to be dead.** Reasoning
+that "a result is a count *plus* 22 bytes, so the guard should cover all of
+it", I wrote the loop condition as `off+4+fileIDLen <= len(plain)`. The
+mutation harness disagreed: replacing it with plain `off+4` left every test
+green, and the capture decodes to the same 299 results with the same last
+name and the same last port either way. The in-loop `break` is what ends the
+list, so the wide condition was **deleted, not defended** — one mechanism
+instead of two. The comment in the code records that it was tried and
+measured, because the "obviously more correct" version is the kind of thing
+that otherwise gets re-added.
+
+**The tests decode a CAPTURE, not a fixture.** `testdata/searchresult_live.bin`
+is the real frame. Every other test here round-trips through our own encoder,
+which proves the halves agree and nothing more — and there is no encoder for a
+result at all, since a stranger writes those bytes. The golden values are the
+ones a misaligned walk cannot fake: the filename `Hw-004.mp4` and the hash
+`40d349929c69b3735a1d5247b6fedde6`. A wrong walk reads a *different* file's 16
+bytes and produces 299 **different** wrong values, so a count-based assertion
+sees nothing wrong.
+
+**Two writes that were invisible while wrong, both now pinned by tests.** A
+mutation run flagged the tag count and the keyword terminator as surviving.
+Neither was a hole in the protocol code — both were holes in what the tests
+happened to exercise:
+
+- **The tag count** is written into a zero-initialised `[4]byte`, and for a
+  little-endian uint32 below 256 only byte 0 is non-zero. So `count[0] = byte(n)`
+  produces **byte-identical** output to the real `PutUint32` for every list
+  under 256 tags — and a keyword search carries exactly **one** tag. The test
+  that bites encodes **300** tags and asserts the list's total length, because
+  for that size the one-byte write is no longer equivalent.
+- **The keyword's NUL terminator.** eMule string tags are NUL-terminated, and
+  the length prefix **includes** the NUL: the wire reads `82 01 07 00` for
+  "ubuntu" — type, id, length 7, six letters, NUL. A server reading past a
+  missing terminator does not error, it keeps reading the rest of the packet
+  as keyword text, finds nothing, and answers nothing. **There is no log line
+  anywhere for that failure**, which is what made it worth a test rather than
+  a comment.
+
+**One thing I got wrong and corrected, worth not repeating.** A throwaway
+Python decoder read the Str-family length from the raw wire byte
+(`0x9A - 0x10 = 138`) and reported 2.4 billion tags. The Go was right and the
+script was wrong: `tag.go` stores `Type` as `payload[0] & 0x7F`, so wire `0x9A`
+becomes `0x1A` and `0x1A - 0x10` is 10. Three tags agree — `0x9A`/"Hw-004.mp4"
+(10), `0x99`/".DS_Store" (9), `0x9B`/"OAV1365.mp4" (11) — and the mask is what
+makes the masked and wire conventions agree. **The mistake produces a
+plausible number, not an error**, which is why the test comment says so.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
@@ -313,8 +409,11 @@ confidently reporting a capability it does not have.
   `net.Dialer`; the payload half alone is enough for a full login).
 - **The transfer itself.** `ErrTransferNotImplemented` is still the honest
   answer at the end of a granted ed2k link, and
-  `TestTheDownloadStubStillReportsTheTransferIsUnimplemented` says so. Search →
-  request → download is the next feature after the captures.
+  `TestTheDownloadStubStillReportsTheTransferIsUnimplemented` says so. **Search
+  is now done and proven against a live server**, so what remains between here
+  and a download is: request a file by hash from a source (OP_REQUESGPART and
+  the transfer packets after it). That is the next feature, and it is
+  unblocked — no capture needed.
 
 **One correction made this session, worth not undoing.** The plan's §0 check was
 `grep -rn "goed2k" internal/ed2k/` and the rule was "must return nothing". It
@@ -329,7 +428,7 @@ ways: clean on the real tree, and still catches an injected import.
 cd plugins/p2pdownloader
 go test ./... -count=1                     # whole plugin
 go test ./internal/ed2kwire/ -count=1      # ed2kwire, ~10s
-python3 internal/ed2kwire/mutate_ed2kwire.py   # 25 probes, bounded
+python3 internal/ed2kwire/mutate_ed2kwire.py   # 38 probes, bounded
 
 curl -o /tmp/nodes.dat https://upd.emule-security.org/nodes.dat
 ED2K_LIVE_NODES_DAT=/tmp/nodes.dat \

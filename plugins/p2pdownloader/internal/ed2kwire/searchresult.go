@@ -149,32 +149,31 @@ func DecodeSearchResult(plain []byte) ([]SearchResult, error) {
 
 	results := make([]SearchResult, 0, 16)
 	off := searchResultHeaderLen
-	for off+4+fileIDLen <= len(plain) {
-		// # THE LOOP CONDITION IS off+4, NOT off < len
-		//
-		// The capture's 40,828-byte body ends ONE byte after the last
-		// complete result -- a trailing 0x00. With `off < len` the loop
-		// body still runs at off=40827, where one byte remains, and the
-		// four-byte count read there is assembled from that byte and
-		// three bytes of the NEXT allocation's memory. The first version
-		// did exactly that and reported a 300th result named
-		// "5\x00Walt Disney..." with an impossible tag count.
-		//
-		// The condition is the whole guard, and it is NOT enough on its own.
-		// Four bytes are needed for a count, but a result is a count PLUS 22
-		// bytes of file identity -- and the capture's 300th result has its
-		// five tags complete and ends one byte short of its own file ID.
-		//
-		// The first version guarded only the count and so decoded 299 whole
-		// results, then tried to build a 300th from four bytes of a tail
-		// that held one. The fix is a guard that covers what a result
-		// actually IS rather than only its first field.
-		//
-		// And the asymmetry is deliberate: a result whose TAGS are truncated
-		// is an error (TestATruncatedResultIsAnError), while a result with no
-		// room at all for its identity is the end of the list. Refusing to
-		// decode 299 good results because of one trailing byte would be the
-		// wrong trade.
+	// # THE CONDITION IS off+4, AND THE WIDER ONE WAS REDUNDANT
+	//
+	// The first version used `off < len`, which runs the body at off=40827
+	// where ONE byte remains, so the four-byte tag count is assembled from
+	// that byte and three bytes of the next allocation. It reported a 300th
+	// result named "5\x00Walt Disney..." -- a stray length byte in front
+	// of the name, which is what a misaligned walk looks like, and how it
+	// was caught.
+	//
+	// The second version used off+4+fileIDLen <= len, reasoning that a result
+	// is a count PLUS 22 bytes of identity and the guard should cover all of
+	// it. The mutation harness disagreed: with that condition replaced by
+	// off+4, every test still passed, and the capture decodes to the same
+	// 299 results with the same last name and the same last port either way.
+	//
+	// So the wider condition is gone, and the in-loop break below is what
+	// ends the list. One mechanism, not two: the loop condition answers "is
+	// there a count to read", and the break answers "is there room for the
+	// file that count introduces".
+	//
+	// # AND off+4 IS NOT off < len
+	//
+	// Four bytes is the width of a count. Fewer cannot begin a result, and
+	// a trailing byte is not a truncated result.
+	for off+4 <= len(plain) {
 
 		tags, next, err := parseTagListAt(plain[off:])
 		if err != nil {
