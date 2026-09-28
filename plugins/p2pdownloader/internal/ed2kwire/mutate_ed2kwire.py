@@ -368,7 +368,7 @@ MUTATIONS = [
     ("search: the tag count is written as a byte again",
      TAG, "binary.LittleEndian.PutUint32(count[:], uint32(len(tags)))",
      "count[0] = byte(len(tags)); _ = binary.LittleEndian.Uint32",
-     "SearchRequestIsNotCompressed|TagCountIsWrittenAsFourBytes"),
+     "TagCountOverTwoFiftyFiveUsesAllFourBytes"),
 
     # A string tag carries its own uint16 length. Writing the value bare
     # makes the reader take the first two bytes of the KEYWORD as a length,
@@ -382,7 +382,7 @@ MUTATIONS = [
     # assertion is what has to carry it.
     ("search: the type byte's high bit is not set on write",
      TAG, "w.WriteByte(wireType | 0x80)", "w.WriteByte(wireType)",
-     "SearchRequestIsNotCompressed"),
+     "TheWrittenTagBytesCarryTheHighBit"),
 
     # An empty keyword is a request for the server's whole index. It is
     # refused, and a caller that does not get refused is disconnected for
@@ -396,7 +396,7 @@ MUTATIONS = [
     # length-prefix assertion above is what notices.
     ("search: the keyword is not NUL-terminated",
      SEARCH, "Value: append([]byte(r.Keyword), 0),", "Value: []byte(r.Keyword),",
-     "KeywordSurvivesBytesThatLookLikeFraming"),
+     "TheKeywordIsNULTerminated"),
 
     # 0x33 is OP_SEARCHRESULT -- what the server sends BACK. Sending it
     # is a client volunteering results nobody asked for.
@@ -427,18 +427,7 @@ MUTATIONS = [
     ("searchresult: the header is 24 bytes, not 26",
      SEARCHRESULT, "const searchResultHeaderLen = 4 + 4 + 18",
      "const searchResultHeaderLen = 4 + 4 + 16",
-     "CapturedSearchResultDecodes|StrFamilyTypeByte"),
-
-    # The loop guard. The capture ends one byte after its 300th entry's
-    # tags, and a guard on the COUNT alone lets that entry be built from a
-    # four-byte read of a one-byte tail. With `off < len` it decoded a 300th
-    # result named "5\x00Walt Disney..." -- a name with a stray length byte
-    # in front of it, which is what a misaligned walk looks like.
-    ("searchresult: the loop condition does not guard the four-byte count",
-     SEARCHRESULT, "for off+4 <= len(plain) {", "for off < len(plain) {",
-     "CapturedSearchResultDecodes|LastResultIsComplete|StrFamilyTypeByte"),
-
-    # A result with no room for its file ID ends the list. Making it an
+     "CapturedSearchResultDecodes|StrFamilyTypeByte"),    # A result with no room for its file ID ends the list. Making it an
     # error instead refuses 299 real results over one trailing byte, which
     # is the failure the first version had.
     ("searchresult: no room for a file ID is an error rather than the end",
@@ -452,6 +441,26 @@ MUTATIONS = [
 
     # The port is the confirmation that the 22-byte layout is right, and a
     # decoder that stops before the port cannot be shown to have read it.
+    # NO PROBE FOR THE RESULT LOOP'S CONDITION, and its absence is the point.
+    #
+    # There was one, and it survived. Replacing `for off+4 <= len(plain)`
+    # with `for off < len(plain)` leaves every test green: the capture
+    # decodes to the same 299 results with the same last name and the same
+    # last port, because the in-loop `break` -- not the condition -- is
+    # what ends the list when a result has no room for its file ID.
+    #
+    # So the condition is redundant with the break, and a probe that cannot
+    # be killed is not measuring anything. It is gone rather than pointed at
+    # a weaker assertion. The same reasoning deleted the wider
+    # `off+4+fileIDLen` version earlier, and both facts are recorded in the
+    # comment above the loop in searchresult.go.
+    #
+    # What this does NOT say is that the condition is unnecessary to keep.
+    # It says the CAPTURE cannot tell the two apart. A future change that
+    # removed the in-loop break would have two silent failures stacked, and
+    # the comment at the loop is the thing standing between that and a
+    # subtly wrong decoder.
+
     ("searchresult: the port is not read from the file ID",
      SEARCHRESULT, "r.Port = binary.LittleEndian.Uint16(plain[off+20 : off+22])",
      "r.Port = 0",
