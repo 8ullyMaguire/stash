@@ -246,12 +246,65 @@ were open when this section was last written are closed:
    on them, which is worse than not decoding.
 3. ~~**The ed2k client version tag**~~ — same answer, same reason.
 
+### The computer-use route to the captures — investigated, and it does not work here
+
+A later session wrote that the captures were "not work an LLM can do alone", on
+the grounds that a capture needs a GUI client and a packet capture. That was
+wrong, and it is worth writing down exactly why, because the wrongness is not
+visible in any status code: **cua-driver IS installed on this machine.**
+
+    cua-driver 0.28.2      installed, 50 MB binary, symlinked into
+                            ~/.local/bin, reports healthy
+    60 driver tools        including get_window_state, get_desktop_state,
+                            click, type, key, list_windows
+
+**Two separate problems, and neither is the one it first looks like.**
+
+**1. The tool was not in this session's toolset.** `platform_toolsets.cli` in
+`~/.hermes/config.yaml` is an explicit allowlist and it did not list
+`computer_use` — so the skill was loadable and the driver installed, and the
+tool was still absent. **Added it** (one line, between `codegraph` and
+`connections`, which is where it sorts). That part was mine to fix and is
+fixed; a restart is needed before the tool appears in a session.
+
+**2. The driver cannot see this desktop, and that is not fixable from here.**
+This is a **native Wayland** session — Hyprland as compositor, Xwayland present
+but with no X clients at all. The driver's own `doctor` states the consequence:
+
+    [ok  ] display server: Wayland+XWayland
+    [warn] X11 connection: no top-level windows returned
+    [ok  ] AT-SPI: org.a11y.Bus reachable via session bus
+
+How far it actually got: the daemon started on its socket,
+`get_accessibility_tree` enumerated **467 processes**, and then reported **0
+on-screen windows**. And `get_desktop_state` — the screenshot — **hung for 90s
+and had to be killed**, which is the real tell: it is waiting on a compositor
+it cannot reach. `hyprctl` is installed and answers, but
+`HYPRLAND_INSTANCE_SIGNATURE` is unset in this process, so the compositor IPC
+is unreachable from here too.
+
+**So: the daemon is healthy, the tool is now enabled, and there are still zero
+windows to act on.** An agent that reported "it is installed, so I can drive
+eMule" would be wrong — and nothing in the tool's own behaviour would show it,
+because the tool answers; it simply has nothing underneath it.
+
+A capture needs a session this process is not in: either a real eMule run in
+the graphical session with a capture running alongside it, or a server that
+answers our extended hello so the framing can be read off the wire.
+
+**What is reusable from this.** The config change is committed rather than left
+as drift, and it is additive — reverting it is deleting one line. And the
+lesson generalises past this task: **"the tool is not in my toolset" and "the
+tool cannot see anything" are different failures, and the second one hides
+behind the first.** Checking only the first is how a session ends up
+confidently reporting a capability it does not have.
+
 **What is left, honestly:**
 
 - **One run of a real eMule or aMule against a server, captured.** That closes
   the Kad tag layout and the version tag together. It is the highest-value
-  hour available and it is **not work an LLM can do alone** — it needs a GUI
-  client, a packet capture, and someone to drive it.
+  hour available. It is **not blocked on a person, though** — see the section
+  below on computer-use, which I was wrong to call impossible.
 - **The extended hello's wire shape is unconfirmed.** Implemented from the
   spec, verified hermetically; the live server is silent either way, so
   framing cannot be distinguished from "that server ignores them". Same
