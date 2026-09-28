@@ -292,29 +292,41 @@ func dialTestSource(t *testing.T, peer *sourcePeer) *Source {
 
 // TestOnePartComesBackWithTheBytesWeAskedFor: the whole round trip.
 func TestOnePartComesBackWithTheBytesWeAskedFor(t *testing.T) {
-	// 9,500 bytes of something recognisable: each byte is its own index.
-	data := make([]byte, PartSize)
+	// # A SMALL WINDOW, NOT A WHOLE PART, AND THE REASON IS WORTH KEEPING
+	//
+	// This used to build a real PartSize buffer -- 9,500 bytes when the
+	// constant was the obsolete value, and 9,728,000 now that it is eMule's
+	// real one. At which point the test started writing nine megabytes
+	// through a loopback socket to check that bytes survive a round trip.
+	//
+	// Nothing about the CODEC needs a whole part. A 4-byte window exercises
+	// every offset, every length check and the wire framing identically, and
+	// the part SIZE is a constant that a separate test pins by value. So the
+	// round trip uses a small window, and PartSize stays out of the
+	// allocation.
+	const window = 4
+	data := make([]byte, window)
 	for i := range data {
 		data[i] = byte(i)
 	}
-	peer := &sourcePeer{answer: partAnswerFrame(theHash, 0, PartSize, data)}
+	peer := &sourcePeer{answer: partAnswerFrame(theHash, 0, window, data)}
 	src := dialTestSource(t, peer)
 
 	ans, err := src.RequestPart(context.Background(),
-		PartRequest{FileHash: theHash, Start: 0, End: PartSize})
+		PartRequest{FileHash: theHash, Start: 0, End: window})
 	if err != nil {
 		t.Fatalf("RequestPart: %v", err)
 	}
 
-	if len(ans.Data) != PartSize {
-		t.Errorf("the answer carries %d bytes, want %d", len(ans.Data), PartSize)
+	if len(ans.Data) != window {
+		t.Errorf("the answer carries %d bytes, want %d", len(ans.Data), window)
 	}
 	if !bytes.Equal(ans.Data, data) {
 		t.Error("the bytes came back altered")
 	}
-	if ans.Start != 0 || ans.End != PartSize {
+	if ans.Start != 0 || ans.End != window {
 		t.Errorf("the answer states %d-%d, want 0-%d", ans.Start, ans.End,
-			PartSize)
+			window)
 	}
 	if ans.FileHash != theHash {
 		t.Error("the answer names a different file")
@@ -322,7 +334,7 @@ func TestOnePartComesBackWithTheBytesWeAskedFor(t *testing.T) {
 
 	// And the request we actually put on the wire is the golden one.
 	if len(peer.got) > 0 {
-		want, _ := PartRequest{FileHash: theHash, Start: 0, End: PartSize}.Build()
+		want, _ := PartRequest{FileHash: theHash, Start: 0, End: window}.Build()
 		if got := peer.got[len(peer.got)-len(want):]; !bytes.Equal(got, want) {
 			t.Errorf("the bytes on the wire are\n  %s\nwant\n  %s",
 				hex.EncodeToString(got), hex.EncodeToString(want))
@@ -623,5 +635,49 @@ func TestAHeaderOnlyAnswerWithNoDataIsRefused(t *testing.T) {
 		PartRequest{FileHash: theHash, Start: 0, End: 0})
 	if err == nil {
 		t.Error("a header-only answer describing an empty window was accepted")
+	}
+}
+
+// TestThePartSizeIsEemulesAndNotTheObsoleteValue.
+//
+// # 9,500 SURVIVED BEING WRITTEN DOWN TWICE
+//
+// The transfer plan said 9,500. The first implementation of this file said
+// 9,500. Both were the obsolete eDonkey2000 value, and 9,500 looks entirely
+// reasonable in a way that 9,728,000 does not -- which is why it was not
+// caught by reading and had to be caught by quoting eMule's opcodes.h:
+//
+//	#define PARTSIZE     9728000ui64
+//	#define EMBLOCKSIZE  184320
+//
+// The round-trip test deliberately no longer uses this constant (it uses a
+// four-byte window, since nothing about the codec needs nine megabytes), so
+// without this test the value would be unasserted and could drift back.
+func TestThePartSizeIsEemulesAndNotTheObsoleteValue(t *testing.T) {
+	if PartSize != 9728000 {
+		t.Errorf("PartSize = %d, want 9728000.\n\n"+
+			"9,500 is the obsolete eDonkey2000 part size and it is a "+
+			"number that looks obviously right. A client asking an "+
+			"eMule source for 9,500-byte windows is asking for the "+
+			"wrong thing, and the answer is silence.", PartSize)
+	}
+	if BlockSize != 184320 {
+		t.Errorf("BlockSize = %d, want 184320 -- eMule's hash unit", BlockSize)
+	}
+	// The two are related, and a client that gets the relationship wrong
+	// computes the wrong block count. The division is deliberately NOT
+	// exact, so this asserts the remainder rather than a divisor.
+	const wantBlocks = 52
+	if got := PartSize / BlockSize; got != wantBlocks {
+		t.Errorf("PartSize/BlockSize = %d, want %d. The division is not "+
+			"exact and the last block of a part is short, which is "+
+			"arithmetic rather than a protocol rule -- but it must be "+
+			"52 whole blocks plus a remainder, not something else",
+			got, wantBlocks)
+	}
+	if PartSize%BlockSize == 0 {
+		t.Error("PartSize divides evenly by BlockSize, which contradicts " +
+			"eMule's constants. If this ever becomes true, a verifier " +
+			"that assumes a divisor is now wrong in a new way")
 	}
 }

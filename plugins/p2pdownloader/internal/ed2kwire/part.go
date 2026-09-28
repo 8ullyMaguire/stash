@@ -55,18 +55,28 @@ import (
 // the tag machinery, and the comment is here so the next person does not
 // "simplify" them into it.
 
-// PartSize is the byte window both ends divide a file by.
+// # PARTSIZE IS 9,728,000 AND NOT 9,500, AND THE PLAN HAD IT WRONG
 //
-// 9500, from eMule. Not negotiable: a source and a client that disagree
-// about the window size disagree about which offsets a part number means.
+// The transfer plan's step 2 said 9,500, taken from the obsolete
+// eDonkey2000 protocol. eMule's own opcodes.h says:
 //
-// # AND THE LAST WINDOW IS SHORT, WHICH IS NOT AN ERROR
+//	#define PARTSIZE     9728000ui64
+//	#define EMBLOCKSIZE  184320
 //
-// A file of 20,000 bytes has two full windows and a 1,000-byte remainder.
-// The remainder is a normal, successful answer. Code that requires every
-// answer to be exactly PartSize would reject the last part of every file,
-// which is every file.
-const PartSize = 9500
+// 9,500 is a number that looks obviously right, which is why it survived
+// being written down twice. A client asking an eMule source for 9,500-byte
+// windows is a client asking for the wrong thing, and the answer is silence.
+//
+// The constant is here and not only in the plan because the value is load
+// bearing for a REQUEST: the offsets sent to a source are computed from it.
+const PartSize = 9728000
+
+// BlockSize is eMule's hash unit, in bytes. A part is hashed as
+// PARTSIZE/BlockSize blocks of this size, and 9728000/184320 is not a whole
+// number, so the last block of a part is short. That is arithmetic rather
+// than a protocol rule, and the verifier follows it rather than assuming a
+// divisor.
+const BlockSize = 184320
 
 // The source-side opcodes, cited from eMule's opcodes.h.
 const (
