@@ -2,6 +2,7 @@ package ed2kwire
 
 import (
 	"context"
+	"encoding/hex"
 	"net"
 	"strings"
 	"testing"
@@ -278,5 +279,115 @@ func TestANilContextIsRefusedRatherThanPanicking(t *testing.T) {
 	_, err := Bootstrap(nil, node, self) //nolint:staticcheck
 	if err == nil {
 		t.Error("a nil context was accepted")
+	}
+}
+
+// TestAKnownAddressSurvivesTheRoundTrip: golden bytes from a REAL contact list.
+//
+// # THIS TEST EXISTS BECAUSE EVERY ADDRESS WAS MIRRORED AND NOTHING CAUGHT IT
+//
+// ipv4FromLE swapped the bytes of an address the library had ALREADY swapped,
+// so all 154 contacts in a real list came out reversed. The hermetic tests
+// were green throughout, because they build their contact lists through this
+// same code: a file written with a mirrored address parses back to a mirrored
+// address, and the decoder agreed with itself perfectly.
+//
+// The live Kad test found it by dialling 127.251.161.1, 127.8.43.79 and
+// 127.0.0.1 out of a list containing no loopback addresses. Three in a row is
+// not a coincidence; it is the signature of a byte-reversed 0.0.1.x.
+//
+// # WHY GOLDEN BYTES AND NOT A WRITTEN FIXTURE
+//
+// A fixture written by EncodeNodesDat would be produced by the same code that
+// is under test, and the round trip would be circular. The bytes below are
+// the first 34 bytes of a real published nodes.dat -- 84.123.58.218:4554,
+// Kad version 8 -- copied verbatim, so the decoder is checked against a file
+// it did not write.
+//
+// 84.123.58.218 is chosen on purpose: it is a real, publicly published
+// address, so if it is ever dialled it is a real machine. It is NOT dialled
+// by this test, and nothing here needs the network to pass.
+func TestAKnownAddressSurvivesTheRoundTrip(t *testing.T) {
+	// The first contact record from a real published nodes.dat: a 16-byte
+	// ID, the address 84.123.58.218 in the format's little-endian order
+	// (da 3a 7b 54), UDP 4554, TCP 4552, Kad version 8, and the v2
+	// key/verified tail.
+	const goldenRecord = "7b605cd633fdf01475f3937fe6cc86beda3a7b54ca11c81108000000000000000000"
+
+	raw, err := hex.DecodeString(goldenRecord)
+	if err != nil {
+		t.Fatalf("the golden record is not hex: %v", err)
+	}
+
+	// A v2 file header, then that one record. 4 zero bytes, version 2, count
+	// 1. The library's own parser reads this shape.
+	file := make([]byte, 0, 12+len(raw))
+	file = append(file, 0, 0, 0, 0) // the zero marker that means "versioned"
+	file = append(file, 2, 0, 0, 0) // version 2
+	file = append(file, 1, 0, 0, 0) // one contact
+	file = append(file, raw...)
+
+	nodes, err := ParseNodesDat(file)
+	if err != nil {
+		t.Fatalf("ParseNodesDat on a real contact record: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("got %d contacts, want 1", len(nodes))
+	}
+
+	got := nodes[0]
+	if want := "84.123.58.218"; got.IP.String() != want {
+		t.Errorf("address came out %s, want %s.\n\n"+
+			"The bytes da 3a 7b 54 in the file are the address stored "+
+			"little-endian, and the library has ALREADY undone that by the "+
+			"time it hands the value over -- so swapping them here "+
+			"mirrors every contact. The mirror image of 84.123.58.218 is "+
+			"218.58.123.84, a perfectly valid address on a real network, "+
+			"which is why nothing reported an error",
+			got.IP, want)
+	}
+	if want := uint16(4554); got.Port != want {
+		t.Errorf("UDP port came out %d, want %d", got.Port, want)
+	}
+	if want := byte(8); got.Version != want {
+		t.Errorf("Kad version came out %d, want %d. A version of 1 or "+
+			"lower means the retired Kad1 protocol, which this package "+
+			"does not speak and aMule itself ignores", got.Version, want)
+	}
+}
+
+// TestTheAddressSurvivesOurOwnEncoderToo: the same bytes, through the other
+// direction.
+//
+// The golden test above uses a file this code did not write, which is the
+// only way to break the circularity. This one closes the other half: that
+// EncodeNodesDat does not corrupt a correct address on the way out. Both
+// directions have to be right for the pair to be worth anything, and a
+// round trip through a wrong encoder and a wrong decoder can cancel out --
+// which is precisely the bug the golden test exists to catch.
+func TestTheAddressSurvivesOurOwnEncoderToo(t *testing.T) {
+	original := []Node{{
+		IP:      net.IPv4(84, 123, 58, 218),
+		Port:    4554,
+		Version: 8,
+	}}
+
+	parsed, err := ParseNodesDat(EncodeNodesDat(original))
+	if err != nil {
+		t.Fatalf("ParseNodesDat on our own encoding: %v", err)
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("got %d contacts, want 1", len(parsed))
+	}
+
+	if got, want := parsed[0].IP.String(), "84.123.58.218"; got != want {
+		t.Errorf("our own round trip produced %s, want %s", got, want)
+	}
+	if parsed[0].Version != 8 {
+		t.Errorf("our own round trip produced Kad version %d, want 8. "+
+			"EncodeNodesDat used to hardcode 2 here, which meant a "+
+			"parsed contact came back as 2 whatever it said on disk -- "+
+			"and the test that could have caught it checked the "+
+			"address and not the version", parsed[0].Version)
 	}
 }

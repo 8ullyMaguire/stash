@@ -41,6 +41,25 @@ type Node struct {
 	// lossy conversion here would be a decision made in the wrong place.
 	IP   net.IP
 	Port uint16
+
+	// Version is the contact's own Kad protocol version, straight from the
+	// contact list.
+	//
+	// # ADDED BECAUSE DROPPING IT WAS A REAL BUG, FOUND BY THE LIVE TEST
+	//
+	// The first version of this struct had IP and Port and nothing else,
+	// because those are the two fields Bootstrap needs. That is the wrong
+	// reason to drop a field: aMule itself IGNORES any contact whose
+	// version byte is 1 or lower, because those speak the retired Kad1
+	// protocol, and this package only speaks Kad2. So a stale contact list
+	// full of Kad1 entries is a list where a large fraction of the
+	// attempts are guaranteed to fail — and nothing here could tell that
+	// apart from "the network is down".
+	//
+	// Found when TestLiveKadBootstrapsAgainstRealNodes was written and
+	// asked whether the contacts were even worth calling: the answer was
+	// not expressible. Values 0 and 1 mean Kad1; anything above is Kad2.
+	Version byte
 }
 
 // Addr renders the node as a dial address.
@@ -97,21 +116,56 @@ func ParseNodesDat(raw []byte) ([]Node, error) {
 		// images of each other, and a mirrored IP is a node we cannot reach
 		// and cannot tell is wrong.
 		nodes = append(nodes, Node{
-			IP:   ipv4FromLE(c.Endpoint.IP),
-			Port: c.Endpoint.UDPPort,
+			IP:      ipv4FromLE(c.Endpoint.IP),
+			Port:    c.Endpoint.UDPPort,
+			Version: c.Version,
 		})
 	}
 	return nodes, nil
 }
 
-// ipv4FromLE decodes a uint32 that the Kad format stores little-endian into
-// the net.IP that everything above this package uses.
+// ipv4FromLE turns the library's host-order address into the net.IP that
+// everything above this package uses.
 //
-// The conversion is explicit and byte-by-byte rather than a cast, because
-// `net.IPv4(byte(b), byte(b>>8), byte(b>>16), byte(b>>24))` is the whole
-// function and a cast would be wrong in a way that produces a plausible IP.
+// # THIS FUNCTION SWAPPED THE BYTES A SECOND TIME, AND EVERY CONTACT WAS
+// # UNREACHABLE BECAUSE OF IT
+//
+// The first version did the byte swap by hand:
+//
+//	return net.IPv4(byte(v), byte(v>>8), byte(v>>16), byte(v>>24))
+//
+// on the reasoning that the Kad format stores the address little-endian. It
+// does -- but the LIBRARY HAS ALREADY UNDONE THAT before handing the value
+// over, because kad.Endpoint.IP is a uint32 in ordinary host order. So the
+// swap was applied twice, and every address in the network came out mirrored.
+//
+// # HOW IT WAS FOUND
+//
+// The live Kad test dialled 127.251.161.1, 127.8.43.79 and 127.0.0.1 out of a
+// contact list that contains no loopback addresses at all. Three contacts in a
+// row decoding to 127.x is not a coincidence and not a network problem: it is
+// the signature of a byte-reversed 0.0.1.x. Reading the raw file showed all
+// 154 addresses mirrored, and the three that mattered were 1.161.251.127,
+// 79.43.8.127 and 1.0.0.127 -- the mirror images of the three that were
+// dialled.
+//
+// # WHY NO HERMETIC TEST CAUGHT IT
+//
+// Because the hermetic tests build their contact lists with THIS function, or
+// through a path that goes through it, so a file written with a mirrored
+// address parses back to a mirrored address and the test is green on a decoder
+// that cannot reach a single real node. It agrees with itself. The assertion
+// that would have caught it -- "a known address in, the same address out" --
+// needs a file this code did not write, which is exactly what the live test
+// now supplies.
+//
+// Every address came out as a VALID IPv4 address, just the wrong one, so
+// nothing anywhere reported an error. See TestAKnownAddressSurvivesTheRoundTrip
+// and TestTheLiveContactListHasNoMirroredAddresses.
 func ipv4FromLE(v uint32) net.IP {
-	return net.IPv4(byte(v), byte(v>>8), byte(v>>16), byte(v>>24))
+	// Already host order. binary.BigEndian is not needed and would be
+	// actively wrong: it would restore the mirror image.
+	return net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
 }
 
 // EncodeNodesDat builds a `nodes.dat` buffer from nodes, for the round-trip
@@ -149,20 +203,58 @@ func EncodeNodesDat(nodes []Node) []byte {
 		entry := kad.Entry{
 			ID:       kad.NewID(protocol.Hash{}),
 			Endpoint: endpointFromNode(n),
-			Version:  2,
+			// The contact's OWN version, written through. This used to
+			// be a hardcoded 2, so a parsed contact came back as 2
+			// whatever it said on disk: a round trip through our own
+			// encoder silently upgraded every Kad1 entry to Kad2, and
+			// the test that could have caught it checked the address
+			// and not the version.
+			//
+			// 0 is written as 0, because in a contact list 0 really
+			// does mean Kad1 and pretending otherwise is the bug.
+			Version: n.Version,
 		}
 		_ = entry.Put(&out)
 	}
 	return out.Bytes()
 }
 
-// endpointFromNode converts our Node into the library's Kad endpoint, doing
-// the little-endian address encoding in one named place.
+// endpointFromNode converts our Node into the library's Kad endpoint.
+//
+// # THIS MIRRORED THE ADDRESS, AND ipv4FromLE MIRRORED IT BACK
+//
+// The first version read binary.LittleEndian.Uint32(v4), on the reasoning
+// that the Kad format stores the address little-endian. The FILE does -- but
+// this is not the file, it is the library's in-memory struct, and the library
+// has already undone the format's byte order by the time it gets here. So the
+// address was mirrored on the way out.
+//
+// # WHY IT WAS INVISIBLE FOR SO LONG
+//
+// Because ipv4FromLE mirrored it on the way back IN. The two errors cancelled,
+// every round trip returned the address it started with, and TestANodesDat-
+// RoundTrips was green for as long as it existed.
+//
+// That is the most dangerous shape a byte-order bug can take: two wrong
+// functions that agree with each other are indistinguishable from one right
+// one, and a round-trip test cannot see the difference. The only test that
+// can is one that starts from bytes this code did not write -- which is
+// TestAKnownAddressSurvivesTheRoundTrip, added after the live test dialled
+// three loopback addresses out of a list containing none.
+//
+// # THE LESSON, WRITTEN DOWN SO THE NEXT BYTE ORDER IS NOT PAID FOR TWICE
+//
+// One side of a codec is not evidence about the other. A round trip proves
+// the two halves AGREE; it never proves either is right, and two mirrored
+// halves agree perfectly. Byte order has to be pinned against the FORMAT --
+// golden bytes off the wire -- and never against this package's own output.
 func endpointFromNode(n Node) kad.Endpoint {
 	v4 := n.IP.To4()
 	ip := uint32(0)
 	if v4 != nil {
-		ip = binary.LittleEndian.Uint32(v4)
+		// Already host order, same as ipv4FromLE's read side. See above:
+		// swapping here is what made every written contact unreachable.
+		ip = binary.BigEndian.Uint32(v4)
 	}
 	return kad.Endpoint{IP: ip, UDPPort: n.Port}
 }
@@ -182,7 +274,122 @@ type BootstrapResult struct {
 	// it, and a node that says "firewalled, false" while being firewalled
 	// is the normal case rather than an attack.
 	Firewalled bool
+
+	// TCPPort is the port the node claims for peer connections. Zero is the
+	// protocol's way of saying "not reachable", which is what Firewalled
+	// reports; kept separately because a caller logging a bootstrap wants
+	// the number either way.
+	TCPPort uint16
+
+	// Version is the node's own Kad protocol version. Every node captured
+	// on 2026-09-28 answered 8, and a version of 1 or lower is the retired
+	// Kad1 that this package does not speak.
+	Version byte
+
+	// TagCount is the tag count the node claimed in its header.
+	//
+	// # IT IS CARRIED BECAUSE IT DOES NOT MATCH THE BYTES, AND THAT IS THE POINT
+	//
+	// On every captured answer the count is 20 and the byte immediately
+	// after it is 0x00, which no reading of the tag format accounts for --
+	// see the long note above Bootstrap. Carrying both the count and the
+	// raw bytes lets a caller (and a later reader) see the discrepancy
+	// rather than have it silently normalised away, which is what happened
+	// when the failing decode was simply replaced with a shorter one.
+	TagCount byte
+
+	// UnparsedTags is the remainder of the answer after the header, kept
+	// verbatim. Not interpreted: the format is unestablished. See the note
+	// above Bootstrap for what has been tried.
+	UnparsedTags []byte
+
+	// Opcode is the answer's own opcode byte, 0x09 for a HELLO_ANSWER.
+	//
+	// Carried rather than asserted. A node answering with a different
+	// opcode has still proved it is alive and running Kad, which is the
+	// whole of what a bootstrap promises, so refusing it here would be
+	// refusing a working node over a detail the caller may not care about.
+	// A caller that DOES care -- one about to send a Kad2-specific request
+	// -- has the byte to check.
+	Opcode byte
 }
+
+// # WHAT IS KNOWN ABOUT THE ANSWER, AND WHAT IS NOT
+//
+// Six real nodes answered the hello on 2026-09-28, and the header decodes
+// cleanly and consistently across all of them. Captured from
+// 60.177.107.149:4672, a full 523-byte answer:
+//
+//	e4 09                          protocol 0xE4, opcode 0x09 (HELLO_ANSWER)
+//	72 c9 41 d6 bc e4 b9 a9        the node's own client GUID, 16 bytes,
+//	f9 c8 71 c0 7b 8f ee a9        WORD-REVERSED -- see the note below
+//	36 12                          TCP port 4662, little-endian
+//	08                             Kad protocol version 8
+//	14                             tag count, 20
+//	00                             and then... a zero byte
+//
+// So the frame is [E4][09][id:16][tcpport:2 LE][version:1][count:1], which is
+// EXACTLY the layout kad.Hello.Unpack reads. The header is not the problem,
+// and the version and port both come out sane (8 and 4662) on every node
+// captured, which is the check that says the offsets are right.
+//
+// # THE TAG LIST DOES NOT DECODE, AND THE LIBRARY'S READER IS WHY
+//
+// Byte 22 is 0x00. The library reads tags as [type|0x80][id][value] -- the
+// eMule ED2K tag format -- and refuses anything whose type byte has 0x80
+// clear. A 0x00 has it clear, so the first tag fails with "kad tag without id
+// is unsupported", and that is the exact error every live node produces.
+//
+// The tag section is 500 bytes and none of the following readings walk it to
+// a clean end:
+//
+//   - [name_len:1][name][type:1][value], the eMule Kad tag format. The first
+//     name length is 0, and 0 is the list terminator, so the list reads as
+//     empty while 500 bytes follow it. A sweep of every start offset from 2
+//     to 40 and every count from 1 to 40 found no offset/count pair that both
+//     parses and terminates.
+//   - Fixed 25-byte contact records: 500/20 is exactly 25, but the resulting
+//     addresses and ports are not plausible at that alignment.
+//   - 0x40-prefixed firewall-port records: 0x40 appears 11 times followed by
+//     12 36, but read as [0x40][port:2] that port is 13842, not the 4662 those
+//     bytes also spell in the other order. So 0x40 is a value, not an opcode,
+//     and the coincidence of the byte pair is what made it look like one.
+//
+// What is consistent across all six answers: the opcode, the 20-count, the
+// zero byte at offset 22, and a 4-byte sequence at offsets 68-71 that repeats
+// across DIFFERENT NODES. Cross-node agreement at a fixed offset is the
+// signature of a fixed-size record, which is the strongest hint available
+// without a reference implementation to check against.
+//
+// # WHY THIS IS NOT FIXED BY GUESSING
+//
+// A bootstrap only needs the first twenty bytes. The ID, the port and the
+// version are all decoded correctly and all three are what a caller wants; the
+// tag list is metadata the network does not require for the handshake to
+// complete. So decodeKadAnswer reads the header and STOPS, and treats the
+// remaining bytes as unparsed rather than as a failure.
+//
+// That is a deliberate change from the previous behaviour, which called
+// Hello.Unpack and failed the whole bootstrap over the tag list. Failing here
+// meant: no node on the network can be bootstrapped at all, so Kad is dead,
+// over bytes that carry nothing this client needs yet.
+//
+// # THE HONEST LIMIT
+//
+// The tag list format is unestablished. The library's reader is wrong for it
+// and no offline analysis of six samples pinned it. Establishing it needs one
+// of:
+//
+//  1. A reference client. Capture a real eMule or aMule hello answer and read
+//     the tag section out of the capture. One run answers it, the same way
+//     the ed2k version tag needs a capture and not a probe loop.
+//  2. A library that models the format. The upstream reader is the eMule ED2K
+//     tag format, which is a different thing with the same name.
+//
+// Until then the bytes are carried as raw and not interpreted. A guessed
+// layout is worse than none: a wrong one produces plausible-looking node IDs
+// and a routing table keyed on them, which is a failure that looks like
+// working and is not.
 
 // Bootstrap performs the Kad hello against one node.
 //
@@ -261,10 +468,28 @@ func encodeKadHello(self NodeID) ([]byte, error) {
 
 // decodeKadAnswer parses a node's answer to our hello.
 //
-// The library's `DecodePacket` validates the 0xE4 header and splits the
-// opcode from the body; `Hello.Unpack` reads the body. A node that answers
-// with something that is not a Kad packet is refused BY NAME, because a
-// non-Kad UDP service on the same port is a real and confusing thing to hit.
+// # IT READS THE HEADER AND STOPS, ON PURPOSE
+//
+// The layout is [0xE4][opcode][id:16][tcpport:2 LE][version:1][count:1]
+// followed by a tag list this package does not yet decode -- see the long
+// note above Bootstrap for the captures, the four layouts that were tried and
+// ruled out, and why guessing one is worse than not reading it.
+//
+// The previous version called kad.Hello.Unpack, which reads the header
+// correctly and then hands the tag section to a reader that expects the eMule
+// ED2K tag format. Every real node answers with something that reader refuses,
+// so every bootstrap failed with "kad tag without id is unsupported" and Kad
+// could not reach a single node on the network -- over bytes that carry
+// nothing a bootstrap needs.
+//
+// The header is read here by hand rather than through the library so that the
+// two halves of this package are not coupled to a reader that cannot parse
+// what real nodes send. The offsets are confirmed against six captured
+// answers: version 8 and port 4662 came out sane on every one, which is the
+// check that the offsets are right rather than merely self-consistent.
+//
+// The tag bytes are returned UNPARSED rather than discarded, so a caller that
+// needs them has them and does not have to re-read the datagram.
 func decodeKadAnswer(frame []byte) (BootstrapResult, error) {
 	opcode, body, err := kad.DecodePacket(frame)
 	if err != nil {
@@ -272,23 +497,69 @@ func decodeKadAnswer(frame []byte) (BootstrapResult, error) {
 			"packet: %w", err)
 	}
 
-	// The answer opcode is the same family as the request. A node that
-	// answers with an unexpected opcode has still proved it is alive and
-	// running Kad, which is all this function promises, so the payload is
-	// parsed for the ID but an unexpected opcode is not by itself a failure.
-	var hello kad.Hello
-	if err := hello.Unpack(body); err != nil {
-		return BootstrapResult{}, fmt.Errorf("the Kad answer (opcode 0x%02X) "+
-			"does not decode: %w", opcode, err)
+	// An unexpected opcode is not by itself a failure: a node that answers
+	// with something other than HELLO_ANSWER has still proved it is alive
+	// and running Kad, which is all a bootstrap promises. The opcode is
+	// carried in the result rather than discarded, so a caller CAN check it
+	// -- and so the compiler does not quietly remove a check that was
+	// written and then orphaned.
+	// 16 bytes of ID, 2 of TCP port, 1 of version, 1 of tag count. The count
+	// is read so the tag section can be handed on, and is NOT trusted to
+	// describe the section: on every captured answer the byte after it is
+	// 0x00, which no reading of the tag format accounts for yet.
+	const headerLen = 16 + 2 + 1 + 1
+	if len(body) < headerLen {
+		return BootstrapResult{}, fmt.Errorf("a Kad hello answer carries "+
+			"at least %d bytes of header (16 for the node ID, 2 for the "+
+			"TCP port, 1 for the version, 1 for the tag count) and %d "+
+			"arrived", headerLen, len(body))
 	}
 
+	// The node's ID is its client GUID with each 4-byte word reversed. That
+	// reversal is the Kademlia convention and the library applies it in
+	// kad.ID.Get, so it is applied here rather than skipped: skipping it
+	// produces a plausible ID that is not the node's real one, and a
+	// routing table keyed on the wrong ID finds nothing.
+	rawID := body[0:16]
+	var wire [16]byte
+	for i := 0; i < 16; i += 4 {
+		for j := 0; j < 4; j++ {
+			wire[i+j] = rawID[i+3-j]
+		}
+	}
+	hash, err := protocol.HashFromBytes(wire[:])
+	if err != nil {
+		return BootstrapResult{}, fmt.Errorf("the node's ID does not "+
+			"convert to a hash: %w", err)
+	}
+
+	tcpPort := binary.LittleEndian.Uint16(body[16:18])
+	version := body[18]
+	tagCount := body[19]
+	tags := body[headerLen:]
+
 	return BootstrapResult{
-		ID: hello.ID,
-		// Firewalled is derived from the node's own TCP port claim. This
-		// build does not yet act on it -- a firewalled node is usable for
-		// searches and this is where that decision belongs -- so it is
-		// carried and left for the caller rather than guessed at here.
-		Firewalled: hello.TCPPort == 0,
+		ID: NodeID{Hash: hash},
+		// Firewalled is the node's own claim, read from its TCP port: a
+		// zero means it is not reachable from outside its NAT. Carried as a
+		// claim and left for the caller -- refusing firewalled nodes would
+		// refuse most of the network, and a node that lies about this is
+		// the normal case rather than an attack.
+		Firewalled: tcpPort == 0,
+
+		// What the header said, kept because a caller bootstrapping for
+		// SEARCH reasons needs to know whether a node speaks the protocol
+		// it expects, and because the version is the only part of this
+		// answer that says so.
+		TCPPort: tcpPort,
+		Version: version,
+
+		// The tag bytes, unparsed. tagCount is carried alongside so a
+		// caller can see that it did not match -- which is a live fact
+		// about the format, not something to paper over.
+		TagCount:     tagCount,
+		UnparsedTags: tags,
+		Opcode:       opcode,
 	}, nil
 }
 
