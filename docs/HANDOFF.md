@@ -38,6 +38,97 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 
 ---
 
+## RESUME HERE — STEP 4 DONE, AND THE LIVE TEST FOUND A REAL BUG
+
+**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `ccdf72236`.**
+
+### The headline
+
+**Step 5 of the transfer plan ran, and the first thing it found was that step
+5 could not work — plus a bug in shipped code that has been there since the
+search decoder was written.**
+
+**1. A search result's name was wrong for 284 of 299 files.** `nameOf` returned
+the tag's raw `Value` as the filename. That is right for a Str-family tag
+(the value *is* the name) and wrong for a `tagTypeString` one, whose value is
+`[len:2][name]` — so every name over 15 bytes arrived with its own
+little-endian length glued to the front as two junk bytes:
+
+```
+result 3  type=0x02  value=1d 00 76 69 64 65 6f ...   (0x001D = 29)
+         before: "\x1d\x00video_2026-01-01_14-39-10.mp4"   (31 bytes)
+         after:  "video_2026-01-01_14-39-10.mp4"            (29 bytes)
+```
+
+0x1D is 29 and the name is 29 bytes; 0x62 is 98 and the name is 98 bytes. The
+two agree on all 284, which is what makes it a length prefix rather than a
+coincidence. Fixed by routing through `Tag.String()`, which already decodes
+both encodings correctly — `nameOf` had been re-deriving the rule and drifting
+from it. Five new tests; a mutation probe that reverts the fix to the original
+bug verbatim.
+
+**2. A source handle is reachable, but no reachable handle speaks ed2k.**
+Measured live against `85.17.116.222:6082`, searching `ubuntu`:
+
+| measurement | result |
+|---|---|
+| server-supplied handles in a live search | 299 |
+| of the first 25, accepting a TCP connection | **3** |
+| of those 3, completing our ed2k `DialSource` handshake | **0** |
+| small files (≤ one part) found by 7 keyword searches | 26 |
+| of those, any source answering a part request | **0** |
+
+**So the live test FAILS, and that is the correct result to have reached.** The
+plan said step 5 is "the only real proof"; it is also the step that can
+genuinely fail, and what it proves is that no server on this network currently
+offers a peer this client can complete a source conversation with. The
+source-side opcodes in `part.go` are therefore still *correct as cited and
+unconfirmed in use* — which is exactly what the transfer plan's §9 said they
+were, now measured rather than assumed.
+
+The permanent test is `internal/ed2kwire/transfer_live_test.go` (behind the
+existing `ed2klive` tag). It reports the two numbers as separate facts and
+fails with a message that says which of the two findings it is:
+
+```
+PHASE 1 (TCP connect only, proves a socket opened): 5 of 25 handles accepted
+PHASE 2 (the real question): 0 of 5 TCP-reachable handles completed our ed2k
+handshake; 0 then answered a part request
+```
+
+**A live test that reports a failure is working. This one is red on purpose
+and the red is the evidence.** It refuses to skip, so a green `go test ./...`
+never claims the source protocol is proven — only that nothing in this
+milestone regressed.
+
+### The mistake worth more than the finding
+
+**I labelled a bare `net.DialTimeout` result "LIVE".** A TCP connect proves a
+socket opened. It says nothing about whether the peer speaks ed2k, and three
+of those three handles failed the actual handshake minutes later. The label
+claimed a conclusion the measurement could not support, and I only caught it
+because the next probe asked a second question.
+
+**A connect is not a handshake, and a probe that measures less than its label
+is worse than no probe** — it manufactures the evidence for the claim it was
+sent to test. Phase 1 of the handshake probe now does the TCP filter *and*
+phase 2 runs `DialSource`, and the two are reported as separate numbers.
+
+### What the plan got wrong
+
+**Step 5 assumed a search result's `UserID`/`Port` is a dialable source.** It
+is, and that is the useful part — but a handle that accepts a connection is
+common (3 of 25) while one that completes an ed2k handshake was zero of three.
+The plan wrote "take a SearchResult, dial its UserID/Port as a source" as if
+those were the same step, and the gap between them is the actual finding.
+`docs/specs/2026-09-28-ed2k-transfer-plan.md` step 5 is corrected in place.
+
+**Kad source lookup is not a nice-to-have any more.** It is the only path to a
+peer, on the evidence above. The plan listed it under "what this does not
+settle"; it is the blocking item for the transfer.
+
+---
+
 ## RESUME HERE — BOTH NETWORKS NOW TALK TO REAL SERVERS
 
 **Last updated 2026-09-28, at a clean milestone. Branch `develop` at `497d1d7a9`.**
@@ -1989,6 +2080,49 @@ set, which is the same scope error as the source-scanning test that walked
 `..` from `internal/api`.
 
 Run them **serially**. They edit real files and restore them.
+
+### A mutation that does not compile is MALFORMED, and it is easy to write one
+
+The ed2kwire harness now reports **51 killed, 0 survived, 0 skipped, PYEXIT=0**.
+Getting the new name probe to that line took two attempts, and the failure was
+worth recording because it is the whole reason MALFORMED is a separate verdict:
+
+- Attempt 1 replaced the decode with `return string(t.Value)`. That leaves
+  `strings` and the loop variable `t` used only by the code that was removed,
+  so the package does not build.
+- Attempt 2 kept them referenced with `_ =` but left `name` unused:
+  `declared and not used: name`.
+
+**Both looked like "the fix is untested" from a distance and were actually "my
+probe is wrong".** A build failure and a dead test produce the same silence, so
+the harness distinguishes them — and here the distinction sent me to the probe
+rather than to `nameOf`, which was correct all along.
+
+Diagnose it by applying the mutation and building **in one process**, rather
+than by reading the harness's verdict and guessing:
+
+```python
+open(SR, "w").write(orig.replace(old, new, 1))
+subprocess.run(["go", "build", "./internal/ed2kwire/"], ...)
+# restore in a finally, not at the end
+```
+
+### Two harnesses must never overlap — and one of them is not a test run
+
+I ran the live test while the mutation harness was editing the same package,
+and the live test reported:
+
+```
+tag 0x01 has wire type 0x99, which this client does not model
+```
+
+That is `tag.go` mid-mutation, not a wire finding. **The mutation harness
+edits real files, so anything else that compiles or tests that package during
+it is measuring the harness.** The earlier lesson in this file was about a
+harness killed mid-probe leaving its mutation applied; this is the same trap
+from the other side — not leaving a mutation behind, but reading one that was
+there on purpose.
+
 
 The push destination is still unset: the only remote is `upstream` =
 `github.com/stashapp/stash`, which is the upstream project. Everything here is

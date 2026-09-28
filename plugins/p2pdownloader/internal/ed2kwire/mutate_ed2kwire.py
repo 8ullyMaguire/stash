@@ -476,6 +476,46 @@ MUTATIONS = [
     ("searchresult: the hash is not read from the file ID",
      SEARCHRESULT, "copy(r.Hash[:], plain[off:off+16])",
      "copy(r.Hash[:], plain[off:off+8])", "CapturedHashIsSixteenBytes|GoldenFirstResult"),
+
+    # THE NAME IS DECODED, NOT COPIED. This is the probe that would have
+    # caught the 284-of-299 bug.
+    #
+    # nameOf used to return the tag's raw Value as the filename. That is
+    # right for a Str-family tag (the value IS the name) and wrong for a
+    # tagTypeString one, whose value is [len:2][name] -- so every name over
+    # 15 bytes arrived with its own little-endian length glued to the front
+    # as two junk bytes.
+    #
+    # It survived a 14-test suite because every name assertion was on the
+    # FIRST result or on the three short Str-family names (0x9A, 0x99,
+    # 0x9B), and because the corrupted names are LONGER than the real ones
+    # -- so plausibility checks and length checks both pass. Only a
+    # whole-name comparison past result 2 fails, and there was none.
+    #
+    # The reverted form below is the ORIGINAL bug, verbatim, so this probe
+    # is a regression guard on the fix rather than a guess at it.
+    #
+    # # IT MUST STILL COMPILE, AND THE FIRST ATTEMPT DID NOT
+    #
+    # The first version replaced the decode with `return string(t.Value)`,
+    # which leaves both `strings` and the loop variable `t` used only by the
+    # code that was removed -- so the package fails to build and the harness
+    # reports MALFORMED, not a survivor. A build failure and a dead test look
+    # the same from the outside, which is the whole reason the verdict is
+    # separate; here it correctly pointed at this probe rather than at the
+    # fix.
+    #
+    # So the replacement keeps the shape and drops only the decode:
+    # `_ = strings.TrimRight` and `_ = t` keep both referenced, and the
+    # name comes back as the raw value -- the bug, compiling.
+    ("searchresult: the name is the tag's raw value, length prefix and all",
+     SEARCHRESULT,
+     "\t\tname, ok := t.String()\n\t\tif !ok {\n\t\t\treturn \"\"\n\t\t}\n"
+     "\t\treturn strings.TrimRight(name, \"\\x00\")",
+     "\t\tname, ok := t.String()\n\t\t_ = name\n\t\t_ = ok\n\t\t_ = strings.TrimRight\n"
+     "\t\t_ = t\n\t\treturn string(t.Value)",
+     "NameIsNotItsOwnLengthPrefix|"
+     "EveryDecodedNameMatchesItsDeclaredLength|NoNameBeginsWithAControlByte"),
     # ---- the SOURCE handshake ----
     #
     # A source is a peer, reached the same way a server is. Nothing here

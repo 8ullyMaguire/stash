@@ -1,9 +1,9 @@
 package ed2kwire
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 )
 
 // Reading a search RESULT: what a server sends back, and the shape it is.
@@ -218,14 +218,57 @@ func DecodeSearchResult(plain []byte) ([]SearchResult, error) {
 // nameOf reads tag 0x01 as a filename, dropping the NUL terminator the wire
 // carries.
 //
-// The terminator is stripped HERE and not by the tag decoder, because a tag
-// decoder that silently trimmed values would be wrong for the server info
-// tags where the NUL is meaningful. Stripping is this type's job.
+// # IT DECODES THROUGH Tag.String, AND NOT THROUGH t.Value — 284 OF 299
+// NAMES WERE WRONG WITHOUT IT
+//
+// The first version returned `string(bytes.TrimRight(t.Value, "\x00"))` for
+// whatever the tag held, and that is correct for a Str-family tag and wrong
+// for a tagTypeString one. A tagTypeString value is `[len:2][bytes]`: the
+// uint16 length is PART OF THE VALUE, not part of the name.
+//
+// Measured on the capture, 2026-09-28, 284 of its 299 results:
+//
+//	result  3  type=0x02  value=1d 00 76 69 64 65 6f ...  (len 0x001D = 29)
+//	          before: "\x1d\x00video_2026-01-01_14-39-10.mp4"  (31 bytes)
+//	          after:  "video_2026-01-01_14-39-10.mp4"           (29 bytes)
+//	result  4  type=0x02  value=62 00 53 75 73 75 72 ...  (len 0x0062 = 98)
+//	          before: "b\x00Susurran.tu.nombre...mkv"          (100 bytes)
+//	          after:  "Susurran.tu.nombre...mkv"                (98 bytes)
+//
+// 0x1D is 29 and the name is 29 bytes; 0x62 is 98 and the name is 98 bytes.
+// The two agree on every one of the 284, which is what makes this a length
+// prefix rather than a coincidence.
+//
+// # WHY NOTHING CAUGHT IT, AND IT IS NOT A CLOSE MISS
+//
+// The capture's first three results are all short Str-family tags (0x9A,
+// 0x99, 0x9B), where the value IS the name. The tests assert on those three
+// by name, so they passed. Every test that could have seen the bug asserted
+// on a result whose type does not have the prefix.
+//
+// And the junk is invisible to a length check: the corrupted names are
+// LONGER than the real ones, not shorter, so "is this name plausible" passes
+// and "is this name the right length" would too. The only assertions that
+// fail are ones that compare the whole name — and there were none past the
+// first three results.
+//
+// # AND THE FIX IS TO CALL THE ACCESSOR THAT ALREADY KNOWS THIS
+//
+// `Tag.String()` handles both encodings correctly: it reads the uint16
+// length for a tagTypeString and uses the value verbatim for a Str-family
+// type. Duplicating that rule here is how the two drifted apart in the first
+// place, and the whole point of the Tag accessors is that a caller converts
+// rather than re-decodes.
 func nameOf(tags TagList) string {
 	for _, t := range tags {
-		if t.ID == tagIDFileName {
-			return string(bytes.TrimRight(t.Value, "\x00"))
+		if t.ID != tagIDFileName {
+			continue
 		}
+		name, ok := t.String()
+		if !ok {
+			return ""
+		}
+		return strings.TrimRight(name, "\x00")
 	}
 	return ""
 }

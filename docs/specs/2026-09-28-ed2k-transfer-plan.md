@@ -440,6 +440,40 @@ GOFLAGS=-mod=mod go test ./internal/rpc/ -run 'TestTheDownloadStubStillReportsTh
 
 ## Step 5 — the live test, and it is the only real proof
 
+> ### RUN 2026-09-28: THIS STEP FAILED, AND WHAT IT FOUND
+>
+> **The live test was written and run. It does not pass, and the reason is
+> recorded here rather than left as a red build.** Measured against
+> `85.17.116.222:6082`:
+>
+> | measurement | result |
+> |---|---|
+> | server-supplied handles in a live search (`ubuntu`) | 299 |
+> | of the first 25, accepting a TCP connection | **3** |
+> | of those 3, completing our `DialSource` ed2k handshake | **0** |
+> | small files (≤ one part) from 7 keyword searches | 26 |
+> | of those, any source answering a part request | **0** |
+>
+> **The plan's own wording was wrong.** It said "dial its `UserID`/`Port` as a
+> source" as if dialling and reaching a source were one step. They are not: a
+> handle that accepts a TCP connection is reasonably common, and a handle that
+> completes an ed2k source conversation was zero of three. The gap between the
+> two is the finding, and no amount of retrying hides it — a peer that ignores
+> our handshake will ignore the next one too.
+>
+> **What this establishes, and it is worth stating plainly:** the source-side
+> opcodes in `part.go` remain *correct as cited and unconfirmed in use*. §9's
+> caveat holds; this run is what turned it from an assumption into a
+> measurement.
+>
+> **The honest consequence is that Kad source lookup is now blocking, not
+> deferred.** A server's `UserID`/`Port` is a *hint* that a source exists
+> there, and on today's network that hint is right about TCP reachability and
+> wrong about ed2k. Kad (`OP_KAD2_SEARCH_SOURCE_REQ`, `OP_START_TRANSFER`) is
+> the protocol that resolves a file hash to peers directly, and it is the only
+> remaining path. It was listed in §8 as unsettled; the evidence here promotes
+> it to the next milestone.
+
 A source is a stranger, and everything above is a claim about what it will do.
 **This is the step that can genuinely fail**, and it is why the earlier
 milestones needed captures.
@@ -465,6 +499,13 @@ GOFLAGS=-mod=mod ED2K_LIVE_SERVERS=85.17.116.222:6082 \
 Expected: `--- PASS`, or a **named** failure (`no source answered` /
 `the answer is not a part packet`). Either is progress; a hang is not, and the
 existing deadline tests are the model for that.
+
+> **And the measured result was neither, on 2026-09-28: a named failure at
+> the handshake, not at the part request.** The test's job is to distinguish
+> those — `ErrRefused` (the peer never spoke) from an unrecognised opcode (it
+> spoke something else) from a short answer (it spoke and lied). It reported
+> `ErrRefused` on all three reachable handles, which is the first of the three
+> and the one that points at Kad.
 
 ## Step 6 — factor the handshake out, with two callers
 
