@@ -31,10 +31,31 @@ goed2k.HashFromHashSet  ->  90955B3AFD7D14B68B672C584F88DD93   (WRONG)
 internal/ed2k.HashFile  ->  735E6A43667B72334F8E27F9C46D263B   (correct)
 ```
 
-**Rule for every reviewer:** a `grep -rn "goed2k" internal/ed2k/` must return
-**nothing**. The hash is ours. If that grep ever returns a line, the plugin can
-hash a file to a value matching nothing on the network, and no unit test will
-notice, because the library's tree hash agrees with itself.
+**Rule for every reviewer:** no file in `internal/ed2k/` may **import** the
+library. The hash is ours. If one ever does, the plugin can hash a file to a
+value matching nothing on the network, and no unit test will notice, because
+the library's tree hash agrees with itself.
+
+**And the check has to match the rule, which is a correction.** The first
+version of this line was `grep -rn "goed2k" internal/ed2k/` and the rule was
+"must return nothing". It returned two lines — in a **comment** in `ehash.go`
+recording the measured counterexample that justifies the whole rule. So the
+check fired on its own evidence, and a reviewer running it got a failure that
+meant nothing: the two `//` lines document the rejection, and a third
+comment line is where a future reader would look for the reasoning.
+
+Deleting the evidence to satisfy the check would be the wrong trade, so the
+check changed to what it was always for — an import is what puts the library
+in the build:
+
+```sh
+# an IMPORT is the violation; a comment is the documentation of it
+grep -rn 'goed2k' --include='*.go' internal/ed2k/ \
+  | grep -v '^\s*//' | grep -v ':[0-9]*:\s*//'   # -> empty
+```
+
+A blunt grep that is kept green by deleting the reasoning is worse than a
+precise one that is red: the first trains a reviewer to ignore it.
 
 ---
 
@@ -249,7 +270,8 @@ go build ./...                                  clean
 go vet ./...                                    clean
 gofmt -l internal/ed2kwire/                     clean
 go test ./... -count=1                          green, no network
-grep -rn goed2k internal/ed2k/                  EMPTY  <- the rule in §0
+grep -rn goed2k --include='*.go' internal/ed2k/ | grep -v ':[0-9]*:\s*//'
+                                                    EMPTY  <- the rule in §0
 python3 internal/ed2kwire/mutate_ed2kwire.py    0 survived, PYEXIT=0
 go test -tags ed2klive ./internal/ed2kwire/     reported honestly, including failure
 ```

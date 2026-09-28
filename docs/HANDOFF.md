@@ -234,13 +234,41 @@ is `upd.emule-security.org`, and that test needs updating.
 
 ### THE NEXT TASK
 
-1. **The two captures** (Kad tags, ed2k version tag). One reference-client
-   session closes both.
-2. **The eMule extended handshake** (plan §3) — *this is the actual feature*.
-   The login is the door; the handshake is what gets you file search. It is
-   the only thing standing between this work and a working download.
-3. ~~Fix the dead URLs in `live_test.go`~~ — DONE at `336280646`.
-4. ~~Re-run the mutation harness~~ — DONE, 0 survivors at `497d1d7a9`.
+**Everything in this plan is now implemented and verified.** The two steps that
+were open when this section was last written are closed:
+
+1. ~~**The eMule extended handshake** (plan §3)~~ — **DONE** at `6ae05a910`.
+   `exthello.go`, 25 mutation probes at zero survivors. See "M5 step 3" above
+   for the four bugs the harness found and what each one taught.
+2. ~~**The Kad tag list does not decode**~~ — still open, and **it needs a
+   reference client.** Four layouts were tried and ruled out. This is not
+   guessable: a wrong layout yields plausible node IDs and a routing table keyed
+   on them, which is worse than not decoding.
+3. ~~**The ed2k client version tag**~~ — same answer, same reason.
+
+**What is left, honestly:**
+
+- **One run of a real eMule or aMule against a server, captured.** That closes
+  the Kad tag layout and the version tag together. It is the highest-value
+  hour available and it is **not work an LLM can do alone** — it needs a GUI
+  client, a packet capture, and someone to drive it.
+- **The extended hello's wire shape is unconfirmed.** Implemented from the
+  spec, verified hermetically; the live server is silent either way, so
+  framing cannot be distinguished from "that server ignores them". Same
+  capture closes it.
+- **The TCP half of SYN obfuscation** (needs a raw socket, not exposed by
+  `net.Dialer`; the payload half alone is enough for a full login).
+- **The transfer itself.** `ErrTransferNotImplemented` is still the honest
+  answer at the end of a granted ed2k link, and
+  `TestTheDownloadStubStillReportsTheTransferIsUnimplemented` says so. Search →
+  request → download is the next feature after the captures.
+
+**One correction made this session, worth not undoing.** The plan's §0 check was
+`grep -rn "goed2k" internal/ed2k/` and the rule was "must return nothing". It
+returned two lines — in a **comment** recording the measured counterexample that
+justifies the whole rule. The check was firing on its own evidence, and it is
+now scoped to imports, which is what the rule was always for. Verified both
+ways: clean on the real tree, and still catches an injected import.
 
 ### How to run the tests
 
@@ -248,7 +276,7 @@ is `upd.emule-security.org`, and that test needs updating.
 cd plugins/p2pdownloader
 go test ./... -count=1                     # whole plugin
 go test ./internal/ed2kwire/ -count=1      # ed2kwire, ~10s
-python3 internal/ed2kwire/mutate_ed2kwire.py   # 19 probes, bounded
+python3 internal/ed2kwire/mutate_ed2kwire.py   # 25 probes, bounded
 
 curl -o /tmp/nodes.dat https://upd.emule-security.org/nodes.dat
 ED2K_LIVE_NODES_DAT=/tmp/nodes.dat \
