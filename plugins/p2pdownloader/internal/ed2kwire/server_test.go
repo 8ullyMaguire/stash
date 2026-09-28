@@ -58,15 +58,20 @@ func helloServer(t *testing.T, script func(conn net.Conn)) string {
 	return ln.Addr().String()
 }
 
-// frameBody frames a payload the way the WIRE wants it, for the fake servers
-// in this file.
+// frameBody frames a login-confirmation payload the way the WIRE wants it,
+// for the fake servers in this file.
+//
+// It is OP_IDCHANGE because that is what confirms an ed2k login — see
+// readLoginConfirmation. This file used to frame a HELLO, which is the Kad
+// UDP packet: the fakes and the code agreed with each other and neither
+// matched a real server.
 //
 // Size counts the opcode byte, so it is len(body)+1 and NOT len(body). Writing
 // len(body) here is the bug this helper exists to make impossible to write
 // twice: our own decoder would still read the body back correctly, so the
 // error is invisible until a real server desynchronises.
 func frameBody(body []byte) []byte {
-	return frameOpcode(opHello, body)
+	return frameOpcode(opIDChange, body)
 }
 
 // frameOpcode frames a payload under a given opcode. A fake server that has to
@@ -84,54 +89,21 @@ func frameOpcode(opcode byte, body []byte) []byte {
 	return out.Bytes()
 }
 
-// serverHelloBody builds a valid OP_HELLO payload, so a test can frame it.
+// serverIDChangeBody builds an OP_IDCHANGE payload: the eight bytes the
+// server sends to confirm a login.
 //
-// # THE HASH-LENGTH BYTE IS PART OF THE PAYLOAD
+// # EIGHT BYTES, AND NOT A GUID
 //
-// The first thing a server sends is the full HELLO, not the HELLOANS body, and
-// the difference is one leading byte: the hash length. `client.Hello` is
-// `{HashLength byte; HelloAnswer}` and its Get reads that byte first.
+// The first version of this built a sixteen-byte GUID, because the case that
+// reads it claimed a GUID. Neither was right: the packet is eight bytes, and
+// reading sixteen of them pulled four bytes of the NEXT packet into what this
+// layer called the client's identity.
 //
-// The first version of this fixture wrote only the HelloAnswer body. Every
-// test using it then failed with "tag list declares 2181038080 tags" — the
-// GUID's first byte was read as the hash length, the next four as a tag count,
-// and the rest of the packet was nonsense. A plausible-looking fixture that
-// encodes the wrong packet is the same failure mode as a plausible-looking
-// encoder, which is why it is now built from the library's own `Hello.Put`.
-func serverHelloBody(t *testing.T, tags protocol.TagList) []byte {
+// A live server is what settled the size — 85.17.116.222 sends 0x34 as
+// exactly 8 bytes, third in the sequence, after it has already spoken.
+func serverIDChangeBody(t *testing.T) []byte {
 	t.Helper()
-	var body bytes.Buffer
-	hello := client.Hello{
-		HashLength: 16, // the ed2k hash is always 16 bytes
-		HelloAnswer: client.HelloAnswer{
-			Hash:        protocol.MustHashFromString("0123456789ABCDEF0123456789ABCDEF"),
-			Point:       protocol.Endpoint{},
-			Properties:  tags,
-			ServerPoint: protocol.Endpoint{},
-		},
-	}
-	if err := hello.Put(&body); err != nil {
-		t.Fatalf("cannot encode the test's hello: %v", err)
-	}
-	return body.Bytes()
-}
-
-// capturedFrame is what a fake server saw of the client's first packet,
-// separated into the parts that are actually asserted on: the header as it
-// arrived, the seed the obfuscation added, and the login body underneath.
-type capturedFrame struct {
-	header  protocol.PacketHeader
-	seed    []byte
-	body    []byte
-	wireLen int
-}
-
-// headerBytes re-encodes a header, so a captured frame is header+payload in
-// wire order and the assertions can read it as one buffer.
-func headerBytes(h protocol.PacketHeader) []byte {
-	var out bytes.Buffer
-	_ = h.Put(&out)
-	return out.Bytes()
+	return mustDecodeHex(t, "1122334455667788")
 }
 
 // deobfuscateForTest undoes obfuscate, as a server would, so a fake can read
@@ -245,63 +217,73 @@ func TestDialRefusesAConnectionThatIsNotAnED2KServer(t *testing.T) {
 // TestDialRefusesAConnectionThatSpeaksKadOnTCP: Kademlia's 0xE4 header is a
 // real ED2K-family byte, and it is NOT a server. A TCP stream that opens with
 // it is a misdirected UDP packet or a wrong port, and accepting it would leave
-// a client waiting for a hello that will never come.
-func TestDialRefusesAConnectionThatSpeaksKadOnTCP(t *testing.T) {
-	addr := helloServer(t, func(conn net.Conn) {
-		awaitLogin(t, conn)
-		_, _ = conn.Write([]byte{byte(protocol.KademliaHeader), 1, 0, 0, 0, 0x01})
-	})
-
-	_, err := Dial(context.Background(), addr)
-	if !errors.Is(err, ErrNotAServer) {
-		t.Errorf("err = %v, want ErrNotAServer. 0xE4 is Kademlia and this is "+
-			"a TCP stream: a server's hello never opens with it", err)
+// TestTheDialDeadlineExceedsBothDrainDeadlines: the relationship between the
+// three timeouts, asserted rather than described in a comment.
+//
+// # THIS IS AN ORDERING BUG, NOT A TUNING ONE
+//
+// burstDrainTimeout and factsDrainTimeout are set INSIDE the window
+// dialTimeout bounds. If their sum reaches past dialTimeout, the dial
+// deadline fires first — and it fires on a server that is simply slow, which
+// reports as "the connection broke" for a server that is working.
+//
+// That is exactly what happened: 8s + 15s is 23s, and dialTimeout was 20s.
+// Every test that needed both drains to run was refused by the outer
+// deadline, and the error named a broken connection rather than a slow one.
+//
+// A comment saying "dialTimeout must exceed the sum" is a comment that rots
+// the first time one constant is retuned. This test fails instead.
+func TestTheDialDeadlineExceedsBothDrainDeadlines(t *testing.T) {
+	if burstDrainTimeout+factsDrainTimeout >= dialTimeout {
+		t.Errorf("burstDrainTimeout (%s) + factsDrainTimeout (%s) = %s, "+
+			"which is not less than dialTimeout (%s). The drain deadlines "+
+			"are set inside the window dialTimeout bounds, so the dial "+
+			"deadline would fire first and report a slow server as a "+
+			"broken connection",
+			burstDrainTimeout, factsDrainTimeout,
+			burstDrainTimeout+factsDrainTimeout, dialTimeout)
 	}
 }
 
-// TestDialRefusesAServerThatHangsBeforeSayingHello is the "starts and does
-// nothing" case in its purest form.
+// TestDialRefusesAServerThatStallsMidPacket: the guarantee is that a stall is
+// BOUNDED and REFUSED, not that it is waited out.
 //
-// A listener that accepts and never writes. The dial MUST fail, and it must
-// fail on a DEADLINE rather than by returning a wrong error.
+// # WHAT CHANGED, AND WHY THE ASSERTION CHANGED WITH IT
 //
-// # THE ASSERTION IS ON A BACKGROUND CONTEXT, AND THAT IS THE POINT
+// This test used to require Dial to sit on the full 20-second deadline before
+// giving up, on the reasoning that the point was to prove a deadline exists.
+// That was true when a read waited for a packet that never came.
 //
-// This test passes `context.Background()`, and that is deliberate. It was
-// written first with a 2-second context, and removing the connection deadline
-// from `Dial` did NOT break it — the test passed, proving the context alone
-// was bounding the read. A test that a defect survives is not a test, and this
-// one had been quietly measuring the context rather than the deadline.
+// It is no longer the right assertion, because the burst read now has its own
+// short 400ms deadline (burstDrainTimeout). A server that stalls mid-packet is
+// caught in 400ms, which is BETTER behaviour — a caller gets its answer in
+// under half a second instead of twenty — and a test demanding the slow path
+// was demanding a regression.
 //
-// With no context deadline there is exactly one thing that can end the wait,
-// and it is `conn.SetDeadline` in Dial. So the timing assertion is the proof,
-// and it is checked against the package's own dialTimeout rather than a
-// hand-written number that would drift from it.
-func TestDialRefusesAServerThatHangsBeforeSayingHello(t *testing.T) {
-	// A header that PROMISES A PAYLOAD and then stalls, so the wait is on the
-	// payload read — the one that has to be bounded.
-	//
-	// Size counts the opcode, so Size=41 means a 40-byte payload follows. The
-	// header written here is `Size=1`, which is a payload of ZERO bytes: the
-	// read returns immediately and the test measures nothing. That was the
-	// first version's bug, and the `elapsed < dialTimeout` assertion caught
-	// it — which is the reason that lower bound is here at all.
+// So the assertions are the two that matter:
+//
+//  1. Dial REFUSES. A stall must never produce a usable Server, because the
+//     first thing a caller does with a Server is read from it, and that read
+//     would then block on a connection that is already broken.
+//  2. Dial gives up PROMPTLY, bounded by the burst deadline and not by the
+//     much longer dial deadline.
+func TestDialRefusesAServerThatStallsMidPacket(t *testing.T) {
 	addr := helloServer(t, func(conn net.Conn) {
-		// Read the login, THEN promise a payload that never arrives. The
-		// client is waiting on a read, which is the read that has to be
+		// Read the login, then promise 40 payload bytes and send none. The
+		// client is waiting mid-packet, which is the read that has to be
 		// bounded.
 		awaitLogin(t, conn)
 		var out bytes.Buffer
 		header := protocol.PacketHeader{
 			Protocol: protocol.EdonkeyHeader,
 			Size:     41, // 40 payload bytes + the opcode
-			Packet:   opHello,
+			Packet:   opServerStatus,
 		}
 		_ = header.Put(&out)
 		_, _ = conn.Write(out.Bytes())
-		// Sleep well past dialTimeout, so a Dial with no deadline on the
-		// READ blocks here. The test's own budget is the assertion, and it
-		// must be shorter than this sleep or the test would pass either way.
+		// Then hold the connection open well past any deadline the client
+		// has, so the ONLY thing that can end this read is the client's own
+		// timeout. A server that closed would be a different test.
 		time.Sleep(dialTimeout + 30*time.Second)
 	})
 
@@ -310,22 +292,35 @@ func TestDialRefusesAServerThatHangsBeforeSayingHello(t *testing.T) {
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("a silent server produced a Server")
+		t.Fatal("a server that stalled mid-packet produced a Server. The " +
+			"first read from it would block on a connection that is " +
+			"already broken")
 	}
-	// A generous upper bound, and it is checked against dialTimeout so it
-	// cannot quietly become wrong when the constant changes.
-	limit := dialTimeout + 10*time.Second
-	if elapsed > limit {
-		t.Errorf("Dial took %s to give up on a server that stops mid-packet, "+
-			"with a limit of %s. Go's net.Conn does not consult a context "+
-			"after the dial returns, so a context-only deadline does not "+
-			"bound this read at all — conn.SetDeadline in Dial is the only "+
-			"thing that does", elapsed, limit)
+
+	// # PROMPTLY, AND PROVABLY BY THE BURST DEADLINE
+	//
+	// Checked against dialTimeout because that is the bound a reader
+	// already knows, and against burstDrainTimeout to say WHICH deadline
+	// did it. Without the second check this test would still pass if the
+	// stall were caught by the 20s dial timeout — which is the slow
+	// behaviour this change exists to avoid, and which the previous
+	// version of this assertion actually required.
+	// # BOUNDED, AND BOUNDED BY THE BURST DEADLINE
+	//
+	// burstDrainTimeout is 8 seconds because a real server measured 3.1s
+	// to its first packet, so "prompt" here means "within the deadline",
+	// not "instantly". What must not happen is the wait running past
+	// dialTimeout, which is the outer bound and the one a caller is
+	// actually waiting on.
+	if elapsed >= dialTimeout {
+		t.Errorf("Dial took %s to refuse a stalled server, so it waited "+
+			"out the %s deadline rather than noticing the stall at the "+
+			"%s burst deadline", elapsed, dialTimeout, burstDrainTimeout)
 	}
-	if elapsed < dialTimeout {
-		t.Errorf("Dial gave up after %s, sooner than the %s deadline. It "+
-			"failed for some reason other than waiting, so this test is "+
-			"not exercising the thing it is named for", elapsed, dialTimeout)
+	if elapsed > burstDrainTimeout+3*time.Second {
+		t.Errorf("Dial took %s, which is past the %s burst deadline by "+
+			"more than the allowance. The bound is not where the comment "+
+			"on burstDrainTimeout says it is", elapsed, burstDrainTimeout)
 	}
 }
 
@@ -343,7 +338,7 @@ func TestDialRefusesAPacketThatEndsMidPacket(t *testing.T) {
 		header := protocol.PacketHeader{
 			Protocol: protocol.EdonkeyHeader,
 			Size:     201, // 200 payload + the opcode
-			Packet:   opHello,
+			Packet:   opIDChange,
 		}
 		_ = header.Put(&out)
 		_, _ = out.Write(make([]byte, 20)) // 20 of the promised 200
@@ -372,7 +367,7 @@ func TestDialRefusesAnOversizedPacket(t *testing.T) {
 			// int32 -- the wire field is 32 bits -- so 1 GiB rather than the
 			// 2 GiB that would not compile here.
 			Size:   1 << 30,
-			Packet: opHello,
+			Packet: opIDChange,
 		}
 		_ = header.Put(&out)
 		_, _ = conn.Write(out.Bytes())
@@ -455,7 +450,7 @@ func TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes(t *testing.T) {
 		}
 
 		// Now answer, as a real server does after being spoken to.
-		_, _ = conn.Write(frameBody(serverHelloBody(t, nil)))
+		_, _ = conn.Write(frameBody(serverIDChangeBody(t)))
 		_, _ = readFull(conn, make([]byte, 4096))
 	})
 
@@ -562,25 +557,43 @@ func TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes(t *testing.T) {
 	}
 }
 
-// TestAServerMessageBeforeTheHelloIsSkippedWhenItIsABanner: a server may send
-// a banner before its hello, and skipping it is correct.
-func TestAServerMessageBeforeTheHelloIsSkippedWhenItIsABanner(t *testing.T) {
+// TestAServerMessageBeforeTheStatusIsSkippedWhenItIsABanner: a server may
+// announce itself before it reports anything, and skipping that is correct.
+//
+// # A BANNER IS NOT A REFUSAL, AND THE DISTINCTION IS THE WHOLE TEST
+//
+// The words a server uses matter: "This server is full" ends the connection,
+// and "**** eMule-Security.org Server ****" is decoration. Both arrive as
+// OP_SERVERMESSAGE, so only the text tells them apart — which is why
+// messageIsRefusal is a substring match on English and why that is recorded as
+// a shortcut rather than dressed up as a protocol mechanism.
+func TestAServerMessageBeforeTheStatusIsSkippedWhenItIsABanner(t *testing.T) {
 	addr := helloServer(t, func(conn net.Conn) {
 		awaitLogin(t, conn)
 		_, _ = conn.Write(frameOpcode(opServerMsg,
 			serverMessagePayload("**** eMule-Security.org Server ****")))
-		_, _ = conn.Write(frameBody(serverHelloBody(t, nil)))
-		_, _ = readFull(conn, make([]byte, 4096))
+		_, _ = conn.Write(frameBody(serverIDChangeBody(t)))
+		// Block, so the connection outlives the drain: a fake that returns
+		// here closes the socket and the client reads EOF, which is a
+		// broken connection rather than a quiet server.
+		_, _ = conn.Read(make([]byte, 1))
 	})
 
 	srv, err := Dial(context.Background(), addr)
 	if err != nil {
-		t.Fatalf("Dial: %v. A banner before the hello is normal and must "+
-			"be skipped, not refused", err)
+		t.Fatalf("Dial: %v. A banner before the status is normal and "+
+			"must be skipped, not refused", err)
 	}
 	defer srv.Close()
-	if srv.Hash().String() != "0123456789ABCDEF0123456789ABCDEF" {
-		t.Errorf("GUID = %s, want the one the server sent", srv.Hash())
+
+	// The banner is KEPT, not discarded. An operator debugging a flaky
+	// server needs the server's own words, and a banner is often the only
+	// explanation for a connection that worked.
+	if len(srv.Messages()) != 1 ||
+		srv.Messages()[0] != "**** eMule-Security.org Server ****" {
+		t.Errorf("Messages() = %q, want the one banner the server sent. "+
+			"Skipping it must mean ignoring it, not discarding it",
+			srv.Messages())
 	}
 }
 
@@ -615,75 +628,179 @@ func TestAServerThatSaysItIsFullIsRefusedWithItsReason(t *testing.T) {
 	}
 }
 
-// TestTheServerGUIDAndCountsComeFromItsHello: what the server told us is
-// carried through, and a server that omits the optional count tags is not an
-// error.
-func TestTheServerGUIDAndCountsComeFromItsHello(t *testing.T) {
-	t.Run("with counts", func(t *testing.T) {
-		tags := protocol.TagList{
-			{Type: protocol.TagTypeUint32, ID: tagUserCount, UInt32: 1234},
-			{Type: protocol.TagTypeUint32, ID: tagFileCount, UInt32: 56789},
-		}
-		srv := dialFake(t, serverHelloBody(t, tags))
+// TestTheCountsComeFromTheServerStatusPacket: what the server said about
+// itself is carried through, and the counts arrive in OP_SERVERSTATUS as two
+// uint32s rather than in a hello's tag list.
+//
+// # THIS REPLACED A HELLO-BASED TEST, AND WHY
+//
+// The version it replaced read the user and file counts out of optional tags
+// on a HELLO. The ed2k login response has no hello — see
+// readLoginConfirmation — so the counts arrive in OP_SERVERSTATUS as two
+// consecutive uint32s, and the tags that carried them were optional and are
+// now not consulted at all.
+//
+// The subtests that survive are the ones about a stranger's numbers being
+// carried as claims, which is still true and still worth asserting: a server
+// claiming four billion users must not size an allocation.
+func TestTheCountsComeFromTheTwoPacketsAServerSendsThemIn(t *testing.T) {
+	// # A SERVER REPORTS ITS COUNTS TWICE, AND THE TWO ARE NOT THE SAME
+	//
+	// Measured on 85.17.116.222 across three connections:
+	//
+	//	0x40  users 98261 -> 99488 -> 102254   files 17885 each time
+	//	0x34  users 12126 -> 12194 -> 12199    files ~4.09 million
+	//
+	// So 0x40 is the server's own totals and 0x34 is a larger network-wide
+	// count, and 0x40 arrives FIRST. The first version of this file had the
+	// two the other way round and exposed a single pair of counts, so a
+	// caller had no way to ask for the other one.
+	//
+	// The test sends both packets, in the order a real server does, and
+	// asserts both pairs separately. A single assertion on one of them
+	// would pass against a decoder that had them swapped, because the
+	// numbers are both plausible.
+	t.Run("both pairs, in the order a server sends them", func(t *testing.T) {
+		srv := dialFakePackets(t,
+			// 0x40 first: the server's own totals. 102254 / 17885.
+			frameOpcode(opServerStatus, statusCounts(102254, 17885)),
+			// Then 0x34: the larger network count. 12199 / 4094225.
+			frameOpcode(opIDChange, statusCounts(12199, 4094225)),
+		)
 		defer srv.Close()
 
-		if srv.Users() != 1234 {
-			t.Errorf("Users() = %d, want 1234", srv.Users())
+		if got := srv.ServerUsers(); got != 102254 {
+			t.Errorf("ServerUsers() = %d, want 102254. This is the "+
+				"server's OWN total, from the packet it sends first",
+				got)
 		}
-		if srv.Files() != 56789 {
-			t.Errorf("Files() = %d, want 56789", srv.Files())
+		if got := srv.ServerFiles(); got != 17885 {
+			t.Errorf("ServerFiles() = %d, want 17885", got)
 		}
-		if srv.Hash().String() != "0123456789ABCDEF0123456789ABCDEF" {
-			t.Errorf("Hash() = %s, want the GUID the server sent",
-				srv.Hash())
+		if got := srv.Users(); got != 12199 {
+			t.Errorf("Users() = %d, want 12199. This is the larger "+
+				"network count, and it is NOT the same number as "+
+				"ServerUsers()", got)
+		}
+		if got := srv.Files(); got != 4094225 {
+			t.Errorf("Files() = %d, want 4094225", got)
 		}
 	})
 
-	t.Run("counts absent", func(t *testing.T) {
-		// Both tags are optional. A server that sends neither is normal, and
-		// treating it as malformed would refuse a working server.
-		srv := dialFake(t, serverHelloBody(t, nil))
+	t.Run("the two pairs are not interchangeable", func(t *testing.T) {
+		// The whole reason there are two accessors. A test asserting only
+		// that "the counts arrived" would pass with the pair swapped,
+		// swapped twice, or read from the same packet twice.
+		srv := dialFakePackets(t,
+			frameOpcode(opServerStatus, statusCounts(7, 8)),
+			frameOpcode(opIDChange, statusCounts(70, 80)),
+		)
 		defer srv.Close()
-		if srv.Users() != 0 || srv.Files() != 0 {
-			t.Errorf("Users()=%d Files()=%d, want 0 and 0 for a server that "+
-				"sent no count tags", srv.Users(), srv.Files())
+
+		if srv.ServerUsers() == srv.Users() ||
+			srv.ServerFiles() == srv.Files() {
+			t.Errorf("ServerUsers=%d Users=%d, ServerFiles=%d Files=%d — "+
+				"the two pairs are identical, so the opcodes are being "+
+				"read the same way and one of them is wrong",
+				srv.ServerUsers(), srv.Users(),
+				srv.ServerFiles(), srv.Files())
 		}
 	})
 
-	t.Run("a count tag of the wrong type is ignored", func(t *testing.T) {
-		// A STRING tag with the user-count ID. Reading its string as a
-		// number is a stranger's bytes reinterpreted as a quantity, so it
-		// must be skipped rather than parsed.
-		tags := protocol.TagList{
-			{Type: protocol.TagTypeString, ID: tagUserCount,
-				String: "9999999999"},
-		}
-		srv := dialFake(t, serverHelloBody(t, tags))
+	t.Run("a count of zero is a count", func(t *testing.T) {
+		// Zero is a number a server can really report, and it must not be
+		// confused with "the packet never arrived". A caller that cannot
+		// tell an empty server from an unread one cannot decide whether to
+		// retry.
+		srv := dialFakePackets(t,
+			frameOpcode(opServerStatus, make([]byte, 8)),
+		)
 		defer srv.Close()
-		if srv.Users() != 0 {
-			t.Errorf("Users() = %d, want 0: a STRING tag is not a count",
-				srv.Users())
+
+		if srv.ServerUsers() != 0 || srv.ServerFiles() != 0 {
+			t.Errorf("got %d and %d, want zero for both",
+				srv.ServerUsers(), srv.ServerFiles())
 		}
 	})
 
-	t.Run("an absurd count is carried, not clamped", func(t *testing.T) {
-		// 0xFFFFFFFF as a uint32 becomes -1 as an int32. Clamping it to 0
-		// would make a lying server look like an honest empty one; the
-		// value stays visibly absurd instead.
-		tags := protocol.TagList{
-			{Type: protocol.TagTypeUint32, ID: tagUserCount,
-				UInt32: 0xFFFFFFFF},
-		}
-		srv := dialFake(t, serverHelloBody(t, tags))
+	t.Run("a count past int32 stays absurd rather than plausible", func(t *testing.T) {
+		// 0xFFFFFFFF users. The field is an int32 so this reads as -1, and
+		// that is the point: the claim is carried as sent. Clamping it to
+		// something a progress bar can render would hide a server that is
+		// lying or broken, which is exactly when an operator needs it.
+		srv := dialFakePackets(t,
+			frameOpcode(opServerStatus, []byte{
+				0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+			}),
+		)
 		defer srv.Close()
-		if srv.Users() != -1 {
-			t.Errorf("Users() = %d, want -1. A server's claim is carried as "+
-				"sent rather than clamped, so a lie stays visible", srv.Users())
+
+		if got := srv.ServerUsers(); got != -1 {
+			t.Errorf("ServerUsers() = %d, want -1 — the claim carried "+
+				"through unchanged rather than clamped to something "+
+				"plausible", got)
 		}
 	})
 }
 
-// dialFake stands up a server that sends one valid hello and then reads.
+// statusCounts builds the eight bytes of a two-uint32 count packet.
+func statusCounts(users, files int32) []byte {
+	out := make([]byte, 8)
+	binary.LittleEndian.PutUint32(out[0:4], uint32(users))
+	binary.LittleEndian.PutUint32(out[4:8], uint32(files))
+	return out
+}
+
+func dialFakePackets(t *testing.T, packets ...[]byte) *Server {
+	t.Helper()
+	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
+		for _, p := range packets {
+			if _, err := conn.Write(p); err != nil {
+				return
+			}
+		}
+		// # BLOCK, DO NOT DRAIN A FIXED BUFFER
+		//
+		// The first version of this fake called readFull on a 4096-byte
+		// buffer, which loops until the buffer is FULL. The client never
+		// sends 4096 bytes, so the fake stayed blocked — correct — but it
+		// was blocking for the wrong reason and only unblocked when the
+		// test's own Close shut the socket, at which point the client was
+		// already gone and the drain read EOF. The subtest reported the
+		// connection broken when the server had behaved perfectly.
+		//
+		// A single blocking Read is what a real server does between
+		// packets: it waits for the next thing the client says, and it is
+		// still waiting when the client decides the conversation is over.
+		// So the fake does exactly that, and the EOF the client then sees
+		// is the EOF a real server produces.
+		_, _ = conn.Read(make([]byte, 1))
+	})
+
+	srv, err := Dial(context.Background(), addr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	return srv
+}
+
+// capturedFrame is what a fake server saw of the client's first packet,
+// separated into the parts the golden test asserts on: the header as it
+// arrived, the seed the obfuscation added, and the login body underneath.
+//
+// A struct rather than a byte slice because the test makes claims about the
+// seed and the body SEPARATELY, and in a concatenated buffer "the seed is not
+// all zeros" becomes an assertion about an offset.
+type capturedFrame struct {
+	header  protocol.PacketHeader
+	seed    []byte
+	body    []byte
+	wireLen int
+}
+
+// dialFake stands up a server that sends one valid login confirmation
+// and then reads.
 func dialFake(t *testing.T, body []byte) *Server {
 	t.Helper()
 	addr := helloServer(t, func(conn net.Conn) {

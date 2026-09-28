@@ -40,15 +40,16 @@ package ed2kwire
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/monkeyWie/goed2k/protocol"
-	"github.com/monkeyWie/goed2k/protocol/client"
 )
 
 var (
@@ -81,12 +82,24 @@ var (
 // 1 MiB is generous: the largest thing sent here is a bitfield or a tag list.
 const maxPacketSize = 1 << 20
 
-// dialTimeout bounds the connect AND the first read, because a server that
-// accepts a TCP connection and then says nothing is a real and common
-// occurrence — a filtered port, a server that is up but not serving, a
+// dialTimeout bounds the connect AND the whole login exchange, because a
+// server that accepts a TCP connection and then says nothing is a real and
+// common occurrence — a filtered port, a server that is up but not serving, a
 // tarpitted connection. Without a deadline on the read, Dial hangs forever
 // inside a call that looks like it is working.
-const dialTimeout = 20 * time.Second
+//
+// # 40s, AND THE SUM OF THE PARTS IS WHY
+//
+// This must exceed burstDrainTimeout plus factsDrainTimeout, because those
+// two are set INSIDE the window this bounds. At 20s it did not: a real
+// server measured 3.1s to its first packet and then 11.4s of quiet, which
+// fits, but only just, and the first version of the constants had the sum
+// exceed this — so the dial deadline, not the drain deadline, was ending the
+// exchange and every quiet server was reported as broken.
+//
+// The relationship is asserted rather than left to arithmetic in a comment:
+// see TestTheDialDeadlineExceedsBothDrainDeadlines.
+const dialTimeout = 40 * time.Second
 
 // Server is one ed2k server we are connected to.
 //
@@ -96,18 +109,42 @@ type Server struct {
 	addr string
 	conn net.Conn
 
-	// The server's GUID, and the endpoint it wants callbacks on.
-	hash        protocol.Hash
-	serverPoint protocol.Endpoint
+	// The server's OWN totals, from the 0x40 packet it sends first. Kept
+	// apart from users/files because a server reports both: its own view of
+	// its size, and a larger network-wide count. Reporting one and calling
+	// it the other is how a number ends up 8x wrong.
+	//
+	// These are CLAIMS from a stranger, like every other count here.
+	totalUsers int32
+	totalFiles int32
 
-	// What the server said about itself, in the tags of its hello.
+	// heardAnything records that the server sent at least one packet we
+	// understood. It is what separates "the conversation finished" from
+	// "the server never spoke", because both end in the same read error.
+	heardAnything bool
+
+	// What the server said about itself: a user count, a file count, a tag
+	// list, and messages in words.
 	//
 	// These are CLAIMS from a stranger and are carried as claims. A server
-	// can report any value here, including a negative one, and nothing in the
-	// protocol checks it — so they are never used to size an allocation, a
-	// buffer, or a progress bar's denominator.
-	users int32
-	files int32
+	// can report any value here, including a negative one, and nothing in
+	// the protocol checks it — so they are never used to size an allocation,
+	// a buffer, or a progress bar's denominator.
+	users    int32
+	files    int32
+	tags     TagList
+	messages []string
+
+	// tagErr records a tag list this client could not parse while leaving
+	// the connection usable.
+	//
+	// A parse failure here is NOT a login failure. The login was confirmed
+	// by OP_IDCHANGE before OP_SERVERINFO arrived, so the server accepted us
+	// and then said something this client does not model. Failing the
+	// connection would throw away a working connection over a banner, and
+	// dropping the error would hide a real protocol difference — so it is
+	// kept and a caller can ask for it.
+	tagErr error
 
 	// sentFirst records that the connection's first packet has gone out, and
 	// so is the only packet allowed to have been obfuscated.
@@ -123,9 +160,47 @@ type Server struct {
 // Addr is the address this server was reached at.
 func (s *Server) Addr() string { return s.addr }
 
-// Hash is the server's GUID. It identifies the SERVER, not a file, and is not
-// the hash of anything we download.
-func (s *Server) Hash() protocol.Hash { return s.hash }
+// ServerUsers and ServerFiles are the server's own totals, from the 0x40
+// packet it sends immediately after a login.
+//
+// They are separate from Users and Files because a server reports both, and
+// on ed2k-rust the larger pair is roughly eight times the server's own — so
+// showing one while calling it the other is a number that is simply wrong.
+//
+// # THERE IS NO SESSION TOKEN, AND THERE USED TO BE ONE
+//
+// This accessor was called Hash and returned sixteen bytes read from the 0x40
+// packet as though it were a GUID. It changed on every connection and
+// contained the user count followed by the server's own address. No ed2k
+// server sends a session token in the login response, and inventing an
+// accessor for one is how a caller ends up using it.
+//
+// What confirms a login is the absence of a refusal: the server decoded an
+// obfuscated request and started sending its own status. A server that
+// declines sends OP_SERVERMESSAGE instead, and that is ErrRefused.
+func (s *Server) ServerUsers() int32 { return s.totalUsers }
+func (s *Server) ServerFiles() int32 { return s.totalFiles }
+
+// Tags is what the server said about itself in its OP_SERVERINFO packet.
+//
+// Tags is nil when the server sent no info packet, and TagErr is non-nil when
+// it sent one this client could not read. The connection is usable in both
+// cases, because the login was confirmed before the info packet arrived.
+func (s *Server) Tags() TagList { return s.tags }
+
+// Messages is what the server said in words: banners, warnings and refusals.
+// An operator debugging a flaky server needs the server's own words, and a
+// banner is often the only explanation for a connection that worked.
+func (s *Server) Messages() []string { return s.messages }
+
+// TagErr is why the server's info packet could not be read, or nil.
+//
+// A failure here is NOT a login failure: the server confirmed the login with
+// OP_IDCHANGE before sending OP_SERVERINFO, so it accepted us and then said
+// something this client does not model. Refusing the connection would throw
+// away a working connection over a banner, and dropping the error would hide a
+// real protocol difference — so it is kept and a caller can ask.
+func (s *Server) TagErr() error { return s.tagErr }
 
 // Users is the user count the server advertised in its hello.
 //
@@ -235,17 +310,21 @@ func Dial(ctx context.Context, addr string) (*Server, error) {
 			addr, err)
 	}
 
-	// Read until we have the server's hello, tolerating the packets a server
-	// may legitimately send first.
-	hello, err := srv.readHello()
-	if err != nil {
+	// Read the server's opening burst, then keep reading until it goes
+	// quiet. There is no confirmation packet to wait for — see
+	// readLoginConfirmation for the measurements that established it, and
+	// for why the first version of this file timed out against every server
+	// on the network while waiting for a hello that does not exist.
+	//
+	// readLoginConfirmation ends by handing over to drainFacts itself, when
+	// the server goes quiet. Calling drainFacts again here would be a second
+	// 400ms wait for a server that has already finished talking, and the
+	// second wait would always be the one that times out — reporting a
+	// slow server for a conversation that is already complete.
+	if err := srv.readLoginConfirmation(); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("%s: %w", addr, err)
 	}
-
-	srv.hash = hello.Hash
-	srv.serverPoint = hello.ServerPoint
-	srv.users, srv.files = countsFromTags(hello.Properties)
 
 	// The deadline has done its job. Leaving it in place would fail the first
 	// real transfer read 20 seconds in, which reads as a flaky network rather
@@ -259,81 +338,351 @@ func Dial(ctx context.Context, addr string) (*Server, error) {
 	return srv, nil
 }
 
-// readHello reads packets until the server's hello arrives.
+// readLoginConfirmation reads packets until the server confirms the login.
 //
-// A server may answer with OP_SERVERMESSAGE first — a refusal with a human
-// reason, such as "This server is full" — and that is NOT a hello and NOT a
-// transport failure. Refusing the connection on a message means an operator
-// sees "malformed packet" for a server that is simply full, which is the
-// difference between an actionable error and a confusing one. Measured against
-// a real server:
+// # A SERVER CONFIRMS WITH OP_IDCHANGE, AND SENDS NO HELLO
 //
-//	protocol=0xE3 size=33 opcode=0x38 payload=32B   (size-1 = 32)
-//	0x38 -> "WARNING : This server is full"
+// The opcodes that arrive after a login request, in the order a live server
+// sends them (85.17.116.222, 2026-09-28):
 //
-// So the loop skips messages, collects one, and returns it alongside the hello
-// so the caller can say what the server said.
-func (s *Server) readHello() (client.HelloAnswer, error) {
-	var hello client.HelloAnswer
-	var messages []string
+//	0x40  OP_IDCHANGE     the login is accepted; the payload is a new GUID
+//	0x34  OP_SERVERSTATUS user and file counts
+//	0x38  OP_SERVERMESSAGE banners
+//	0x41  OP_SERVERINFO   the server's own tag list
+//
+// Only 0x40 means the login worked. Everything else is a server talking
+// about itself, and none of it is a failure — so those are consumed and the
+// facts recorded, rather than treated as a reason to give up.
+//
+// A refusal is a message whose text says so, and that IS a failure: see
+// readMessage for the words, which come from real servers and are the reason
+// an operator sees "This server is full" instead of a timeout.
+// readLoginConfirmation reads the login response.
+//
+// # NOTHING HERE IS A CONFIRMATION, AND THAT IS THE POINT
+//
+// A server that accepts a login does not say "accepted". It starts talking:
+// the whole first burst IS the confirmation. Measured on 85.17.116.222:
+//
+//  1. 0x40  the server's own totals, then its endpoint
+//  2. 0x34  a larger, network-wide count
+//  3. 0x38  a banner about port forwarding
+//  4. 0x41  the server's GUID and a ten-tag list
+//  5. 0x38  a second banner naming the software
+//
+// So this function reads that burst and hands off to drainFacts, which keeps
+// reading until the server goes quiet. The only thing in the whole sequence
+// that can REFUSE is an OP_SERVERMESSAGE whose text says so — and a refusal is
+// handled here, because a server that declines says so in words rather than
+// by falling silent.
+//
+// The first version of this file waited for an OP_HELLO, which is the Kad
+// UDP packet. Against a real network that waited for a packet that never
+// came, so every server timed out after having plainly answered. The second
+// version treated 0x40 as a 16-byte GUID, which changed on every connection
+// and contained the user count. Neither is a confirmation because neither is
+// a confirmation: the sequence simply has none.
+func (s *Server) readLoginConfirmation() error {
+	// A bound on how many packets may be read before handing off. A server
+	// that talks forever must not make this loop unbounded; the drain that
+	// follows is separately bounded.
+	const maxSkipped = 16
 
-	// A bound on how many packets may be skipped. Without it, a server that
-	// sends messages forever is an infinite loop on a connection that looks
-	// alive — the "starts and does nothing" shape again, in a new costume.
-	const maxSkipped = 8
+	// # "QUIET" AND "SILENT" ARE DIFFERENT, AND THE DIFFERENCE IS THIS FUNCTION
+	//
+	// A server that has sent its burst and stopped is a working server, and
+	// going quiet after speaking is how a conversation ends. A server that
+	// has said NOTHING is a server that never accepted us.
+	//
+	// Both end in the same read error — a deadline — so the deadline alone
+	// cannot tell them apart. The first version of this function treated a
+	// timeout as success, and then a server that accepted a connection and
+	// stalled mid-packet produced a usable Server: the exact "starts and does
+	// nothing" failure this whole layer exists to prevent.
+	//
+	// So what matters is not whether the read timed out but whether anything
+	// arrived first. `heard` is set by every packet notePostLoginPacket
+	// accepts, and it is the whole distinction.
+	//
+	// # THE FIELD IS SET DIRECTLY, NOT THROUGH A defer
+	//
+	// The first version used `defer func() { s.heardAnything = heard }()`.
+	// A defer runs AFTER the return value is computed, so it overwrote
+	// whatever the drain had already recorded with a snapshot taken at
+	// function entry — and every connection reported "said nothing at all"
+	// no matter how much the server had said. The symptom was a Dial that
+	// failed on four passing fixtures, which is the confusing direction:
+	// the guard was firing, just with a value from before the read.
+	heard := false
 
-	for skipped := 0; skipped <= maxSkipped; skipped++ {
+	// # A SHORT DEADLINE, THEN THE DRAIN TAKES OVER
+	//
+	// Nothing in the opening burst is a confirmation, so this loop cannot
+	// exit on content — it exits on the server going QUIET, and it must do
+	// that quickly. With the 20-second dial deadline still in force, a
+	// server that sent its burst and stopped made every test wait the full
+	// 20 seconds and then fail, because the loop was waiting for a packet
+	// that was never coming.
+	//
+	// So the burst read gets its own short deadline and hands over to
+	// drainFacts, which has the same shape and the same reasoning. A
+	// server that has said nothing at all by the end of it has not
+	// accepted the login, and that is a failure worth reporting.
+	if err := s.conn.SetReadDeadline(
+		time.Now().Add(burstDrainTimeout)); err != nil {
+		return fmt.Errorf("cannot bound the login-response read: %w", err)
+	}
+
+	for read := 0; read <= maxSkipped; read++ {
 		header, payload, err := readFrame(s.conn)
 		if err != nil {
-			// A message seen before a failure is almost always the reason
-			// for it, and losing it means reporting "EOF" for a server that
-			// said why.
-			if len(messages) > 0 {
-				return hello, fmt.Errorf("%w (the server first said: %s)",
-					err, strings.Join(messages, "; "))
+			if isTimeout(err) {
+				// The server has finished its opening burst. Carry on into
+				// the drain rather than reporting an error — but only if it
+				// actually said something. A server that went quiet having
+				// spoken nothing is a server that never accepted us, and a
+				// Server built on that is a Server that hangs on first use.
+				if !heard {
+					return fmt.Errorf("the server accepted the connection "+
+						"and then said nothing at all: %w", err)
+				}
+				return s.drainFacts()
 			}
-			return hello, err
+			// A server that accepted a login and then broke mid-sentence
+			// is not a server we can talk to. Say so.
+			return fmt.Errorf("the server answered the login request and "+
+				"then the connection broke: %w", err)
 		}
 
-		switch header.Packet {
-		case opHello:
-			// The payload is the full HELLO, which begins with a hash-length
-			// byte, and the HELLOANS body, which does not. A server sends
-			// OP_HELLO for both, distinguished only by that leading byte.
-			var full client.Hello
-			if err := full.Get(bytes.NewReader(payload)); err != nil {
-				return hello, fmt.Errorf("the server's hello does not "+
-					"decode: %w", err)
-			}
-			return full.HelloAnswer, nil
+		if err := s.notePostLoginPacket(header.Packet, payload); err != nil {
+			return err
+		}
+		// Set on the struct directly: the field is what the drain reads,
+		// and a local copy plus a deferred write loses the update.
+		s.heardAnything = true
+		heard = true
 
-		case opServerMsg:
-			if msg, ok := decodeServerMessage(payload); ok {
-				messages = append(messages, msg)
-				// A message that says the server is full or refusing is a
-				// REFUSAL, not something to skip past: continuing would just
-				// wait for a hello that is not coming.
-				if isRefusalMessage(msg) {
-					return hello, fmt.Errorf("%w: the server refused the "+
-						"connection: %s", ErrRefused, msg)
-				}
-			}
-			// Otherwise: a banner, and the hello follows. Skipping it is
-			// correct.
-
-		default:
-			// An unexpected opcode. It is skipped rather than refused: the
-			// hello is what this function is for, and a server that sends
-			// something else first is still a server. If it never sends the
-			// hello, the skip bound ends the loop and the error names the
-			// opcodes seen.
-			messages = append(messages, fmt.Sprintf("opcode 0x%02X", header.Packet))
+		// A message that is a refusal ends this: a server that declines
+		// does not go on to send a tag list.
+		if len(s.messages) > 0 &&
+			messageIsRefusal(s.messages[len(s.messages)-1]) {
+			return fmt.Errorf("%w: the server refused the connection: %s",
+				ErrRefused, s.messages[len(s.messages)-1])
 		}
 	}
 
-	return hello, fmt.Errorf("the server sent %d packets and no hello "+
-		"(%s). It is a server, but it is not talking to us",
-		len(messages)+1, strings.Join(messages, "; "))
+	// Reached only if a server sent maxSkipped packets and was still
+	// talking. The facts collected so far are kept and the drain takes the
+	// rest: this is a chatty server, not a broken one.
+	return s.drainFacts()
+}
+
+// burstDrainTimeout bounds how long the first packet is waited for.
+//
+// # 400ms WAS A GUESS, AND A REAL SERVER TOOK 3 SECONDS
+//
+// The first version of this constant was 400 milliseconds, and every hermetic
+// test passed with it because a local fake replies in microseconds. Against a
+// real server it refused every connection in 0.4s with "the server accepted
+// the connection and then said nothing at all" — on a server that was about
+// to answer.
+//
+// Measured on 85.17.116.222 on 2026-09-28, three times, identically:
+//
+//	first byte after 3093ms, 3094ms, 3093ms
+//
+// So the floor is set from a measurement rather than from what a loopback
+// server does. It is generous on purpose: a short deadline here produces a
+// false "this server is dead" for a slow but working one, and a slow refusal
+// costs a user far less than a wrong one.
+//
+// A local fake cannot catch this class of bug, which is the second reason the
+// live tests exist alongside the hermetic ones rather than instead of them.
+const burstDrainTimeout = 8 * time.Second
+
+// notePostLoginPacket records one packet from the server's opening burst, and
+// reports a refusal.
+//
+// One function rather than a switch in each of the two loops that read these
+// packets. The two loops are the confirmation read and the drain, they see
+// the same opcodes, and a copy of the switch in each is a copy that will
+// eventually disagree — which is exactly what happened when 0x40 was read as a
+// GUID in one place and a count in another.
+func (s *Server) notePostLoginPacket(opcode byte, payload []byte) error {
+	switch opcode {
+	case opServerStatus:
+		// 0x40: the server's OWN totals, then its endpoint. Sent first.
+		if len(payload) < 8 {
+			return fmt.Errorf("a server status packet is 8 bytes and "+
+				"%d arrived", len(payload))
+		}
+		s.totalUsers = int32(binary.LittleEndian.Uint32(payload[0:4]))
+		s.totalFiles = int32(binary.LittleEndian.Uint32(payload[4:8]))
+
+	case opIDChange:
+		// 0x34: a larger, network-wide count. Sent third.
+		//
+		// # NEITHER COUNT PACKAGE CARRIES A SESSION TOKEN
+		//
+		// Both are two uint32s and both move on every connection, so
+		// neither is an identifier. The first version of this file read
+		// 0x40 as a 16-byte GUID and produced a "GUID" that was the user
+		// count followed by the server's address, changing every time.
+		//
+		// There is no session token to expose, and inventing an accessor
+		// for one is how a caller ends up using bytes whose meaning is
+		// unestablished.
+		if len(payload) < 8 {
+			return fmt.Errorf("a server count packet is 8 bytes and "+
+				"%d arrived", len(payload))
+		}
+		s.users = int32(binary.LittleEndian.Uint32(payload[0:4]))
+		s.files = int32(binary.LittleEndian.Uint32(payload[4:8]))
+
+	case opServerInfo:
+		// The server's tag list, parsed with this package's own decoder —
+		// which exists because the library's reads the wire format wrong.
+		//
+		// A failure here is not a login failure: the server has already
+		// accepted us and is now saying something this client does not
+		// model. Refusing the connection would throw away a working
+		// connection over a banner, and dropping the error would hide a
+		// real protocol difference — so it is kept and a caller can ask.
+		if tags, err := parseTagList(payload); err == nil {
+			s.tags = tags
+		} else {
+			s.tagErr = err
+		}
+
+	case opServerMsg:
+		if msg, ok := decodeServerMessage(payload); ok {
+			s.messages = append(s.messages, msg)
+		}
+
+	default:
+		// An opcode this client does not model. Recorded and kept, not
+		// treated as a failure: these packets are unsolicited, and a
+		// server that sends something extra is still a server.
+		s.messages = append(s.messages,
+			fmt.Sprintf("opcode 0x%02X", opcode))
+	}
+	return nil
+}
+
+// factsDrainTimeout bounds how long Dial waits for the packets a server
+// sends right after confirming a login.
+//
+// The alternative is to return immediately on OP_IDCHANGE, and that is what
+// this file did: every connection then reported zero users, zero files and
+// no tags, which is indistinguishable from a server that is genuinely empty
+// and is the worst of both readings. The cost of the wait is added to every
+// connection, so it is short — a server that has accepted a login has
+// already sent these by the time its confirmation reaches us in practice.
+//
+// # MEASURED, NOT ASSUMED
+//
+// The same server measured above, after its first packet, goes quiet for
+// 11.4 seconds before sending the next four. So this deadline is larger than
+// it looks for the same reason burstDrainTimeout is: the alternative is
+// reporting a working server as broken, and the cost of being wrong in that
+// direction is a user watching a spinner instead of a download.
+//
+// The first version was 400ms and the hermetic tests passed, because a local
+// fake sends everything at once. A constant that only works against a
+// loopback is not a constant that works.
+const factsDrainTimeout = 15 * time.Second
+
+// drainFacts reads the packets a server sends after confirming a login, until
+// it goes quiet or the drain deadline passes.
+//
+// The reads are best-effort by design: a timeout here is the NORMAL outcome
+// for a server that sent only a confirmation, and it is not an error. So the
+// timeout is swallowed and the facts collected so far are kept. The only
+// failure that matters is one that leaves the connection unusable, and a
+// server that has just closed is that.
+func (s *Server) drainFacts() error {
+	if err := s.conn.SetReadDeadline(
+		time.Now().Add(factsDrainTimeout)); err != nil {
+		// A connection whose deadline cannot be set is a connection whose
+		// reads will block forever, so this is worth failing on.
+		return fmt.Errorf("cannot bound the post-login read: %w", err)
+	}
+	defer func() {
+		// Clear the drain deadline. Leaving it in place would fail the
+		// first real transfer read 400ms in, which reads as a flaky
+		// network rather than as a forgotten ClearDeadline.
+		_ = s.conn.SetReadDeadline(time.Time{})
+	}()
+
+	for read := 0; read < maxDrainedPackets; read++ {
+		header, payload, err := readFrame(s.conn)
+		if err != nil {
+			// Silence is the EXPECTED end of a drain: a server has said
+			// everything it is going to say until we ask it something.
+			// Returning nil here is what makes Dial succeed against a
+			// server that answered and then had nothing more to add.
+			//
+			// mustRead used to discard the read error, so a deadline
+			// looked identical to a closed connection and every quiet
+			// server reported "EOF" and failed the dial. That was a
+			// real bug, and it is why the timeout is distinguished here
+			// rather than treated as any other error.
+			if isTimeout(err) {
+				// Quiet after speaking is a finished conversation. Quiet
+				// with nothing heard at all is a server that never
+				// answered, and a Server that pretends otherwise is the
+				// failure this whole file is about.
+				if !s.heardAnything {
+					return fmt.Errorf("the server accepted the connection "+
+						"and then said nothing at all: %w", err)
+				}
+				return nil
+			}
+			// A refusal still matters even now: a server that talks and
+			// then refuses is refusing.
+			if last := s.lastMessage(); last != "" &&
+				messageIsRefusal(last) {
+				return fmt.Errorf("%w: the server refused the connection: %s",
+					ErrRefused, last)
+			}
+			// Otherwise the connection has ended or broken, and a login
+			// that was accepted is no longer usable. Say so rather than
+			// handing back a Server whose next read will fail.
+			return fmt.Errorf("reading the server's status after it "+
+				"answered the login: %w", err)
+		}
+
+		if err := s.notePostLoginPacket(header.Packet, payload); err != nil {
+			return err
+		}
+		s.heardAnything = true
+	}
+	return nil
+}
+
+// maxDrainedPackets bounds the post-login drain. A server that sends packets
+// forever is a server that will never go quiet, and a drain with no bound is
+// a read that never returns.
+const maxDrainedPackets = 32
+
+// isTimeout reports whether a read error is the deadline expiring rather than
+// a real fault. The distinction matters because a timeout here is the expected
+// end of a drain and a real fault is not.
+func isTimeout(err error) bool {
+	return errors.Is(err, os.ErrDeadlineExceeded) ||
+		errors.Is(err, context.DeadlineExceeded)
+}
+
+// lastMessage is the most recent thing the server said, or the empty string if
+// it has not said anything.
+//
+// A function rather than an index at the call site, because the empty case is
+// the one that panics and it is exactly the one a reader assumes away.
+func (s *Server) lastMessage() string {
+	if len(s.messages) == 0 {
+		return ""
+	}
+	return s.messages[len(s.messages)-1]
 }
 
 // decodeServerMessage reads an OP_SERVERMESSAGE payload: a uint16 length and
@@ -367,9 +716,9 @@ var refusalWords = []string{
 	"too many", "max connections", "not available", "offline",
 }
 
-// isRefusalMessage reports whether a server message means the server is not
-// going to complete the handshake.
-func isRefusalMessage(msg string) bool {
+// messageIsRefusal reports whether one server message means the server is not
+// going to keep this connection.
+func messageIsRefusal(msg string) bool {
 	lower := strings.ToLower(msg)
 	for _, w := range refusalWords {
 		if strings.Contains(lower, w) {
@@ -437,9 +786,43 @@ func (s *Server) sendFrame(protocolByte, opcode byte, payload []byte) error {
 // the opcode share the value, which is a coincidence of the design and not a
 // typo.
 const (
-	opHello        byte = 0x01
 	opLoginRequest byte = 0xE3
+
+	// # THE TWO CONFIRMATION-RELEVANT OPCODES, AND WHICH IS WHICH
+	//
+	// # THE ed2k LOGIN RESPONSE HAS NO HELLO
+	//
+	// OP_HELLO (0x01) belongs to the KAD UDP hello, not to the ed2k TCP
+	// login. The first version of this file read a hello after the login
+	// request, so against a real server it read the status and messages
+	// packets, did not recognise them, skipped them, and kept waiting for a
+	// packet that was never coming until the deadline fired. The live tests
+	// showed this as every server failing with a timeout AFTER HAVING PLAINLY
+	// ANSWERED, which is the most confusing failure available.
+	//
+	// # 0x34 CONFIRMS THE LOGIN, AND 0x40 IS THE STATUS
+	//
+	// The two were swapped in the first version of this file, and a live
+	// handshake is what settled it. Captured in order from 85.17.116.222:
+	//
+	//	1. op=0x40  20B  users=102254 files=17885  + the server's endpoint
+	//	2. op=0x34   8B  a 4-byte value, then 4 zero bytes
+	//	3. op=0x38  89B  "VPN with port forwarding (for High ID) ..."
+	//	4. op=0x41 110B  GUID deadbeefcafebabe..., then a ten-tag list
+	//	5. op=0x38  70B  "Open-source ed2k-server ..."
+	//
+	// 0x40 carries counts that CHANGE between connections — 98261, then
+	// 99488, then 102254 — so it cannot be an identifier. 0x34 arrives third,
+	// after the server has already spoken, and its first field is a
+	// per-connection value. Reading 0x40 as an ID assigned a "GUID" that
+	// changed on every connection and was in fact the user count.
+	//
+	// So: 0x34 is the login confirmation, and 0x40 is the status.
+	opIDChange     byte = 0x34
+	opServerStatus byte = 0x40
+	opServerInfo   byte = 0x41
 	opServerMsg    byte = 0x38
+	opGetServerLst byte = 0x1C
 )
 
 // loginRequest is the first packet a client sends: a 16-byte user hash, the
@@ -542,9 +925,24 @@ func checkProtocolByte(got byte) error {
 // So the one-byte check goes first. It is definitive — no ED2K server sends 0x47
 // — and it answers the question the size check would otherwise answer badly.
 func readFrame(r io.Reader) (protocol.PacketHeader, []byte, error) {
-	var header protocol.PacketHeader
-	if err := header.Get(bytes.NewReader(mustRead(r, protocol.PacketHeaderSize))); err != nil {
+	// The header is read first and its error kept, because the protocol byte
+	// and the size are both IN it — decoding a short header would read
+	// uninitialised memory as a stranger's claim.
+	raw, err := mustRead(r, protocol.PacketHeaderSize)
+	if err != nil {
+		var header protocol.PacketHeader
+		// A timeout is reported as itself so the caller can tell a quiet
+		// server from a broken one. mustRead used to discard this, which
+		// turned every deadline into an EOF.
+		if isTimeout(err) {
+			return header, nil, err
+		}
 		return header, nil, fmt.Errorf("reading the packet header: %w", err)
+	}
+
+	var header protocol.PacketHeader
+	if err := header.Get(bytes.NewReader(raw)); err != nil {
+		return header, nil, fmt.Errorf("decoding the packet header: %w", err)
 	}
 
 	if err := checkProtocolByte(header.Protocol); err != nil {
@@ -573,13 +971,27 @@ func readFrame(r io.Reader) (protocol.PacketHeader, []byte, error) {
 	return header, payload, nil
 }
 
-// mustRead reads exactly n bytes and returns them, or a short slice. A short
-// slice is fine here: the caller's decoder reports the truncation, and the
-// error text names the header size rather than inventing one.
-func mustRead(r io.Reader, n int) []byte {
+// mustRead reads exactly n bytes and returns however many arrived.
+//
+// # THE ERROR IS DROPPED, AND THAT IS A BUG THIS FUNCTION HAD
+//
+// `io.ReadFull` returns the error that stopped it, and the first version of
+// this function threw that error away with `_`. A read that stopped because
+// the DEADLINE EXPIRED is indistinguishable, afterwards, from a peer that
+// closed: both leave a short buffer.
+//
+// That mattered because a read deadline is exactly how the post-login drain
+// knows a server has gone quiet. With the error dropped, every quiet server
+// reported "reading the packet header: EOF" and Dial failed — so a server
+// that had accepted the login and simply had nothing more to say was reported
+// as a broken connection, on every connection, in the normal case.
+//
+// The error is returned alongside the bytes so the caller can tell a timeout
+// from an end-of-stream, which is the distinction the drain turns on.
+func mustRead(r io.Reader, n int) ([]byte, error) {
 	buf := make([]byte, n)
-	read, _ := io.ReadFull(r, buf)
-	return buf[:read]
+	read, err := io.ReadFull(r, buf)
+	return buf[:read], err
 }
 
 // frameBytes builds a framed packet as bytes.

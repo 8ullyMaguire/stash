@@ -101,11 +101,21 @@ func TestLiveAServerAcceptsOurHello(t *testing.T) {
 			}
 			defer srv.Close()
 
-			// A server that answered is a server that decoded our hello and
-			// chose to reply. Report what it said, because a zero user count
-			// is a real and common shape for a server that is up.
-			t.Logf("connected: guid=%s users=%d files=%d",
-				srv.Hash(), srv.Users(), srv.Files())
+			// A server that confirmed the login is a server that decoded
+			// our request and accepted us. Report what it said: the
+			// session token proves the confirmation arrived, and a zero
+			// user count is a real and common shape for a server that is
+			// up but idle.
+			//
+			// The token is printed as bytes, not as a GUID. It is eight
+			// opaque bytes whose meaning is not established, and printing
+			// it in hex-as-a-hash is what made the earlier version of
+			// this file believe the client had an identity it did not.
+			t.Logf("connected: network users=%d files=%d | "+
+				"this server: users=%d files=%d | messages=%v",
+				srv.Users(), srv.Files(),
+				srv.ServerUsers(), srv.ServerFiles(),
+				srv.Messages())
 		})
 	}
 }
