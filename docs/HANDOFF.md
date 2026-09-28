@@ -777,6 +777,148 @@ than broken** — no error, no log line, every test green. The association is no
 made at add time on both paths; it is the second time it has been missing from
 one of them.
 
+### An empty `paths` in `metadataScan` is a FULL LIBRARY SCAN
+
+The one finding in step 5.5 that would have been expensive to learn in
+production. `getScanPaths` (internal/manager/manager_tasks.go:56) is:
+
+```go
+func getScanPaths(inputPaths []string) []*config.StashConfig {
+	stashPaths := config.GetInstance().GetStashPaths()
+	if len(inputPaths) == 0 {
+		return stashPaths
+	}
+```
+
+An empty list is not "scan nothing" — it is "scan **every** configured library".
+The plugin is a background task, so that scan runs with nobody watching and is
+not what anybody asked for. `library.Scan` refuses an empty slice rather than
+sending it, and `TestTheScanIsAlwaysAskedForByPath` fails if anything can produce
+a call with no path in it.
+
+A **path** outside the library is different, and quieter: the host accepts the
+mutation, runs a job that scans nothing, and returns a job id. So a *successful*
+scan is not evidence the file was scanned. Only the job's own status and error
+say why, which is why `library.Host` has a `JobStatus` method and not just
+`SceneForPath`.
+
+### "No scene appeared" is ambiguous, and the job status is what resolves it
+
+It is what a subtitle looks like. It is ALSO what a path outside every configured
+library looks like. Those two want different answers — one is "correctly not a
+scene", the other is "your download path is misconfigured and every future
+download will do the same" — and the plugin cannot tell them apart by polling the
+file. Only the host knows its library paths.
+
+The first version of `waitForScene` polled until the deadline regardless, so
+every download that correctly produced no scene burned the full 90 seconds before
+reporting a perfectly good outcome. In a library with 4,000 subtitle files that
+is a day of the downloader's time. It now returns as soon as **either** a scene
+appears **or** the job reaches a terminal state, and the caller distinguishes
+`JobFinished` (a real answer), `JobFailed`/`JobCancelled` (a broken scan, which
+must not be reported as "not a video") and READY/RUNNING (no answer yet, so a
+timeout rather than a verdict).
+
+### A path handed to a regex is a pattern
+
+`findScenesByPathRegex` takes a REGEX. So the path goes into a regex, and a path
+that arrives unescaped is a pattern:
+
+| File name | Unescaped pattern matches |
+|---|---|
+| `Scene (2019).mp4` | a group — also matches `Scene 2019.mp4` |
+| `a|b.mp4` | alternation — also matches `a.mp4` |
+| `[a-z].mp4` | a character class |
+| `.*.mp4` | **every** `.mp4` in the library |
+
+The last one is the dangerous case, and it is reachable by accident. The plugin
+would then report a link to a scene belonging to a different file, and the
+operator would believe their download was linked when it was not.
+`ExactPathPattern` quotes with `QuoteMeta` and anchors with `^...$` — the portable
+anchors rather than `\A`/`\z`, because the pattern appears in the host's logs
+where somebody is trying to reproduce it.
+
+### `json.RawMessage` is a `[]byte`, so `data["field"]` slices it
+
+```go
+var data json.RawMessage          // it is a []byte
+data["metadataScan"]              // THIS COMPILES. It is not a map lookup.
+```
+
+It slices twelve arbitrary bytes, and `json.Unmarshal` then fails on them for
+reasons that name neither the field nor the endpoint. Decoded through a struct
+instead — which also makes the field name a checked thing rather than a
+substring.
+
+### A guard that names the thing it forbids fails on its own declaration
+
+This is the **third** time in this project, and it is now a rule rather than an
+anecdote. The magnet grep failed on `.AddMagnet(` matching this package's own
+safe `AddMagnet`. In step 5.5 it happened twice in one file:
+`TestTheLibraryIntegrationReachesTheHostOnlyOverHTTP` failed on the forbidden
+strings in its own list, and `TestTheHandOffUsesTheHostsOwnScanAndNotAFinger-
+printOfItsOwn` failed on `phash` in the mutation harness's row labels.
+
+The fix each time is the same and it is not subtle: **exclude the file that holds
+the list.** Excluding the whole file beats exempting individual lines, because a
+newly added forbidden string is then automatically exempt rather than needing
+the same edit twice.
+
+### A `COVERED` verdict is a claim, so the probe has to be the claim
+
+Two handoff probes scored `COVERED` — "a lower layer already refuses this" — for
+the wrong reason. The label said *"a scene id on every outcome"* and the probe
+only added the id **after** the linked check, so it changed nothing a test could
+see. A `COVERED` verdict is false reassurance, which is worse than a survivor
+because it looks like evidence.
+
+**The label is the claim and the probe has to be the same claim.** When a probe
+scores `COVERED`, the first question is whether the probe expresses its own
+label, and only the second question is whether a lower layer genuinely refuses
+the input. Rewriting the probe the way the label reads killed all three.
+
+### A nil interface method call is a segfault, and my own comment said otherwise
+
+`Handoff.Library` may be nil, `Handoff.Run` then builds
+`library.NewIntegrator(nil)`, and the first `Call` dereferenced a nil interface.
+A nil interface method call is a **segfault, not an error** — the process dies
+with no error to report and no stack in the plugin's own log.
+
+The doc comment on `Handoff` had claimed this "fails through the normal path
+rather than by dereferencing nil". That claim was false, it was written before
+the code, and the test written to check it took the process down. The check lives
+in `Call` rather than in the constructor, because both routes to a nil Host are
+ordinary: a zero `Handoff`, and a caller that wires the dependency after
+construction.
+
+### A harness that is interrupted mid-probe leaves the mutation applied
+
+A sweep of this package was killed by a `SIGTERM` partway through, and the probe
+in flight left `continue` instead of `return nil, err` in `waitForScene`. The
+suite then took **126 seconds** to fail and the outer timeout killed the run
+first — so the interrupted sweep reported nothing, and the mutation it left
+behind looked like a pre-existing bug. It was a real one: `continue` skips the
+`select` at the bottom of the loop, so the loop never yields and spins at full
+CPU for the whole 90-second deadline.
+
+`internal/library/mutate_library.py` therefore keeps every file's original text
+in memory, restores **per probe** rather than at the end, bounds every probe, and
+verifies the restoration afterwards.
+
+### A malformed probe must not be counted as a hole in the tests
+
+The same incident exposed a scoring bug: the `elif` chain had three branches and
+an `else` that caught both `COVERED` and `SKIP`, so a probe that failed to
+compile was counted as a **hole in the tests** — the exact inversion the `SKIP`
+verdict exists to prevent, reintroduced by the branch meant to implement it. A
+second bug had the "pattern is not in the file" branch counting a skip without
+listing it, so the summary said "1 malformed" and printed nothing beneath the
+heading.
+
+Four verdicts now, and they exit with different codes: a survivor returns 1 (go
+look at a test), a malformed probe returns 2 (go look at this file). A single
+non-zero code sends the reader to the shorter list.
+
 ### Nine mutation harnesses
 
 ```bash
@@ -788,7 +930,7 @@ python3 internal/collab/mutate_locator.py               # 14
 (cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
 
-228 mutations across nine harnesses, 0 survivors. The earlier figure said
+262 mutations across ten harnesses, 0 survivors. The earlier figure said
 "seven harnesses" and omitted `mutate_seam.py`, `mutate_consent.py` and
 `mutate_media_gate.py` — the plugin harnesses were being counted as the whole
 set, which is the same scope error as the source-scanning test that walked

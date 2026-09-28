@@ -2234,9 +2234,72 @@ capability from the host, that is a real finding about the host — it means M5
 needs a host change, and the goal prompt's "the plugin needs no new host
 capability" is what is under test.
 
-**Verify:** `TestLibrary_CompletedFileIsScannedAndLinked`,
-`TestLibrary_UnmatchedFileDoesNotAttachToNearestScene`,
-`TestResume_SurvivesProcessRestart`.
+**DONE 2026-09-28, and moved AHEAD of 5.4.** The order was changed on evidence,
+not preference: **zero of the 850 issues in `docs/research/matrix.md` mention
+ed2k, eMule, Kademlia or eDonkey** (0 hits across `open_issues.json` too), while
+this step is the half of M5's exit criterion the plan itself names — "get it
+scanned and linked". ed2k is hand-rolled and is the largest single piece of work
+left in M5, so building it before the end-to-end path existed meant proving the
+boundary against nothing.
+
+Three packages, deliberately separated:
+
+| Package | Knows about | Does NOT know about |
+|---|---|---|
+| `internal/library` | the host's GraphQL | torrents, magnets, anything protocol |
+| `internal/handoff` | the ORDER: validate → gate → transfer → scan | both protocols |
+| `internal/torrent` | BitTorrent | the host, the library, scanning |
+
+`internal/library` does three verbs and nothing else, because each one that
+existed was a capability the plugin was not supposed to ask for:
+
+```graphql
+mutation  { metadataScan(input: { paths: $paths, scanGeneratePhashes: true }) }
+query     { findScenesByPathRegex(filter: { path: { regex: $path_regex } }) { findScene { id path } } }
+query     { findJob(input: { id: $id }) { id status error } }
+```
+
+**The host's scanner, not one of ours.** A downloader that maintains its own
+`files` rows is a plugin writing the core's database, and everything step 5.0 was
+built to prevent comes back through the front door. So: write a file, ask the
+host to look, then ask whether it did. Three findings make that safe and all
+three are the kind that are expensive in production:
+
+- **An empty `paths` is a FULL LIBRARY SCAN.** `getScanPaths` returns every
+  configured stash path for an empty list. `Scan` refuses to send one.
+- **A path outside the library scans nothing and still returns success.** Only
+  the job's own status says why — which is why `Host` has `JobStatus` and not
+  just `SceneForPath`.
+- **"No scene appeared" is ambiguous**: a subtitle, or a misconfigured download
+  path. `findJob` resolves it, and the wait now ends on a *terminal job* rather
+  than on the deadline — so a subtitle costs milliseconds instead of 90 seconds.
+
+**Linking is the host's fingerprint matcher**, so the mutation asks for
+`scanGeneratePhashes: true` and computes nothing itself.
+`TestTheHandOffUsesTheHostsOwnScanAndNotAFingerprintOfItsOwn` asserts the absence
+of any hashing in this package, because a second divergent implementation of
+matching is exactly what the separation is for. The plan's alternative — link by
+phasher/osher through the host's query surface — would need a host capability
+this package should not assume exists, and inventing one is a real M5 finding
+rather than a convenience.
+
+**Three endings, not two.** `linked` / `scanned_no_scene` / `failed`, because a
+release directory holds a video, three subtitles and a cover, and the host
+correctly declines four of the five. A single boolean loses either the link or
+the refusals.
+
+**Verify:** `TestACompletedDownloadIsScannedAndLinked`,
+`TestACompletedTransferIsScannedAndLinked`,
+`TestTheScanIsAlwaysAskedForByPath`, `TestAPathWithRegexCharactersMatchesOnlyItself`,
+`TestAFailedScanIsAFailureAndNotANoScene`, `TestACleanFinishWithNoSceneDoesNot-
+CostTheTimeout`, `TestP2PDownloaderLibraryIntegrationUsesNoCoreImports`,
+`TestTheLibraryIntegrationReachesTheHostOnlyOverHTTP`.
+
+160 tests green across seven packages. 34 mutations across four files, 0
+survived, 0 malformed, by `internal/library/mutate_library.py`.
+
+`TestResume_SurvivesProcessRestart` is still open — it needs a transfer that can
+actually be resumed, which is the remaining part of 5.3.
 
 ---
 
