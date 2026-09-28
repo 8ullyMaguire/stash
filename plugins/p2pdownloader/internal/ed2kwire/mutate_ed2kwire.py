@@ -67,6 +67,7 @@ TAG = os.path.join("internal", "ed2kwire", "tag.go")
 EXTHELLO = os.path.join("internal", "ed2kwire", "exthello.go")
 SEARCH = os.path.join("internal", "ed2kwire", "search.go")
 SEARCHRESULT = os.path.join("internal", "ed2kwire", "searchresult.go")
+SOURCE = os.path.join("internal", "ed2kwire", "source.go")
 
 # The suite's own timeout. Without it, a mutation that makes a read block
 # forever hangs the sweep rather than failing it, and a hang is not a kill.
@@ -474,6 +475,55 @@ MUTATIONS = [
     ("searchresult: the hash is not read from the file ID",
      SEARCHRESULT, "copy(r.Hash[:], plain[off:off+16])",
      "copy(r.Hash[:], plain[off:off+8])", "CapturedHashIsSixteenBytes|GoldenFirstResult"),
+    # ---- the SOURCE handshake ----
+    #
+    # A source is a peer, reached the same way a server is. Nothing here
+    # can prove the source PROTOCOL is right -- no live source has been
+    # spoken to yet, and step 5 of the transfer plan is where that happens
+    # for the first time. What these probes check is the shape of our own
+    # first packet and the two things the handshake is allowed to refuse.
+
+    # THE ONE THAT MATTERS MOST. The first version of this loop returned
+    # success on ANY timeout, reasoning that "the peer spoke and then went
+    # quiet" is the normal shape of a source handshake. True of a peer that
+    # spoke -- and it made a peer that said NOTHING indistinguishable from
+    # a completed handshake. The test found it as "a peer that accepted
+    # the connection and then said nothing was reported as a successful
+    # handshake", which is a hang with no error anywhere.
+    ("source: quiet is accepted even if the peer never spoke",
+     SOURCE, "if !heard {", "if false && !heard {",
+     "ASourceThatNeverSpeaksIsRefused"),
+
+    # The connection deadline, not the context alone. Without it the
+    # context expires while the read blocks anyway, and the caller sees a
+    # transfer that never finishes rather than an error.
+    ("source: no deadline is set on the connection itself",
+     SOURCE, "if err := conn.SetDeadline(time.Now().Add(dialTimeout)); err != nil {",
+     "if err := error(nil); err != nil {",
+     "ASourceThatNeverSpeaksIsRefused|FloodingPeerIsBounded"),
+
+    # The marker opcode. A peer that does not see 0x01 does not know to
+    # de-obfuscate, and drops the connection with nothing to report.
+    ("source: the first packet is not marked as obfuscated",
+     SOURCE, "obfuscated, err := obfuscate(frame, seed)",
+     "obfuscated, err := frameBytes(protocol.EdonkeyHeader, opLoginRequest, body)",
+     "TheSourceFirstPacketIsActuallyObfuscated"),
+
+    # The user hash is sixteen ZERO bytes and not a random one. A random
+    # hash would make this client a different identity on every connection,
+    # which reads as deliberate and is not.
+    ("source: the handshake sends a random user hash",
+     SOURCE, "Hash: [16]byte{},",
+     "Hash: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},",
+     "TheSourceFirstPacketIsTheSameObfuscatedLogin"),
+
+    # The body is built by loginRequest.body, where the port is a uint32 and
+    # not a uint16. A uint16 there is a packet two bytes short, which a peer
+    # reads as a tag count of whatever follows -- the same failure the
+    # server's own login had. Source builds the same body and could drift.
+    ("source: the handshake is not built through loginRequest.body",
+     SOURCE, "body, err := req.body()", "body := []byte{}; _ = req",
+     "TheSourceFirstPacketIsTheSameObfuscatedLogin"),
 ]
 
 
@@ -533,7 +583,8 @@ def main():
     # point still restores every file, because restoration does not depend on
     # the loop reaching its own epilogue.
     originals = {}
-    for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO, SEARCH, SEARCHRESULT):
+    for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO, SEARCH, SEARCHRESULT,
+                SOURCE):
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
             print("FATAL: %s does not exist under %s" % (rel, REPO))
