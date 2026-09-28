@@ -616,10 +616,18 @@ MUTATIONS = [
      PART, "ans.Data = payload[fixedLen:]", "ans.Data = payload[16:]",
      "OnePartComesBackWithTheBytes"),
 
-    # The fixed-packet check. Without it a short answer is indexed past.
+    # The fixed-header check. Without it a short answer has payload[20:24]
+    # read four bytes past the end, which is a slice panic.
+    #
+    # The -run pattern was STALE the first time: it named the round-trip test,
+    # which never sends a short answer, and the probe survived while the
+    # guard was genuinely untested. It now names the test that loops every
+    # length from 0 to 23, which is the test that exists BECAUSE this probe
+    # survived. A probe surviving on a stale pattern is the same class of
+    # error as a survivor that is real -- both look identical in the output.
     ("part: a short answer is not refused",
      PART, "if len(payload) < fixedLen {", "if false {",
-     "OnePartComesBackWithTheBytes"),
+     "ATruncatedAnswerIsRefusedRatherThanIndexedPast|OneByteShortAnswer"),
 ]
 
 
@@ -819,8 +827,8 @@ def main():
                                             EXPECTED_SURVIVORS[label]))
                 else:
                     survived += 1
-                    survivors.append(label)
-                    print("  SURVIVED  %s" % label)
+                    survivors.append((label, len(selected)))
+                    print("  SURVIVED  %s  (%d test(s) ran)" % (label, len(selected)))
             else:
                 covered += 1
                 print("  COVERED   %s" % label)
@@ -834,8 +842,20 @@ def main():
           % (killed, covered, survived, skipped, expected))
     if survivors:
         print("\n### SURVIVORS -- go and look at a TEST")
-        for s in survivors:
-            print("    %s" % s)
+        for lbl, ntests in survivors:
+            # # THE TEST COUNT IS HERE BECAUSE A SURVIVOR CAN BE A STALE PATTERN
+            #
+            # A -run pattern naming a test that does not assert the mutated
+            # line produces a survivor that is a fact about the PATTERN and
+            # not about the tests. Both look identical in the output, and
+            # this package has now made that mistake four times: a survivor
+            # on a stale pattern, twice, a survivor on a live one, and once
+            # on a probe that guarded a real risk not yet reachable.
+            #
+            # Printing the count is not enough to tell them apart, but it
+            # makes "zero tests ran" visible, which is the case that is
+            # unambiguously a broken pattern.
+            print("    %-56s %d test(s) ran" % (lbl, ntests))
     if malformed:
         print("\n### MALFORMED -- go and look at THIS FILE")
         for m in malformed:
