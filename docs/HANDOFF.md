@@ -601,7 +601,7 @@ My test asserted the upload limiter was nil, on the reasoning that a client-wide
 upload limit is a permission-shaped knob. The *reasoning* was right and the
 *assertion* was wrong: it failed, and the fix was `rate.Inf`, not nil.
 
-### Eight mutation harnesses
+### Nine mutation harnesses, 194 mutations, 0 survivors
 
 ```bash
 python3 mutate_seam.py                                  # 6
@@ -612,7 +612,11 @@ python3 internal/collab/mutate_locator.py               # 14
 (cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
 
-108 mutations across seven harnesses, 0 survivors.
+194 mutations across nine harnesses, 0 survivors. The earlier figure said
+"seven harnesses" and omitted `mutate_seam.py`, `mutate_consent.py` and
+`mutate_media_gate.py` — the plugin harnesses were being counted as the whole
+set, which is the same scope error as the source-scanning test that walked
+`..` from `internal/api`.
 
 Run them **serially**. They edit real files and restore them.
 
