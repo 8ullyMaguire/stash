@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#3949",
+  "title": "Add a flag to hide individual images on specific galleries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Some gallery sets have images that while are part of the release you may not want to see when viewing a gallery, i.e. contact-sheets, clean covers, blurry images, partially ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3950",
+  "title": "Hide header and footer inside lightbox by default",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When you open a image from a gallery, the top and bottom info/action bars take space, even in full screen, so the image is confined to the remaining space. It's a waste **De",
+  "probe": ""
+ },
+ {
+  "key": "stash#3957",
+  "title": "Ability to merge details on individual fields in Scene Scrape Results dialog",
+  "excerpt": "While Tagger and Identify allow merging, the stock UI during scraping does not. So if you have existing tags or performers, your choice is A (old) or B (new), but not A+B... The only way to add older items is to manually add A's items to B,",
+  "probe": ""
+ },
+ {
+  "key": "stash#3958",
+  "title": "Add gallery tagger view mode",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are a lot of image galleries related to videos already indexed in stashdb. For those of us that are more interested in collecting images than videos, being able to pop",
+  "probe": ""
+ },
+ {
+  "key": "stash#3961",
+  "title": "Ability to configure default tab for each object page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Lets not assume what kind of content the user prefers (images, scenes, galleries, etc). Give the user the option to select the default nav-tab that is opened on the respecti",
+  "probe": ""
+ },
+ {
+  "key": "stash#3962",
+  "title": "Ability to favorite scenes, images and galleries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently only performers can be marked as favourites. It's a one-click solution fast, easy to do and quite convenient, and doesn't even requires you to open the edit page. ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3967",
+  "title": "Display zoom level percentage inside a lightbox",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As it is now, when you are in a gallery and open an image in the lightbox mode, there is no indication of the current zoom level or the steps it does when you zoom in / out.",
+  "probe": ""
+ },
+ {
+  "key": "stash#398",
+  "title": "Groups section Suggested Improvements",
+  "excerpt": "Hi all I've been building a list of Bugs & Suggested Improvements for the Movies section. If you want to contribute any bugs and suggestions please post and I'll update the first post with them. ****** *Bugs* ****** n/a (previous bugs resol",
+  "probe": ""
+ },
+ {
+  "key": "stash#3994",
+  "title": "Filter for Is Image Clip: True/False",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Outside of tagging them, theres not a good way of filtering in/out the new image clips with existing image filters. **Describe the solution you'd like** Add a true/false, Is",
+  "probe": ""
+ },
+ {
+  "key": "stash#4002",
+  "title": "Associate audio files used by e-stim toys to matching scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Videos that support \"e-stim\" toys often have an .mp3 soundfiles with the same name as the video, exactly like funscripts. **Describe the solution you'd like** Stash should a",
+  "probe": ""
+ },
+ {
+  "key": "stash#4019",
+  "title": "Sync or Export/Import across devices",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** If I have 2 separate stash apps running on different computers (1 a local windows pc, 1 a remote Linux server with stash docker) there's no way to sync them so previews, per",
+  "probe": ""
+ },
+ {
+  "key": "stash#4041",
+  "title": "Checking for StashID in scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, just the phash is used for finding duplicates but this doesn’t work all the time. Scenes with the same StashID are duplicates as well, which partly have quite dif",
+  "probe": ""
+ },
+ {
+  "key": "stash#4042",
+  "title": "Allow selective tasks input to parse delineated list of directories",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have a large library, so I rarely do an entire library scan or auto-tag. The way I currently add new content is by running a script that autosorts new videos into folders,",
+  "probe": ""
+ },
+ {
+  "key": "stash#4053",
+  "title": "Support TIF/TIFF image format",
+  "excerpt": "It seems TIF images cannot be processed correctly. Auto-gallery creation is not working after scanning a folder containing TIF images only. Thumbnail generation is not working and TIF images cannot be displayed as well. A snippet of error l",
+  "probe": ""
+ },
+ {
+  "key": "stash#4067",
+  "title": "Ability to generate scene markers immediately after creation",
+  "excerpt": "In its current state, Stash requires that a user manually run a generate task on the entire db, or manually start a generate task specifically on that scene in order to generate the animated webp for a given marker. This two step process is",
+  "probe": ""
+ },
+ {
+  "key": "stash#4070",
+  "title": "Ability to scan image clips from archives",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently if a gallery contains video clips, they will only be detected by Stash if the gallery is in a folder with loose files, and not an archive like a .zip file. **Descr",
+  "probe": ""
+ },
+ {
+  "key": "stash#4077",
+  "title": "Filter menu: Add rename option; Consolidate icon buttons into vertical overflow menu",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There is no direct option to rename a filter, and adding an option to rename it will cause a congestion of icon buttons on the filter menu **Describe the solution you'd like",
+  "probe": ""
+ },
+ {
+  "key": "stash#4080",
+  "title": "Run tasks from system tray",
+  "excerpt": "It would be really nice to run tasks from the system tray without having to go through the web UI. The process would look like: right click Stash icon, hover `Run Task` menu option which opens a side menu showing `Scan`, `Auto Tag`, `Genera",
+  "probe": ""
+ },
+ {
+  "key": "stash#4083",
+  "title": "AHash fingerprint support",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** Using a scenes audio to identify the file has been discussed numerous times across discord and a few issues, I could not find a dedicated issue to track any discussion o",
+  "probe": ""
+ },
+ {
+  "key": "stash#4084",
+  "title": "Show visual indication if scene tagger returns multiple results",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Using tagger with a 15\" laptop (1920x1080) the page often gets positioned in such a way that if Tagger returns multiple results for a scene the second returned card is not v",
+  "probe": ""
+ },
+ {
+  "key": "stash#4089",
+  "title": "Allow scraping scene index (Group Scene Number) by scene scrapers",
+  "excerpt": "It seems that the \"Movie Scene Number\" is not presented to scene scrapers as a field they can set. It would be great if scrapers were able to set this when adding their other metadata (Director, Date etc), rather than the user having to set",
+  "probe": ""
+ },
+ {
+  "key": "stash#4115",
+  "title": "Support HEIC image format",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Stash does not support `.heic` image files at all, which are commonly used when taking photos on iOS devices. **Describe the solution you'd like** `.heic` images should be a",
+  "probe": ""
+ },
+ {
+  "key": "stash#4136",
+  "title": "Can't cast any video to Chromecast",
+  "excerpt": "**Describe the bug** Every time I try to cast any video to Chromecast, the player hangs and doesn't play the video. Chromecast doesn't show any error; it only displays a cast icon. I've tried this with both HTTP and HTTPS, and I get the sam",
+  "probe": ""
+ },
+ {
+  "key": "stash#4155",
+  "title": "DLNA lists for extended rating system",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** DLNA has \"lists\" for the ratings 1-5 stars. With one of the past updates came the option to have more granular ratings like **3½** or even **4,1**. Scenes rated with these a",
+  "probe": ""
+ },
+ {
+  "key": "stash#4160",
+  "title": "Pass more metadata for sceneByFragment scrapers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The current fragment that gets passed to sceneByFragment scrapers has a lot of empty fields. Many are unrelated to identifying scenes but there are a few that could be reall",
+  "probe": ""
+ },
+ {
+  "key": "stash#4163",
+  "title": "Deleting a duplicated gallery makes all images of the remaining gallery disappear",
+  "excerpt": "**Describe the bug** Having two indexed image galleries with the same files inside (same CRC), if you delete one of them, with this option: Delete gallery folder/zip file and any images not attached to any other gallery. All reference to th",
+  "probe": ""
+ },
+ {
+  "key": "stash#4167",
+  "title": "Support multiple studio codes",
+  "excerpt": "Following on from #4166 but I thought it'd be better as a separate issue. A bit of a niche use case, but with many Japanese paysites, it's common practice to split a gallery into several different groups of images with separate studio codes",
+  "probe": ""
+ },
+ {
+  "key": "stash#4168",
+  "title": "Allow user to define a custom start/end time per scene",
+  "excerpt": "### Describe the feature you'd like I would like to add the ability to input start and end times for scenes in the scene side panel under the Edit tab. This would function similarly to the time box used for creating markers, with fields lab",
+  "probe": ""
+ },
+ {
+  "key": "stash#4174",
+  "title": "Filter to exclude by duration in scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I've noticed most of the mega-groups of false positives are for videos that are shorter than ~10 seconds. I also see that you can filter with the difference by a fixed value",
+  "probe": ""
+ },
+ {
+  "key": "stash#4175",
+  "title": "Ability to change default live transcode method",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** My WMV files seek and load faster when using DASH/HLS instead of the default mp4 live transcode **Describe the solution you'd like** A way to set the default transcode or re",
+  "probe": ""
+ },
+ {
+  "key": "stash#4207",
+  "title": "Ability to move queued tasks up/down to change priority",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When longer running tasks like a scan are running, I have to wait for it to complete before generating a cover for a single scene from the scene edit screen, for example. Wa",
+  "probe": ""
+ },
+ {
+  "key": "stash#4219",
+  "title": "Add/expose `ID` tags on HTML elements",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - When creating custom `.css` for stash, some elements are problematic to select as they have identical class combinations as other elements and don't have an ID, etc to uni",
+  "probe": ""
+ },
+ {
+  "key": "stash#422",
+  "title": "Enhanced performer aliases with studio association",
+  "excerpt": "Many performer's only use a first name, including their aliases. This causes duplicates and false positives for auto-tagging. **Describe the solution you'd like** Give the end-user the option to associate each alias with a studio. When auto",
+  "probe": ""
+ },
+ {
+  "key": "stash#4221",
+  "title": "Make internal scene ID a searchable field",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - Currently, if you have a scene selected and want to run `Scene Tagger` on it -- you might think to grab the ID from the url (e.g. `http://localhost:9999/scenes/3788 --> 37",
+  "probe": ""
+ },
+ {
+  "key": "stash#4231",
+  "title": "Set performer image from existing images",
+  "excerpt": "1. In the edit page when asking to change/add image cover I would recommend an option to be able to just pick an image from an file inside the stash app. - For example lets say I open the edit page for a model and want to choose a cover ima",
+  "probe": ""
+ },
+ {
+  "key": "stash#4233",
+  "title": "Rotation information is ignored for determining if a video is portrait",
+  "excerpt": "**Describe the bug** A portrait clip recorded on an iPhone will be stored as landscape but with rotation information embedded. The clip plays fine and everything work except for the scene cards that do not get the css class portrait. Releva",
+  "probe": ""
+ },
+ {
+  "key": "stash#4239",
+  "title": "Make \"Scrape With\" (on scene page) function identically to \"Scene Tagger\"",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - Although using `Scene Tagger` and the `Scrape With` button on a scene page are similar, there are some key differences... - Using `Scene > Scrape With` does not... - Offer",
+  "probe": ""
+ },
+ {
+  "key": "stash#4274",
+  "title": "Add dedicated page that tracks Watch History",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently the scenes have a view counter, but no watch history is logged **Describe the solution you'd like** I would like to request the implementation of a \"Watch History\"",
+  "probe": ""
+ },
+ {
+  "key": "stash#428",
+  "title": "Import/Export scene metadata to/from same folder",
+  "excerpt": "This feature is simpler to how kodi does meta data, essential exporting and importing the metadata and images from the folder the scene belongs to https://kodi.wiki/view/Naming_video_files/Movies This isnt a replacement but and alternative ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4300",
+  "title": "Docker container overhaul",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - Running as root in the docker container can cause issues with permissions - also is a minor security concern #684 - while USER is an option, it breaks since stash looks un",
+  "probe": ""
+ }
+]

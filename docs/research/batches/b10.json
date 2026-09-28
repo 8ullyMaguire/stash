@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#47",
+  "title": "Implement ajax load/infinite scroll pagination functionality",
+  "excerpt": "Implement Ajax load/infinite scroll functionality on applicable pages, such as Performers and Scenes pages. Perhaps it can be an option to enable or disable Ajax in the Interface Configuration options. Eg. https://www.sitepoint.com/jquery-i",
+  "probe": ""
+ },
+ {
+  "key": "stash#4739",
+  "title": "Inherit tag images from tagged images",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Setting images on tags takes too much time. Browsing tags without being able to see what they are is monotonous. **Describe the solution you'd like** Tags should derive thei",
+  "probe": ""
+ },
+ {
+  "key": "stash#4746",
+  "title": "Mark Studio As Network",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** nope **Describe the solution you'd like** An additional field to mark a studio as a Network (network being defined as the parent organization of other studios, without title",
+  "probe": ""
+ },
+ {
+  "key": "stash#4756",
+  "title": "Ability to merge all the scenes with the same Stash ID in Scene Duplicate Checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have some duplicated scenes because a new one was created from a different video file, and i want to merge both while keeping the stats of the oldest \"created at\", they ha",
+  "probe": ""
+ },
+ {
+  "key": "stash#4771",
+  "title": "Ability to set subtitle offset",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When viewing JAV scenes with subtitles (downloaded from various sources or Whisper generated), sometimes the subtitle isn't in sync. **Describe the solution you'd like** Add",
+  "probe": ""
+ },
+ {
+  "key": "stash#4779",
+  "title": "Add more id and data attributes",
+  "excerpt": "## Synopsis Now that the project has fully embraced third-party customization with plugins, please make the markup more accessible to styling. We can start by simply adding `id` and `data` attributes wherever relevant. ## id attribute Lets ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4815",
+  "title": "Aliases not changed on performer scrape before alias uniqueness is tested",
+  "excerpt": "When scraping a performer that already exists in the Stash database, if they have an alias that matches the performer name in the existing alias list then you will get an error message on that alias line after scraping from StashDB even tho",
+  "probe": ""
+ },
+ {
+  "key": "stash#4816",
+  "title": "Add play count to scene cards",
+  "excerpt": "Hi, When I watch a video/movie partly I can see a bar on the overview windows undeneath the video but when the video is finished I can't see that I watched it already. Would it be possible to create such a feature? I think Plex media Server",
+  "probe": ""
+ },
+ {
+  "key": "stash#4823",
+  "title": "Add full list of editable fields in the edit modal for images",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many fields are missing from the edit modal for images **Describe the solution you'd like** Add the full list of editable fields to the edit modal for their respective objec",
+  "probe": ""
+ },
+ {
+  "key": "stash#4827",
+  "title": "Add Filter by Tag in scene duplicate checker tool",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm Deduplicating 1000s of scenes. Most of the duplicates are easy to bulk delete (for example same studio in 2 different resolutions), but those easy to resolve/delete dupl",
+  "probe": ""
+ },
+ {
+  "key": "stash#4831",
+  "title": "Breast/Cup Size Sort on Performers Page",
+  "excerpt": "### Is your feature request related to a problem? Please describe: There is a `Penis Size` sort but not a `Breast Size` sort option on the `/Performers` page to be able to sort the women as well as the men by their physical attributes. ### ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4834",
+  "title": "Editable saved filter names",
+  "excerpt": "The filter dropdown allows you to modify existing filters, either with new conditions, or to delete a filter entirely. I propose allowing filter names to be editable - so we can change the name of the filter itself, rather than only modify ",
+  "probe": ""
+ },
+ {
+  "key": "stash#484",
+  "title": "Support date with Auto Tag task",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Include the extraction of the date to auto tagging **Describe the solution you'd like** Let the user define the different date formats for the auto-tagging to match, and hav",
+  "probe": ""
+ },
+ {
+  "key": "stash#4853",
+  "title": "Ability to increase O-Count on all images inside a gallery with a single click",
+  "excerpt": "I use the gallery feature for doujins and would like to see the o-counter enabled for galleries instead of having to o-count all the pages. Could be a setting to enable.",
+  "probe": ""
+ },
+ {
+  "key": "stash#4860",
+  "title": "Add collapsible elements to identify modal",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently if you enable all options in the Identify modal it becomes very long! ![image](https://github.com/stashapp/stash/assets/147556958/4cb5828b-2d9a-4369-9935-448661bee",
+  "probe": ""
+ },
+ {
+  "key": "stash#4916",
+  "title": "Ability to configure displayed tabs in Scene page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The page to view a scene is getting more tabs, most of them are just clutter to me, and cause me to misclick often. **Describe the solution you'd like** Similar to the abili",
+  "probe": ""
+ },
+ {
+  "key": "stash#4917",
+  "title": "Support for file size scene filter",
+  "excerpt": "It would be nice to have ability to filter scenes by file size. Eg. More than some size, less than some size. Thanks in advance",
+  "probe": ""
+ },
+ {
+  "key": "stash#4919",
+  "title": "Create/link ScrapedStudio Parent Studio on Scrape",
+  "excerpt": "**Describe the bug** Put simply, if you have a scraper return the \"Parent\" field, which is mapped to a parent studio, the application does not create (or link if it exists) the linked studio. The reason this matters is for \"network\" studios",
+  "probe": ""
+ },
+ {
+  "key": "stash#4933",
+  "title": "Show related scenes directly on the Appears With page instead of just performers",
+  "excerpt": "On the performers page there is an 'appears with\" tab. When you open this up, it takes you to a display of all the performers that performer has appeared with in other scenes/movies. This is an amazing feature, but I feel it is lacking in f",
+  "probe": ""
+ },
+ {
+  "key": "stash#4950",
+  "title": "Add Custom Image Numbering and Sorting for Galleries",
+  "excerpt": "In Stash, users can organize scenes in a custom order using the \"scene number\" feature in the movies tab. This offers great flexibility, because it's possible to sort by the scene number. When it comes to organizing images, Stash provides t",
+  "probe": ""
+ },
+ {
+  "key": "stash#4970",
+  "title": "Add Organized flag to all objects",
+  "excerpt": "**VERY EDITED VERSION** Please add the STASH BUTTON to ~SCENES~, PERFORMERS, GROUPS, STUDIOS, ~IMAGES~, ~GALLERYS~, TAGS **EDITED VERSION** The identity of the program 'Stash' is connected to a) the storage and organisation of adult content",
+  "probe": ""
+ },
+ {
+  "key": "stash#4985",
+  "title": "Ability to search/query the text of caption files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I want to find all the scenes where something is said. **Describe the solution you'd like** When I search for text, scenes with subtitle files containing that text should be",
+  "probe": ""
+ },
+ {
+  "key": "stash#4995",
+  "title": "Ability to Upload Videos/Images from the GraphQL API",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I am currently in the process of writing a browser extension that allows me to upload & tag files directly from specific websites, without having to open the stash web UI. T",
+  "probe": ""
+ },
+ {
+  "key": "stash#4998",
+  "title": "Expand hook context to determine source",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A hook could be called from many different sources, it would be good to know from what context a hook was called, was it a plugin? was it the UI? was it a task? Knowing what",
+  "probe": ""
+ },
+ {
+  "key": "stash#5002",
+  "title": "Plugin settings UI/UX",
+  "excerpt": "## Scope As more plugins are created and installed, the plugin page is becoming cumbersome to navigate and manipulate. Each plugin could potentially have its own litany of settings, multiplied by several plugins, this becomes a contiguous w",
+  "probe": ""
+ },
+ {
+  "key": "stash#5033",
+  "title": "Scene Tagger/Scrape with.../Scrape query for stash-box parses comma separated aliases individually",
+  "excerpt": "**Describe the bug** When trying to create a performer from Scene Tagger/Scrape with.../Scrape query tasks, it will return duplicate alias error if stash-box source has the same aliases listed on its own and with comma in between names. **T",
+  "probe": ""
+ },
+ {
+  "key": "stash#5036",
+  "title": "Rescanning windows on *nix paths breaks galleries",
+  "excerpt": "**Describe the bug** Gallery paths are prepended instead of replaced on rescan when moving from Windows to *nix **To Reproduce** Steps to reproduce the behavior: 1. Import a gallery on windows at `D:/stash/gallery.zip` 2. Migrate to *nix, d",
+  "probe": ""
+ },
+ {
+  "key": "stash#5067",
+  "title": "Option to select highest bitrate in scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No option on the select options to choose the higher Bit Rate. **Describe the solution you'd like** An additional option to select the higher bit rate **Describe alternative",
+  "probe": ""
+ },
+ {
+  "key": "stash#5089",
+  "title": "Copy existing markers on newly created scene from split",
+  "excerpt": "**Describe the bug** Markers that existed in a scene with multiple files don't behave correctly after splitting the scene: 1. Markers stay visible on the timeline of the first scene and tooltip comes up with mouse hover on timeline but mark",
+  "probe": ""
+ },
+ {
+  "key": "stash#5094",
+  "title": "Multiple image support for all objects using corresponding user-defined image attributes",
+  "excerpt": "## Yet another multiple image support request We've received numerous feature requests (FRs) for multiple image support across various objects, including performers, alternate scene covers (scenes), DVD/CD/VHS covers and spines for movies (",
+  "probe": ""
+ },
+ {
+  "key": "stash#5101",
+  "title": "Support for min/max stroke length slider for Handy integration",
+  "excerpt": "I would like to request the addition of a min/max stroke length slider to the Stash interface, similar to the one found on https://handyfeeling.com/remote. This slider should be included as a new tab within the existing interface, alongside",
+  "probe": ""
+ },
+ {
+  "key": "stash#5107",
+  "title": "Ability to limit Auto Tag scraper in scene tagger to only apply to specific objects",
+  "excerpt": "Currently Auto Tag always tags Performers, Studios, and Tags, which can make the Tagger screen very messy. It would be great if in the Tagger screen there was a way to only show scrape results with matched Performers (or Studios/Tags), to m",
+  "probe": ""
+ },
+ {
+  "key": "stash#5111",
+  "title": "GIF files in ZIP archives are images vs video",
+  "excerpt": "**Describe the bug** A gif added as a standalone file has a visual file type of `VideoFile`. If the (possibly same) gif is inside of zip file and added, its visual file type will be `ImageFile`. **Expected behavior** The visual file types s",
+  "probe": ""
+ },
+ {
+  "key": "stash#5118",
+  "title": "Plugin Services available in Stash->Services tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are scripts like [Stash Watcher](https://github.com/stashapp/CommunityScripts/tree/9b6fac4934c2fac2ef0859ea68ebee5111fc5be5/scripts/stash-watcher), which call themselv",
+  "probe": ""
+ },
+ {
+  "key": "stash#5144",
+  "title": "Add option to generate/scrub waveforms and display them alongside the player",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Longer videos can be difficult to find periods of activity or dialogue in. **Describe the solution you'd like** Displaying a waveform similar to how funscripts/interactive v",
+  "probe": ""
+ },
+ {
+  "key": "stash#5159",
+  "title": "Support multiple filters of the same type",
+  "excerpt": "**Problem** I wanted to exclude a studio + exclude null studios on the scene page, but it only allows me to do one of them and not both. In addition \"includes\" should be renamed to \"include/exclude\" or some other name to suggest that you ca",
+  "probe": ""
+ },
+ {
+  "key": "stash#517",
+  "title": "List view overhaul; rich tables for easier bulk and individual metadata editing and more",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** List view is currently used for bulk editing but it's very limited in scope and in it's ui-ux. **Describe the solution you'd like** A list view replacement that incorporates",
+  "probe": ""
+ },
+ {
+  "key": "stash#5178",
+  "title": "A>B Loop Controls do not work on Apple Touch Devices",
+  "excerpt": "**Describe the bug** On desktop browsers you can select an A (in) and B (out) time for a video and then turn the loop on. On iOS this does not work in either safari or chrome (both in the non full screen browser where the controls appear). ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5185",
+  "title": "Treat videos in folders that have `.forcegallery` as image clips",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I find the need to manually adjust file extensions or disable video support to treat certain videos as clips within galleries somewhat cumbersome. This process can be a bit ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5193",
+  "title": "Make O-Counter on Performer Card clickable",
+  "excerpt": "The \"O-Counter\" on the profile card does nothing at the moment - while rendered as a html button element. (The other buttons link to functions/sites within Stash) ![Screenshot 2024-08-30 at 14 30 33](https://github.com/user-attachments/asse",
+  "probe": ""
+ }
+]

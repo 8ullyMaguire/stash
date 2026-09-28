@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#5584",
+  "title": "Video / \"Image Clip\" controls for lightbox",
+  "excerpt": "I think it would be a good decision to enable the native browser video controls be default for videos played via the light box. In Firefox, this can be manually done on a per video basis via context menu.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5587",
+  "title": "Setting to sort Performer Credits in TabPanel & CardPopover",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Listed performer credits in the TabPanel and CardPopover sections appear sorted based on the assignment to an object (Scene, Gallery, etc). This is not much of an issue for ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5593",
+  "title": "Support multiple aliases for groups",
+  "excerpt": "Performers, studios and tags currently support multiple aliases, however groups do not. It would be great for them all to function in the same way.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5595",
+  "title": "Ability to edit scene number from scene tagger on scenes sub-page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As work is progressing with the new scene/groups paradigm, the increased leverage will need to find some efficiencies for importing multiple scenes into the groups. Currentl",
+  "probe": ""
+ },
+ {
+  "key": "stash#5596",
+  "title": "Client Side Hamming Distance Settings for Identify Tasks",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** False positives frequently occur when using the identify function with various stash-box instances. Partly I believe this is due to some bad hashes on the stash-box side whi",
+  "probe": ""
+ },
+ {
+  "key": "stash#5601",
+  "title": "Add Bluesky Icon for performer links",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Please add an icon / slot for the Twitter alternative, Bluesky. **Describe the solution you'd like** As with Twitter/Instagram, if a Bluesky profile is in the URLs fields, s",
+  "probe": ""
+ },
+ {
+  "key": "stash#5612",
+  "title": "Create a sharable link to give temporary access to a scene",
+  "excerpt": "Would be super nice to have a way to share videos easily, like drag and drop (hard to implement probably) or even just a submenu that \"copies\" the file for pasting later (like sharing through discord). Could be implemented in a way that mak",
+  "probe": ""
+ },
+ {
+  "key": "stash#5616",
+  "title": "Implement ratings keyboard shortcut for images in lightbox mode",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When viewing images in lightbox, the rating keyboard shortcuts, _r + n{0-5}_, have not been implemented. **Describe the solution you'd like** Implement rating keyboard short",
+  "probe": ""
+ },
+ {
+  "key": "stash#5625",
+  "title": "Centralized Automated Update Checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, there is no streamlined way to check for updates across multiple components of Stash, such as plugins, metadata scrapers, and the application itself. Users have t",
+  "probe": ""
+ },
+ {
+  "key": "stash#5626",
+  "title": "Main Nav Bar Notification System",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A notification service for updates that interfaces with https://github.com/stashapp/stash/issues/5625. Currently, users may not notice available updates for plugins, scraper",
+  "probe": ""
+ },
+ {
+  "key": "stash#5627",
+  "title": "Ability to Merge existing Performer aliases in Performer Scrape Results modal",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When scraping a performer, especially from different Stash Boxes (to update information and/or assign additional Stash IDs for those instances), the Performer Aliases are pr",
+  "probe": ""
+ },
+ {
+  "key": "stash#5631",
+  "title": "`moveFiles` should optionally clean up empty directories",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I've written a plugin that works like RoU to move files around in my stash instance. It uses move_files to move the files. This may leave empty directories behind. While it'",
+  "probe": ""
+ },
+ {
+  "key": "stash#5643",
+  "title": "Ability to report false-positive fingerprint back to stash-box instance",
+  "excerpt": "### Describe the feature you'd like I would like the ability to dismiss false-positive matches when using the Tagger feature along with scraping against Stash-Box. This would involve Stash remembering the rejected matches so that they don't",
+  "probe": ""
+ },
+ {
+  "key": "stash#5646",
+  "title": "Add new /temp/ Application Path instead of using /generated/temp/ for temporary files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** During content generation, the path /generated/tmp/ is used. I have an Unraid NAS server with SSD drives setup as its \"Cache\" in addition to its standard disk \"Array\". I use",
+  "probe": ""
+ },
+ {
+  "key": "stash#5650",
+  "title": "Support for funscript tokens (aka DRM)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, the support for \"normal\" funscripts works great out of the box. Unfortunately funscripts downloaded from IVDB are not working. Basically, these funscripts are no ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5667",
+  "title": "Add \"Ignore Auto Tag\" box to scraped performer create dialog",
+  "excerpt": "When creating a new site or performer during scraping, I'd like to see an option to add the ignore auto tagger within the create dialog box, similar to how you can uncheck the details you don't want when creating. Right now when you create ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5681",
+  "title": "Support Hardware Acceleration (Intel Integrated Graphics) When Building Video Previews",
+  "excerpt": "# Hope to Support Hardware Acceleration (Intel Integrated Graphics) When Building Video Previews In the current version, by compiling ffmpeg, the Intel integrated graphics card can be effectively utilized for transcoding video files, making",
+  "probe": ""
+ },
+ {
+  "key": "stash#5683",
+  "title": "High CPU / looping read access when loading scene associated with removed external hard drive",
+  "excerpt": "**Describe the bug** When a scene's source file is on external hard drive not present (and therefore the file is not playable), the way the stash app works currently is that it repeatedly dumps out errors (The \"No such file or directory\" fo",
+  "probe": ""
+ },
+ {
+  "key": "stash#5709",
+  "title": "Zombie process left (Python defunct)",
+  "excerpt": "**Describe the bug** ``` System information System load: 0.42 Temperature: 52.0 C Usage of /: 41.3% of 116.32GB Processes: 5847 Memory usage: 39% Users logged in: 1 ... => There are **5332 zombie processes.** ``` ``` NAS  ~  ps aux | grep",
+  "probe": ""
+ },
+ {
+  "key": "stash#571",
+  "title": "Support for multiple performer images",
+  "excerpt": "It would be great to allow save a few images at performer entity and not just one like now. I like to ocassionally surf the net searching for great profile images for girls in my database, and it would be nice to keep more that one (maybe w",
+  "probe": ""
+ },
+ {
+  "key": "stash#5711",
+  "title": "Image relationships feature to allow linking related images ",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are a few situations where being able to specify a relationship between two images may be desirable: - An image is an upscale of another - An image is a decensored ver",
+  "probe": ""
+ },
+ {
+  "key": "stash#5731",
+  "title": "Hardware decoding in generation tasks",
+  "excerpt": "It is worth adding `-hwaccel auto` near the start of most/all of the ffmpeg invocations in Stash. Software decoding, especially at 4K, is a bottleneck to thumbnail/sprite/preview generation, and for me generation is much faster with the GPU",
+  "probe": ""
+ },
+ {
+  "key": "stash#5736",
+  "title": "Support Handy Firmware 4",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The handy firmware 4 is under development and is pretty mature now. **Describe the solution you'd like** This should be able to query the firmware version with /info to dyna",
+  "probe": ""
+ },
+ {
+  "key": "stash#5748",
+  "title": "Consider career start/end dates when dispalying performer age",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The performer age isn't really useful when their career has ended or if the available scenes don't match the full range of their career. ![Image](https://github.com/user-att",
+  "probe": ""
+ },
+ {
+  "key": "stash#5750",
+  "title": "Ability to view markers based on secondary tags",
+  "excerpt": "**Describe the solution you'd like** Extend marker search view with sub tags. Currently it only works with main tags. Eventually add option in configuration which allows to turn on/off search with sub tags.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5758",
+  "title": "Scene save activity causing re-queries for plugin",
+  "excerpt": "Currently writing a plugin that patches `ScenePage`. When attempting to query `findScenes`, my component is requerying when pausing the video. Disabling `Scene play history` in settings resolves the issue. WP mentioned the call to scene sav",
+  "probe": ""
+ },
+ {
+  "key": "stash#5762",
+  "title": "Configure max memory usage",
+  "excerpt": "### Describe the feature you'd like I’d like to be able to configure the maximum memory usage of the main process. Currently, the memory usage gradually approaches the maximum set limit (e.g., 10 GiB) and can lead to an Out Of Memory (OOM) ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5769",
+  "title": "Support hardware acceleration for phash/sprite/preview generation tasks",
+  "excerpt": "On the back of multiple other issues, a generic issue to encompass and link all generate hwaccel issues and proposals In-depth testing done here: https://git.feederbox.cc/feederbox826/5731-hwaccel # tl;dr - VAAPI decode is *fast* and accoun",
+  "probe": ""
+ },
+ {
+  "key": "stash#5772",
+  "title": "Make director/photographer field a list",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Some scenes/galleries/images have more than one director/photographer. As director and photographer fields are just strings, we have to record all directors/photographers in",
+  "probe": ""
+ },
+ {
+  "key": "stash#5783",
+  "title": "Marker Preview Generation Options",
+  "excerpt": "The current marker previews are fixed to only show the first 20 seconds, regardless of the length of the marker. **Describe the solution you'd like** I would like to be able to customize the previews generated for markers. This would look e",
+  "probe": ""
+ },
+ {
+  "key": "stash#5785",
+  "title": "Settings option to display favourited tags first",
+  "excerpt": "> For example, if I had tags: A, B, C, D, E, and F. Normally the tag filter would order them as such, however, if I had favourited the C and E tags, the order would now be C, E, A, B, D, F. Alternatively, the favourited tags could appear in",
+  "probe": ""
+ },
+ {
+  "key": "stash#5786",
+  "title": "[meta] Duplicate Checker improvements",
+  "excerpt": "# Duplication deletion criteria - Bitrate, FPS #2094 - Size, Duration #2210 - Bitrate #5067 - PSNR/ VMAF #2397 - Tag #4827 - Resolution #4417 - StashID #4041 - Codec #5281 # Duplicate Handling - Hardlink #4409 - Transfer metadata #2380 - Me",
+  "probe": ""
+ },
+ {
+  "key": "stash#5788",
+  "title": "[meta] Sorting Feature Requests",
+  "excerpt": "Since there's so much overlap in issues and sub-issues... New Field: - Breast/ Cup Size #4831 / #1661 - Last listed time #5088 - File creation time #6668 Date - Relative date #5010 - Performer age #2956 - Age when filmed #2564 - Folder modi",
+  "probe": ""
+ },
+ {
+  "key": "stash#5792",
+  "title": "\"Play Next\" in marker view",
+  "excerpt": "**Describe the solution you'd like** - Automatic playback of next marker when in marker view #5790 - [Bug] Next/ Previous buttons should skip to next/previous markers #5778",
+  "probe": ""
+ },
+ {
+  "key": "stash#5795",
+  "title": "Add URLs to scenes \"Details\" tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Sometimes I would like an easy way to go to a scene's source page on the studio. It would be nice if the URLs were on the Details page for easier access (as far as I can tel",
+  "probe": ""
+ },
+ {
+  "key": "stash#5806",
+  "title": "Improve the layout for comparing existing and new values when scraping via scene tagger",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I often \"scrape all\" from multiple stash boxes because scenes are missing from them. But sometimes both stash boxes have a scene and they may have different data. I would li",
+  "probe": ""
+ },
+ {
+  "key": "stash#5819",
+  "title": "Set scene preview from file or URL",
+  "excerpt": "I'd like to be able to set preview for scenes the same way we can set image: either from a local file or a URL: ![Image](https://github.com/user-attachments/assets/1882ed90-9560-4677-af38-a9335dd3d56c) Most websites show preview when you ho",
+  "probe": ""
+ },
+ {
+  "key": "stash#5823",
+  "title": "Show 100% identical duplicates on Scene Duplicate Checker",
+  "excerpt": "**Describe the bug** If you import the same file/Scene twice, the scene is only shown one time in the scene overview, and the Scene duplicate checker doesn't show the two files as being \"similar\" or identical, and you have to use different ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5850",
+  "title": "Thumbnails generated as JPEG drop transparency resulting in black thumbnails",
+  "excerpt": "**Describe the bug** Thumbnails of line art images with transparency are resulted in black thumbnails without transparency. This makes the thumbnails unreadable. **To Reproduce** Steps to reproduce the behavior: 1. Scan a line art image wit",
+  "probe": ""
+ },
+ {
+  "key": "stash#5869",
+  "title": "Add gallery support to identify task",
+  "excerpt": "I am managing many Galleries in my stash instance and I there is no way to quickly scrape metadata for multiple galleries. For context, I created a simple JSON metadata scrapper that reads a JSON file inside each of my galleries. However, t",
+  "probe": ""
+ }
+]

@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash-box#431",
+  "title": "[Feature] Bulk tag input on scene form",
+  "excerpt": "- In addition to the current tag search input field on scene form, probably right next to it, add a ➕ button. - The button opens a modal with a multi-line text input, allowing you to input multiple tags, one on each line, and two buttons, \"",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#436",
+  "title": "[Feature] Image voting system",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Image size and other file properties don't necessarily dictate quality or relevance of an image. Relevance can change over time, such as a more recent image. **Describe the ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#440",
+  "title": "[Feature] Automatically share database through torrent",
+  "excerpt": "To have a better way of getting the database than scrapping the website, a torrent could be created periodically. A copy of the database would need to be made in order to share it through torrent as it cannot change while it's being shared.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#458",
+  "title": "[Feature] Add 'Add to Collection/Wantlist' and Collection/Wantlist viewing functionality to StashDB (Optional only!)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I think it would be great to give people the option of cataloguing their collections through StashDB, so having a system just like Discogs; they view a scene on StashDB and ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#459",
+  "title": "[Feature] Movie section functionality on StashDB?",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I may not have searched properly but I couldn't find an open issue for adding a Movie section to StashDB, which would obviously require the functionality to link scenes to t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#472",
+  "title": "[Feature] Add `ARCHITECTURE.md`",
+  "excerpt": "Add an [ARCHITECTURE.md file](https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html) to allow new contributors to learn about the physical architecture of the project easily.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#474",
+  "title": "[Feature] Rating and recommendation system",
+  "excerpt": "Allow rating scenes, performers and studios with up to five stars. Recommend other scenes, performers and studios based on mine and other users ratings.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#476",
+  "title": "[Feature] Adding fingerprints manually",
+  "excerpt": "I would like the option of including other hashes manually from the UI. I think right now the only way to include fingerprints is by creating the scene from stash, but then the fingerprints are limited only to the ones that stash creates an",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#477",
+  "title": "[Feature] Differentiate files",
+  "excerpt": "Associate different fingerprints that belong to the same file. I think it would be useful to know which hashes belong to each file and maybe have some tags specific to those files. For example some files may have ads or be mirrored and ther",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#488",
+  "title": "[Feature] Add more performer filters",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There's no way to filter performers based on criteria other than gender and name. **Describe the solution you'd like** Add the ability to filter performers based on one or m",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#494",
+  "title": "[Feature] change edit default order",
+  "excerpt": "at the moment it's a real pain to add old scenes where the performers are not already in the Database. You have to add the missing performers first and wait some time for Days before they get accepted. You could bother the guys on discord t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#497",
+  "title": "[Feature] Set Organised Status",
+  "excerpt": "There is currently a status for scenes (and galleries) in Stash to set a scene to \"Organised\". This is currently unused and requires a user manually toggle it for scenes. What I'd like to propose is that these be added to Stash-box as well ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#525",
+  "title": "[Bug Report] Attempting to edit an edit with a deleted image, crashes",
+  "excerpt": "``` \"errors\": [ { \"message\": \"the requested element is null which the schema does not allow\", \"path\": [ \"findEdit\", \"details\", \"images\", 0 ] } ] ```",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#530",
+  "title": "[Feature] Other hash types",
+  "excerpt": "I want to have an instance that includes all hash types, to act as a wiki, so that any file manager using any hash algorithm (blake2b, md5 or whatever) can get the file metadata assuming the hash is unique in the database.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#540",
+  "title": "[Feature] Make images optional for each instance",
+  "excerpt": "I want to make an instance for amateur content but I don't want to have images on the instance. Add option to disable the submission of images in the configuration file.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#541",
+  "title": "[Feature] List view",
+  "excerpt": "I want to make an instance for amateur content but I don't want to have images on the instance. The default view when images are disabled should be a list view on everything.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#542",
+  "title": "[Feature] Associate duplicate and non-duplicate scenes.",
+  "excerpt": "When [this issue](https://github.com/stashapp/stash/issues/1656) is implemented in stash there should be a similar feature in stash-box to keep all duplicate and non-duplicate scenes and filter them from stash duplicate checker.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#549",
+  "title": "[Feature] Allow scene without studio.",
+  "excerpt": "I've set up a new instance that I want to use for amateur content, and I want to be able to submit scenes without a studio. That constraint is enforced by the voting system so I don't think it's necessary.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#550",
+  "title": "[Feature] Allow scene without date",
+  "excerpt": "I've set up a new instance that I want to use for amateur content, and I want to be able to submit scenes without date. That constraint is enforced by the voting system so I don't think it's necessary.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#551",
+  "title": "[Feature] Configuration to set the number of invite keys",
+  "excerpt": "By default each user has 0 invite keys. I would like to change that default.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#552",
+  "title": "[Feature] Performer modification history",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It would be neat if there is an approx chronic of modifications (change hair color/style, tattoos, gain/loos weight, change of messurements etc) somewhere in in stash-box an",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#553",
+  "title": "[Feature] Some additional performer data fields",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It might be neat to have some additional data fields for performers that might be used for `Smart Tags` or similar. **Describe the solution you'd like** Data fields I came a",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#559",
+  "title": "[Feature] Similar Performer Recommendations",
+  "excerpt": "Not necessarily an easy feature but it would be nice to automatically or manually create relations between performers that would allow for finding similar performers to an existing favorite",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#560",
+  "title": "[Feature] Give a measure of relevance to the tags of a scene",
+  "excerpt": "Give importance to tags so that when a file is renamed if all tags can't be used, because it would exceed the maximum length, the most important tags are used. The number of submissions or votes in stash-box could be a way to measure the ta",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#569",
+  "title": "[Feature] Quest / Bounty Gamification",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The requirements of meta data, which is mandatory often blocks or denies contributions to StashDB. This leads to the following issues: - It's difficult or in some cases even",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#570",
+  "title": "[Feature] Allow editing closed submissions.",
+  "excerpt": "When you submit an incomplete edit people will downvote it and it will get closed. Since you can't reopen the edit you have wasted time. I wouldn't waste time recreating the submission again but I would fix the rejected submission if it was",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#574",
+  "title": "[Feature] Comment section for each Performer, Studio, Tag, and Scene or a basic forum with integration of the latter",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Not a problem per se, but adding a comment section for each performer, studio, tag, and scene entry may help to facilitate community growth, to report possible inaccuracies/",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#583",
+  "title": "[Bug Report] Password length limit",
+  "excerpt": "The password length limit is supposed to be 64 but I've used a 50 character password and I've gotten an error. Perhaps it's checking for bits instead of characters, and some unicode characters may take more space than simple ascii character",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#585",
+  "title": "[Feature] Submit a compilation scene",
+  "excerpt": "If a scene contains a compilation of clips of other scenes it would be useful to associate each clip with it's corresponding scene. It would be the same as it is now for a movie and a scene.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#586",
+  "title": "[Feature] Submit tags specific for each file",
+  "excerpt": "The tags would help filter in stash to find scenes we want to change or remove. Like scenes with ads, mirrored, etc",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#592",
+  "title": "[Bug Report] Replacing Performer in Scene is Added Instead",
+  "excerpt": "**Describe the bug** Got a bug report on Discord, a user tried to remove an ambiguous performer from a scene and replace it with the correct performer. At the same time, they submitted an edit to rename that ambiguous performer with somethi",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#594",
+  "title": "[Feature] Confirmation on cancel",
+  "excerpt": "I've been tinkering with stash box and going through and creating performers etc. However, when I click on cancel in the forms there isn't a prompt so it's super easy to lose the data you've written up. I think a small confirmation prompt w",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#595",
+  "title": "[Feature] Leaderboard",
+  "excerpt": "Another idea to include may be a leaderboard. Maybe a daily, weekly, monthly, Yearly and All-time tracker of different stats (most Submissions, most edits, etc.). Could even separate it into performer/Scene/Studio? Obviously to be eligible ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#596",
+  "title": "[Feature] Awards Database",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A Request on the Stash Git Page was posted that I think would be perfect for adding to here. It would be adding a new section to the Stash page to track Award Wins/Nominatio",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#599",
+  "title": "[Feature] Allow other users to modify an edit",
+  "excerpt": "Instead of only voting on it other users could make a modification to fix a mistake. It should only be done by more trusted curators. Maybe compare the stats of the creator of the edit and the user who wants to modify it. If the stats show ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#6",
+  "title": "Traefik Reverse Proxy for Dev instance",
+  "excerpt": "We're going to want a front end load balancer and reverse proxy so that we can deploy and test the API directly on http and via https. I would almost go as far as to suggest that the API should not operate in plaintext but that's up to @Wit",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#600",
+  "title": "[Feature] Reward points based on the points gained by people invited",
+  "excerpt": "To promote the use of stash-box by more people. If there was a point system points could be awarded to someone for the points gained by people he invited. The points awarded could be based on the number of people invited, like `1/2` for one",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#605",
+  "title": "[Bug Report] Downscaled Studio Logos Lose Transparency",
+  "excerpt": "Weird that we didn't have this one written up yet, but it appears this is still an issue. I'm not familiar with the specifics of the relevant code here but this is my understanding of what's causing this problem. **Describe the bug** Practi",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#610",
+  "title": "[Feature] Select primary name from list of aliases",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently a performer/tag requires a primary name and optional aliases (if applicable). This relies on having two distinct fields, one for a primary name, and another for a ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#612",
+  "title": "[Feature] Add user toggle to blur images",
+  "excerpt": "Add a setting to the user profile to blur images. The blur could apply always or the image could be cleared on mouse over. > To add the setting to User.tsx to blur images and clear them on hover and save the setting in postgres, you can fol",
+  "probe": ""
+ }
+]

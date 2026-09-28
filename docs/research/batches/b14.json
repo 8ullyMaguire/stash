@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#634",
+  "title": "Ability for previews to skip the intro of scenes from specific sources",
+  "excerpt": "Hi and thanks for this great project I discovered a few days ago. Here goes my first issue for it! :shipit: **Is your feature request related to a problem? Please describe.** When browsing in wall mode, scenes from sources such as Pornhub h",
+  "probe": ""
+ },
+ {
+  "key": "stash#6357",
+  "title": "Filter based on related objects",
+  "excerpt": "### Describe the feature you'd like Filter objects based on properties of sub-objects ie. filtering scenes by performer issues - [ ] Performers - [ ] Studio - [ ] Marker ### Describe the benefits this would bring to existing users Partially",
+  "probe": ""
+ },
+ {
+  "key": "stash#6360",
+  "title": "Ability to merge studios",
+  "excerpt": "### Describe the feature you'd like I would like to be able to merge two or more studios, including sub-studios (that is, re-assigning sub-studios the newly merged one). ### Describe the benefits this would bring to existing users Less tedi",
+  "probe": ""
+ },
+ {
+  "key": "stash#6365",
+  "title": "Replace in-app manual with offline version of StashDocs",
+  "excerpt": "### Describe the feature you'd like Due to the inefficiency of maintaining multiple libraries of documentation, I propose doing away with the In-App Manual altogether, and shipping an offline version of StashDocs directly with Stash. The li",
+  "probe": ""
+ },
+ {
+  "key": "stash#6382",
+  "title": "Add option to select every file by path in scene Duplicate Checker",
+  "excerpt": "### Describe the feature you'd like In **Settings** > **Tools** > **Scene Duplicate Checker**, under the **Selection Options...** button, there are currently a few different way to select files in duplicate group such as by size, res, age, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6383",
+  "title": "Make the selectable item area bigger in scene duplciate checker",
+  "excerpt": "### Describe the feature you'd like This is related to [issue6382](https://github.com/stashapp/stash/issues/6382) In #6382 I suggest a feature where I can bulk select duplicate by file location. Right now since there is no way for me to acc",
+  "probe": ""
+ },
+ {
+  "key": "stash#6390",
+  "title": "Improving pagination performance by caching results of larger queries",
+  "excerpt": "Spinning off my comment from #6319 since that issue has been closed. Core problem: Pagination in tabs with lots of results can be very slow. Every page access requires performing the full query. This results in sorting p*(p+1)/2 * perPage r",
+  "probe": ""
+ },
+ {
+  "key": "stash#6394",
+  "title": "Allow scrapers to return custom fields",
+  "excerpt": "### Describe the feature you'd like Some sources may provide additional information that users would like to save in a structured way e.g. performer shoe size, penis girth etc. Allowing scrapers to return something like `'custom_fields': {'",
+  "probe": ""
+ },
+ {
+  "key": "stash#6421",
+  "title": "Rename o-counter concept into \"Hearts\"",
+  "excerpt": "### Describe the feature you'd like The o-counter was implemented way back in #291, as a parallel function to Pornganizer's \"splooge\" feature. A number of options were floated for potential names for the concept. I regret choosing the rathe",
+  "probe": ""
+ },
+ {
+  "key": "stash#6422",
+  "title": "Option to apply scene filters only to primary file",
+  "excerpt": "### Describe the feature you'd like I sometimes keep split video files from an official source and merge both the files and the Stash scenes. Currently it's not possible to filter only for the duration of the primary files, which leads to c",
+  "probe": ""
+ },
+ {
+  "key": "stash#6429",
+  "title": "Improve visual clarity on merge direction in scene duplicate checker",
+  "excerpt": "### Describe the feature you'd like I have a two scenes- both called \"Puppies Playing\", one in 2160p and one in 1080p. On the duplicate checker, I clearly see which is which. In this case, I want to get rid of the 4k version and keep the 10",
+  "probe": ""
+ },
+ {
+  "key": "stash#6430",
+  "title": "Option to merge metadata and delete files in a single task in scene Duplicate Checker",
+  "excerpt": "### Describe the feature you'd like In the Duplicate Scene checker... I want to keep all the metadata by merging them, but I don't want to keep both files. Delete only deletes the file (but doesn't merge the playcounts, etc). Merge only mer",
+  "probe": ""
+ },
+ {
+  "key": "stash#6446",
+  "title": "Make thumbnail placeholders more informative by mentioning the task required to generate them",
+  "excerpt": "### Describe the feature you'd like When thumbnails are missing for a scene or marker or something else, it would make it more clearer if the placeholder described what type of thumbnail that is supposed to take its place, instead of just \"",
+  "probe": ""
+ },
+ {
+  "key": "stash#6452",
+  "title": "Tagger View Jumps Position",
+  "excerpt": "### Describe the bug When using tagger view on mobile after saving a scene the scroll position is preserved but the page position jumps. Prior to 0.30 in tagger view (especially using mobile) with 'Hide Unmatched Scenes' enabled when a scen",
+  "probe": ""
+ },
+ {
+  "key": "stash#6454",
+  "title": "Ability to cutomize the prefix for path links on File Info tab",
+  "excerpt": "### Describe the feature you'd like Currently the Path item in File Info is a somewhat useless link. The path is relative to whatever device or container Stash is running in, and can't link out to a file manager due to sandboxing. However, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6455",
+  "title": "SQL Query Improvments for Larger DB",
+  "excerpt": "### Describe the feature you'd like Currently, there are some edge case issue for larger databases. The main conversation for it starts on Discord [here](https://discord.com/channels/559159668438728723/559159931505213440/1453045631370395659",
+  "probe": "C20"
+ },
+ {
+  "key": "stash#6456",
+  "title": "bfcache not used because WebSocket connection is not closed",
+  "excerpt": "### Describe the bug When navigating to a different page and then going back, page should not refresh, and scroll position should restore. It currently doesn't due to bfcache not being used because of an open WebSocket connection. See https",
+  "probe": ""
+ },
+ {
+  "key": "stash#6457",
+  "title": "Update API to scan in file(s), add metadata on scan",
+  "excerpt": "### Describe the feature you'd like I couldn't find an existing feature request for this but apologies if duplicate. I'm requesting an update to the backend to support scanning individual files and adding metadata on scan via GQL. These fea",
+  "probe": ""
+ },
+ {
+  "key": "stash#6459",
+  "title": "Expand scene captions filter to support all languages",
+  "excerpt": "### Describe the feature you'd like Add support for filtering scenes by all detected subtitle languages, including Czech (cs). Subtitles with valid ISO 639-1 language codes (e.g. cs) are correctly detected and displayed in the scene player,",
+  "probe": ""
+ },
+ {
+  "key": "stash#6460",
+  "title": "Add configuration option on scene tagger to set studio code",
+  "excerpt": "### Describe the feature you'd like Add a checkbox for the studio code field in the tagger options. ### Describe the benefits this would bring to existing users Because there are so many erroneous studio codes now on StashDB. It's become an",
+  "probe": ""
+ },
+ {
+  "key": "stash#6466",
+  "title": "Unsaved entries intermittently lost in Scene Edit Tags or Performers boxes",
+  "excerpt": "### Describe the bug When adding new tags or performers to a scene while the video is playing, all unsaved entries may disappear. This is happens intermittently issue. It can potentially go unnoticed and lead to loss of manual data entry. I",
+  "probe": ""
+ },
+ {
+  "key": "stash#647",
+  "title": "Add keyboard shortcuts to focus selector fields",
+  "excerpt": "#637 has added most of the shortcuts required by #81 However, I was unable to get keybindings working to set the focus to the Scene tag selector, for example. This is due to the multiple levels of sub-components and the new to forward refs.",
+  "probe": ""
+ },
+ {
+  "key": "stash#6490",
+  "title": "Ability to open tag page on click instead of applying object-specific tags filter",
+  "excerpt": "### Describe the feature you'd like Currently, clicking on a tag directly (not using the popover) will take you to a search page filtering by this tag on the media type it was attached to. This means if you're watching a scene and click a t",
+  "probe": ""
+ },
+ {
+  "key": "stash#6509",
+  "title": "Highlight AB loop points on the scene scrubber bar",
+  "excerpt": "### Describe the feature you'd like Highlight the AB loop timestamps directly on the scrubber bar. If only A is set, show a single marker. ### Describe the benefits this would bring to existing users Makes loop boundaries visible at a glanc",
+  "probe": ""
+ },
+ {
+  "key": "stash#6516",
+  "title": "Add duplicated filter to galleries",
+  "excerpt": "### Describe the feature you'd like Filtering duplicate galleries by title or URL. ### Describe the benefits this would bring to existing users It would allow more user friendly non-programable way to deduplicate galleries. ### Is there an ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6526",
+  "title": "Player bottom controls are clipped (fullscreen missing) + menus overlap/are occluded (z-index/stacking issue)",
+  "excerpt": "### Describe the bug On Android mobile browsers in portrait orientation, the Stash web video player UI renders incorrectly 100% reproducibly on my setup: The bottom control bar is clipped/truncated (right side of the controls is cut off), c",
+  "probe": ""
+ },
+ {
+  "key": "stash#6539",
+  "title": "Scraper postprocess option to decode HTML entities to Unicode",
+  "excerpt": "### Describe the feature you'd like Some JSON APIs return special characters encoded as HTML entities like `&hellip;` or `&#8211;`. Decoding them to the correct unicode (\"…\", \"–\") with the current post processing options can be a pain (even",
+  "probe": ""
+ },
+ {
+  "key": "stash#6544",
+  "title": "\"Group By\" View mode with collapsible sections",
+  "excerpt": "### Describe the feature you'd like I think a 'Group By' option in all relevant views would be helpful. It would be set to 'None' by default and probably can work with any option available for sorting. For example group by view to show rati",
+  "probe": ""
+ },
+ {
+  "key": "stash#6564",
+  "title": "Stash Object Sync Project",
+  "excerpt": "### Describe the feature you'd like # Feature Parity Across Object Types ## Problem Stash's object types (Scenes, Performers, Images, Galleries, Groups, Tags, Studios) have significant feature disparities. Scenes receive the most developmen",
+  "probe": ""
+ },
+ {
+  "key": "stash#6576",
+  "title": "Ability to filter images based on gallery rating",
+  "excerpt": "### Describe the feature you'd like I have a niche usecase for this where I use it to collect art from specific Artists into folders. In an almost pinterest-like fashion, I can search for artists, browse their galleries, and rate their artw",
+  "probe": ""
+ },
+ {
+  "key": "stash#6577",
+  "title": "No way to prevent .webm files from being categorized as \"videos\"/scenes instead of images",
+  "excerpt": "### Describe the bug I don't want `webm` files to be categorized as videos/scenes; I use them as a modern `gif` format. Here are the steps I've taken to set that up: * My data folder has two subfolders, `/data/video` and `/data/images`. Eac",
+  "probe": ""
+ },
+ {
+  "key": "stash#6579",
+  "title": "Support funscripts for AutoBlow interactive toys",
+  "excerpt": "### Describe the feature you'd like I see there is Handy Connection integration for Handy devices. I like to suggest to add AutoBlow and Vacuglide API connectors to Stashapp. ### Describe the benefits this would bring to existing users This",
+  "probe": ""
+ },
+ {
+  "key": "stash#6645",
+  "title": "Reorganise generated artifacts",
+  "excerpt": "### Describe the feature you'd like Image thumbnails use `fsutil.GetIntraDir` to generate a segmented path for their artifacts. That is, it takes the checksum of the image and creates intermediate directories of the first four characters of",
+  "probe": ""
+ },
+ {
+  "key": "stash#6657",
+  "title": "Ability to generate group cover from attached scenes if no image is set",
+  "excerpt": "### Describe the feature you'd like the default image of Groups should be auto generate split image of the videos thumbnails/cover inside the group ### Describe the benefits this would bring to existing users remove the need to navigate ins",
+  "probe": ""
+ },
+ {
+  "key": "stash#6668",
+  "title": "Sort scenes by file by creation time in filesystem",
+  "excerpt": "### Describe the feature you'd like how can i let stash app read the the creation date from file system and sort it according to creation time in my system its working only after adding new file ### Describe the benefits this would bring to",
+  "probe": ""
+ },
+ {
+  "key": "stash#6669",
+  "title": "Merge tags on alias collision ",
+  "excerpt": "### Describe the feature you'd like I was tagging content in stash and ran across an issue where I can't set an alias to be an existing tag. I have the tag \"ambiguous_gender\" and \"androgynous\", which mean enough of the same thing to me to i",
+  "probe": ""
+ },
+ {
+  "key": "stash#6672",
+  "title": "X-Ray Style Performer Overlay in Fullscreen Image & Video Viewer",
+  "excerpt": "### Describe the feature you'd like During image slideshow or fullscreen viewing, provide an **X-ray–style overlay option** that displays **clickable (hyperlinked) performer names with tiny thumbnails**, similar to the mockup shown below. T",
+  "probe": ""
+ },
+ {
+  "key": "stash#6677",
+  "title": "Log date to history tab when tag was applied to an object",
+  "excerpt": "### Describe the feature you'd like I see in the roadmap there's [O-Count history for Images and Performers](https://github.com/stashapp/stash/issues/4680). In addition to that, I think when a tag is applied to a scene/image/performer/anyth",
+  "probe": ""
+ },
+ {
+  "key": "stash#6719",
+  "title": "GraphQL SFW shadowed query fields",
+  "excerpt": "### Describe the feature you'd like I've been building an iOS/tvOS/macOS media player for Stash. It started out as a side project just for myself, but it worked so well I decided to release it on the App Store. Apple is, as you know, not fr",
+  "probe": ""
+ },
+ {
+  "key": "stash#6732",
+  "title": "HEIC/HEIF Image Format Support with Live Photo Pairing",
+  "excerpt": "**Inspiring Issue:** [#4115 - Support HEIC images for photos taken on iOS devices](https://github.com/stashapp/stash/issues/4115) ## Summary Add support for HEIC/HEIF image files, the default photo format on iOS devices since iOS 11 (2017).",
+  "probe": ""
+ }
+]

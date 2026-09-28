@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash-box#771",
+  "title": "[Feature] Make UI more mobile-friendly / less fixed-width",
+  "excerpt": "When occasionally accessing a stash box from a tablet or even a desktop browser window that isn't very wide (Arc split screen is very useful!), many screens (login, editing, submission review) require horizontal scrolling. I'd like to see t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#772",
+  "title": "[Feature] Validate user hasn't forgotten to click 'add' for a link",
+  "excerpt": "I've noticed that many times I and other users have reported pasting in a link, and forgetting to click 'add' before submitting a studio/scene etc. This is only usually noticed when it was a mandatory link someone else picks up is missing. ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#778",
+  "title": "[Bug Report] Commas in Aliases split the alias on call to ScrapeSinglePerformer",
+  "excerpt": "**Describe the bug** Commas are accepted when adding an alias, however when being scraped via Stash (eg ScrapeSinglePerformer) they're not escaped or quoted etc in the return list of aliases, so it will then split an alias with a comma into",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#782",
+  "title": "[Feature] Limit pending edits per user",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently users can submit an unlimited amount of concurrent edits regardless of experience/quality of submissions **Describe the solution you'd like** A maximum limit which",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#783",
+  "title": "[Feature] Links to related scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are times when studios will release multiple versions of the same scene (Dry/Wet versions), or release compilations of multiple scenes. This would ideally be present i",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#784",
+  "title": "Add cut/uncut and penis length to stastdh",
+  "excerpt": "While it is already in the stashapp, the circumcision status and penis length fields are not available yet in stashdb. Would be nice to add it.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#787",
+  "title": "[Feature] Exclude (= ignore) studios and performers",
+  "excerpt": "Although I like the option to add performers and studios to your favorite list, I miss the function to ignore / exclude these too. Besides the heart (Add Favorite) there could be another icon which adds the object to the excluding list. All",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#790",
+  "title": "[Feature] Performer tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are many performer attributes we cannot or should not cover with fields, because there are too many to list. But it would be beneficial to document these attributes in",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#794",
+  "title": "[Feature] Studio page performer tab, add a \"view more\" scene card for each performer",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There's a limit of 10 scenes cards per performer on the studio page performer's tab **Describe the solution you'd like** - Indicate that the performer has done more scenes w",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#802",
+  "title": "[Bug Report] Removing category is not a valid change",
+  "excerpt": "**Describe the bug** Removing the category from an existing tag return the error `Error: edit contains no changes` **To Reproduce** Steps to reproduce the behavior: 1. To to a tag with an existing category 2. Clear the category through an e",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#804",
+  "title": "[Feature] Filter Performer's scenes by alias",
+  "excerpt": "(Copy of issue formerly known as #742 - Github have shadow banned me ....) **Is your feature request related to a problem? Please describe.** Currently only possible to filter performers by studio and/or tag. **Describe the solution you'd l",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#808",
+  "title": "[Feature] Add support for specific UK countries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When adding nationalities to performers, instead of being able to select a specific member country of the United Kingdom (England, Scotland, Wales, Northern Ireland), you ca",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#809",
+  "title": "[Bug Report] Certain characters break password reset",
+  "excerpt": "**Describe the bug** When trying to reset the password, the reset form doesn't like the email format if `+` is used (common in email aliases). As a result, the email address shown in the URL for the request would not read as valid. It was r",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#814",
+  "title": "[RFC] Scenes with 100's of bad phashes keep growing faster without stopping",
+  "excerpt": "## Scope [This scene](https://stashdb.org/scenes/24a9fa74-1bde-4406-946f-1524f5784b32#fingerprints) is an example. There are over 300 fingerprints including over 100 phashes. The durations range from several seconds, to over an hour, so the",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#815",
+  "title": "[Feature] Submitter User Rating Display",
+  "excerpt": "In a community-driven/crowd sourced platform, the credibility of data submitted is paramount. Just as eBay uses seller and buyer ratings to build trust and gauge reliability, our platform would benefit from displaying a prominent \"user rati",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#818",
+  "title": "[RFC] Correlate aliases to studios",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Other sites --- indexxx, iafd partially--- correlate aliases with studios, such as `name (studio)`, for each respective studio a performer has appeared in. This is more info",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#820",
+  "title": "[Feature] Studio ownership history and studio code format",
+  "excerpt": "A common issue with tracking Studio content is understanding the studio's ownership. Over time, studios may operate under different ownership or distribution groups, or the studio goes defunct and their library gets sold to 3rd parties. I s",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#822",
+  "title": "[Feature] Performer page notification badge/banner for duplicate performer based on URL matches",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** To identify existing duplicate performers when editing, and to mitigate the creation of duplicate performers via duplicate URL matching. **Describe the solution you'd like**",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#823",
+  "title": "[Feature] Custom fields for all objects",
+  "excerpt": "Implement the ability for administrators to create custom fields for objects (scenes, studios, tags, performers). This will allow for flexible customization, mitigate requests for specific fields, and let different installations of stash-bo",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#829",
+  "title": "[Bug Report] Some Performer Filter Criterions Do Not Work",
+  "excerpt": "**Describe the bug** I am using Postman to send GraphQL queries (`queryPerformers` query). I am testing the filter criterions. Some work, some don't. **Am I missing something? Is this a known issue?** All queries look as follows, I just exc",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#832",
+  "title": "[Feature] Groups in stash-box",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It is currently possible in Stash to express all manner of scene relations via the Groups feature, but there is currently no way of persisting this information in stash-box.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#834",
+  "title": "[Feature] User-Created Lists",
+  "excerpt": "### Summary Implement a robust \"Lists\" feature for the app ala [Trak.tv personal user lists](https://forums.trakt.tv/t/manage-your-watchlist-personal-lists/19080). Lists enable users to create, share, and manage ranked and dynamic lists of ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#846",
+  "title": "[RFC] Streamlining Support for Nameless Performers",
+  "excerpt": "# Summary As IAFD demonstrates, there are many cataloged performers that have been identified in a decent amount of scenes, however they are uncredited in all their work, and their names remain unknown. Such as \"[unknown male 497922](https:",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#848",
+  "title": "[RFC] More Accurate Tags by Using Tag Namespaces/Sources",
+  "excerpt": "### Scope My proposal is to add namespaces/sources to tags, like \"Some Site / Tag Name\", to preserve their original (and possibly distinct) meanings. These tags should then be mapped to the StashDB tags by dynamic parent/sub-tag relationshi",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#850",
+  "title": "[Feature] Add Vectors To DB for Identifying performers",
+  "excerpt": "#### **Is your feature request related to a problem? Please describe.** there was some discussion of adding face vectors [directly into stash-box](https://discord.com/channels/559159668438728723/1023942157289144360/1157436649349857420) this",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#851",
+  "title": "[Feature] Funscript metadata",
+  "excerpt": "Stash is used by many for funscript use and it would be advantageous to be able to embed the metadata for a funscript author or be able to pick from 1 or more funscripts per video. Have a metadata section in stash/stashbox for funscript and",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#867",
+  "title": "[Feature] Add backend support for AutoCrop for automated headshots",
+  "excerpt": "## Proposal summary Integrate [Autocrop](https://github.com/leblancfg/autocrop) into the stash-box backend to automatically crop existing and newly added photos, into consistent headshots. ## What is Autocrop Autocrop is a Python tool, both",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#870",
+  "title": "[Feature] findUpdatedScenes",
+  "excerpt": "Opening up discussion on a `findUpdatedScenes` API, first described in stashapp/stash/issues/2903. Original author @mmenanno described it as follows: > ### Stash-Box Backend Side > > For the sake of making the process optimal Stash-Box shou",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#879",
+  "title": "[Bug Report] Deleted fields in edits are reset when updating the edit",
+  "excerpt": "This affects production ([v0.5.3](https://github.com/stashapp/stash-box/releases/tag/v0.5.3)), as well as current develop. #### **To Reproduce** Steps to reproduce the behavior: 1. Existing performer with (for example) height set to 170 cm.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#9",
+  "title": "[Bug Report] Fields updated to NULL are ignored",
+  "excerpt": "**Describe the bug** Whenever a mutation is sent to modify a value to NULL, the column is ignored and the old value is retained. This makes it impossible to set values to Unknown.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#916",
+  "title": "[RFC] Notification Enhancements",
+  "excerpt": "We've gotten notification updates in recent releases and I'd like to propose a few additional enhancements. If anyone has their own ideas or feedback, please contribute. 1. **Add Scene/Studio name on pending \"Create\" edits.** - This is the ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#92",
+  "title": "[Feature] Studio Logo's/Images",
+  "excerpt": "If we could host Logo's and images for the studios with support for maybe multiple / set one as default (rating based maybe?) Then the stash clients could pull the image easily when needed. This would also remove the manual legwork everyone",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#926",
+  "title": "[Feature] [My Fingerprints] Filter for entries with more than 1 value per hash",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I just opened up the new \"My Fingerprints\" page (nice work btw), and found some of my wrongly submitted entries. <img width=\"1235\" alt=\"Image\" src=\"https://github.com/user-a",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#929",
+  "title": "[Feature] Remember draft entries when leaving or refreshing the page.",
+  "excerpt": "When I leave the draft form or refresh the page as a user, all the filled entries get deleted. Solution: Remember all the entries in the field when leaving or refreshing the page.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#930",
+  "title": "[Feature] Sort performer scenes based on scene length",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When I have a scene locally but don't know what it's called in StashDB I usually find the performer and try to find the scene which matches the thumbnail and duration, but b",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#935",
+  "title": "[docker] tagged releases",
+  "excerpt": "Hi, On docker hub i noticed there is only a \"latest\" tag, and not a tag per _git tag_. I'm working on a helm chart and this would allow me to create stable versions of the chart with the app itself so it doesn't become invalid",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#938",
+  "title": "[Feature] Ability to filter \"My fingerprints\" by submission date",
+  "excerpt": "This could be the first submission date or last submission date for any given scene, whichever is easier to implement. Either way, it would further increase transparency of the \"Submit Fingerprints\" feature.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#939",
+  "title": "[Feature] Fingerprints submitted / \"Owned\" filter on various pages",
+  "excerpt": "It would be very useful to be able to filter any given performer or studio page by scenes you have and have not yet submitted fingerprints for. On scene pages it might also be nice to make this information more immediately visible, perhaps ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#941",
+  "title": "[Bug Report] voting yes after voting no should clear notification",
+  "excerpt": "**Describe the bug** Twice now I have gotten a notification on stash DB that someone voted no on my edit, but when looking at the edit there were no \"no\" votes. It seems that someone had first voted no and then changed their vote to yes. In",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#943",
+  "title": "[Bug Report] Edits are not updated when entities are merged",
+  "excerpt": "> If a person gets merged while there are still pending edits for the performer using the old id the scene will still point to the old id eg `/edits/cd3d11a5-5eed-4625-9550-36121317ba68`",
+  "probe": ""
+ }
+]

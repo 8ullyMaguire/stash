@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#7028",
+  "title": "Inconsistent File Info shortcut on gallery/image pages conflicts with Add Filter shortcut",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug The File Info tab uses inconsistent keyboard shortcuts across entity detail pages. On scene detail pages, the File Inf",
+  "probe": ""
+ },
+ {
+  "key": "stash#7036",
+  "title": "Add \"Primary Source\" as default/top of list in scrape dialog",
+  "excerpt": "### Describe the feature you'd like Now that stashbox lists the primary source separate from databases and other sources. It would be nice to have the primary designated always. <img width=\"299\" height=\"185\" alt=\"Image\" src=\"https://github.",
+  "probe": ""
+ },
+ {
+  "key": "stash#7052",
+  "title": "Link O history to multiple scenes (O Assists)",
+  "excerpt": "### Describe the feature you'd like When a user is enjoying more than one scene and the time comes to increment the o-count, they may wish to give credit to more than one scene or image. It would be nice to link O history to multiple scenes",
+  "probe": ""
+ },
+ {
+  "key": "stash#7058",
+  "title": "Do not pre-select scene match when multiple scenes are found in scene tagger",
+  "excerpt": "### Describe the feature you'd like You can see that once a scene was misidentified by a user, many others will re-submit the same hashes afterwards because they blindly accept the wrong scene from StashDB. The wrong scene will be pre-selec",
+  "probe": ""
+ },
+ {
+  "key": "stash#7068",
+  "title": "Secondary sort issue when sorting by descending date",
+  "excerpt": "### Describe the feature you'd like Hello, I'd like to describe a quirk that I often encounter, although I'm unsure of what the solution should be exactly. It occurs when I have a set of chronological galleries, but the individual galleries",
+  "probe": ""
+ },
+ {
+  "key": "stash#7071",
+  "title": "Add VR specific fields to `VideoFile`",
+  "excerpt": "### Describe the feature you'd like Add VR specific fields to `VideoFile` to better support external integrations. ### Describe the benefits this would bring to existing users More comprehensice file information will be stored in Stash and ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7086",
+  "title": "Add `{inputName}` placeholder for searchByName scrapers",
+  "excerpt": "### Describe the feature you'd like Similarly to {inputURL} and {inputHostname}, it would be nice to have just the search value in a new parameter {inputName}. ### Describe the benefits this would bring to existing users This is useful if y",
+  "probe": ""
+ },
+ {
+  "key": "stash#710",
+  "title": "Store and display corrupt files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When processing my huge library I would like to see which files failed to open / caused errors in ffmpeg so I can review / delete / redownload them. **Describe the solution ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7106",
+  "title": "Deleting an image in a zip gallery silently fails",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Deleting an image in a zipped gallery doesn't seem to work. The image initially disappears, but after a rescan, the im",
+  "probe": ""
+ },
+ {
+  "key": "stash#7118",
+  "title": "Duration filtering for scene identification",
+  "excerpt": "### Describe the feature you'd like I would like to propose an option to filter StashDB identification matches based on scene duration. Since StashDB already has the duration for each scene, the identify dialog could include a slider that l",
+  "probe": ""
+ },
+ {
+  "key": "stash#7130",
+  "title": "App not responding on RClone drive - \"Loading ...\" forever",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Running stash-win.exe from a mounted rclone encrypted drive will cause the website to load the app shell, but then pre",
+  "probe": ""
+ },
+ {
+  "key": "stash#7132",
+  "title": "Performer evolution",
+  "excerpt": "### Describe the feature you'd like To have the ability to set a \"performer evolution\" timeframe, and then allow filtering, searching, etc., by that \"evolution\". For instance, a performer might start their career with natural breasts, under",
+  "probe": ""
+ },
+ {
+  "key": "stash#7133",
+  "title": "Using \"excludes\" or \"is not\" with the disambiguation filter hides non-disambiguated performers",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug When filtering the list of performers, if you use the Disambiguation filter with the `is not` or `excludes` options, o",
+  "probe": ""
+ },
+ {
+  "key": "stash#7134",
+  "title": "Watch Later",
+  "excerpt": "### Describe the feature you'd like I’m a bit surprised there’s no watch later or favorites list, or even a playlist feature, so users can make their own collections. ### Describe the benefits this would bring to existing users A quick way ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7135",
+  "title": "Unmentioned/bugged max password length",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug In the docs there is no mention of the max password length being 72 characters, though I'm not sure if this a hard lim",
+  "probe": ""
+ },
+ {
+  "key": "stash#7136",
+  "title": "JSON based scrapers fail with Chrome CDP",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug While trying to troubleshoot why R18.dev scraper was getting 403s I modified the R18.dev [scraper](https://github.com/",
+  "probe": ""
+ },
+ {
+  "key": "stash#7139",
+  "title": "Lack of right-click paste option in multi-edit boxes like Tags, Performers, Groups in  Edit tab",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug There is no \"Paste\" option in right-click context menu for Tags/Performers/Groups select boxes. Multi-entry select box",
+  "probe": ""
+ },
+ {
+  "key": "stash#7142",
+  "title": "Scroll position is lost when navigating back to a list",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Going back to a list view lands at the top of the list instead of the position you left. Scroll down the Scenes list, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7145",
+  "title": "Remote image downloader sends no User-Agent, causing HTTP 418",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Describe the bug Stash fails to download remote images from cdn.adultfilmindex.com with HTTP status 418. The AdultFilm",
+  "probe": ""
+ },
+ {
+  "key": "stash#7147",
+  "title": "Fast dragging motions in the lightbox/image-viewer navigate to the next/previous image",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Mouse gestures that drag the image are being misread as clicks in the lightbox image viewer when click duration is und",
+  "probe": ""
+ },
+ {
+  "key": "stash#7148",
+  "title": "Drags that overshoot the image boundaries result in the lightbox/image-viewer being dismissed",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug The user is able to drag the cursor outside the image boundaries when trying to drag an image in the lightbox/image-vi",
+  "probe": ""
+ },
+ {
+  "key": "stash#7149",
+  "title": "Panning images in lightbox with the mouse wheel can result in navigation to the next/previous image",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Panning images in lightbox using the mouse wheel (with scroll mode set to \"Pan Y\") can result in navigation to the nex",
+  "probe": ""
+ },
+ {
+  "key": "stash#715",
+  "title": "Assign default scrapers to individual fields and add 'Scrape From All Sources' button on Performer page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Some scrapers carry inaccurate data or data which breaks country flag for example **Describe the solution you'd like** I was thinking (dangerous I know), but it would be gre",
+  "probe": ""
+ },
+ {
+  "key": "stash#7152",
+  "title": "Studio Tagger batch update panics when scraped studio has nil StoredID",
+  "excerpt": "### Have you enabled troubleshooting mode? - [ ] I confirm that the troubleshooting mode is enabled. ### Describe the bug ### Summary The **Studio Tagger → Batch Update Studios** operation can panic with a nil pointer dereference when updat",
+  "probe": "C41"
+ },
+ {
+  "key": "stash#7154",
+  "title": "Lightbox back button behavior cause unsaved modal to show",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Context: #7094 introduced history-aware navigation on all lightboxes. A bug arose when mixed with the existing popstat",
+  "probe": ""
+ },
+ {
+  "key": "stash#7155",
+  "title": "Stale sprite/preview/cover/transcode after a same path file content change",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug When a video is modified in place (i.e. by a plugin or external program) naturally its hash would change, today stash ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7157",
+  "title": "Option to play next scene after deleting",
+  "excerpt": "### Describe the feature you'd like i'd like to either have default behavior after deleting a scene be to move to the next scene or to have it a configurable option to do so ### Describe the benefits this would bring to existing users i fee",
+  "probe": ""
+ },
+ {
+  "key": "stash#7160",
+  "title": "[UI/UX] Organized icon state is hard to distinguish on scene detail pages",
+  "excerpt": "### Describe the feature you'd like On the scene detail pages (e.g., [http://127.0.0.1:9999/scenes/{id}](http://127.0.0.1:9999/scenes/%7Bid%7D)), it is difficult to visually distinguish whether the \"organized\" icon is currently in its activ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7165",
+  "title": "Plugin settings should be able to add connect-src CSP sources",
+  "excerpt": "### Describe the feature you'd like Add a mechanism for plugin developers to contribute additional connect-src entries to Stash’s page Content Security Policy through plugin settings, rather than only through the static ui.csp.connect-src v",
+  "probe": ""
+ },
+ {
+  "key": "stash#7173",
+  "title": "Generate failing make previews",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug **Describe the bug** Preview video generation fails for 100% of scenes in a library when using the default \"Generate →",
+  "probe": ""
+ },
+ {
+  "key": "stash#7175",
+  "title": "Ability to attach performer to a group",
+  "excerpt": "### Describe the feature you'd like It should be possible to add performer to Group which automatically adds that performer to all Scenes in the Group. ### Describe the benefits this would bring to existing users This would make organizing ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7179",
+  "title": "`.nogallery` does not remove an existing folder-based gallery during Clean",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug When `.nogallery` marker is added to a directory that already has a folder-based gallery, running the Clean task leave",
+  "probe": ""
+ },
+ {
+  "key": "stash#7187",
+  "title": "No way to return \"No images found\" from scraper script?",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug When a `scrapeJson` scraper finds no results, the UI shows a clear \"No images found\" message. But there doesn't seem t",
+  "probe": ""
+ },
+ {
+  "key": "stash#7192",
+  "title": "Option to disable automatic file hash merging for Images/Galleries and allow duplicate files",
+  "excerpt": "### Describe the feature you'd like I would like to request a global setting/toggle under Settings -> Tasks/System to completely disable automatic file hash (MD5) deduplication and merging for Images and Galleries. When this toggle is turne",
+  "probe": ""
+ },
+ {
+  "key": "stash#7194",
+  "title": "Show free/available disk space on the Statistics page",
+  "excerpt": "### Describe the feature you'd like The Statistics page shows library totals (scene count, total size, duration, etc.) but gives no indication of how much free space remains on the drives backing the library. To check remaining space, I cur",
+  "probe": ""
+ },
+ {
+  "key": "stash#7197",
+  "title": "Add plugin media-src CSP support",
+  "excerpt": "### Describe the feature you'd like I would like to be able to embed videos from outside of the localhost stash domain in pages created by custom stash plugins. Currently we cannot do this for `media-src`, even though it's supported for js ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7198",
+  "title": "Updating scrapers does not install new requirements",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug I have been updating a lot of scrapers in the Community repository lately and several users have reported this bug to ",
+  "probe": ""
+ },
+ {
+  "key": "stash#7200",
+  "title": "Warn about overlapping URL patterns in scrapers",
+  "excerpt": "### Describe the feature you'd like Most scrapers are URL scrapers, and the way they work is by matching whatever URL is in the field for any scene/performer/gallery/image to a pattern declared in the scraper. The problem arises when two or",
+  "probe": ""
+ },
+ {
+  "key": "stash#7202",
+  "title": "Tagger should not cut off vertical cover images (for the local scene)",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug When a scene has a vertical cover image (portrait format), tagger sizes it at 100% width and cuts off the bottom part.",
+  "probe": ""
+ },
+ {
+  "key": "stash#7204",
+  "title": "Add Sex/Genitals Field for Performers",
+  "excerpt": "### Describe the feature you'd like It has came up several times in the past that a single `gender` field doesn't always allow a user to fully understand the physical/biological aspects of a performer. A performer may identify as male but h",
+  "probe": ""
+ }
+]

@@ -96,6 +96,51 @@ def main():
             f"reason: {sorted(thin)[:8]}"
         )
 
+    # 4. THE REASON MUST BE A REASON. Two failure shapes have now been observed
+    #    in real output, and both passed every check above.
+    #
+    #    (a) the quote pasted back: "why" is the issue text itself, truncated
+    #        to a fixed length. It is not a reason, and it is 45 words against
+    #        an instruction that asked for at most 20.
+    #    (b) the template: "The quote '<...>' relates to <capability intent>".
+    #        It contains the right intent string, mentions the quote, and
+    #        reasons about nothing -- and it is longer than 4 words, so the
+    #        length gate above waves it through.
+    #
+    #    Both are detected by content, not by length, because both defeat a
+    #    length check by padding.
+    pasted, templated, padded = [], [], []
+    for key, val in answer.items():
+        issue = by_key.get(key)
+        if issue is None:
+            continue
+        why = re.sub(r"\s+", " ", val.get("why") or "").strip()
+        stripped = re.sub(r"^Issue requests\s*", "", why)
+        hay = re.sub(r"\s+", " ", f"{issue['title']} {issue['excerpt']}").strip()
+        if stripped and stripped[:60] in hay:
+            pasted.append(key)
+        if re.match(r"^The quote '.*' (relates to|matches|indicates|is about)", stripped):
+            templated.append(key)
+        # 20 words was the instruction's own bound. Over it means the field
+        # was filled by copying rather than by reasoning.
+        if len(why.split()) > 25:
+            padded.append(key)
+    if pasted:
+        failures.append(
+            f"{len(pasted)} 'why' values are copied from the issue text rather "
+            f"than stating a reason: {sorted(pasted)[:8]}"
+        )
+    if templated:
+        failures.append(
+            f"{len(templated)} 'why' values are the template \"The quote '...' "
+            f"relates to ...\", which reasons about nothing: {sorted(templated)[:8]}"
+        )
+    if padded:
+        failures.append(
+            f"{len(padded)} 'why' values run past 25 words, which indicates the "
+            f"field was copied rather than reasoned: {sorted(padded)[:8]}"
+        )
+
     # 4. Known-answer probes. These have a defensible right answer, agreed
     #    before the batch ran, and a scorer cannot get them right by accident.
     probes = [(k, v) for k, v in ((i["key"], i["probe"]) for i in batch) if v]

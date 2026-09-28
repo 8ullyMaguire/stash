@@ -1,0 +1,202 @@
+{
+  "stash#1006": {
+    "cap": "C05",
+    "quote": "manage PDF files under a menu item Ebooks",
+    "why": "PDF files are page-based documents like CBZ/CBR, matching C05's intent for CBZ/CBR/PDF page-based items"
+  },
+  "stash#1010": {
+    "cap": "C47",
+    "quote": "having to manually search hundreds or even thousands of scenes",
+    "why": "Request for batch search functionality matches C47's intent to search across title, body, tags, performers, studio, transcript"
+  },
+  "stash#1017": {
+    "cap": "C67",
+    "quote": "ability to \"Add All\" in both individual fields and overall would save a lot of clicking",
+    "why": "Request for bulk operations in scrape results dialog matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#1024": {
+    "cap": "C33",
+    "quote": "When scene has two or more female performers sometimes they different in acts",
+    "why": "Request for per-performer tag fields matches C33's intent for per-field proposals with weights, history, and merge"
+  },
+  "stash#1028": {
+    "cap": "C03",
+    "quote": "patchy support for any porn that falls outside of this",
+    "why": "Request for better support of non-studio content matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1029": {
+    "cap": "C50",
+    "quote": "folder structure is ignored when it comes to presenting those videos",
+    "why": "Explicit request for folder-like organization matches C50's intent for virtual folders over query results, breadcrumbs"
+  },
+  "stash#1030": {
+    "cap": "C03",
+    "quote": "You might have a 10 second long gif and a 5 second silent video clip",
+    "why": "Request to combine different media types matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1052": {
+    "cap": "C60",
+    "quote": "ability to quickly create these",
+    "why": "Request for keyboard shortcut matches C60's intent for full shortcut map, command palette, undo"
+  },
+  "stash#1058": {
+    "cap": "C04",
+    "quote": "allow one to select which track plays",
+    "why": "Request for audio track selection matches C04's intent for audio objects, waveform, music metadata, audio scrapers"
+  },
+  "stash#1111": {
+    "cap": "C48",
+    "quote": "option for case-insensitive RegEx filtering",
+    "why": "Request for case-insensitive regex matching matches C48's intent for fuzzy, phonetic, synonym and alias-aware matching"
+  },
+  "stash#1125": {
+    "cap": "C03",
+    "quote": "drag and drop them from one browser window to another",
+    "why": "Request for image upload matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1127": {
+    "cap": "C03",
+    "quote": "primary gallery for an actress and then sub-galleries",
+    "why": "Request for sub-galleries matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1129": {
+    "cap": "C46",
+    "quote": "click on a letter of the alphabet and filter the view",
+    "why": "Request for alphabetical filtering matches C46's intent for one coherent filter model: facets, saved filters, URL state"
+  },
+  "stash#1161": {
+    "cap": "C03",
+    "quote": "linking scenes to galleries is a tedious manual task",
+    "why": "Request to link scenes to galleries matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1165": {
+    "cap": "C46",
+    "quote": "Searching with generic terms could lead to ambiguous results",
+    "why": "Request for better filtering based on metadata matches C46's intent for one coherent filter model"
+  },
+  "stash#1170": {
+    "cap": "C13",
+    "quote": "organized flag for performers",
+    "why": "Request for organized flag on performers matches C13's intent for mark items organised/favourite; bulk-operate large sets"
+  },
+  "stash#1171": {
+    "cap": "C78",
+    "quote": "clear logs button in the logs section",
+    "why": "Request for clear logs button matches C78's intent for structured logs, job traces, health dashboard, metrics"
+  },
+  "stash#1173": {
+    "cap": "C73",
+    "quote": "As there are a bunch of features not surfaced into the configuration menus, a button to launch config.yml in the users default editor would be helpful",
+    "why": "Request for in-app configuration editor matches C73's intent for documented public API, client libraries, import/export"
+  },
+  "stash#118": {
+    "cap": "C62",
+    "quote": "I have a suggestion regarding the front-end user i",
+    "why": "Request for alphabetical performer list matches C62's intent for performer/studio cards, direct profile links, sorting"
+  },
+  "stash#1182": {
+    "cap": "C61",
+    "quote": "It would be good for users to be able to ensure the config is set up correctly and responding to queries",
+    "why": "Request for UI testing/configuration button matches C61's intent for theming & accessibility (UI customization)"
+  },
+  "stash#1183": {
+    "cap": "C67",
+    "quote": "I have many media files from various different Studios, I use the existing functionality in the application to mass edit and assign a Studio to each",
+    "why": "Request for scraper placeholder fields matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#12": {
+    "cap": "C69",
+    "quote": "https://github.com/stashapp/StashServer/issues/43",
+    "why": "Request for account system matches C69's intent for accounts, roles, per-library permission, audit log"
+  },
+  "stash#1220": {
+    "cap": "C52",
+    "quote": "Per discord discussion with @InfiniteTF putting su",
+    "why": "Request for perceptual hash lookup matches C52's intent for near-duplicate items, re-encodes, same scene different file"
+  },
+  "stash#1246": {
+    "cap": "C60",
+    "quote": "As suggested on Discord (by B33N): > Do we have un",
+    "why": "Request for search functionality in settings matches C60's intent for full shortcut map, command palette, undo (search as command)"
+  },
+  "stash#1253": {
+    "cap": "C49",
+    "quote": "**Is your feature request related to a problem? Pl",
+    "why": "Request for tag organization matches C49's intent for tag namespaces, tag groups, per-tag attributes and colors"
+  },
+  "stash#1258": {
+    "cap": "C04",
+    "quote": "**Is your feature request related to a problem? Pl",
+    "why": "Request for audio file support matches C04's intent for audio objects, waveform, music metadata, audio scrapers"
+  },
+  "stash#1259": {
+    "cap": "C07",
+    "quote": "**Is your feature request related to a problem? Pl",
+    "why": "Request for text file support matches C07's intent for text objects and external link items with metadata"
+  },
+  "stash#1280": {
+    "cap": "C61",
+    "quote": "default tab when clicking into Scenes or Performers",
+    "why": "Request for UI configuration/default tab matches C61's intent for theming & accessibility (UI customization)"
+  },
+  "stash#1290": {
+    "cap": "C55",
+    "quote": "As soon as you select an individual piece of media though",
+    "why": "Request for media navigation matches C55's intent for fast full-screen gallery with keyboard, compare, zoom"
+  },
+  "stash#1296": {
+    "cap": "C86",
+    "quote": "Adding my own tags one by one is a pain",
+    "why": "Request for bulk tag entry matches C86's intent for bulk editor, CSV import, paste-parse, undo"
+  },
+  "stash#13": {
+    "cap": "C67",
+    "quote": "https://github.com/stashapp/StashServer/issues/45",
+    "why": "Request for UI-based scene upload matches C67's intent for stable extension API for scrapers, plugins, hooks (upload surface)"
+  },
+  "stash#1317": {
+    "cap": "C12",
+    "quote": "As you add more studios, performers, tags, scenes, etc. it can get really overwhelming",
+    "why": "Request for global filtering/saved views matches C12's intent for saved, dynamic, auto-updating queries as a first-class object"
+  },
+  "stash#1334": {
+    "cap": "C62",
+    "quote": "see both the Scenes and Images of a particular performer in a unified manner",
+    "why": "Request for unified scene/image view matches C62's intent for performer/studio cards, direct profile links, sorting"
+  },
+  "stash#1335": {
+    "cap": "C46",
+    "quote": "Filter settings, if used, are often specific to particular videos",
+    "why": "Request for persistent filter settings matches C46's intent for one coherent filter model: facets, saved filters, URL state"
+  },
+  "stash#1341": {
+    "cap": "C67",
+    "quote": "All of my scenes are scraped with the URL, if i use the tagger it will overwrite",
+    "why": "Request for tagger configuration matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#1365": {
+    "cap": "C46",
+    "quote": "Tags is one of the major ways you sort the content",
+    "why": "Request for contextual filtering matches C46's intent for one coherent filter model"
+  },
+  "stash#1367": {
+    "cap": "C67",
+    "quote": "Right now, if URLs are set for various scenes or performers, it is not possible to scrape them in bulk",
+    "why": "Request to extend tagger for other scrapers matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#1385": {
+    "cap": "C90",
+    "quote": "files to be tidy and navigable on my filesystem",
+    "why": "Request for filesystem integration matches C90's intent for every view state is a shareable, resolvable URL"
+  },
+  "stash#1400": {
+    "cap": "C49",
+    "quote": "your list of tags ends up HUGE. It becomes hard to easily find the tags you prefer",
+    "why": "Request for tag ratings matches C49's intent for tag namespaces, tag groups, per-tag attributes and colors"
+  },
+  "stash#1445": {
+    "cap": "C17",
+    "quote": "If a task is interrupted (for example by an automatically triggered Docker update)",
+    "why": "Request for task queue resumption matches C17's intent for durable queue: identify, generate, match, cluster, transcode"
+  }
+}

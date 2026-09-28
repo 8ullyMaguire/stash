@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#3253",
+  "title": "Video.js Tags Quick Add Dialouge",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When curating media, having to delve into the edit side panel to tag, on occasions where your prime focus is tagging tags, can be tedious at best. It actually makes you less",
+  "probe": ""
+ },
+ {
+  "key": "stash#3266",
+  "title": "Add alias field keyword searching for groups",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** If you want to search a movie name by his alias, you can't. **Describe the solution you'd like** - The default search look for alias **Describe alternatives you've considere",
+  "probe": ""
+ },
+ {
+  "key": "stash#3272",
+  "title": "Sort scenes by studio or performer rating from scenes page",
+  "excerpt": "I think it would be really conventient to be able to sort scenes (scene tab) by studio or performer rating. This way we can filter scenes AND sort them in a way that scenes featuring a studio or performer with a higher rating are showed fir",
+  "probe": ""
+ },
+ {
+  "key": "stash#3281",
+  "title": "Smarter Tagging Overhaul",
+  "excerpt": "I'd first like to apologize for what is likely a mess of words. I am not a writer by any means. **Is your feature request related to a problem? Please describe.** Tagging structure as a whole and how it is applied to performers and scenes s",
+  "probe": ""
+ },
+ {
+  "key": "stash#3296",
+  "title": "Ability to select multiple studios",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm using Stash for both IRL and R34 videos and images, and sometimes there are multiple artists on a video, unfortunately I can't add them all because the Studio field is l",
+  "probe": ""
+ },
+ {
+  "key": "stash#3299",
+  "title": "Native Remote UI",
+  "excerpt": "<!-- Update or delete the title if you need to delegate your title gore to something # Native Remote UI *### Scope* <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind of summary so its easie",
+  "probe": ""
+ },
+ {
+  "key": "stash#3303",
+  "title": "Remove `^https?:\\/\\/(www\\.)?` and `\\/$` from all <a> HTML tags displaying link text URLs",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** To reduce the length of link text URL strings displayed throughout the Stash UI, it is unnecessary to display the full URL in an `<a>` HTML tags link text. **Describe the so",
+  "probe": ""
+ },
+ {
+  "key": "stash#3312",
+  "title": "Dynamically load more rows on front page when reaching the end of items",
+  "excerpt": "**Is your feature request related to a problem? I like the main Stash page, showing recent scenes to even adding custom filters. The only thing, as it is with a maximum amount of entries per row, it's usefulness is quite limited **Describe ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3318",
+  "title": "Studio Code display improvement",
+  "excerpt": "<!-- Update or delete the title if you need to delegate your title gore to something # [RFC] Studio Code display improvement *### Scope* <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind of",
+  "probe": ""
+ },
+ {
+  "key": "stash#3322",
+  "title": "Increase the checkbox size for selecting multiple items in scene duplicate checker",
+  "excerpt": "Marking multiple items for edits/deletion should have a bigger clickable area. Currently you need to click the small checkbox in the corner I notice that it has been implemented but not yet in the Scene Duplicate Checker Is it possible to i",
+  "probe": ""
+ },
+ {
+  "key": "stash#3333",
+  "title": "Saved Filters: Tag-item badge below toolbar not updating",
+  "excerpt": "**Describe the bug** Saved Filters: Tag-item badge below toolbar is not updating text when associated tag has been renamed and still displays the old name. **To Reproduce** Steps to reproduce the behavior: 1. Create Tag: Test ABC 2. On Tags",
+  "probe": ""
+ },
+ {
+  "key": "stash#3336",
+  "title": "metadataScan flag to disable/ignore hooks",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** I've run into the case were I would like to add files to stash via a script without kicking off plugin automations I have in place for normal scanning tasks, currently r",
+  "probe": ""
+ },
+ {
+  "key": "stash#3350",
+  "title": "Ability to play scene directly from the scenes grid page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** no **Describe the solution you'd like** From the main video page, it would be nice to have the option to enable immediate video playback. The idea is from this screen, tap t",
+  "probe": ""
+ },
+ {
+  "key": "stash#3361",
+  "title": "Add POST support to scraper queries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Some APIs only support API requests as POST query (e.g. [AniList](https://anilist.gitbook.io/anilist-apiv2-docs/overview/graphql/getting-started)). Currently you have to wri",
+  "probe": ""
+ },
+ {
+  "key": "stash#3364",
+  "title": "Tagging Flow/Interface to facilitate content tagging",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Tagging can be arduous, and it's not always obvious what media is missing important tags. **Describe the solution you'd like** Stash could provide a tagging interface/flow, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3366",
+  "title": "Add metadata in multiple languages",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - Many scenes have titles and details available in multiple languages, but only one version can be stored in stash. In StashDB most of the time this is english, even if ther",
+  "probe": ""
+ },
+ {
+  "key": "stash#3371",
+  "title": "Rename 'Merge' to 'Merge Metadata' in scene duplicate checker tool",
+  "excerpt": "The Merge feature is a powerful tool! Unfortunately, the wording of the tool is leading to considerable confusion. Merge _what_ exactly? Videos together like a compilation video editing tool? This confusion is becoming increasingly more evi",
+  "probe": ""
+ },
+ {
+  "key": "stash#3382",
+  "title": "Expose Named Capture Groups in Scene filename parser",
+  "excerpt": "I like space-padding some elements of my filenames, mostly for visual uniformity at the command line, e.g. : ``` [2023-01-25] [foo ] TitleA.mp4 [2023-01-25] [bar ] TitleB.mp4 [2023-01-25] [quux] TitleC.mp4 ``` I want tags in Stash to corres",
+  "probe": ""
+ },
+ {
+  "key": "stash#3384",
+  "title": "Ungreedy Repetitions in Scene filename parser",
+  "excerpt": "Would be useful to have ungreedy options for parser fields ({title}, {tag}, {studio}, etc.). Don't know that each field needs an ungreedy counterpart ... Might suffice (and be easiest to implement) to have a checkbox that allows \"(?U)\" to b",
+  "probe": ""
+ },
+ {
+  "key": "stash#3400",
+  "title": "Rewamp tagging system to support tag attributes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** tagging in stashdb is basic you have to remember what kind of tags you have in your database in order to tag the scene succinctly. In addition, tagging is scene specific eve",
+  "probe": ""
+ },
+ {
+  "key": "stash#3412",
+  "title": "Streamline the scene merging process in scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, manually merging duplicate scenes together is tedious, and any automated process to prone to errors. Part of the problem with merging is that after you've merged ",
+  "probe": ""
+ },
+ {
+  "key": "stash#342",
+  "title": "Ability to upload sanitized logs to external pastebin",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** This feature is focused on allowing users to gather a sanitized debug log in a quickly created Pastebin link. Optionally via the https://hastebin.com link along with `DataDr",
+  "probe": ""
+ },
+ {
+  "key": "stash#3422",
+  "title": "Ability to upload and set scene cover from remote server",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many downloads include a cover image in the same folder as the video file. The `Set image` button only allows to choose local files (`from file`), not server files. -> I can",
+  "probe": ""
+ },
+ {
+  "key": "stash#3426",
+  "title": "Anamorphic videos previews are not normalized",
+  "excerpt": "**Describe the bug** In case of an anamorphic format video (pixel aspect is not 1:1 square), default generated thumbnail looks like stretched horizontally or vertically. This is a problem that occurs on both mobile and desktop. **To Reprodu",
+  "probe": ""
+ },
+ {
+  "key": "stash#3431",
+  "title": "Boolean Filter Wrappers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Filters currently AND each other, so when you have two or more filters, all must be true. There is no way currently to OR filters (as in `A || B`), or even NOT them (`!(A &&",
+  "probe": ""
+ },
+ {
+  "key": "stash#3450",
+  "title": "Ability to use relative dates for date-specific filters",
+  "excerpt": "### Describe the feature you'd like I would like to enable filtering using relative dates for fields such as release date, updated date, and created date. Currently, we can filter using absolute dates, like all scenes released after January",
+  "probe": ""
+ },
+ {
+  "key": "stash#3468",
+  "title": "Return more search results and restructure results presentation in performer tagger",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Performer tagger search currently returns 4-5 results at most **Describe the solution you'd like** Return more search results and present them in a format that is more infor",
+  "probe": ""
+ },
+ {
+  "key": "stash#3469",
+  "title": "Add the ability to group Tags into Tag Groups",
+  "excerpt": "![tagdropdown](https://user-images.githubusercontent.com/76471868/220528520-18dc26f9-398c-44f5-b555-045cef6889b7.png) Alright! I've had manually defined Tag Groups (aka Tag Categories) for over a year now and I've received a bunch of questi",
+  "probe": ""
+ },
+ {
+  "key": "stash#3478",
+  "title": "Recent Activity sorts for Performers, Studios, and Tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There is no current way to sort Performers, Studios, or Tags by recent activity. By recent activity, I mean recently released scenes (or galleries/images). **Describe the so",
+  "probe": ""
+ },
+ {
+  "key": "stash#3481",
+  "title": "Import tags from sidecar text files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** AI interrogators like deepbooru, WD14, and CLIP can generate a text file with tags from an image. afaik currently there is no way to read these txt files for automatically a",
+  "probe": ""
+ },
+ {
+  "key": "stash#3485",
+  "title": "Perform database integrity check on startup",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** After my database almost crashed this week after updating to a new version of Stash with the error code: `error backing up database: vacuum failed: database disk image is ma",
+  "probe": ""
+ },
+ {
+  "key": "stash#3486",
+  "title": "Option to performer scheduled automatic database backups",
+  "excerpt": "**Describe the solution you'd like** Can we have a function that writes a backup of our database periodically to a backup folder? **Describe alternatives you've considered** I can perform a manual backup but you know that that kind of thing",
+  "probe": ""
+ },
+ {
+  "key": "stash#3496",
+  "title": "Adding Hashes to Galleries for Potential Stash-Box Integration",
+  "excerpt": "### Scope <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind of summary so its easier for people to determine if they can contribute at a glance. --> The idea here would be to add hashes to ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3505",
+  "title": "Similar Performers Tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Sometimes I forget performers' names but know they have much in common with a performer whose name I remember. Sometimes I just want to find a performer in my library that i",
+  "probe": ""
+ },
+ {
+  "key": "stash#3529",
+  "title": "Create new object for characters",
+  "excerpt": "A characters tab would be great. The could be used for source film maker videos (samus or lora croft) or for porn stars dressed as the characters Would also be nice if stashdb could also add characters to scrap like performers. Very detaile",
+  "probe": ""
+ },
+ {
+  "key": "stash#3530",
+  "title": "Support multiple scenes in a single file",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** There are cases where a stash user would want to view scenes that may exist in a single file separately without re-encoding the source file into separate files so they c",
+  "probe": ""
+ },
+ {
+  "key": "stash#3531",
+  "title": "Exclude organized scenes from scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** there are false positives even in \"exact duplicates\". right now there is no way i can resolve some of my duplicates without either merging or deleting. i want to just mark t",
+  "probe": ""
+ },
+ {
+  "key": "stash#3573",
+  "title": "Exclude directories in scene duplicate checker",
+  "excerpt": "It'd be nice if we can filter out, for example by path, in the Scene Duplicate Checker. In my case I have several deepfake videos marked as duplicates that I don't want to remove, adding too much noise to the list.",
+  "probe": ""
+ },
+ {
+  "key": "stash#3602",
+  "title": "Add scene field to track uncredited performers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Performers are sometimes either unknown or uncredited - especially so for male performers. This makes the _performer count_ filters and sorts inaccurate as you can have mass",
+  "probe": ""
+ },
+ {
+  "key": "stash#3617",
+  "title": "Ability to Manually Link Performers and show direct link to their profiles",
+  "excerpt": "An Affiliated Performers section in the profiles of any individual Performer that allows you to manually link performers to each others profile pages. Attached is a quick photoshop mockup of what it could be like: https://i.imgur.com/R46wEX",
+  "probe": ""
+ }
+]
