@@ -38,6 +38,7 @@ go 1.24.3
 
 require (
 	github.com/anacrolix/torrent v1.61.0
+	github.com/monkeyWie/goed2k v0.0.0-20260602122456-f2a71d599dee
 	github.com/stashapp/stash v0.31.1
 	golang.org/x/crypto v0.45.0
 	golang.org/x/time v0.14.0
