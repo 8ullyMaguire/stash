@@ -561,7 +561,7 @@ MUTATIONS = [
     # here is invisible to a length check.
     ("part: the request does not lead with the file hash",
      PART, "out = append(out, r.FileHash[:]...)",
-     "out = append(out, r.End, r.Start, 0, 0)",
+     "out = append(out, r.FileHash[15], r.FileHash[14], r.FileHash[13],\n		r.FileHash[12], r.FileHash[11], r.FileHash[10], r.FileHash[9],\n		r.FileHash[8], r.FileHash[7], r.FileHash[6], r.FileHash[5],\n		r.FileHash[4], r.FileHash[3], r.FileHash[2], r.FileHash[1],\n		r.FileHash[0])",
      "PartRequestIsAHashAndThreeOffsetPairs|TheRequestCarriesNoTagCount"),
 
     # THE THREE PAIRS. eMule batches three windows per packet; we ask for
@@ -600,7 +600,8 @@ MUTATIONS = [
     # writes a short window and the file fails much later.
     ("part: a short answer is accepted anyway",
      PART, "if want := int(ans.End - ans.Start); len(ans.Data) != want {",
-     "if false {", "ShortAnswerIsRefused"),
+     "if want := int(ans.End - ans.Start); false && len(ans.Data) != want {",
+     "ShortAnswerIsRefused"),
 
     # OP_FILEREQANSNOFIL is a normal ANSWER, not a malformed packet. Folding
     # it into a generic error makes a transfer ask a peer that will never

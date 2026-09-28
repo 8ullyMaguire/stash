@@ -261,7 +261,18 @@ func (p *sourcePeer) serve(t *testing.T, ln net.Listener) {
 // dialTestSource connects to a peer, returning a Source for tests.
 func dialTestSource(t *testing.T, peer *sourcePeer) *Source {
 	t.Helper()
-	dialTimeoutForTest(t, 3*time.Second)
+
+	// # WHY 300ms AND NOT THE REAL BUDGET
+	//
+	// DialSource reads the peer's opening burst until it goes quiet, so every
+	// dial costs half the budget before the part request is even sent. At the
+	// 3s this test file originally used, the 24-iteration truncation loop
+	// took 36 seconds -- long enough that a suite people are told to run
+	// gets run less often, which is the worst outcome a test can have.
+	//
+	// 300ms is ample for a listener on the loopback interface, and the tests
+	// that genuinely need patience (the silent peer) set their own budget.
+	dialTimeoutForTest(t, 300*time.Millisecond)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -539,5 +550,78 @@ func TestAPartBeforeTheHandshakeIsRefused(t *testing.T) {
 	}
 	if msg := err.Error(); !bytes.Contains([]byte(msg), []byte("handshake")) {
 		t.Errorf("the error does not say the handshake was missing: %v", err)
+	}
+}
+
+// TestATruncatedAnswerIsRefusedRatherThanIndexedPast.
+//
+// # THE MUTATION THAT FOUND THIS ONE
+//
+// The length guard on a part answer's fixed 24-byte header survived a full
+// mutation run, which meant no test sent a payload too short to hold it. The
+// guard is not decorative: without it, a 20-byte answer has payload[20:24]
+// read four bytes past the end, which is a slice panic -- the one thing a
+// wire decoder must never do with a stranger's bytes.
+//
+// So this test exists because a probe survived, which is the probe doing its
+// job: a guard nobody exercises is indistinguishable from a guard nobody
+// needs, and only one of those is safe.
+func TestATruncatedAnswerIsRefusedRatherThanIndexedPast(t *testing.T) {
+	// Every length from nothing up to one byte short of the header. A
+	// decoder that is right for one of them and wrong for the rest is a
+	// decoder with an off-by-one, and the loop is what finds it.
+	for n := 0; n < 24; n++ {
+		peer := &sourcePeer{
+			answer: frameOpcode(opSendingPart, make([]byte, n)),
+		}
+		src := dialTestSource(t, peer)
+
+		_, err := src.RequestPart(context.Background(),
+			PartRequest{FileHash: theHash, Start: 0, End: PartSize})
+		if err == nil {
+			t.Fatalf("a %d-byte part answer was accepted. The header alone "+
+				"is 24 bytes, so this is a packet that cannot be one",
+				n)
+		}
+		// And the message must say what was too short, because a bare
+		// error leaves the reader guessing which field was missing.
+		if !bytes.Contains([]byte(err.Error()), []byte("shorter")) {
+			t.Errorf("a %d-byte answer gave %v, which does not say the "+
+				"payload was too short to be a part answer", n, err)
+		}
+	}
+}
+
+// TestAOneByteShortAnswerIsStillRefused: the boundary itself.
+//
+// Twenty-three bytes is the case a `< 24` guard written as `<= 24` would
+// miss, and one byte too few is a packet no source means to send. Looped
+// over in the test above; named here because the boundary is the part worth
+// reading twice.
+func TestAOneByteShortAnswerIsStillRefused(t *testing.T) {
+	peer := &sourcePeer{answer: frameOpcode(opSendingPart, make([]byte, 23))}
+	src := dialTestSource(t, peer)
+
+	if _, err := src.RequestPart(context.Background(),
+		PartRequest{FileHash: theHash, Start: 0, End: PartSize}); err == nil {
+		t.Error("a 23-byte answer was accepted; the header is 24 bytes")
+	}
+}
+
+// TestAHeaderOnlyAnswerWithNoDataIsRefused.
+//
+// Twenty-four bytes is a valid header describing a zero-length window, and it
+// is refused for a different reason than a 23-byte one: there is no room for
+// data AND the window is empty. The empty-window refusal is the load-bearing
+// one here, since a caller that treated this as success would count a part it
+// never received.
+func TestAHeaderOnlyAnswerWithNoDataIsRefused(t *testing.T) {
+	peer := &sourcePeer{answer: frameOpcode(opSendingPart, make([]byte, 24))}
+	src := dialTestSource(t, peer)
+
+	_, err := src.RequestPart(context.Background(),
+		PartRequest{FileHash: theHash, Start: 0, End: 0})
+	if err == nil {
+		t.Error("a header-only answer describing an empty window was accepted")
 	}
 }
