@@ -1962,17 +1962,60 @@ input, and deletes a user's file. The mutation is killed by
 
 ### Step 5.3 — BitTorrent
 
-Per spec §7: metainfo parsing, magnet + BEP 9 metadata fetch, Kademlia DHT
-(BEP 5) discovery, peer wire protocol, multi-connection, piece verification,
-resume, rate limits.
+**IN PROGRESS. The seeding decision is DONE** —
+`docs/decisions/0002-seeding-policy.md`, `internal/policy/seeding.go`,
+14/14 mutations killed. The transfer surface is next.
 
-The library covers the protocol surface. What it does **not** decide, and what
-5.3 must answer explicitly rather than by leaving the library's default: whether
-a given torrent is allowed to **seed**. `ClientConfig.NoUpload`,
-`ClientConfig.Seed` and `Torrent.AllowDataUpload` / `DisallowDataUpload` all
-exist, and spec §7.1's storage-vs-acting distinction says the answer is a
-decision, not a default. The consent gate answers whether a locator may be
-acted on; whether the bytes may leave afterwards is the next question.
+The decision had to come first, because the library's default is the wrong one
+and the default is what a downloader ships with. `ClientConfig.Seed`'s own
+comment says uploading is opportunistic by default. A permissive default in a
+client pointed at a corpus of untracked, self-published material means the box
+publishes strangers' work without anyone having decided that it should — and
+once the chunks are out, no later decision retracts them.
+
+So §7.1's line between *storing* a locator and *acting* on it needed a third
+distinction. Storing is writing the locator. Acting is starting a transfer.
+**Seeding is a write to a library the operator never sees**, and it is
+permitted only where a tier carries an assertion covering it:
+
+| tier | upload |
+|---|---|
+| `self_published`, `performer_claimed`, `third_party_permitted` | allowed |
+| `unverified` (the common case — every object starts here) | **forbidden** |
+| `quarantined`, `denied` | forbidden |
+| anything else | **forbidden** |
+
+`unverified` being the common case is what makes the default the interesting
+one: "nobody has objected" is not "somebody permitted this". And an
+unrecognised tier value — a newer core, a hand-edited row, a truncated database
+— falls to the restrictive branch, because every permissive tier is a claim by
+an *identified* party.
+
+The operator's `OperatorAllowedSeed` is an **outer bound, never an override**: it
+can narrow, it cannot widen, and
+`TestTheOperatorCannotWidenThePolicy` pins that because it is the direction a
+settings screen invites.
+
+Two things that are easy to get wrong and are pinned by mutation rather than by
+opinion:
+
+- **The tier strings are duplicated** across the module boundary, since the
+  plugin cannot import `internal/collab`. A stale copy fails SAFE and SILENT:
+  every decision falls to the restrictive branch, the downloader stops seeding
+  everywhere, and nothing errors. So `TestTheTierStringsMatchTheCore` reads both
+  files. **Both sides from source** — the first version wrote this file's six out
+  by hand and compared against a literal count, and two mutations survived it.
+  A test that checks a hand-written copy of the thing it is checking is the same
+  mistake one level down.
+- **`Policy` has no zero value that is safe by design.** `CanUpload()` on a zero
+  `Policy` returns false for the right answer by accident, because `""` is not
+  `UploadForbidden`. Hence `UploadForbiddenFor`, asserted to return
+  `UploadForbidden` specifically rather than merely "cannot upload".
+
+Remaining for this step: metainfo parsing, magnet + BEP 9 metadata fetch,
+Kademlia DHT (BEP 5) discovery, peer wire protocol, multi-connection, piece
+verification, resume, and rate limits — all from the library, with the upload
+policy wired into the client config and per-torrent controls.
 
 ### Step 5.4 — ed2k
 

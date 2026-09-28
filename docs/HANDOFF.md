@@ -337,8 +337,40 @@ without a granted proposal for that exact locator**, and every way of not
 having a grant refuses — nil answer, unreachable core, or a plugin with no gate
 at all.
 
-**M5 steps 5.1 and 5.2 are done. 5.3–5.5 remain**: BitTorrent, ed2k, library
+**M5 steps 5.1 and 5.2 are done, and step 5.3's seeding decision is done. 5.3's
+transfer surface and 5.4–5.5 remain**: BitTorrent transfers, ed2k, library
 integration. **M6 is unstarted.**
+
+### Seeding is derived from the tier, because uploading is not fetching
+
+`docs/decisions/0002-seeding-policy.md`. `anacrolix/torrent` uploads
+opportunistically by default — its own comment says so — and a permissive
+default in a client pointed at a corpus of untracked, self-published material
+means the box publishes strangers' work with nobody having decided it should.
+Once the chunks are out, no later decision retracts them.
+
+So §7.1 needed a third distinction. Storing a locator is writing it. Acting is
+starting a transfer. **Seeding is a write to a library the operator never sees**,
+and it is permitted only where a tier carries an assertion covering it:
+`self_published` / `performer_claimed` / `third_party_permitted` may;
+`unverified` may not; so may `quarantined`, `denied`, and **anything the build
+does not recognise**.
+
+`unverified` is where every object *starts*, so it is the common case — which is
+what makes "nobody has objected" versus "somebody permitted this" the decision
+that matters. And every permissive tier is a claim by an **identified** party,
+so a value nobody can be identified for is not one.
+
+`OperatorAllowedSeed` is an **outer bound, never an override**: it can narrow, it
+cannot widen, and `TestTheOperatorCannotWidenThePolicy` pins that because it is
+the direction a settings screen invites.
+
+**The tier strings are duplicated** across the seam and a stale copy fails safe
+and silent — every decision falls to the restrictive branch, seeding stops
+everywhere, nothing errors. The drift test reads **both** files, both from
+source: the first version listed this file's six by hand and compared against a
+literal, and two mutations survived it. A test checking a hand-written copy of
+what it is checking is the same mistake one level down.
 
 ### `anacrolix/torrent` v1.61.0 is adopted, and its path-safety function is not
 
@@ -388,14 +420,17 @@ plausible "fix" for "accepted a regular file" is `os.RemoveAll` then
 file. That mutation is killed by
 `TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
 
-### Four mutation harnesses, 55 mutations, 0 survivors
+### Five mutation harnesses, 69 mutations, 0 survivors
 
 ```bash
 python3 mutate_seam.py                                  # 6
 python3 internal/collab/mutate_locator.py               # 14
-(cd plugins/p2pdownloader && python3 internal/paths/mutate_paths.py)  # 12
-(cd plugins/p2pdownloader && python3 mutate_rpc.py)      # 23
+(cd plugins/p2pdownloader && python3 internal/paths/mutate_paths.py)   # 12
+(cd plugins/p2pdownloader && python3 internal/policy/mutate_policy.py) # 14
+(cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
+
+69 mutations across five harnesses, 0 survivors.
 
 Run them **serially**. They edit real files and restore them.
 
