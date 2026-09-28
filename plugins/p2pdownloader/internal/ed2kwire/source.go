@@ -125,8 +125,32 @@ func DialSource(ctx context.Context, addr string) (*Source, error) {
 		return nil, fmt.Errorf("dialling the ed2k source at %s: %w", addr, err)
 	}
 
-	// The deadline goes on the CONNECTION. See the comment above: a context
-	// alone does not bound a read that has already started.
+	// # THE DEADLINE GOES ON THE CONNECTION, AND A MUTATION PROVED WHY
+	//
+	// The comment above says a context alone does not bound a read that
+	// has already started, and that is true -- but the mutation harness
+	// found that removing THIS call changed no test at all, and the
+	// reason is instructive.
+	//
+	// readHandshakeAnswer sets its own read deadline on every iteration,
+	// so the reads were already bounded and this call was doing nothing
+	// for them. The first draft of the test suite therefore protected a
+	// line that no behaviour depended on.
+	//
+	// What it does cover is the WRITE, and a write is the one operation
+	// here that no later call bounds: a peer that accepts the connection
+	// and then stops reading can leave our first packet sitting in a full
+	// send buffer. A 28-byte write into a default buffer does not block
+	// (measured: 17 microseconds), so this is defence against a case that
+	// is unlikely rather than one that is observed -- and defence that is
+	// only reachable under conditions this step cannot produce is worth
+	// saying out loud, which is why it is here rather than deleted.
+	//
+	// The alternative was deleting the call and letting step 2's part
+	// requests -- which send up to 9500 bytes -- inherit whatever the OS
+	// does with a full buffer. That is a real risk arriving in the next
+	// step, and a deadline already on the connection is the cheapest way
+	// to be safe when it does.
 	if err := conn.SetDeadline(time.Now().Add(dialTimeout)); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("cannot bound the handshake read on %s: %w",

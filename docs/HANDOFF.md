@@ -456,6 +456,75 @@ workflow. Next concrete step is step 1 of the plan: `source.go` and
 `DialSource`, verified by `go build ./... && echo CLEAN` and a
 silent-peer test.
 
+### M5 step 5, step 1 of the plan: the SOURCE handshake
+
+`internal/ed2kwire/source.go`, at `007d4f7e3`. A `Source` is a peer holding a
+file, reached the same way a server is: TCP, client speaks first, first packet
+obfuscated, every packet after it plain. `DialSource` completes the handshake
+and refuses by name. No part request, no file, no change to `internal/rpc` —
+that is step 2.
+
+**`Source` is deliberately NOT a `Server`.** A source has no
+`OP_SERVERINFO` and no user or file count, and giving it those fields would
+invite a caller to read a zero that looks like a fact. "This source serves 0
+users" is a claim nothing here can support, so `Source` carries a connection,
+an address, and a GUID held as raw bytes it does not yet interpret.
+
+**The handshake duplication with `Dial` stays on purpose.** A commit that both
+extracts a function and adds a feature to its callers produces a diff where
+neither can be reviewed, and the extraction would inherit the feature's test
+coverage — so a refactor that broke `Dial` would surface as a transfer
+failure. The two call sites are what make the extraction honest, so it is step
+6 as the plan says. What is NOT duplicated is the obfuscator: `obfuscate` and
+`newObfuscationSeed` are called directly, because a second obfuscator is a
+second thing whose correctness nobody would test.
+
+**The bug this step caught, and it is the same failure the layer exists to
+prevent — introduced by the layer.** The burst read returned success on **any**
+timeout, reasoning that "the peer spoke and then went quiet" is the normal
+shape of a source handshake. True of a peer that spoke. It made a peer that
+said **nothing** indistinguishable from a completed handshake:
+
+```
+a peer that accepted the connection and then said nothing was
+reported as a successful handshake
+```
+
+That is a transfer that hangs forever with no error anywhere. The loop now
+tracks whether anything was heard, and silence-with-nothing-said is
+`ErrRefused` naming the address and the wait. The rule is weak about **which**
+packets and never about **whether any** arrived — refusing until a specific
+packet arrives would fail against every real peer on an assumption nobody has
+tested, and step 5 is where a source is observed for the first time.
+
+**A surviving probe that is honest about surviving.** Removing the
+`conn.SetDeadline` call changes no observable behaviour, and the harness
+flagged it. The reason is instructive: `readHandshakeAnswer` sets its own
+read deadline every iteration, so the reads were already bounded and the call
+was doing nothing for them. It is **kept** anyway, and the comment says why —
+it covers the **write**, the one operation nothing later bounds, and step 2's
+part requests send up to 9500 bytes where a first packet sends 28. A 28-byte
+write into a default buffer does not block (measured: 17µs), so this is
+defence against a case that is *not yet reachable*. That is a different thing
+from a line that is redundant, and the difference is recorded rather than
+resolved by deletion.
+
+**Two of the five new probes were defects in the probes, not holes in the
+tests** — the harness said so itself, correctly: one left `seed` unused and
+one redeclared `body`. Both rewritten to compile.
+
+**What these tests cannot prove, and the file says so:** no source-side packet
+has ever been observed. Every fake peer here is scripted to match whatever
+the code does, so the tests pin our own first packet byte-for-byte and our
+reaction to a silent or flooding stranger. They say nothing about whether the
+source *protocol* is right.
+
+**One detail worth carrying:** the real opcode is **not** on the wire and not
+recoverable from the seed — a server maps it itself. A first version of the
+golden test tried to assert it after de-obfuscating, which cannot work; the
+existing `deobfuscateForTest` already took the opcode as an argument for
+exactly this reason.
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on

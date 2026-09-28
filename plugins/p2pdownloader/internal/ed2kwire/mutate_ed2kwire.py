@@ -494,9 +494,21 @@ MUTATIONS = [
      SOURCE, "if !heard {", "if false && !heard {",
      "ASourceThatNeverSpeaksIsRefused"),
 
-    # The connection deadline, not the context alone. Without it the
-    # context expires while the read blocks anyway, and the caller sees a
-    # transfer that never finishes rather than an error.
+    # THIS ONE SURVIVES, AND IT IS DOCUMENTED AS SURVIVING.
+    #
+    # Removing the connection deadline changes no observable behaviour in
+    # this step, because readHandshakeAnswer sets its own read deadline on
+    # every iteration -- the reads were already bounded. The line is kept
+    # anyway, and the comment at it in source.go says why: it covers the
+    # WRITE, which is the one operation nothing later bounds, and step 2's
+    # part requests send up to 9500 bytes where a first packet sends 28.
+    #
+    # A probe that survives because it guards a real risk not yet
+    # reachable is a different thing from one that survives because it is
+    # redundant, and the difference is worth stating. Deleting the call
+    # would turn this into the second kind.
+    # ^ EXPECTED TO SURVIVE. See EXPECTED_SURVIVORS below and the comment
+    #   above this probe.
     ("source: no deadline is set on the connection itself",
      SOURCE, "if err := conn.SetDeadline(time.Now().Add(dialTimeout)); err != nil {",
      "if err := error(nil); err != nil {",
@@ -506,8 +518,8 @@ MUTATIONS = [
     # de-obfuscate, and drops the connection with nothing to report.
     ("source: the first packet is not marked as obfuscated",
      SOURCE, "obfuscated, err := obfuscate(frame, seed)",
-     "obfuscated, err := frameBytes(protocol.EdonkeyHeader, opLoginRequest, body)",
-     "TheSourceFirstPacketIsActuallyObfuscated"),
+     "obfuscated, err := obfuscate(frame, seed); obfuscated[5] = opLoginRequest",
+     "TheSourceFirstPacketIsActuallyObfuscated|TheSourceFirstPacketIsTheSameObfuscated"),
 
     # The user hash is sixteen ZERO bytes and not a random one. A random
     # hash would make this client a different identity on every connection,
@@ -517,15 +529,47 @@ MUTATIONS = [
      "Hash: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},",
      "TheSourceFirstPacketIsTheSameObfuscatedLogin"),
 
-    # The body is built by loginRequest.body, where the port is a uint32 and
-    # not a uint16. A uint16 there is a packet two bytes short, which a peer
-    # reads as a tag count of whatever follows -- the same failure the
-    # server's own login had. Source builds the same body and could drift.
+    # The body is built by loginRequest.body, and it is 24 bytes: a 16-byte
+    # hash, a FOUR-byte port, and a 4-byte tag count. Dropping two bytes is
+    # the exact failure of writing that port as a uint16, which is the bug
+    # this package's own server login had -- a packet two bytes short,
+    # which a peer reads as a tag count of whatever follows, with no error
+    # at either end.
+    #
+    # The mutation appends or slices AFTER body() rather than replacing the
+    # call, so `req` stays used. The two forms that rebuilt the body from
+    # nothing left `req` declared and unused, and the harness correctly
+    # reported them as SKIP -- a defect in the probe, not a hole.
     ("source: the handshake is not built through loginRequest.body",
-     SOURCE, "body, err := req.body()", "body := []byte{}; _ = req",
+     SOURCE, "body, err := req.body()",
+     "body, err := req.body(); body = body[:len(body)-2]",
      "TheSourceFirstPacketIsTheSameObfuscatedLogin"),
 ]
 
+
+
+# EXPECTED_SURVIVORS are probes that are KNOWN not to be killable, each with
+# the reason, so the exit code can still mean "no unexplained hole".
+#
+# # WHY THIS IS A LIST AND NOT A TOLERATED COUNT
+#
+# A count is not reviewable. Three survivors and "you may tolerate two" does
+# not say WHICH two, and the next run silently tolerates a different two. A
+# named allowlist does, and adding an entry is a visible act with a reason
+# attached to it.
+#
+# # AND A PROBE MAY ONLY BE HERE IF IT GUARDS A REAL RISK
+#
+# The distinction that matters is between a line that is REDUNDANT -- nothing
+# depends on it, so deleting it changes nothing -- and a line that guards a
+# risk that is NOT YET REACHABLE. The second belongs here. The first does not:
+# it should be deleted, as two other guards in this package were.
+EXPECTED_SURVIVORS = {
+    "source: no deadline is set on the connection itself":
+        "bounds the WRITE, which nothing later bounds; a 28-byte first "
+        "packet never blocks (measured 17us) so no test can observe it, and "
+        "step 2 sends up to 9500 bytes where this step sends 28",
+}
 
 
 def tests_matching(run_pat):
@@ -601,7 +645,7 @@ def main():
     print("### %d probes, each bounded at %ds, each restored before the next\n"
           % (len(MUTATIONS), PROBE_TIMEOUT))
 
-    killed = covered = survived = skipped = 0
+    killed = covered = survived = skipped = expected = 0
     survivors = []
     malformed = []
     try:
@@ -692,9 +736,15 @@ def main():
                 # sends the reader to the tests, which is the honest
                 # direction: a reported hole costs one look, a hidden one
                 # costs the next bug that depends on this line.
-                survived += 1
-                survivors.append(label)
-                print("  SURVIVED  %s" % label)
+                if label in EXPECTED_SURVIVORS:
+                    expected += 1
+                    print("  EXPECTED  %s\n            known not to be "
+                          "killable: %s" % (label,
+                                            EXPECTED_SURVIVORS[label]))
+                else:
+                    survived += 1
+                    survivors.append(label)
+                    print("  SURVIVED  %s" % label)
             else:
                 covered += 1
                 print("  COVERED   %s" % label)
@@ -703,8 +753,9 @@ def main():
         # this only matters if the loop raised.
         restore_all()
 
-    print("\n### %d killed, %d covered, %d survived, %d skipped"
-          % (killed, covered, survived, skipped))
+    print("\n### %d killed, %d covered, %d survived, %d skipped, "
+          "%d expected"
+          % (killed, covered, survived, skipped, expected))
     if survivors:
         print("\n### SURVIVORS -- go and look at a TEST")
         for s in survivors:
@@ -716,6 +767,13 @@ def main():
 
     # 0 clean, 1 a hole in the tests, 2 a defect in this harness. Kept apart
     # so one non-zero code sends the reader to the shorter list.
+    stale_expected = sorted(set(EXPECTED_SURVIVORS) - {m[0] for m in MUTATIONS})
+    if stale_expected:
+        print("\n### STALE EXPECTATIONS -- go and look at THIS FILE")
+        for lbl in stale_expected:
+            print("    %s\n        no such probe exists any more, so this "
+                  "allowlist entry is protecting nothing" % lbl)
+        return 2
     if malformed:
         return 2
     if survivors:
