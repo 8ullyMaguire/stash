@@ -114,6 +114,33 @@ that other capabilities repeatedly depend on.
 block of work in the milestone. Starting there maximises the chance the pass
 ends with one large unfinished thing rather than several finished ones.
 
+## Ordering, in practice: bugs first, mapping second
+
+**Decision: while the mapping is unreliable, work issues whose defect is
+self-evident from the issue text alone — crashes, security, data loss — rather
+than waiting for a trustworthy capability to work under.**
+
+Three such issues are already fixed in this branch, and all three were invisible
+to anyone triaging by capability name:
+
+- `stash#7240`, an arbitrary file write via zip-slip. Filed under C63
+  "Confirmation on cancel".
+- `stash#7240`'s second half, package install, a separate defect in a separate
+  subsystem. I fixed import first and did not notice the package-install path
+  until I audited all four zip sites — which is the lesson: fixing the site named
+  in the issue is not the same as fixing the issue.
+- `stash#7152`, a nil dereference that aborted whole stash-box batch jobs. Filed
+  under C36 "Leaderboards & badges".
+
+**Why:** a capability mis-mapping delays work by making the unit of work
+wrong. A crash is a crash regardless of which box it sits in, so these can be
+done while the mapping is being rebuilt, and they are the highest-severity
+issues in the set.
+
+**The trap to name:** the "fix the one site the issue names" instinct is what
+left the package-install half unfixed for a commit. Every fix after the first
+one got a survey of the whole pattern first.
+
 ## Reporting honesty
 
 **Decision: the milestone summary leads with capabilities built, not issues
