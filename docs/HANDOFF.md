@@ -4,11 +4,12 @@ Where StashForge is, what is verified, and what the next person should know
 before touching anything. Written for a cold start: no context from the session
 that produced it.
 
-Last updated: **M5 in progress** — BOTH the ed2k login and the Kad bootstrap
-now complete against live servers. Branch **`develop`** at `ead1cb705`. **Read
-"RESUME HERE" below before anything else**; it carries the verified numbers,
-the two byte-order bugs that cancelled each other, the two open questions that
-need a reference-client capture, and the exact next task.
+Last updated: **M5 in progress** — the eMule extended hello (ExtHello) is
+implemented, 48 tests green, and the mutation harness is at **zero survivors**
+across 25 probes. BOTH the ed2k login and the Kad bootstrap complete against
+live servers. Branch **`develop`**, unpushed. **Read "RESUME HERE" below before
+anything else**; it carries the verified numbers, the four bugs the harness
+found in the new codec, and the exact next task.
 
 ---
 
@@ -137,6 +138,73 @@ matching no test runs no tests, the run passes, and the probe is scored
 SURVIVED — identical to a real hole. The harness now checks, *before* applying
 any mutation, that the pattern selects at least one test, and reports zero as
 MALFORMED instead.
+
+### M5 step 3: the eMule extended hello
+
+`internal/ed2kwire/exthello.go` — the step between "we are connected" and
+"we can search". A client declares its capabilities so a server knows whether
+the file it found can be served to us. Without it a server has no idea what
+version or limits we have, and will not route a search.
+
+**Wire format**, as implemented:
+
+```
+[E3] [22] [size:4 LE] [01] [seed:4] [zlib]
+                              obfuscated
+      the size COUNTS the opcode -- SizePacket() is size-1
+```
+
+**One thing this could not be validated against.** The extended hello is
+implemented from the specification, not from a capture. The four framing
+variants tried against `85.17.116.222:6082` — opcode-counted size,
+opcode-excluded size, no protocol byte, raw deflate — all produced the same
+silence, and a raw socket with no ed2k logic reads nothing from that server
+either. **An accepted-then-silent connection cannot distinguish "our framing
+is wrong" from "this server ignores extended hellos".** So the codec is
+verified hermetically and the wire shape is unconfirmed. That is the next task.
+
+**Four bugs, all found by mutation rather than by reading the code:**
+
+**A four-byte count written as one byte.** `parseTagList` reads a `uint32`;
+the first writer emitted a single byte. A two-tag list then read back as
+100,762,114 tags, and `parseTagList`'s own bound caught it and reported a
+*corrupt tag list* — a loud failure in the wrong file, naming the reader,
+which was correct, and never the writer, which was not.
+
+**A length-prefixed string written without its length.** Round trip failed
+with "tag 0x01 claims a 12406-byte string and only 11 bytes are left", where
+12406 is `0x306E` — the first two bytes of `v0.60a`. A confident, specific and
+wrong number, and the only honest reading of it is that the writer is at fault.
+
+**A round trip that could not see a missing high bit.** `parseTag` does
+`Type: payload[0] & 0x7F`, so this package's own reader is *indifferent* to
+the type byte's high bit. A round trip passes either way. But a real server
+requires it — it is what marks a name-carrying tag, and the library's own
+reader refuses a tag without it outright. **A round trip proves the halves
+agree, not that either is right.** Same lesson as the byte-order pair, second
+time in the same package. Now asserted at the byte level in
+`TestTheWrittenTagBytesCarryTheHighBit`.
+
+**Twenty lines of checks that were all redundant.** `inflateExtHello`
+validated the zlib header itself — compression method nibble, multiple-of-31,
+and a two-byte length guard. All three were probed by deletion and **all three
+survived**, because `zlib.NewReader` does the same validation and the function
+already wraps its error in `ErrNotZlib`. The length guard looked load-bearing:
+a panic with it removed. Re-running the probe showed `zlib.NewReader` refusing
+the same one-byte payload with "unexpected EOF". **The panic was real and was
+not reachable through this package's entry point.** All three removed; what was
+lost is a more specific message, and the comment says so.
+
+**Current: 24 killed, 1 covered, 0 survived, 0 skipped.** 48 tests in the
+package, 0 skips — including one that used to skip, when a search for a
+fixture that no compressor can produce was replaced by a hand-built one.
+
+**And a note on writing probes.** The count probe took three attempts: the
+first did not compile (unused import), the second *survived* because writing
+one byte into a zero-initialised `[4]byte` is byte-identical to writing four.
+**There is no way to express "one byte instead of four" as a change to the
+wire.** The real bug was writing one byte and *not padding*, so the probe
+belongs on the byte the reader lands on next.
 
 ### What is deliberately NOT done, and why
 

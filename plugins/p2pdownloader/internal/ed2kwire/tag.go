@@ -1,6 +1,7 @@
 package ed2kwire
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 )
@@ -336,4 +337,98 @@ func parseTag(payload []byte) (Tag, int, error) {
 	// only asserted "ten tags parsed" would have passed.
 	tag.Value = value
 	return tag, 2 + len(value), nil
+}
+
+// # THE WRITER, WHICH DID NOT EXIST UNTIL THE EXTENDED HELLO NEEDED ONE
+//
+// This file was decode-only for its whole life, which was fine until an
+// extended hello had to be SENT: a capability list goes out compressed, and
+// there was no way to put one in the wire format the decoder reads back.
+//
+// # THE TYPE BYTE IS NOT DECORATION
+//
+// The wire is [type|0x80][id][value] -- the high bit marks the name-carrying
+// form -- and parseTag MASKS the high bit off before storing Type. So a Tag
+// built by a caller has a masked Type, and writing it back must SET the bit
+// again. Writing the masked value produces a tag that this package's own
+// parser refuses ("tag without id"), which is the exact failure the mask
+// comment in the Tag struct warns about.
+//
+// # STRINGS ARE LENGTH-PREFIXED IN THEIR TYPE BYTE
+//
+// A string tag's type byte is 0x02 (u16-length string) or 0x10+n for a string
+// of n bytes, and the length is IN the type. A tag whose Value is longer than
+// 15 bytes therefore cannot be a short string at all, and is written as 0x02
+// with an explicit uint16 length.
+func writeTag(w *bytes.Buffer, t Tag) error {
+	wireType, err := wireTypeFor(t)
+	if err != nil {
+		return err
+	}
+	w.WriteByte(wireType | 0x80)
+	w.WriteByte(t.ID)
+
+	// # tagTypeString CARRIES ITS OWN LENGTH, AND OMITTING IT IS THE BUG
+	//
+	// Every other type's width is implied by the type byte, so writing the
+	// value bare is correct for all of them. A length-prefixed string is the
+	// exception: the reader takes a uint16 from the stream, and a tag written
+	// without one makes the reader take the first two bytes of the VALUE as
+	// a length.
+	//
+	// The symptom is a round trip that fails with a confident, specific and
+	// wrong number -- "tag 0x01 claims a 12406-byte string and only 11
+	// bytes are left" -- where 12406 is 0x306E, the first two bytes of
+	// "v0.60a". The error names the tag parser and is not lying about what
+	// it saw; it is the writer that is wrong, and nothing in the message
+	// says so.
+	if wireType == tagTypeString {
+		var n [2]byte
+		binary.LittleEndian.PutUint16(n[:], uint16(len(t.Value)))
+		w.Write(n[:])
+	}
+	w.Write(t.Value)
+	return nil
+}
+
+// wireTypeFor picks the wire type byte for a tag's value.
+//
+// A Uint32-shaped value is written as a uint32 and a String-shaped one as a
+// string, because the alternative is a caller having to know the type byte
+// for its own value. A caller that needs a specific type -- the server's own
+// tag list uses several -- can set Type directly, and that is honoured.
+func wireTypeFor(t Tag) (byte, error) {
+	// An explicit type is the caller's choice and is used as given -- the
+	// server's own tag list arrives with types this function has no reason to
+	// second-guess, and a caller that needs one can set it.
+	if t.Type >= tagTypeStrBase && t.Type <= tagTypeStrMax {
+		return t.Type, nil
+	}
+	switch t.Type {
+	case tagTypeBool, tagTypeString, tagTypeUint8, tagTypeUint16,
+		tagTypeUint32, tagTypeUint64:
+		return t.Type, nil
+	}
+
+	// Type 0 is not a wire type, it is the zero value of a Tag a caller
+	// built without setting one, so the type is inferred from the value.
+	//
+	// # SHORT STRINGS GO IN THE TYPE BYTE, AND THAT IS THE POINT
+	//
+	// A string of 1 to 16 bytes is written as tagTypeStrBase+n, which is
+	// what the live server does and what parseTag reads back. A longer one
+	// uses tagTypeString with a uint16 length after it, because the length
+	// has nowhere to live in a single type byte.
+	switch n := len(t.Value); {
+	case n == 1:
+		return tagTypeUint8, nil
+	case n == 2:
+		return tagTypeUint16, nil
+	case n == 4:
+		return tagTypeUint32, nil
+	case n >= 1 && n <= int(tagTypeStrMax-tagTypeStrBase)+1:
+		return tagTypeStrBase + byte(n) - 1, nil
+	default:
+		return tagTypeString, nil
+	}
 }

@@ -64,6 +64,7 @@ REPO = os.path.dirname(os.path.dirname(ROOT))
 SERVER = os.path.join("internal", "ed2kwire", "server.go")
 OBFUSCATE = os.path.join("internal", "ed2kwire", "obfuscate.go")
 TAG = os.path.join("internal", "ed2kwire", "tag.go")
+EXTHELLO = os.path.join("internal", "ed2kwire", "exthello.go")
 
 # The suite's own timeout. Without it, a mutation that makes a read block
 # forever hangs the sweep rather than failing it, and a hang is not a kill.
@@ -244,6 +245,108 @@ MUTATIONS = [
     ("obfuscate: the seed falls back to zeros when randomness fails",
      OBFUSCATE, "\tif _, err := randRead(seed[:]); err != nil {",
      "\tif _, err := randRead(seed[:]); false && err != nil {", "."),
+    # ---- the extended hello, which is the step between login and search ----
+    #
+    # Every probe below is a bug this codec actually had on the day it was
+    # written, and the count field is the one worth reading twice: the first
+    # version wrote it as ONE byte, parseTagList reads FOUR, and every decode
+    # then spanned the count byte and the first three bytes of the first tag.
+    # A two-tag list came out claiming 100,762,114 tags -- and the error
+    # named parseTagList, which was correct, and never the writer, which was
+    # not. A loud failure in the wrong file is still the wrong file.
+    # Compiles: a four-byte buffer with only the low byte set, rather than a
+    # one-byte write. The first version of this probe replaced the whole
+    # statement with plain.WriteByte, which left encoding/binary unused and
+    # so failed to BUILD -- the harness correctly called that a malformed
+    # probe rather than a survivor, and the fix is to keep binary in use.
+    # # THE COUNT PROBE IS NOW A SIZE PROBE, AND THAT IS THE POINT
+    #
+    # The first version of this probe replaced PutUint32 with a single
+    # plain.WriteByte -- which did not compile, because it left
+    # encoding/binary unused. The second kept binary in use by writing
+    # count[0] and leaving the other three bytes of the [4]byte at zero,
+    # and it SURVIVED.
+    #
+    # It survived because it is not the bug. A one-byte count and a
+    # four-byte count of the same value, written into a zero-initialised
+    # array, produce IDENTICAL bytes. There is no way to express "one byte
+    # instead of four" as a change to the wire, because on the wire the two
+    # are the same thing.
+    #
+    # The real bug was writing a one-byte count and NOT padding it, and that
+    # is a change to the LENGTH of what follows: the count byte was
+    # immediately followed by the first tag. So the probe is on the byte the
+    # reader lands on next.
+    ("exthello: the count is followed by the first tag instead of 3 zero bytes",
+     EXTHELLO, "var count [4]byte",
+     "var count [1]byte; count[0] = 1; _ = binary.LittleEndian.Uint32; _ = count[0]",
+     "TagCountIsWrittenAsFourBytes|ARoundTrip"),
+
+    # The length prefix is the other half of the same class of bug. A string
+    # tag's Value includes its own uint16 length, so writing the value bare
+    # makes the reader take the first two bytes of the VALUE as a length --
+    # and it reported "claims a 12406-byte string", which is 0x306E, the
+    # first two bytes of "v0.60a". A confident, specific, wrong number.
+    ("tag: a length-prefixed string is written without its length",
+     TAG, "if wireType == tagTypeString {", "if false {",
+     "ARoundTrip"),
+
+    # Without the high bit the reader refuses its own output. The failure is
+    # silent in a test that only counts tags, which is why the round trip
+    # checks the type byte explicitly.
+    ("tag: the type byte's high bit is not set on write",
+     TAG, "w.WriteByte(wireType | 0x80)", "w.WriteByte(wireType)",
+     "TheWrittenTagBytesCarryTheHighBit"),
+
+    # # THE INFLATION BOUND
+    #
+    # Removing the limit lets a few hundred compressed bytes allocate
+    # gigabytes. A limit applied AFTER inflating has already allocated the
+    # bomb, so this probe also checks that LimitReader is what is removed --
+    # changing the +1 would leave the read unbounded and the check one byte
+    # too tight to matter.
+    # The +1 is not decoration: the reader stops at the limit, so the read
+    # returns limit+1 bytes and the check sees one byte too many. Drop it and
+    # a payload of EXACTLY maxExtHelloInflated inflated bytes comes back
+    # looking like it fit -- so the check has to be > and not >=, and neither
+    # is right without the other.
+    ("exthello: the reader stops at the limit with no room for the check",
+     EXTHELLO, "io.LimitReader(zr, maxExtHelloInflated+1)",
+     "io.LimitReader(zr, maxExtHelloInflated)",
+     "ExactlyTheLimitIsAccepted"),
+
+    ("exthello: the bomb is bounded but the post-read check is gone",
+     EXTHELLO, "if len(plain) > maxExtHelloInflated {", "if false {",
+     "CompressionBomb"),
+
+    # # THE HEADER CHECKS ARE NOT PROBED, BECAUSE THEY ARE NOT THERE
+    #
+    # The first version of inflateExtHello validated the zlib header itself --
+    # the compression method nibble, then the multiple-of-31 rule -- and both
+    # were probed here. Both SURVIVED deletion, which is the interesting part:
+    # zlib.NewReader validates the same header and this function already
+    # wraps its error in ErrNotZlib, so the explicit checks were a second
+    # opinion on an answered question. They have been removed, and these two
+    # probes with them.
+    #
+    # A probe for deleted code is worse than no probe: it fails to apply, and
+    # the harness reports that as a defect in itself rather than as a fact
+    # about the code.
+
+    # There is NO probe for the two-byte length guard that used to be here,
+    # because the guard is gone.
+    #
+    # It was probed three times and survived every time: zlib.NewReader
+    # refuses a one-byte payload with "unexpected EOF", and this function
+    # wraps that in ErrNotZlib, so the behaviour the guard provided was
+    # already the behaviour the reader provided. The panic that seemed to
+    # justify the guard came from a probe calling DecodeExtHello directly --
+    # which is the same entry point, and did not panic once the real
+    # sequence was run rather than assumed.
+
+    ("exthello: more tags than the limit are accepted",
+     EXTHELLO, "if len(tags) > maxExtHelloTags {", "if false {",
+     "MoreTagsThan"),
 ]
 
 
@@ -302,7 +405,7 @@ def main():
     # point still restores every file, because restoration does not depend on
     # the loop reaching its own epilogue.
     originals = {}
-    for rel in (SERVER, OBFUSCATE, TAG):
+    for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO):
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
             print("FATAL: %s does not exist under %s" % (rel, REPO))
