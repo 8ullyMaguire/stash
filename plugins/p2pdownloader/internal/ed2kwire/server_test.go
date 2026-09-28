@@ -418,6 +418,8 @@ func TestDialRefusesAnOversizedPacket(t *testing.T) {
 // two-byte port makes the packet two bytes short, and the server reads the
 // bytes that follow as a tag count. Nothing errors at either end.
 func TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes(t *testing.T) {
+	quickDeadlines(t)
+
 	captured := make(chan capturedFrame, 1)
 	addr := helloServer(t, func(conn net.Conn) {
 		// Read the client's login ONCE and hand it to the channel. The
@@ -568,6 +570,8 @@ func TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes(t *testing.T) {
 // messageIsRefusal is a substring match on English and why that is recorded as
 // a shortcut rather than dressed up as a protocol mechanism.
 func TestAServerMessageBeforeTheStatusIsSkippedWhenItIsABanner(t *testing.T) {
+	quickDeadlines(t)
+
 	addr := helloServer(t, func(conn net.Conn) {
 		awaitLogin(t, conn)
 		_, _ = conn.Write(frameOpcode(opServerMsg,
@@ -753,6 +757,10 @@ func statusCounts(users, files int32) []byte {
 
 func dialFakePackets(t *testing.T, packets ...[]byte) *Server {
 	t.Helper()
+	// The fake blocks after its script, so the client waits out the drain
+	// deadline before Dial returns. At the production 15s that is a quarter
+	// of a minute per test; quickDeadlines shrinks it and restores it after.
+	quickDeadlines(t)
 	addr := helloServer(t, func(conn net.Conn) {
 		awaitLogin(t, conn)
 		for _, p := range packets {
@@ -803,6 +811,7 @@ type capturedFrame struct {
 // and then reads.
 func dialFake(t *testing.T, body []byte) *Server {
 	t.Helper()
+	quickDeadlines(t)
 	addr := helloServer(t, func(conn net.Conn) {
 		awaitLogin(t, conn)
 		_, _ = conn.Write(frameBody(body))

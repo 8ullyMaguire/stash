@@ -99,7 +99,13 @@ const maxPacketSize = 1 << 20
 //
 // The relationship is asserted rather than left to arithmetic in a comment:
 // see TestTheDialDeadlineExceedsBothDrainDeadlines.
-const dialTimeout = 40 * time.Second
+//
+// It is a var rather than a const so the hermetic tests can shrink it. A test
+// that has to wait 15 seconds to observe a quiet server is a test nobody runs,
+// and a suite that is not run is a suite that is not protecting anything. The
+// MEASURED values are pinned by TestTheRealDeadlinesAreTheMeasuredOnes, so
+// shrinking them for tests cannot quietly make production wrong.
+var dialTimeout = 40 * time.Second
 
 // Server is one ed2k server we are connected to.
 //
@@ -498,7 +504,12 @@ func (s *Server) readLoginConfirmation() error {
 //
 // A local fake cannot catch this class of bug, which is the second reason the
 // live tests exist alongside the hermetic ones rather than instead of them.
-const burstDrainTimeout = 8 * time.Second
+//
+// A var for the reason on dialTimeout: the hermetic tests shrink these to
+// milliseconds so a suite about a quiet server does not take a quarter of a
+// minute per test. TestTheRealDeadlinesAreTheMeasuredOnes pins the real
+// values, so a test cannot make production wrong by editing this.
+var burstDrainTimeout = 8 * time.Second
 
 // notePostLoginPacket records one packet from the server's opening burst, and
 // reports a refusal.
@@ -590,7 +601,9 @@ func (s *Server) notePostLoginPacket(opcode byte, payload []byte) error {
 // The first version was 400ms and the hermetic tests passed, because a local
 // fake sends everything at once. A constant that only works against a
 // loopback is not a constant that works.
-const factsDrainTimeout = 15 * time.Second
+//
+// A var for the reason on dialTimeout.
+var factsDrainTimeout = 15 * time.Second
 
 // drainFacts reads the packets a server sends after confirming a login, until
 // it goes quiet or the drain deadline passes.
