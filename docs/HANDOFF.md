@@ -39,7 +39,7 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 
 ## RESUME HERE — BOTH NETWORKS NOW TALK TO REAL SERVERS
 
-**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `ead1cb705`.**
+**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `497d1d7a9`.**
 
 ### The headline
 
@@ -61,6 +61,8 @@ before this session.
 
 | Commit | What |
 |---|---|
+| `497d1d7a9` | mutation harness at **zero survivors**; a dead guard deleted |
+| `336280646` | the live nodes.dat URL, and the check that missed the mirror |
 | `ead1cb705` | **Kad reaches the real network**; two byte-order bugs fixed |
 | `8e6efcbb1` | the live-login milestone recorded |
 | `a82f2d809` | test deadlines shrinkable in the suite, real ones pinned |
@@ -103,19 +105,38 @@ measurement is measuring the rate limit, not the protocol.**
 the first harness run had patterns that no longer matched the source. Both are
 now taken from the source bytes rather than transcribed by hand.
 
-### The mutation harness, which this package did not have
+### The mutation harness — now at ZERO survivors
 
 `internal/ed2kwire/mutate_ed2kwire.py` — 19 probes, four verdicts (KILLED /
 COVERED / SURVIVED / SKIP). Exit **1** for a hole in the tests, **2** for a
-defect in the harness, so one non-zero code sends the reader to the shorter
-list. Every probe is bounded and restores its file: a sweep of
+defect in the harness, **0** for clean, so one non-zero code sends the reader
+to the shorter list. Every probe is bounded and restores its file: a sweep of
 `internal/library` was once interrupted by a SIGTERM and left a mutation
 applied to `integrate.go`.
 
-First run: 13 killed, 3 survived, 2 malformed. The three survivors were all
-the same species — a load-bearing flag or bound with no test on it
-(`sentFirst`, `heardAnything`, the zero-seed fallback). `guards_test.go` now
-covers four.
+**Current: 18 killed, 1 covered, 0 survived, 0 skipped.**
+
+Getting there was worth the runs, because each survivor was a real finding:
+
+**A dead guard, proven by a mutation that survived.** `drainFacts` carried a
+"said nothing at all" check identical to the live one in
+`readLoginConfirmation`. Deleting it changed no test result — only possible for
+a line nothing can reach. It cannot be reached: `readLoginConfirmation` returns
+on `!heard` *before* handing over. **A defensive copy of a check that cannot
+fire is worse than no check** — it reads as protection, cannot be tested, and
+its mutation is a coverage hole no test can close. Removed, reasoning kept.
+
+**A guard nobody could execute.** `newObfuscationSeed` called `crypto/rand`
+directly, so its error path was untestable — and the probe that deleted the
+check survived, correctly. The randomness source is now a parameter
+(`newObfuscationSeedFrom`), which keeps the seam where it is used rather than
+in a package var a test has to restore.
+
+**Two probes reporting survivors without testing anything.** A `-run` pattern
+matching no test runs no tests, the run passes, and the probe is scored
+SURVIVED — identical to a real hole. The harness now checks, *before* applying
+any mutation, that the pattern selects at least one test, and reports zero as
+MALFORMED instead.
 
 ### What is deliberately NOT done, and why
 
@@ -150,9 +171,8 @@ is `upd.emule-security.org`, and that test needs updating.
 2. **The eMule extended handshake** (plan §3) — *this is the actual feature*.
    The login is the door; the handshake is what gets you file search. It is
    the only thing standing between this work and a working download.
-3. Fix the dead URLs in `live_test.go` (`TestLiveKadNodesDatDownloads` fails
-   on `www.emule-security.org`; the live URL is `upd.emule-security.org`).
-4. Re-run the mutation harness to confirm 0 survivors after `guards_test.go`.
+3. ~~Fix the dead URLs in `live_test.go`~~ — DONE at `336280646`.
+4. ~~Re-run the mutation harness~~ — DONE, 0 survivors at `497d1d7a9`.
 
 ### How to run the tests
 
