@@ -42,6 +42,12 @@ import (
 	"net/rpc"
 	"net/rpc/jsonrpc"
 	"sync"
+
+	// The ed2k locator parser, used to REFUSE an unusable ed2k link before
+	// the consent gate is asked about it. It is imported here so the plugin
+	// does not advertise a scheme whose links nothing validates — see the
+	// comment on the ed2k branch in downloadWithGate.
+	"github.com/stashapp/stash-plugin-p2pdownloader/internal/ed2k"
 )
 
 // serviceName is what the host dials: `t.client.Call("RPCRunner.Run", ...)`.
@@ -318,6 +324,40 @@ func downloadWithGate(ctx context.Context, input PluginInput, override Proposer)
 		// because asking core's gate about `file:///etc/passwd` spends an
 		// operator's trust on a question with an obvious answer.
 		return nil, err
+	}
+
+	// ed2k's NAME is validated here, before the gate, and this is the only
+	// place that can do it. A magnet carries an infohash and nothing else; an
+	// ed2k link carries a NAME, and the name is what will be written to disk.
+	// `ed2k://|file|../../etc/passwd|1|<hash>|` is a well-formed locator by
+	// every test the consent gate could apply — core decides whether a locator
+	// may be stored against an object and has no opinion about filenames — so
+	// asking core about it spends an operator's trust on a question with an
+	// obvious answer.
+	//
+	// It is also what makes the plugin's advertisement honest. The scheme is in
+	// knownSchemes and named in the error message, and without this call a user
+	// could hand the plugin an ed2k link, be granted a proposal for it, and
+	// arrive at the transfer stub with nothing having checked the name at all.
+	//
+	// NO scheme check here: `gateDownload` already calls LocatorSchemeOf, and a
+	// second call is redundancy that reads like two independent defences when
+	// it is one. Duplicating it made the mutation that disables the check in
+	// consent.go survive as a false hole — a `file://` locator was still
+	// refused, just by the copy here instead. See the ed2k rows in
+	// mutate_rpc.py, which is why this branch is asserted to be the ONLY
+	// scheme check on the pre-gate path.
+	//
+	// The scheme is read from the locator's own prefix rather than by calling
+	// LocatorSchemeOf, so this block cannot be reached for a non-ed2k locator.
+	if isED2KLocator(locator) {
+		if _, err := ed2k.Parse(locator); err != nil {
+			return nil, fmt.Errorf("the locator is an ed2k link and it is "+
+				"not usable: %w. It is refused here rather than proposed "+
+				"for, because an ed2k link's name is what will be written to "+
+				"disk and a name that escapes the download root should "+
+				"never reach a proposal", err)
+		}
 	}
 
 	// Core decides. See consent.go for why a refusal here has to end the run

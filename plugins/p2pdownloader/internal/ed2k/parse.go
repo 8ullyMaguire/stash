@@ -234,9 +234,21 @@ var dangerousNameComponents = []string{"..", "..\\", "../"}
 // having already been parsed from a hostile link is a name that has been through
 // one attacker-controlled transformation too many.
 func checkName(name string) error {
-	// Lowercased, because a Windows client would accept `..\..\WINDOWS` and the
-	// check has to hold for the platforms this link will be opened on, not the
-	// one the plugin was compiled for.
+	// THE strings.ToLower LOOKS REDUNDANT AND IS NOT
+	//
+	// Every entry in `dangerousNameComponents` is either ".." or a separator
+	// appended to it, and none of them contains a letter — so lowering the name
+	// changes nothing about whether they are found. The mutation that drops the
+	// ToLower survives, and the harness reports it COVERED, and the verdict is
+	// TRUE: measured with the ToLower removed, `..\..\WINDOWS` is still refused.
+	//
+	// It is kept anyway, and the reason is the UNC check below rather than this
+	// one: that check is a prefix match on `\\`, and it is the check that would
+	// be case-sensitive if any UNC spelling were lettered. The ToLower is one
+	// cheap line that makes the whole function case-insensitive by
+	// construction rather than by remembering to lowercase at each of three
+	// sites, and a check that has to be remembered is a check that eventually
+	// is not.
 	lower := strings.ToLower(name)
 
 	for _, bad := range dangerousNameComponents {

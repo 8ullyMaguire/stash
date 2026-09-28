@@ -4,9 +4,10 @@ Where StashForge is, what is verified, and what the next person should know
 before touching anything. Written for a cold start: no context from the session
 that produced it.
 
-Last updated: **M5 in progress** — steps 5.3 and 5.5 committed, step 5.4 (ed2k)
-half-written. Branch `main` at `e72cf063e`. **Read "RESUME HERE" below before
-anything else**; it carries the verified numbers and the exact next task.
+Last updated: **M5 in progress** — steps 5.3, 5.4 and 5.5 committed. Branch
+`main` at `8bcbcc941` plus the step-5.4 completion commit. **Read "RESUME
+HERE" below before anything else**; it carries the verified numbers and the
+exact next task.
 
 ---
 
@@ -42,16 +43,19 @@ from this section; everything below it is background.**
 
 ### Where the branch is
 
-`main` at `e72cf063e` — *"M5 step 5.5: the library hand-off, through the plugin
-API only"*. Two commits this session, both green at the time:
+`main` at `8bcbcc941` — *"M5 step 5.4: the ed2k tests, and the two bugs they
+found"* — plus the commit that finished 5.4's parser work and closed the ed2k
+advertisement. Commits on this milestone, all green at the time:
 
 | Commit | What |
 |---|---|
 | `18a9845d5` | M5 step 5.3 — the magnet path and BEP 9 arrival |
 | `e72cf063e` | M5 step 5.5 — the library hand-off, through the plugin API only |
+| `a7b2dcf07` | M5 step 5.4 — the ed2k locator parser and eHash, plus a resume handoff |
+| `8bcbcc941` | M5 step 5.4 — the ed2k tests, and the two bugs they found |
 
-**The working tree has one untracked directory: `plugins/p2pdownloader/internal/ed2k/`.**
-It is NOT committed and it is the next task. Nothing else is uncommitted.
+**The working tree is clean.** `internal/ed2k/` and `internal/rpc/ed2k_gate_test.go`
+are committed, not untracked.
 
 ### Verified state, re-checked just now
 
@@ -69,13 +73,19 @@ go list -deps ./... | grep -c 'github.com/stashapp/stash/'   ->  0
 | policy | 9 |
 | storage | 16 |
 | torrent | 51 |
-| rpc | 29 |
+| rpc | 36 |
 | library | 30 |
 | handoff | 14 |
-| ed2k | **0** |
-| **total** | **160** |
+| ed2k | **39** |
+| **total** | **206** |
 
-Ten mutation harnesses, 262 mutations, 0 survivors. The step 5.5 harness is
+Core's own unit suite and `-tags integration` suite are both green on this
+branch (`go test ./...` and `go test -tags integration ./...` in the repo root,
+EXIT=0, no failures).
+
+Eleven mutation harnesses, 318 mutations, 0 survivors. The step 5.4 harness is
+`internal/ed2k/mutate_ed2k.py`: 56 rows across three files, 50 killed, 6 covered
+by a lower layer, 0 survived, 0 malformed, exit 0. The step 5.5 harness is
 `internal/library/mutate_library.py`: 34 probes across four files, 26 killed,
 8 covered by a lower layer, 0 survived, 0 malformed, exit 0.
 
@@ -83,16 +93,30 @@ Ten mutation harnesses, 262 mutations, 0 survivors. The step 5.5 harness is
 pipe.** `... | tail -40; echo $?` reports `tail`'s status. A run of
 `mutate_library.py` that ends `PYEXIT=0` is the one to trust.
 
-### THE NEXT TASK: finish `internal/ed2k` (step 5.4)
+### THE NEXT TASK: the ed2k wire protocol
 
-Three files exist and **all three now build and vet clean**. What is missing is
-the test file, and then the wire protocol on top.
+**Step 5.4's parser and hasher are done, tested and mutation-checked.** The
+remaining piece of 5.4 is the protocol itself, and it is the largest single
+piece of work left in M5.
 
 | File | State |
 |---|---|
-| `ed2k.go` | `Locator`, `Kind`, `Hash`, `String`, `IsZero` — done |
-| `parse.go` | `Parse`, `ParseHash`, `checkName` — done, **untested** |
-| `ehash.go` | `Sum`, `HashFile`, `HashBytes`, `TreeHash` — done, **untested** |
+| `ed2k.go` | `Locator`, `Kind`, `Hash`, `String`, `IsZero` — done, tested |
+| `parse.go` | `Parse`, `ParseHash`, `checkName` — done, tested |
+| `ehash.go` | `Sum`, `HashFile`, `HashBytes`, `TreeHash` — done, tested |
+| `parse_test.go` | 21 tests — done |
+| `ehash_test.go` | 18 tests — done |
+| `mutate_ed2k.py` | 56 rows, all four verdicts — done |
+
+```
+internal/ed2k: 39 tests, 98.2% statement coverage
+mutate_ed2k.py: 50 killed, 6 covered, 0 survived, 0 malformed  (PYEXIT=0)
+```
+
+The 5% and 25% that coverage reports as gaps in `HashFile` and `HashBytes` are
+the **error branches**, and both were measured rather than assumed — see
+"COVERED is a claim, not a decoration" below. Do not add a test to close them;
+there is no input that reaches them.
 
 **Verified correct, do not redo it.** `Sum` was checked against all seven RFC
 1320 MD4 test vectors and passes — it is a real `Sum`-shaped helper because
@@ -108,65 +132,80 @@ revert it**, or the build fails.
 MD4 is a protocol identifier here, not a security claim; the package's own
 `Deprecated:` notice is about the other case, and the import comment says so.
 
-**In order, next:**
+**Next, in order:**
 
-1. **`parse_test.go`** — the locator grammar, written first per the plan's
-   standing rule. The cases that matter:
-   - `ed2k://|file|name|size|hash|` and the `|folder|` form; a `|folder|` link's
-     hash covers a FILE LIST, so the two must not be treated as interchangeable.
-   - A name containing a **pipe** — the name is "everything between the second
-     and third pipe", which is why this is a hand-written scan and not a split.
-   - Traversal in the name: `..`, `..\..\`, absolute `/etc/passwd`, and a
-     Windows drive letter `C:\x` — the last one checked **by hand**, because
-     `filepath.VolumeName` returns `""` for it on Linux, so a Linux build would
-     pass a name that is absolute on the machine that opens the link.
-   - Hash length: 31 and 33 characters, non-hex, uppercase. Length is checked
-     **before** decoding, because `hex.DecodeString` accepts any even length and
-     decoding first means a silently truncated hash — which identifies a
-     different file, the worst possible outcome.
-   - `size` of 0, negative, and non-numeric.
-   - Uppercase hex must be accepted on input and printed lowercase: a peer
-     comparing hash strings treats `AABB` and `aabb` as different files.
-2. **`ehash_test.go`** — the tree boundary. A file of exactly `PartSize` bytes is
-   ONE part, not two, so the comparison is `<` and not `<=`; a second empty part
-   would contribute eight zero bytes and change the hash. Then the
-   `PartHashPrefixLength = 8` prefix concatenation, and `TreeHash`'s
-   **little-endian** length (every other multi-byte integer in ed2k is
-   little-endian, so a big-endian version is not a typo anyone would notice
-   locally — it is a hash that matches nothing).
-3. **`mutate_ed2k.py`** — copy the shape of `internal/library/mutate_library.py`:
-   four verdicts (`KILLED` / `COVERED` / `SURVIVED` / `SKIP`), **four** `elif`
-   branches, per-probe restore, per-probe bound, separate exit codes (survivor 1,
-   malformed 2). Read its docstring before writing one — the bugs it already
-   documents were all real.
-4. Then the protocol itself: the eDonkey2000 server connection, the Kad node
-   list, the extended handshake. The plan's own words are *"hand-rolled because
+1. **The eDonkey2000 wire protocol**: the server connection, the Kad node list,
+   the extended handshake. The plan's own words are *"hand-rolled because
    nothing in Go provides it"*, so this is written against the protocol
-   description and is the largest single piece of work left in M5.
+   description and nothing can be borrowed.
+2. **The transfer surface** (unfinished since 5.3): piece verification, resume,
+   rate limits — and `TestResume_SurvivesProcessRestart`, which needs a transfer
+   that can actually be resumed. This is why
+   `internal/rpc.downloadWithGate` still ends in
+   `ErrTransferNotImplemented`, and it is the gap between "the library hand-off
+   works" and "a downloader".
 
-**Also unfinished in 5.3:** the transfer surface itself — piece verification,
-resume, rate limits — and `TestResume_SurvivesProcessRestart`, which needs a
-transfer that can actually be resumed. That is why
-`internal/rpc.downloadWithGate` still ends in
-`ErrTransferNotImplemented`, and it is the gap between "the library hand-off
-works" and "a downloader".
+### The ed2k advertisement is now honest, and the test that keeps it so
 
-### A live inconsistency to fix in step 5.4
+The plugin used to **advertise ed2k and have no handler for it**: `SchemeED2K`
+was in `knownSchemes`, `LocatorSchemeOf` accepted `ed2k://`, `source.json`
+promised *"Fetches files over BitTorrent and ed2k"*, and a user could hand it
+an ed2k link, get a proposal, be granted, and arrive at the transfer stub with
+**nothing having validated the name**.
 
-The plugin **advertises ed2k and has no handler for it**:
+What landed instead of a handler:
 
-- `internal/rpc/consent.go:206` defines `SchemeED2K` and `knownSchemes` at
-  line 223 **accepts** `ed2k://`, and `LocatorSchemeOf` matches it by prefix at
-  line 281.
-- The plugin's `source.json` (the `p2p-downloader.yml` in the plan) says
-  *"Fetches files over BitTorrent and ed2k into your library"*.
+- `internal/rpc/downloadWithGate` now parses any ed2k locator **before** the
+  consent gate and refuses it if unusable.
+- `internal/rpc/consent.go` has `isED2KLocator`, a prefix test that duplicates
+  `LocatorSchemeOf`'s on purpose, with
+  `TestTheED2KPrefixIsRecognisedTheSameWayTwice` asserting the two agree.
 
-So a user can hand the plugin an ed2k link, get a consent proposal for it, be
-granted, and then arrive at the transfer stub. Fixing it is either a handler in
-5.4 or a removal from `knownSchemes` plus the description — and the second is the
-honest option if 5.4 does not land. **Do not leave it in the state where the
-error message says "this build speaks only BitTorrent, ed2k and HTTP" and ed2k
-speaks nothing.**
+**Why before the gate, which is the whole assertion.** Core's gate decides
+whether a locator may be stored against an object. It has no opinion about
+filenames, and `ed2k://|file|../../etc/passwd|1|<hash>|` is a *well-formed
+locator* by every test a consent gate could apply. So the gate cannot catch it,
+and asking core anyway spends an operator's trust on a question with an obvious
+answer. Each test therefore asserts two things: the download is refused, **and
+`core.asked` is empty**. A test that only asserted the refusal would pass even
+if the parser ran *after* a granting gate, because the stub refuses everything
+anyway — so the ordering is asserted by its own mutation, and that mutation is
+a row in `mutate_rpc.py` (the parse physically moved below `gateDownload`).
+
+**What is still true and still stated plainly:** a granted, well-formed ed2k
+link still ends in `ErrTransferNotImplemented`, because there is still no ed2k
+transport. `TestTheDownloadStubStillReportsTheTransferIsUnimplemented` says so,
+so the error cannot quietly start implying a download was attempted.
+
+### Two harness lessons this step, both of them cost a real detour
+
+**A duplicated defence reads like two defences.** The first version called
+`LocatorSchemeOf` in `downloadWithGate` as well as in `gateDownload`. Correct
+code, and it made the existing `mutate_rpc.py` row *"a file:// locator reaches
+the protocol handler"* report **SURVIVED** — because disabling the check in
+consent.go left my copy to refuse it. Not a hole, but the row's meaning had
+changed underneath it. Deduping took it back to **29 killed, 0 survived**. A
+survivor is a question about the code, and the first thing to check is whether
+the code changed, not whether the test is weak.
+
+**A list-form mutation row needs a 4th element even when it has no file tag.**
+`run_all` unpacks `old, expect, tag = entry[1], entry[2], entry[3]`, so a list
+row written with three elements raises `IndexError` on the *next* row and takes
+the whole sweep with it. Pass `None` for "not consent".
+
+**COVERED is a claim, not a decoration.** All six `COVERED` verdicts in
+`mutate_ed2k.py` were measured, not assumed, and the measurements are recorded
+in the comment above each row. Two worth knowing:
+
+- `HashBytes` discarding `HashFile`'s error is unreachable *from that call
+  site*: it takes a `[]byte` and wraps it in a `bytes.Reader`, which cannot
+  fail. `HashFile` on a reader that does fail does return the error (measured).
+- The `strings.ToLower(name)` in `checkName` really is redundant for the
+  traversal check — every entry in `dangerousNameComponents` is `..` plus a
+  separator, and none contains a letter, so `..\..\WINDOWS` is refused with it
+  removed. It is **kept anyway**, because the UNC check is the case-sensitive
+  one and one cheap line makes the whole function case-insensitive by
+  construction rather than by remembering to lowercase at three sites.
 
 ### Why the order changed, in one line
 

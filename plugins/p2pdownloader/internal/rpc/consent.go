@@ -308,6 +308,29 @@ func LocatorSchemeOf(raw string) (LocatorScheme, error) {
 		"It handles %s", parsed.Scheme, strings.Join(LocatorSchemeNames(), ", "))
 }
 
+// isED2KLocator reports whether a locator is an ed2k link.
+//
+// It exists so the pre-gate ed2k validation in downloadWithGate can ask that
+// one question WITHOUT calling LocatorSchemeOf, because gateDownload already
+// calls it and a second call is a second copy of the same decision — see the
+// comment on that branch for what duplication cost us once already.
+//
+// The test is deliberately the SAME prefix test LocatorSchemeOf uses, case
+// insensitively, so the two cannot drift: an ed2k link that LocatorSchemeOf
+// calls ed2k is an ed2k link this calls ed2k. If LocatorSchemeOf's own
+// prefix ever changes, TestTheED2KPrefixIsRecognisedTheSameWayTwice fails
+// rather than the ed2k validation quietly stopping to apply.
+//
+// A false negative here is not a security hole: a locator this misses is one
+// LocatorSchemeOf also refuses as unrecognised, so the gate still refuses it
+// before anything is fetched. A false POSITIVE would be — an http URL would be
+// run through the ed2k parser and refused for being http — so the prefix is
+// matched exactly and not loosely, and `ed2k:foo` without the slashes is left
+// to LocatorSchemeOf's own URL branch.
+func isED2KLocator(raw string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "ed2k://")
+}
+
 // gateDownload is the consent check, called before anything is fetched.
 //
 // # THE ORDER OF THE CHECKS, AND WHY IT IS THIS ORDER

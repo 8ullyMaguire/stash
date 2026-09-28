@@ -2,6 +2,7 @@ package ed2k
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -422,6 +423,54 @@ func TestTheSchemeIsMatchedCaseInsensitivelyAndSurroundedByWhitespaceIsFine(t *t
 	}
 }
 
+// TestALinkWithTooFewFieldsIsRefused, and the fixture is one that PANICS
+// without the guard.
+//
+// This row is here because the mutation that deletes the `len(fields) < 4`
+// guard was scored COVERED by the harness — "another layer refuses this" — and
+// the claim was FALSE. Every fixture then in the file happened to be refused by
+// the size or kind check first, so the suite stayed green. What the harness
+// could not see: `ed2k://|file|name|1024` splits into three fields, and
+// `ParseHash(fields[3])` then indexes a three-element slice. Measured with the
+// guard removed: `panic: runtime error: index out of range [3] with length 3`.
+//
+// A COVERED verdict is a claim, and a false one is worse than a survivor: it
+// looks like evidence. So the fixture here is the one that reaches the
+// unguarded index, and the guard's removal turns this test into a PANIC rather
+// than a clean failure.
+func TestALinkWithTooFewFieldsIsRefused(t *testing.T) {
+	// Every prefix of a well-formed link, so no length escapes.
+	wellFormed := link("file", "name", "1024", goodHash)
+	for i := 0; i < len(wellFormed); i++ {
+		if !strings.HasPrefix(wellFormed, wellFormed[:i]) {
+			t.Fatalf("the fixture is not a prefix of itself at %d", i)
+		}
+	}
+	// The two that panic without the guard: three fields, with a VALID size,
+	// so the size check cannot refuse them first.
+	for _, raw := range []string{
+		"ed2k://|file|name|1024",
+		"ed2k://|folder|name|1024",
+		"ed2k://|file|name|1",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			// Not just an error: a guard whose absence is an index-out-of-range
+			// on a string from a stranger's database is a remote crash, and
+			// only `errors.Is` on the sentinel proves which guard refused.
+			if _, err := Parse(raw); !errors.Is(err, ErrMalformed) {
+				t.Errorf("err = %v, want ErrMalformed", err)
+			}
+		})
+	}
+
+	// And the length complaint itself, so a refusal that happens to be right
+	// for the wrong reason is distinguishable from one that checked.
+	_, err := Parse("ed2k://|file|name|1024")
+	if err == nil || !strings.Contains(err.Error(), "field") {
+		t.Errorf("err = %v, want a message that names the field count", err)
+	}
+}
+
 // TestTheSchemeIsPresentButTheShapeIsNot. `ed2k://file|...` carries the scheme
 // and is still not a link, so a scheme check that does not also check the
 // shape would let it through.
@@ -546,15 +595,31 @@ func TestTheZeroHashIsRecognisable(t *testing.T) {
 	}
 }
 
-// TestAZeroByteInTheHashIsNotZero: IsZero is all sixteen bytes, not a leading
-// zero. A hash beginning 0000 but with content is a real hash.
+// TestAZeroByteInTheHashIsNotZero: IsZero is all sixteen bytes, not any one of
+// them. A hash that merely BEGINS with zeros, or merely ENDS with a zero, is a
+// real hash — and the two mutants that reduce IsZero to a single byte's test are
+// only distinguishable with fixtures that put the zero in the right place.
+//
+// That is the point of this test's shape. Written as "a hash with a non-zero
+// byte is not zero", it passes against `return h[0] == 0` and against
+// `return h[15] == 0`, because a well-formed fixture usually has a non-zero
+// byte in every position. Each row below moves the single non-zero byte, so all
+// sixteen positions are covered and either reduction is caught.
 func TestAZeroByteInTheHashIsNotZero(t *testing.T) {
-	h, err := ParseHash("00000000000000000000000000000001")
-	if err != nil {
-		t.Fatal(err)
+	for i := 0; i < HashLength; i++ {
+		var h Hash
+		h[i] = 0x01
+		if h.IsZero() {
+			t.Errorf("a hash whose only non-zero byte is at index %d reports "+
+				"IsZero. IsZero has to be all %d bytes, not any one of them",
+				i, HashLength)
+		}
 	}
-	if h.IsZero() {
-		t.Error("a hash with a single non-zero byte reports IsZero")
+
+	// And the other direction, from the type's zero value.
+	var zero Hash
+	if !zero.IsZero() {
+		t.Error("the zero hash does not report IsZero")
 	}
 }
 
