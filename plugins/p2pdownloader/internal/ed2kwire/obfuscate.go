@@ -131,8 +131,31 @@ const protocolPacketHeaderSize = 6
 // server on the network, and the symptom is indistinguishable from a network
 // problem, which is the most expensive kind of bug to find later.
 func newObfuscationSeed() ([obfuscationSeedSize]byte, error) {
+	return newObfuscationSeedFrom(rand.Read)
+}
+
+// # WHY THE RANDOMNESS SOURCE IS A PARAMETER
+//
+// newObfuscationSeedFrom exists so the failure path above is REACHABLE FROM A
+// TEST. It was not, and that is not a theoretical gap: the mutation harness
+// deleted the error check, nothing failed, and the probe was reported as a
+// survivor -- correctly, because no test could have caught it.
+//
+// A guard nobody can execute is a guard nobody has checked. The check here is
+// the difference between "we could not read randomness" and "here are four
+// zero bytes", and the second one produces a client every ed2k server on the
+// network drops, with a symptom identical to a network fault. It is the most
+// expensive kind of bug in this file to find late and the cheapest to make
+// testable: one parameter.
+//
+// randRead is the seam, not a package-level var swapped by a test. A var would
+// be mutable from any file in the package and would have to be restored; a
+// parameter is passed where it is used and cannot leak.
+func newObfuscationSeedFrom(
+	randRead func([]byte) (int, error),
+) ([obfuscationSeedSize]byte, error) {
 	var seed [obfuscationSeedSize]byte
-	if _, err := rand.Read(seed[:]); err != nil {
+	if _, err := randRead(seed[:]); err != nil {
 		return seed, fmt.Errorf("cannot read randomness for the SYN "+
 			"obfuscation seed: %w. This is fatal rather than defaulted: a "+
 			"zero seed is dropped by every ed2k server on the network, and "+

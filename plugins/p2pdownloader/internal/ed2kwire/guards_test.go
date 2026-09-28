@@ -2,6 +2,7 @@ package ed2kwire
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -269,5 +270,61 @@ func TestAServerThatNeverSpeaksIsRefused(t *testing.T) {
 			"bare deadline error reads as a flaky network; this one has "+
 			"to say the server accepted the connection and went silent",
 			err)
+	}
+}
+
+// TestAFailedSeedIsFatalRatherThanZero: the error path, now reachable.
+//
+// # THIS TEST EXISTS BECAUSE THE PATH WAS UNREACHABLE AND THE MUTATION SAID SO
+//
+// newObfuscationSeed called crypto/rand directly, so its error branch could
+// not run on a healthy machine and no test could assert it. The mutation
+// harness deleted the error check, the whole suite passed, and the probe was
+// reported SURVIVED -- correctly, because there was nothing to catch it.
+//
+// The difference the check makes is the whole point of the function. Four
+// zero bytes is a seed every ed2k server on the network drops, and the
+// symptom is silence: indistinguishable from a filtered port, a server that
+// is down, or a network fault. So the failure must surface as an error at the
+// one place that can still say something useful about it.
+func TestAFailedSeedIsFatalRatherThanZero(t *testing.T) {
+	sentinel := errors.New("no entropy available")
+
+	seed, err := newObfuscationSeedFrom(
+		func([]byte) (int, error) { return 0, sentinel })
+
+	if err == nil {
+		t.Fatalf("a failed read of randomness returned a seed and no error. "+
+			"That seed is four zero bytes, and a zero seed is dropped by "+
+			"every ed2k server on the network -- the caller would connect, "+
+			"get silence, and blame the network. Got %x", seed)
+	}
+
+	// The seed must be zeroed rather than left holding whatever the failed
+	// read happened to write. A caller that logs the seed on error would
+	// otherwise print four bytes of partial randomness as if they were real.
+	if seed != ([obfuscationSeedSize]byte{}) {
+		t.Errorf("the failed path returned a non-zero seed %x. It must be "+
+			"zero, so nothing downstream can mistake it for a usable seed",
+			seed)
+	}
+
+	// The underlying error must survive, wrapped. A caller that wants to
+	//know whether this was a transient or a fatal condition can only
+	// distinguish them by the cause, and errors.Is is how they ask.
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error is %v, which does not wrap the underlying failure. "+
+			"A caller cannot tell a transient entropy failure from a fatal "+
+			"one without the cause", err)
+	}
+
+	// And the message has to name the consequence, because this is an
+	// error a user will see and "no entropy available" sends them looking
+	// at the wrong thing entirely.
+	if !strings.Contains(err.Error(), "zero seed") {
+		t.Errorf("error message is %q, which does not say what goes wrong "+
+			"downstream. The reason this is fatal rather than defaulted is "+
+			"that a zero seed is dropped by every server, and that is the "+
+			"part worth reading", err)
 	}
 }

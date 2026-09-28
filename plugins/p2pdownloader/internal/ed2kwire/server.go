@@ -641,14 +641,38 @@ func (s *Server) drainFacts() error {
 			// real bug, and it is why the timeout is distinguished here
 			// rather than treated as any other error.
 			if isTimeout(err) {
-				// Quiet after speaking is a finished conversation. Quiet
-				// with nothing heard at all is a server that never
-				// answered, and a Server that pretends otherwise is the
-				// failure this whole file is about.
-				if !s.heardAnything {
-					return fmt.Errorf("the server accepted the connection "+
-						"and then said nothing at all: %w", err)
-				}
+				// Quiet after speaking is a finished conversation, and
+				// returning nil here is what makes Dial succeed against a
+				// server that answered and then had nothing more to add.
+				//
+				// # THERE IS NO "QUIET WITH NOTHING HEARD" CASE TO HANDLE
+				//
+				// This used to check s.heardAnything and refuse when
+				// nothing had been heard. That check was DEAD CODE, and
+				// the mutation harness is what proved it: deleting it
+				// changed no test result, which is only possible for a
+				// line nothing can reach.
+				//
+				// The reason is the call order. readLoginConfirmation
+				// hands over to this function only on the path where it
+				// has already heard a packet -- its own `if !heard`
+				// returns first, so by the time drainFacts runs,
+				// heardAnything is necessarily true. A server that
+				// accepts the connection and says nothing is refused
+				// there, in readLoginConfirmation, where the test for it
+				// is TestAServerThatNeverSpeaksIsRefused.
+				//
+				// The comment that used to sit here said a Server that
+				// pretended otherwise was "the failure this whole file
+				// is about". It was, and it is still -- it is just
+				// handled upstream. Leaving a defensive copy of a check
+				// that cannot fire is worse than not having it: it reads
+				// as protection, it cannot be tested, and a mutation of it
+				// is reported as a coverage hole that no test can close.
+				//
+				// If this function ever gains another caller, the check
+				// has to come back with it. That is what the call-order
+				// comment above it is for.
 				return nil
 			}
 			// A refusal still matters even now: a server that talks and

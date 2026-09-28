@@ -50,6 +50,7 @@ The two that are worth reading the labels for:
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -118,7 +119,7 @@ MUTATIONS = [
     # the server is talking and the client calls it silent.
         ("server: a server that spoke is still called silent",
      SERVER, "s.heardAnything = true\n\t\theard = true",
-     "\t\t_ = heard", "StallsMidPacket|SaidNothing|StaysSilent"),
+     "\t\t_ = heard", "SpeaksIsNeverCalledSilent|NeverSpeaksIsRefused|StaysSilent"),
 
     # ---- the counts, which were swapped ----
     # 0x40 is the server's OWN totals and 0x34 is a larger network count.
@@ -152,14 +153,26 @@ MUTATIONS = [
     # "Quiet after speaking" is a finished conversation; "silent" is a server
     # that never accepted us. Both end in the same read error, so treating a
     # timeout as success hands back a Server whose first read will block.
-        # This is the drainFacts guard, the last line of defence before a Server
-    # is handed back. An earlier version of this probe had the closing brace
-    # indented one tab deeper than the source, so it did not match and SKIPped
-    # -- and a SKIP reads as "nothing wrong" in a summary line.
-    ("server: a timeout is success even when nothing was heard",
-     SERVER, "if !s.heardAnything {\n\t\t\t\t\treturn fmt.Errorf(\"the server accepted the connection \"+\n\t\t\t\t\t\t\"and then said nothing at all: %w\", err)\n\t\t\t\t}",
-     "\t\t\tif false {\n\t\t\t}",
-     "StallsMidPacket|SaidNothing|NeverSpoke|SaysNothingAtAll"),
+    #
+    # The LIVE guard on "nothing was heard", in readLoginConfirmation. This
+    # replaced a probe on an identical-looking guard in drainFacts, which
+    # survived every mutation because it was DEAD CODE: drainFacts is only
+    # ever called on the path where a packet has already been heard, so its
+    # copy of the check could never fire. Deleting a line nothing can reach
+    # changes no test result, and that is the only reason the mutation
+    # harness could see it.
+    #
+    # The replacement is the same check in the one function that can reach
+    # it, so the guarantee is still guarded and now is actually testable.
+    ("server: a server that never spoke is called silent",
+     SERVER, "if !heard {\n\t\t\t\t\treturn fmt.Errorf(\"the server accepted the connection \"+\n\t\t\t\t\t\t\"and then said nothing at all: %w\", err)\n\t\t\t\t}",
+     # BOTH variables have to be consumed. Removing the guard leaves `err`
+     # unused in that branch, and removing its only reader leaves `heard`
+     # declared and never read -- so the replacement consumes both. A probe
+     # that does not compile is a defect in the PROBE, and the harness says
+     # so rather than scoring it as a hole; this one was found that way.
+     "\t\t\t\tif false { _ = err; _ = heard }",
+     "NeverSpeaksIsRefused|NeverSpoke|SaysNothingAtAll"),
 
     # ---- the deadlines, which were guesses ----
     # 400ms passed every hermetic test because a local fake replies in
@@ -225,10 +238,45 @@ MUTATIONS = [
     # A seed of zero bytes is not a seed: a constant obfuscation is trivially
     # fingerprintable, which is what the mechanism exists to prevent, and a
     # fallback here produces a client every server drops with no error.
+    # The source now reads through a parameter rather than calling rand.Read
+    # directly, so that the failure path is reachable from a test at all. The
+    # probe follows it: disabling the check on randRead is the same bug.
     ("obfuscate: the seed falls back to zeros when randomness fails",
-     OBFUSCATE, "\tif _, err := rand.Read(seed[:]); err != nil {",
-     "\tif _, err := rand.Read(seed[:]); false && err != nil {", "."),
+     OBFUSCATE, "\tif _, err := randRead(seed[:]); err != nil {",
+     "\tif _, err := randRead(seed[:]); false && err != nil {", "."),
 ]
+
+
+def tests_matching(run_pat):
+    """Return the names of tests the -run pattern actually selects.
+
+    # WHY THIS EXISTS
+
+    A probe whose -run pattern matches no test runs none of the suite, the
+    run passes, and the probe is scored SURVIVED. That is the worst possible
+    verdict for a probe that is not testing anything -- it puts a dead probe
+    in the same list as a genuine hole, and the reader cannot tell them apart
+    without re-deriving what -run does.
+
+    It happened twice in this file. Both times the probe guarded a flag
+    correctly and the pattern still named a test that had been renamed, so two
+    probes reported SURVIVED for guards that were in fact covered by tests
+    that did pass.
+
+    A pattern is a claim about which tests guard a line. Checking it costs one
+    subprocess; not checking it costs a reader an afternoon.
+    """
+    try:
+        p = subprocess.run(
+            ["go", "test", "./" + PKG + "/", "-list", ".", "-count=1"],
+            cwd=REPO, capture_output=True, text=True,
+            env=dict(os.environ, GOFLAGS="-mod=mod"), timeout=60)
+    except subprocess.TimeoutExpired:
+        return None
+    names = [ln.strip() for ln in p.stdout.splitlines()
+             if ln.strip().startswith("Test")]
+    return [n for n in names
+            if any(re.search(alt, n) for alt in run_pat.split("|"))]
 
 
 def run_suite(run_pat):
@@ -300,6 +348,26 @@ def main():
                       % (label, len(missing), len(olds), rel))
                 for m in missing:
                     print("            missing: %r" % (m[:90],))
+                skipped += 1
+                malformed.append(label)
+                continue
+
+            # A pattern that selects no test is a MALFORMED probe, not a
+            # survivor. Checked before the mutation is applied so a broken
+            # build cannot be confused with a dead pattern.
+            selected = tests_matching(run_pat)
+            if selected is None:
+                print("  SKIP      %s\n            could not list the "
+                      "package's tests, so the probe's -run pattern could "
+                      "not be checked", label)
+                skipped += 1
+                malformed.append(label)
+                continue
+            if not selected:
+                print("  SKIP      %s\n            the -run pattern %r "
+                      "selects NO test, so the suite would pass without "
+                      "running anything and this probe would report a "
+                      "survivor that is not one", label, run_pat)
                 skipped += 1
                 malformed.append(label)
                 continue
