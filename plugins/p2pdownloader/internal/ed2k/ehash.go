@@ -91,40 +91,79 @@ const PartHashPrefixLength = 8
 func HashFile(r io.Reader) (Hash, error) {
 	var whole Hash
 
-	// One part first. A file that fits in a part is hashed whole, which is the
-	// common case and the one a large-file corpus mostly consists of.
+	// The first part.
 	first, err := readPart(r)
 	if err != nil {
 		return whole, err
 	}
+
+	// A SHORT first part means the reader was exhausted, so the whole file is
+	// in hand and its MD4 is the answer. This is the common case.
 	if len(first) < PartSize {
 		sum := Sum(first)
 		copy(whole[:], sum[:])
 		return whole, nil
 	}
 
-	// A file of EXACTLY PartSize bytes is one part, not two. The distinction
-	// matters: a second empty part would contribute eight zero bytes to the
-	// concatenation and change the hash, so the boundary is `<` and not `<=`.
-	sum := Sum(first)
-	prefixes := make([]byte, 0, PartHashPrefixLength)
-	prefixes = append(prefixes, sum[:PartHashPrefixLength]...)
-
+	// # THE FIRST PART IS FULL — SO THE QUESTION IS WHETHER THERE IS A SECOND
+	//
+	// There is no comparison of len(first) against PartSize that answers this,
+	// and both of the obvious ones are wrong in a way that is invisible
+	// locally:
+	//
+	//   - `<` sends a file of EXACTLY PartSize bytes down the tree branch,
+	//     where the next read returns nothing, the loop never runs, and the
+	//     result is `MD4(first 8 bytes of MD4(file))` rather than
+	//     `MD4(file)`. The protocol uses the tree "if the file is greater than
+	//     9500 KiB (which means that there is more than one chunk)", and a file
+	//     of exactly one part is not greater than one part. Measured on
+	//     9,728,000 bytes of 0xA5: the tree form gives
+	//     349f76168d62b0a7709aeed1512abd6a, the whole-file MD4 gives
+	//     9cab445c0310e326f5c73a1953882e84.
+	//
+	//   - `<=` fixes that and breaks one byte later: a file of PartSize+1
+	//     bytes takes the whole-file path, and the final byte is DISCARDED.
+	//     Measured, PartSize+1, PartSize×2 and PartSize×2+1234 all hash
+	//     identically — three different files, one hash. A hash that cannot
+	//     tell a file from itself truncated is worse than either of the other
+	//     two defects, because it is not merely wrong, it is wrong SILENTLY on
+	//     the largest files in a corpus.
+	//
+	// The protocol splits a file into full parts "plus a remainder chunk", so
+	// the only thing that settles it is whether the reader has more bytes, and
+	// that is a READ. So it is read, here, before the branch is taken.
 	rest, err := readPart(r)
 	if err != nil {
 		return whole, err
 	}
-	for len(rest) > 0 {
+	if len(rest) == 0 {
+		// A full part and nothing after it: exactly one chunk, no remainder.
+		sum := Sum(first)
+		copy(whole[:], sum[:])
+		return whole, nil
+	}
+
+	// More than one chunk, so the tree applies: the first EIGHT bytes of each
+	// part hash, in part order, MD4'd as a whole.
+	prefixes := make([]byte, 0, 2*PartHashPrefixLength)
+	sum := Sum(first)
+	prefixes = append(prefixes, sum[:PartHashPrefixLength]...)
+
+	for {
 		sum := Sum(rest)
 		prefixes = append(prefixes, sum[:PartHashPrefixLength]...)
 
-		// A read that returns nothing but no error means EOF, and a short read
-		// with no error is the last part. The `err == nil` check is on the READ,
-		// not on the length, because io.Reader is allowed to return n>0 with
-		// io.EOF and discarding that data loses the final part.
+		// A zero-length read is EOF, not an empty part. An empty part would
+		// contribute eight zero bytes and change the hash, so the loop
+		// condition is on the READ and not on the previous read's error:
+		// io.Reader may return n>0 together with io.EOF, and testing the error
+		// would drop the final part.
 		rest, err = readPart(r)
 		if err != nil {
 			return whole, err
+		}
+		if len(rest) == 0 {
+			break
 		}
 	}
 

@@ -38,15 +38,25 @@ var (
 //	ed2k://|file|<name>|<size>|<hash>|
 //	ed2k://|folder|<name>|<size>|<hash>|
 //
-// Pipe-delimited. The fields are NOT percent-encoded in the classic eMule form —
-// eMule's own links put raw names between pipes, including spaces, and
-// frequently including further pipes.
+// Pipe-delimited and POSITIONAL. aMule's own documentation puts it as
+// `ed2k://|file|NAME|SIZE|MD4HASH|/` with "fields separated by pipe
+// characters", so NAME is the second field by position and the parser splits.
 //
-// That last part is why this is a hand-written split rather than a parse: the
-// NAME is "everything between the second and third pipe", so a name containing a
-// pipe cannot be recovered by splitting on all of them and taking a field. The
-// correct algorithm finds the pipes that DELIMIT the name and leaves the rest
-// alone.
+// # A NAME CONTAINING A PIPE IS REFUSED, NOT RECONSTRUCTED
+//
+// An earlier version of this comment claimed the opposite — that the name is
+// "everything between the second and third pipe", that a name containing a
+// pipe "cannot be recovered by splitting", and that the parse was therefore
+// "a hand-written split rather than a parse". The code used strings.Split the
+// whole time, so the comment described a mechanism that was not there, and the
+// grammar it described is not the protocol's either.
+//
+// There is no way to recover a pipe-bearing name: `ed2k://|file|a|b|1024|H|` is
+// genuinely ambiguous between a file called "a|b" of 1024 bytes and a file
+// called "a" whose size field is "b". Guessing either way is worse than
+// refusing, so Parse refuses a link with more fields than the protocol defines.
+// Clients that need such a name percent-encode it, which is why the aMule
+// examples all do.
 //
 // # WHY THE SCHEME IS CHECKED BY PREFIX
 //
@@ -74,14 +84,45 @@ func Parse(raw string) (Locator, error) {
 		return Locator{}, fmt.Errorf("%w: %q has the scheme but no field "+
 			"separator. A link is ed2k://|file|...", ErrMalformed, raw)
 	}
+	// THE FIELDS ARE POSITIONAL, AND A NAME WITH A PIPE IN IT IS NOT A LINK
+	//
+	// This parser splits on every pipe and takes fields 0..3. That is the
+	// protocol's own shape — aMule documents `ed2k://|file|NAME|SIZE|MD4HASH|/`
+	// with "fields separated by pipe characters", and NAME is the second field
+	// by position — and it is deliberately NOT a scan for the pipe that ends the
+	// name.
+	//
+	// An earlier version of this comment described the opposite: "the NAME is
+	// everything between the second and third pipe... a hand-written split
+	// rather than a parse", and the code used strings.Split. So the comment
+	// asserted a mechanism the code did not have, and it described a grammar the
+	// protocol does not have either. A name containing a pipe makes the link
+	// AMBIGUOUS — there is no way to tell "name a|b, size 1024" from "name a,
+	// size b" — so the honest answer is not to guess, and the extra fields are
+	// refused as the extra fields they are rather than silently folded into a
+	// name.
 	fields := strings.Split(strings.TrimPrefix(body, "|"), "|")
 
-	// `|file|name|size|hash` is four fields. Fewer is malformed; more is a
-	// folder link's embedded list or a trailing artifact, and the parser takes
-	// what it needs rather than refusing — eMule appends fields in practice.
+	// `|file|name|size|hash` is four fields. Fewer is malformed.
+	//
+	// MORE is refused too, and this is a change of behaviour worth naming: the
+	// first version took what it needed and ignored the rest, on the theory
+	// that "eMule appends fields in practice". A folder link's embedded file
+	// list does append fields, but a link whose trailing fields we do not
+	// understand is exactly the link whose fields we should not silently drop —
+	// a trailing pipe is the protocol's own terminator, and a link without one
+	// is a link we have not fully understood.
 	if len(fields) < 4 {
 		return Locator{}, fmt.Errorf("%w: %q has %d field(s), expected at "+
 			"least 4 (kind, name, size, hash)", ErrMalformed, raw, len(fields))
+	}
+	if len(fields) > 5 {
+		return Locator{}, fmt.Errorf("%w: %q has %d fields, expected 4 plus "+
+			"a trailing terminator. A name containing a pipe makes the link "+
+			"ambiguous — there is no way to tell a name of \"a|b\" with a "+
+			"size of 1024 from a name of \"a\" with a size of \"b\" — so the "+
+			"link is refused rather than guessed at", ErrMalformed, raw,
+			len(fields))
 	}
 
 	var loc Locator

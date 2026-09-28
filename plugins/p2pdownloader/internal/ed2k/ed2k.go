@@ -24,10 +24,10 @@
 // meaningless to anything that expects a file hash, so a caller that ignores it
 // will look for a file that does not exist.
 //
-// Pipe-delimited, and the fields are NOT percent-encoded in the classic form —
-// eMule's own links put raw names between pipes. So the parse cannot use
-// `url.Parse` and cannot assume escaping: the name is whatever sits between the
-// second and third pipes, including further pipes.
+// Pipe-delimited and positional: `file` is the first field, the name the
+// second, the size the third and the hash the fourth. A name containing a pipe
+// makes the link ambiguous and is refused rather than guessed at — see
+// `parse.go`, where the reasoning is written out.
 //
 // # WHY THE HASH IS 128 BITS AND THE SIZE IS REQUIRED
 //
