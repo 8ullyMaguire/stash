@@ -4,7 +4,9 @@ Where StashForge is, what is verified, and what the next person should know
 before touching anything. Written for a cold start: no context from the session
 that produced it.
 
-Last updated: M3 (metadata sharing), tag `m3-metadata-sharing`.
+Last updated: **M5 in progress** — steps 5.3 and 5.5 committed, step 5.4 (ed2k)
+half-written. Branch `main` at `e72cf063e`. **Read "RESUME HERE" below before
+anything else**; it carries the verified numbers and the exact next task.
 
 ---
 
@@ -30,6 +32,165 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 | M2c identity clustering (plan 2.4b) | done | `m2c-identity-clustering` |
 | **M3 metadata sharing (consent, exporter, federation)** | **done** | `m3-metadata-sharing` |
 | **M4 public hosting: mode, 2FA, library grants** | **done** | `m4-public-hosting` |
+
+---
+
+## RESUME HERE — M5 in progress, step 5.4 half-written
+
+**Written 2026-09-28 at a session boundary caused by a turn-lease failure. Start
+from this section; everything below it is background.**
+
+### Where the branch is
+
+`main` at `e72cf063e` — *"M5 step 5.5: the library hand-off, through the plugin
+API only"*. Two commits this session, both green at the time:
+
+| Commit | What |
+|---|---|
+| `18a9845d5` | M5 step 5.3 — the magnet path and BEP 9 arrival |
+| `e72cf063e` | M5 step 5.5 — the library hand-off, through the plugin API only |
+
+**The working tree has one untracked directory: `plugins/p2pdownloader/internal/ed2k/`.**
+It is NOT committed and it is the next task. Nothing else is uncommitted.
+
+### Verified state, re-checked just now
+
+```
+go version go1.27.1-X:nodwarf5 linux/amd64
+go build ./...      clean
+go vet ./...        clean
+gofmt -l internal/  clean
+go list -deps ./... | grep -c 'github.com/stashapp/stash/'   ->  0
+```
+
+| Package | Tests |
+|---|---|
+| paths | 11 |
+| policy | 9 |
+| storage | 16 |
+| torrent | 51 |
+| rpc | 29 |
+| library | 30 |
+| handoff | 14 |
+| ed2k | **0** |
+| **total** | **160** |
+
+Ten mutation harnesses, 262 mutations, 0 survivors. The step 5.5 harness is
+`internal/library/mutate_library.py`: 34 probes across four files, 26 killed,
+8 covered by a lower layer, 0 survived, 0 malformed, exit 0.
+
+**Run the harnesses with `python3 <harness>` and read the EXIT CODE, not the
+pipe.** `... | tail -40; echo $?` reports `tail`'s status. A run of
+`mutate_library.py` that ends `PYEXIT=0` is the one to trust.
+
+### THE NEXT TASK: finish `internal/ed2k` (step 5.4)
+
+Three files exist and **all three now build and vet clean**. What is missing is
+the test file, and then the wire protocol on top.
+
+| File | State |
+|---|---|
+| `ed2k.go` | `Locator`, `Kind`, `Hash`, `String`, `IsZero` — done |
+| `parse.go` | `Parse`, `ParseHash`, `checkName` — done, **untested** |
+| `ehash.go` | `Sum`, `HashFile`, `HashBytes`, `TreeHash` — done, **untested** |
+
+**Verified correct, do not redo it.** `Sum` was checked against all seven RFC
+1320 MD4 test vectors and passes — it is a real `Sum`-shaped helper because
+`golang.org/x/crypto/md4` predates the one `crypto/sha256` grew.
+
+The import is `golang.org/x/crypto/md4` at **v0.45.0**. Nothing was downloaded
+and no version moved: `x/crypto` was already required *indirect* (the torrent
+library needs its chacha20/poly1305), and importing it directly moved the line
+from the indirect block to the direct one. That is the only `go.mod` change in
+this commit and it is expected — **do not treat it as a new dependency or try to
+revert it**, or the build fails.
+
+MD4 is a protocol identifier here, not a security claim; the package's own
+`Deprecated:` notice is about the other case, and the import comment says so.
+
+**In order, next:**
+
+1. **`parse_test.go`** — the locator grammar, written first per the plan's
+   standing rule. The cases that matter:
+   - `ed2k://|file|name|size|hash|` and the `|folder|` form; a `|folder|` link's
+     hash covers a FILE LIST, so the two must not be treated as interchangeable.
+   - A name containing a **pipe** — the name is "everything between the second
+     and third pipe", which is why this is a hand-written scan and not a split.
+   - Traversal in the name: `..`, `..\..\`, absolute `/etc/passwd`, and a
+     Windows drive letter `C:\x` — the last one checked **by hand**, because
+     `filepath.VolumeName` returns `""` for it on Linux, so a Linux build would
+     pass a name that is absolute on the machine that opens the link.
+   - Hash length: 31 and 33 characters, non-hex, uppercase. Length is checked
+     **before** decoding, because `hex.DecodeString` accepts any even length and
+     decoding first means a silently truncated hash — which identifies a
+     different file, the worst possible outcome.
+   - `size` of 0, negative, and non-numeric.
+   - Uppercase hex must be accepted on input and printed lowercase: a peer
+     comparing hash strings treats `AABB` and `aabb` as different files.
+2. **`ehash_test.go`** — the tree boundary. A file of exactly `PartSize` bytes is
+   ONE part, not two, so the comparison is `<` and not `<=`; a second empty part
+   would contribute eight zero bytes and change the hash. Then the
+   `PartHashPrefixLength = 8` prefix concatenation, and `TreeHash`'s
+   **little-endian** length (every other multi-byte integer in ed2k is
+   little-endian, so a big-endian version is not a typo anyone would notice
+   locally — it is a hash that matches nothing).
+3. **`mutate_ed2k.py`** — copy the shape of `internal/library/mutate_library.py`:
+   four verdicts (`KILLED` / `COVERED` / `SURVIVED` / `SKIP`), **four** `elif`
+   branches, per-probe restore, per-probe bound, separate exit codes (survivor 1,
+   malformed 2). Read its docstring before writing one — the bugs it already
+   documents were all real.
+4. Then the protocol itself: the eDonkey2000 server connection, the Kad node
+   list, the extended handshake. The plan's own words are *"hand-rolled because
+   nothing in Go provides it"*, so this is written against the protocol
+   description and is the largest single piece of work left in M5.
+
+**Also unfinished in 5.3:** the transfer surface itself — piece verification,
+resume, rate limits — and `TestResume_SurvivesProcessRestart`, which needs a
+transfer that can actually be resumed. That is why
+`internal/rpc.downloadWithGate` still ends in
+`ErrTransferNotImplemented`, and it is the gap between "the library hand-off
+works" and "a downloader".
+
+### A live inconsistency to fix in step 5.4
+
+The plugin **advertises ed2k and has no handler for it**:
+
+- `internal/rpc/consent.go:206` defines `SchemeED2K` and `knownSchemes` at
+  line 223 **accepts** `ed2k://`, and `LocatorSchemeOf` matches it by prefix at
+  line 281.
+- The plugin's `source.json` (the `p2p-downloader.yml` in the plan) says
+  *"Fetches files over BitTorrent and ed2k into your library"*.
+
+So a user can hand the plugin an ed2k link, get a consent proposal for it, be
+granted, and then arrive at the transfer stub. Fixing it is either a handler in
+5.4 or a removal from `knownSchemes` plus the description — and the second is the
+honest option if 5.4 does not land. **Do not leave it in the state where the
+error message says "this build speaks only BitTorrent, ed2k and HTTP" and ed2k
+speaks nothing.**
+
+### Why the order changed, in one line
+
+Zero of the 850 issues in `docs/research/matrix.md` mention ed2k, eMule,
+Kademlia or eDonkey — 0 hits in `docs/research/open_issues.json` too — while
+5.5 is the half of M5's exit criterion the plan itself names ("get it scanned
+and linked"). The user chose 5.5 first, then 5.4, then the rest. The reordering
+is recorded in the plan at the 5.5 heading; do not "fix" it back.
+
+### Two process rules this session established
+
+**Long harness runs go in the background with `notify=True`, then `sleep` in a
+foreground call.** A `timeout 580 python3 harness.py` in the foreground was
+SIGTERM'd twice mid-probe. The first time it left a mutation applied to
+`integrate.go`, which cost a debugging detour: the leftover looked like a
+pre-existing bug, and the suite took 126 seconds to fail while the outer timeout
+killed the run first. **After any interrupted sweep, grep the sources for
+mutation markers before believing the next test failure** —
+`grep -rn 'if false\|&& false' internal/` catches the common ones.
+
+**Verify the exit code of the thing, not of the pipe.** A stale pair of harness
+runs sat in the queue reporting `0 survived` and `7 survived` — from before the
+harness fixes. Re-run before believing a number that came from a message.
+
 
 ## Verified state at this tag
 
