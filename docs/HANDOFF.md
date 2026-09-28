@@ -337,9 +337,9 @@ without a granted proposal for that exact locator**, and every way of not
 having a grant refuses — nil answer, unreachable core, or a plugin with no gate
 at all.
 
-**M5 steps 5.1 and 5.2 are done, and step 5.3's seeding decision is done. 5.3's
-transfer surface and 5.4–5.5 remain**: BitTorrent transfers, ed2k, library
-integration. **M6 is unstarted.**
+**M5 steps 5.1 and 5.2 are done. Step 5.3 has its seeding decision AND its
+storage gate. 5.3's transfer surface and 5.4–5.5 remain**: BitTorrent
+transfers, ed2k, library integration. **M6 is unstarted.**
 
 ### Seeding is derived from the tier, because uploading is not fetching
 
@@ -380,18 +380,49 @@ option for either exists — and neither is needed for a corpus of untracked,
 self-published material.
 
 **`storage.ToSafeFilePath` is documented as "ensuring the result won't escape
-into parent directories" and does not.** Its whole implementation is 29 lines
-and it checks whether the **first component** of the joined path is `..`.
-Measured on v1.61.0: `../../etc/passwd` and `a/../../b` are refused;
-`/etc/passwd`, `..\..\windows`, `con` and `trailing.` all return **nil error**.
-And it never touches the filesystem, so it cannot see a symlink — the one case
-§5.2 names as "never via a symlink" and which no pure-string function can catch.
+into parent directories" and is a string check.** 29 lines, and it tests whether
+the *first* component of the joined path is `..`.
 
-**So `internal/paths.SanitizeJoin` is not a parallel implementation of something
-the library offers; it is the only path safety this downloader has.** This is
-the sixth prose-versus-implementation mismatch in this project and the first in
-a third-party library — harder to spot precisely because the claim is typed as
-documentation rather than as a comment.
+**Correction, 2026-09-28.** I previously wrote that `/etc/passwd` and
+`..\..\windows` were reachable escapes, on the evidence that the function
+returns them with a nil error. They are not. `filepath.Join(location, safeName)`
+cleans the *concatenation*, so an absolute name is re-anchored under the
+location and lands inside. Measured:
+
+| Name | function | lands at | inside? |
+|---|---|---|---|
+| `["..","..","etc","passwd"]` | refused | — | safe |
+| `["/etc/passwd"]` | accepted | `<root>/etc/passwd` | **safe** — `Join` re-anchors |
+| `["..\..\windows"]` | accepted | `<root>/..\..\windows` | safe, one odd filename |
+
+I asserted that from the function's return value without checking the caller's
+join. The lesson is in the skill under "a documented guarantee is a claim".
+
+**The escape that IS real is the symlink, and the library's own containment
+check cannot see it.** `file-client.go:92` looks like a defence and
+`isSubFilepath` looks like the check behind it, but `isSubFilepath` is
+`filepath.Rel` plus `HasPrefix`, and `Rel` is pure string arithmetic.
+Executed with the library's own functions, torrent directory a symlink:
+
+```
+file path     : <root>/downloads/innocent/passwd    (innocent -> outside)
+isSubFilepath -> true
+really is     : <root>/outside       (EvalSymlinks)
+the decoy OUTSIDE the download root now reads: "PEERS CONTROLLED BYTES"
+```
+
+So `internal/paths.SanitizeJoin` is not a parallel implementation — it is the
+only path safety this downloader has, and it must be enforced at *our* storage
+layer because the library's cannot be. `internal/paths` runs `EvalSymlinks` on
+both sides and compares with `filepath.Rel`, which is the filesystem-resolving
+version of the check the library intended to write.
+
+The **mmap** storage is worse: `grep -c isSubFilepath` is 0 for `mmap.go` and 1
+for `file-client.go`, and it carries the TODO *"Support all the same native
+filepath configuration that NewFileOpts provides"*. It also prepends
+`BestName()` unconditionally where the classic path skips it for a nameless
+(BEP 52 v2) torrent, so the first component `ToSafeFilePath` inspects is the
+file's own. **This settles which storage implementation step 5.3 must use.**
 
 The dependency also drags cgo sqlite in through the storage backends, which is
 part of why the plugin ships as its own static binary. It must appear in the
@@ -420,17 +451,99 @@ plausible "fix" for "accepted a regular file" is `os.RemoveAll` then
 file. That mutation is killed by
 `TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
 
-### Five mutation harnesses, 69 mutations, 0 survivors
+### `internal/storage.Gate` — the library's only safe storage has no defence
+
+The library needs a storage implementation whether or not the transfer code
+exists yet, and *which* one is a decision:
+
+| backend | containment check | verdict |
+|---|---|---|
+| `storage.NewFile` (classic) | `isSubFilepath` at `file-client.go:92` — a **string** check | unusable alone |
+| `storage.NewMMap` | **none** (`grep -c isSubFilepath` → 0) | unusable |
+| **`internal/storage.Gate`** | every raw component, then `paths.SanitizeJoin`, then the library's | **used** |
+
+`Gate` wraps the classic backend and validates every file **before** handing the
+torrent to the library, because the library's only extension points —
+`FilePathMaker` and `TorrentDirFilePathMaker` — both return a bare `string` and
+**cannot report an error**. A per-file refusal has nowhere to go, so it becomes a
+sentinel filename and the transfer completes with the wrong file in it. Refusing
+the whole torrent in `OpenTorrent` is the only place a real error can be
+returned, and it is the only place one is used.
+
+**The bug the tests caught while writing it, which is the whole reason to read
+this.** The obvious up-front check validates the file's name as one string:
+
+```go
+name := filepath.Join(append([]string{info.BestName()}, file.BestPath()...)...)
+paths.SanitizeJoin(root, name)   // <-- the traversal is already gone
+```
+
+`filepath.Join` **cleans** its result, so `["sub", "..", "..", "escape"]`
+becomes the string `"escape"` before the gate sees it. `SanitizeJoin` is not
+wrong — it is handed a name that no longer contains the attack. The gate
+therefore checks each component **as the torrent supplied it** and never
+pre-joins; the joined name is only an output, for the error message.
+
+This is also why the library's `ToSafeFilePath` looks adequate and is not: it
+joins first and checks the first component of the **result**, which is a
+different question from "does any component of the input walk out".
+
+The same trap bit a *test* later: a case using `{"..", "escape"}` under a
+torrent named `torrent` becomes `torrent/../escape` → `escape`, which is inside
+the root and correctly accepted — so the test passed for the wrong reason. Two
+levels of `..` are needed: one to leave the torrent directory, one to leave the
+root.
+
+A second real bug the same tests caught: the backstop returned a bare
+`.refused-by-stashforge` filename from a function whose sibling returns an
+**absolute** path. The library joins it onto a base directory so it is harmless
+in use, but `FilePathMaker` is a public extension point, and a relative filename
+resolves against the *working directory* in any caller that uses it directly.
+
+### A layered defence needs a `covered` verdict, or the harness lies to you
+
+The gate has **three layers that all refuse a `..` walk** — per-component,
+joined-name, and the torrent-directory check. So "remove layer 1" changes nothing
+a test can see: layers 2 and 3 refuse the same input. That is **not a hole**,
+and treating a surviving row as a defect sends you into the code to fix
+something that is not broken.
+
+So the harness has six verdicts, and the fifth is the one that matters:
+
+```
+killed    the named test failed
+covered   no test noticed AND the whole suite still passed -- another layer
+          refuses this input. Verified by re-running everything with the
+          mutation applied, not assumed.
+survived  the whole suite FAILED but the named test did not. A HOLE.
+```
+
+`covered` is not a pass; it is a *claim*, and the whole-suite re-run is what
+makes it trustworthy. Only `survived` means a hole.
+
+Two other things the harness needed: **compound mutations** (`old`/`new` as
+equal-length lists, because disabling one layer is unobservable — and a single
+edit labelled "COMPOUND" is a lie no harness can detect, which is why five rows
+survived the first run), and **a timeout on every `run`** (a mutation that
+removed a lock's `defer Unlock` deadlocked `go test` and hung the session for
+five minutes).
+
+And when a `survived` row is real: **apply the mutation, run `-v`, read the FAIL
+lines**, and retarget. Five consecutive rows were the same mis-pointing — I had
+named a test that passed while a different one caught the mutation.
+
+### Seven mutation harnesses, 108 mutations, 0 survivors
 
 ```bash
 python3 mutate_seam.py                                  # 6
 python3 internal/collab/mutate_locator.py               # 14
 (cd plugins/p2pdownloader && python3 internal/paths/mutate_paths.py)   # 12
 (cd plugins/p2pdownloader && python3 internal/policy/mutate_policy.py) # 14
+(cd plugins/p2pdownloader && python3 internal/storage/mutate_gate.py)  # 21
 (cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
 
-69 mutations across five harnesses, 0 survivors.
+108 mutations across seven harnesses, 0 survivors.
 
 Run them **serially**. They edit real files and restore them.
 

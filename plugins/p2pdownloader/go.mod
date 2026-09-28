@@ -34,4 +34,30 @@
 // is down is a build whose failure says nothing about the code.
 module github.com/stashapp/stash-plugin-p2pdownloader
 
-go 1.23
+go 1.24.0
+
+require github.com/anacrolix/torrent v1.61.0
+
+require (
+	github.com/anacrolix/chansync v0.7.0 // indirect
+	github.com/anacrolix/generics v0.1.1-0.20251125230353-15d98d46693b // indirect
+	github.com/anacrolix/log v0.17.1-0.20251118025802-918f1157b7bb // indirect
+	github.com/anacrolix/missinggo v1.3.0 // indirect
+	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
+	github.com/anacrolix/missinggo/v2 v2.10.0 // indirect
+	github.com/anacrolix/sync v0.5.5-0.20251119100342-d78dd1f686f1 // indirect
+	github.com/edsrzf/mmap-go v1.1.0 // indirect
+	github.com/go-llsqlite/adapter v0.0.0-20230927005056-7f5ce7f0c916 // indirect
+	github.com/go-llsqlite/crawshaw v0.5.6-0.20250312230104-194977a03421 // indirect
+	github.com/huandu/xstrings v1.3.2 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
+	github.com/mr-tron/base58 v1.2.0 // indirect
+	github.com/multiformats/go-multihash v0.2.3 // indirect
+	github.com/multiformats/go-varint v0.0.6 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	go.etcd.io/bbolt v1.3.6 // indirect
+	golang.org/x/crypto v0.44.0 // indirect
+	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	lukechampine.com/blake3 v1.1.6 // indirect
+)

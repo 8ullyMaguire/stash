@@ -40,15 +40,23 @@ library's own path handling cannot be the one we rely on.
 
 ## The finding that shaped step 5.2
 
+> **Corrected 2026-09-28.** The first version of this section claimed that
+> `/etc/passwd`, `..\..\windows` and friends were reachable escapes. They are
+> not: `filepath.Join(location, safeName)` cleans the *concatenation*, so a name
+> beginning with a separator is re-anchored under `location` and lands inside
+> anyway. The claim was about the function's contract, not about a path on disk,
+> and I did not check the join before asserting it. The finding below is
+> narrower and stronger: **the escape is the symlink, and the library's only
+> containment check cannot see one.**
+
 The library exports `storage.ToSafeFilePath(fileInfoComponents ...string)
 (string, error)`, documented as:
 
 > Combines file info path components, ensuring the result won't escape into
 > parent directories.
 
-That reads like exactly the guarantee step 5.2 asks us to build. It is not
-that guarantee. The whole implementation is 29 lines
-(`storage/safe-path.go`), and it is:
+The whole implementation is 29 lines (`storage/safe-path.go`) and it checks
+whether the **first component** of the joined path is `..`:
 
 ```go
 safeComps := make([]string, 0, len(fileInfoComponents))
@@ -64,38 +72,130 @@ default:
 }
 ```
 
-It checks whether the **first component** of the joined path is `..`. That
-catches `../../etc/passwd` and `a/../../b`, and nothing else. Measured against
-it, with `go run` on v1.61.0:
+### What that does and does not stop
 
-| Input | Result | Verdict |
-|---|---|---|
-| `["..", "..", "etc", "passwd"]` | error `escapes root dir` | refused |
-| `["a", "..", "..", "b"]` | error `escapes root dir` | refused |
-| `["/etc/passwd"]` | `"/etc/passwd"`, **nil error** | **absolute path passed through** |
-| `["..\\..\\windows"]` | `"..\\..\\windows"`, **nil error** | **Windows traversal passed through** |
-| `["con"]` | `"con"`, nil error | **reserved name passed through** |
-| `["trailing."]` | `"trailing."`, nil error | **trailing dot passed through** |
-| `["", "x"]` | `"x"`, nil error | empty component silently dropped |
+Measured, on v1.61.0, both the function and the join the library then performs
+(`location = /data/downloads`):
 
-Plus the thing it cannot do at all: **it never touches the filesystem**, so it
-cannot see a symlink. A torrent whose first path component is a symlink
-pointing outside the root resolves to an in-root path string and lands outside
-anyway. The plan's own requirement — *"never via a symlink"* — is unreachable
-for any pure-string function.
+| Name | `ToSafeFilePath` | Lands at | Inside? |
+|---|---|---|---|
+| `["..", "..", "etc", "passwd"]` | refused `escapes root dir` | — | safe |
+| `["a", "..", "..", "b"]` | refused `escapes root dir` | — | safe |
+| `["sub", "..", "..", "x"]` | refused `escapes root dir` | — | safe |
+| `["/etc/passwd"]` | **accepted** | `/data/downloads/etc/passwd` | safe — the `Join` re-anchors it |
+| `["..\..\windows"]` | **accepted** | `/data/downloads/..\..\windows` | safe, one odd filename |
+| `["with\x00nul"]` | **accepted** | `/data/downloads/with\x00nul` | safe (the syscall truncates) |
+| `["con"]`, `["trailing."]` | **accepted** | as given | safe on Linux; wrong on Windows |
+
+So the string attacks are handled — not by `ToSafeFilePath`'s *logic* being
+right, but by `filepath.Join` cleaning the concatenation, which is a property
+of the caller rather than of the function. A caller that concatenated with `/`
+instead of joining would get the escapes the first version of this ADR claimed.
+
+**The real escape is a symlink, and it is reachable through the classic
+storage's own containment check.** `file-client.go:92` looks like a defence:
+
+```go
+filePath := filepath.Join(dir, fs.opts.FilePathMaker(...))
+if !isSubFilepath(dir, filePath) {
+    err = fmt.Errorf("file %v: path %q is not sub path of %q", ...)
+}
+```
+
+and `isSubFilepath` (`storage/file-paths.go:32`) is a **string** check:
+
+```go
+func isSubFilepath(base, sub string) bool {
+	rel, err := filepath.Rel(base, sub)
+	if err != nil { return false }
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+```
+
+`filepath.Rel` is pure string arithmetic. It cannot resolve a symlink, so a
+torrent whose directory name is a symlink pointing outside the download root
+passes this check. Executed, with the library's own functions:
+
+```
+download root : .../downloads
+file path     : .../downloads/innocent/passwd      (innocent is a symlink)
+isSubFilepath -> true
+would create  : .../downloads/innocent
+really is     : .../outside          (EvalSymlinks)
+relative      : "../outside" -> *** OUTSIDE ***
+
+wrote         : ".../downloads/innocent/passwd"
+the decoy OUTSIDE the download root now reads: "PEERS CONTROLLED BYTES"
+```
+
+The library's own containment check said `true` and the write landed outside
+the download directory anyway.
+
+**The mmap storage is worse and says so.** `storage/mmap.go` calls
+`grep -c isSubFilepath` → **0**, and carries its own TODO: *"Support all the
+same native filepath configuration that NewFileOpts provides."* It also
+prepends `md.BestName()` unconditionally, where the classic path skips it when
+the torrent is nameless (BEP 52 v2) — so in the mmap path the first component
+that `ToSafeFilePath` inspects is the file's own first component.
 
 **So step 5.2's `SanitizeJoin` is not a parallel implementation of something the
-library provides. It is the only path-safety this downloader has.** The
-library's function may be used as a first cheap filter, and must not be the
-last one; the plugin's own `SanitizeJoin` does the rejection, and the final
-path is checked with `filepath.EvalSymlinks` against the root after resolution.
+library provides. It is the only path-safety this downloader has**, and it has
+to be enforced at OUR storage layer, because the library's is a string check
+that a symlink defeats. `internal/paths` is written to run
+`filepath.EvalSymlinks` on both sides and compare with `filepath.Rel`, which is
+the filesystem-resolving version of the check the library intended to write.
 
-This is worth stating plainly because it is the fifth time in this project a
-documented behaviour did not match the implementation, and the pattern is
-consistent: **a comment describing a guarantee is a claim, not a guarantee.**
-Three of the five were in this repo's own migrations; this one was in a
-third-party library, which is strictly harder to notice because the comment is
-typed as documentation rather than as a comment.
+This is the sixth time in this project a documented behaviour did not match the
+implementation, and the pattern is consistent: **a comment describing a
+guarantee is a claim, not a guarantee.** Five were in this repo's own
+migrations; this one is in a third-party library, which is strictly harder to
+notice because the claim is a doc comment on a function whose name says exactly
+what it does.
+
+And the second half of the lesson, which cost more than the first: **measure the
+caller, not just the callee.** `ToSafeFilePath` accepts `/etc/passwd`, which
+looks damning. It is not, because the caller's `filepath.Join` neutralises it. I
+wrote "the absolute path is passed through" and moved on, when the question was
+"where does the file end up". The first version of this ADR would have had a
+reader go looking for a hole that does not exist, and — worse — would have made
+the real one, the symlink, look like one item in a list of string bugs.
+
+## What was built
+
+`plugins/p2pdownloader/internal/storage/gate.go`. A `storage.ClientImpl` that
+wraps the classic backend, validates every file in a torrent before handing it
+to the library, and routes the library's own path makers through
+`internal/paths` as a backstop.
+
+**The classic backend is the only usable one** and the measurement above is why:
+`NewMMap` has no containment check at all, and the classic one has a check that
+is a string comparison. The gate supplies the filesystem-resolving version.
+
+**The library's extension points cannot report an error.** `FilePathMaker` and
+`TorrentDirFilePathMaker` both return a bare `string`, and the library calls them
+before `OpenTorrent` gets a chance to return anything. So a per-file refusal has
+nowhere to go: it becomes a sentinel filename and the transfer completes with the
+wrong file in it. The gate therefore refuses the **whole torrent** in
+`OpenTorrent`, which is the only place a real error can be returned, and uses
+the makers purely as a backstop.
+
+**The joining trap.** The obvious up-front check validates a file's name as one
+string, and it does not work:
+
+```go
+name := filepath.Join(append([]string{info.BestName()}, file.BestPath()...)...)
+paths.SanitizeJoin(root, name)   // <-- the traversal is already gone
+```
+
+`filepath.Join` cleans its result, so `["sub", "..", "..", "escape"]` becomes
+the string `"escape"` before the gate sees it. `SanitizeJoin` is not wrong — it
+is handed a name that no longer contains the attack. So the gate checks each
+component **as the torrent supplied it** and never pre-joins; the joined name is
+only ever an output, for the error message.
+
+That is also why `ToSafeFilePath` looks adequate and is not: it joins first and
+checks the first component of the **result**, which is a different question from
+"does any component of the input walk out".
 
 ## Consequences
 

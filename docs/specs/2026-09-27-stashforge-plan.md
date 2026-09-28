@@ -1886,25 +1886,46 @@ option for either exists in the module — and neither is needed for a corpus of
 untracked, self-published material. ed2k is hand-rolled in 5.4 because nothing
 in Go provides it.
 
-**The finding that matters: the library's path-safety function is not
-path-safety.** `storage.ToSafeFilePath` is documented as "ensuring the result
-won't escape into parent directories". Its whole implementation is 29 lines
-(`storage/safe-path.go`) and it checks whether the **first component** of the
-joined path is `..`. Measured on v1.61.0 with `go run`:
+**The finding that matters: the library's containment check is a string
+check, and a symlink defeats it.** `storage.ToSafeFilePath` is documented as
+"ensuring the result won't escape into parent directories". Its whole
+implementation is 29 lines (`storage/safe-path.go`) and it checks whether the
+**first component** of the joined path is `..`.
 
-| Input | Result |
-|---|---|
-| `["..", "..", "etc", "passwd"]` | error `escapes root dir` |
-| `["a", "..", "..", "b"]` | error `escapes root dir` |
-| `["/etc/passwd"]` | `"/etc/passwd"`, **nil error** |
-| `["..\..\windows"]` | `"..\..\windows"`, **nil error** |
-| `["con"]` | `"con"`, nil error |
-| `["trailing."]` | `"trailing."`, nil error |
-| `["", "x"]` | `"x"`, nil error — the empty component is silently dropped |
+**Correction (2026-09-28).** An earlier version of this section listed
+`/etc/passwd` and `..\..\windows` as reachable escapes, because
+`ToSafeFilePath` returns them with a nil error. They are not reachable:
+`filepath.Join(location, safeName)` cleans the *concatenation*, so an absolute
+name is re-anchored under the location. Measured:
 
-And it never touches the filesystem, so it cannot see a symlink — the one case
-the plan calls out by name as "never via a symlink", and which no pure-string
-function can ever catch.
+| Name | `ToSafeFilePath` | Lands at | Inside? |
+|---|---|---|---|
+| `["..", "..", "etc", "passwd"]` | refused | — | safe |
+| `["/etc/passwd"]` | **accepted** | `<root>/etc/passwd` | safe — the `Join` re-anchors it |
+| `["..\..\windows"]` | **accepted** | `<root>/..\..\windows` | safe, one odd filename |
+
+The string attacks are handled by the *caller's* `Join`, not by the function's
+logic. The function is still not path-safety — but the reason is the case
+neither of them can address:
+
+`file-client.go:92` looks like a defence, and `isSubFilepath` looks like the
+check behind it. `isSubFilepath` is `filepath.Rel` plus a `HasPrefix`, and
+`Rel` is pure string arithmetic. Executed against the library's own functions
+with a torrent directory that is a symlink:
+
+```
+file path     : <root>/downloads/innocent/passwd     (innocent -> outside)
+isSubFilepath -> true
+really is     : <root>/outside        (EvalSymlinks)
+wrote         : "<root>/downloads/innocent/passwd"
+the decoy OUTSIDE the download root now reads: "PEERS CONTROLLED BYTES"
+```
+
+The library's own check said `true` and the write landed outside the download
+directory. The **mmap** storage has no such check at all — `grep -c
+isSubFilepath` returns 0 for `mmap.go` against 1 for `file-client.go` — and
+carries the TODO *"Support all the same native filepath configuration that
+NewFileOpts provides"*.
 
 **So step 5.2 is not a parallel implementation of something the library
 provides — it is the only path safety this downloader has.** That is the
@@ -1960,6 +1981,36 @@ version — `os.RemoveAll` then `MkdirAll` — compiles, returns nil for every
 input, and deletes a user's file. The mutation is killed by
 `TestEnsureRootNeverDestroysWhatIsAlreadyThere`.
 
+**A mutation harness needs a timeout, and a `survived` row needs reading before
+the code does.** A sixth verdict makes the second half mechanical: `covered`
+means no test noticed **and the whole suite still passed** with the mutation
+applied, which is a verified claim that another layer refuses the same input
+rather than my judgement that it does. Only `survived` — the suite failed and
+the named test did not notice — means a hole. Three things here that cost more time than the code did:
+
+- A mutation that removed a lock's `defer Unlock` **deadlocked** `go test`, and
+  a harness with no timeout took the whole run with it. Every `run` is now
+  bounded, and a hang reports `broken` — a verdict a human can act on.
+- **Seven mutations survived, and every one was my mistake rather than the
+  code's.** I pointed each at a test that happened to pass without checking
+  which *layer* of the three-layer gate that test exercises. The up-front check,
+  the joined-name backstop and the torrent-directory check all refuse `..`
+  walks, so every test using one also passed with the others removed: two layers,
+  one test, and the redundancy only apparent. Each test now names the layer it
+  measures, and there is a name only that layer refuses (a trailing dot, a
+  reserved device) so the layers can be killed independently.
+- One mutation was **observably a no-op**: returning a live map instead of a
+  copy is invisible through a `[]Refusal`, because the `range` already copied.
+  That entry is gone rather than reworked — a mutation that cannot be observed
+  is not a mutation, and leaving it would mean a `survived` row that looks like
+  a hole and is not. The property is real, and `-race` is what covers it.
+
+One real bug came out of it: backstop refusals are recorded with **no torrent
+hash** (a name arriving through the library carries none), so every one of them
+landed under the zero hash and overwrote the last. A torrent with two bad names
+reported the second only. The refusals are now a slice, deduped on hash for the
+up-front path and appended for the backstop path.
+
 ### Step 5.3 — BitTorrent
 
 **IN PROGRESS. The seeding decision is DONE** —
@@ -2012,10 +2063,56 @@ opinion:
   `UploadForbidden`. Hence `UploadForbiddenFor`, asserted to return
   `UploadForbidden` specifically rather than merely "cannot upload".
 
-Remaining for this step: metainfo parsing, magnet + BEP 9 metadata fetch,
-Kademlia DHT (BEP 5) discovery, peer wire protocol, multi-connection, piece
-verification, resume, and rate limits — all from the library, with the upload
-policy wired into the client config and per-torrent controls.
+**The storage gate is DONE** — `internal/storage/gate.go`, 20 mutations
+killed, 1 covered by another layer (verified by whole-suite re-run), 0
+survivors. The library needs a storage implementation whether or not the transfer
+code is written yet, and *which* one is a decision rather than a default:
+
+| backend | containment check | verdict |
+|---|---|---|
+| `storage.NewFile` (classic) | `isSubFilepath` at `file-client.go:92` — a **string** check | unusable alone |
+| `storage.NewMMap` | **none** (`grep -c isSubFilepath` → 0) | unusable |
+| **`internal/storage.Gate`** | every raw component, then `paths.SanitizeJoin`, then the library's | **used** |
+
+`Gate` wraps the classic backend and validates every file in a torrent **before
+handing it to the library**, because the library's only extension points —
+`FilePathMaker` and `TorrentDirFilePathMaker` — both return a bare `string` and
+**cannot report an error**. A per-file refusal has nowhere to go, so it becomes a
+sentinel filename and the transfer completes with the wrong file in it. Refusing
+the whole torrent in `OpenTorrent` is the only place a real error can be
+returned, and it is the only place one is used.
+
+**The bug the tests caught while writing this one, which is the reason it is
+written down.** The obvious up-front check validates the file's name as a single
+string:
+
+```go
+name := filepath.Join(append([]string{info.BestName()}, file.BestPath()...)...)
+paths.SanitizeJoin(root, name)   // <-- the traversal is already gone
+```
+
+`filepath.Join` **cleans** its result, so `["sub", "..", "..", "escape"]`
+becomes the string `"escape"` before the gate sees it. `SanitizeJoin` is not
+wrong — it is being handed a name that no longer contains the attack.
+`TestAHostileNameIsCaughtEvenWhenItIsTheSecondComponent` caught this, so the gate
+checks each component **as the torrent supplied it** and never pre-joins. The
+joined name is only ever an output, for the error message.
+
+That is also why the library's `ToSafeFilePath` looks adequate and is not: it
+joins first and checks the first component of the **result**, which is a
+different question from "does any component of the input walk out".
+
+The refusal is **recorded, not returned as a path**. A path is indistinguishable
+from success to everything downstream, so a task report has to be able to say
+*which* file was refused and why — recorded once per torrent, because
+`OpenTorrent` is called again on every retry and a report listing one refusal
+forty times is a report nobody reads.
+
+Remaining for this step: the transfer surface itself — metainfo parsing, magnet
++ BEP 9 metadata fetch, Kademlia DHT (BEP 5) discovery, peer wire protocol,
+multi-connection, piece verification, resume, rate limits — with
+`internal/policy` wired into the client config and the per-torrent
+`AllowDataUpload` / `DisallowDataUpload` controls.
 
 ### Step 5.4 — ed2k
 
