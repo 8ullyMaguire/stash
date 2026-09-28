@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Mutation harness for internal/torrent.
 
-Two files are mutated, because the package's invariants live in two: the WIRING
-is in `downloader.go` and the VALIDATION is in `metainfo_check.go`. A harness
-that walks one file reports the other as untested, which is the scope error this
-repo keeps making in one form or another.
+THREE files are mutated, because the package's invariants live in three: the
+WIRING is in `downloader.go`, the VALIDATION in `metainfo_check.go`, and the
+BEP 9 ARRIVAL path in `magnet.go`. A harness that walks one file reports the
+others as untested, which is the scope error this repo keeps making in one form or
+another -- and did make here: the first version of this harness walked two files
+and reported the magnet path as covered by tests that never touched it.
 
 Verdicts, and the two that cost the most:
 
@@ -36,7 +38,8 @@ TIMEOUT = 300
 
 TARGET = "internal/torrent/downloader.go"
 META = "internal/torrent/metainfo_check.go"
-TARGETS = (TARGET, META)
+MAG = "internal/torrent/magnet.go"
+TARGETS = (TARGET, META, MAG)
 
 # (label, target, old, new, the test that should notice)
 #
@@ -204,11 +207,84 @@ MUTATIONS = [
      '\t\tInfoHash:           spec.InfoHash,',
      '\t\tInfoHash:           metainfo.Hash{},',
      'HashTheGateRefused'),
+    ('magnet: parse error swallowed',
+     MAG,
+     'metainfo.ParseMagnetUri(uri)\n\tif err != nil {',
+     'metainfo.ParseMagnetUri(uri)\n\tif false {',
+     'NoInfoHash'),
+    ('magnet: zero infohash accepted',
+     MAG,
+     '\tif m.InfoHash.IsZero() {',
+     '\tif false {',
+     'NoInfoHash'),
+    ('magnet: per-torrent upload control dropped',
+     MAG,
+     '\tspec.DisallowDataUpload = !upload\n',
+     '\tspec.DisallowDataUpload = false\n',
+     'Magnet'),
+    ('magnet: gate not attached as storage',
+     MAG,
+     '\tspec.Storage = d.gate\n\tspec.ChunkSize = 0',
+     '\tspec.ChunkSize = 0',
+     'Magnet'),
+    ('magnet: tier not remembered',
+     MAG,
+     '\td.remember(m.InfoHash, tier)\n',
+     '',
+     'TierIsRemembered'),
+    ('magnet: lastMagnet recomputes the upload flag',
+     MAG,
+     '\t\tDisallowDataUpload: spec.DisallowDataUpload,',
+     '\t\tDisallowDataUpload: !upload,',
+     'Magnet'),
+    ('magnet: the spec-builder error is ignored',
+     MAG,
+     '\tspec, err := libtorrent.TorrentSpecFromMagnetUri(uri)\n\tif err != nil {',
+     '\tspec, _ := libtorrent.TorrentSpecFromMagnetUri(uri)\n\tif false {',
+     'NoInfoHash|Magnet'),
+    ('arrival: gate never runs',
+     MAG,
+     '\tif _, err := d.gate.OpenTorrent(context.Background(), &info, hash); err != nil {',
+     '\tif _, err := d.gate.OpenTorrent(context.Background(), &info, hash); false && err != nil {',
+     'EscapingName'),
+    ('arrival: gate-refusal drop removed',
+     MAG,
+     '\tif _, err := d.gate.OpenTorrent(context.Background(), &info, hash); err != nil {\n\t\td.drop(tr)',
+     '\tif _, err := d.gate.OpenTorrent(context.Background(), &info, hash); err != nil {\n\t\t_ = tr',
+     'EscapingName'),
+    ('arrival: metainfo-refusal drop removed',
+     MAG,
+     '\tif err := checkMetainfo(&info); err != nil {\n\t\td.drop(tr)',
+     '\tif err := checkMetainfo(&info); err != nil {\n\t\t_ = tr',
+     'Malformed'),
+    ('arrival: metainfo check skipped',
+     MAG,
+     '\tif err := checkMetainfo(&info); err != nil {\n\t\td.drop(tr)',
+     '\tif err := error(nil); err != nil {\n\t\td.drop(tr)',
+     'Malformed|Magnet'),
+    ('arrival: policy hardcoded instead of the recorded tier',
+     MAG,
+     'Tier:                d.tierOf(tr),\n\t\tOperatorAllowedSeed: d.cfg.OperatorAllowedSeed,\n\t})\n\n\tif tr == nil {',
+     'Tier:                "",\n\t\tOperatorAllowedSeed: true,\n\t})\n\n\tif tr == nil {',
+     'Magnet'),
+    ('arrival: DisallowDataUpload not re-applied',
+     MAG,
+     '\tif !upload {\n\t\ttr.DisallowDataUpload()\n\t}',
+     '\tif false {\n\t\ttr.DisallowDataUpload()\n\t}',
+     'Magnet'),
 ]
 
+# Every form the Go compiler emits for a probe that does not compile. The list
+# has to be COMPLETE: a build error this misses is scored `survived`, which
+# reports the probe's own defect as a hole in the tests -- the exact inversion
+# the SKIP verdict exists to prevent. "redeclared" was missing when a magnet row
+# produced `err redeclared in this block`, and the harness confidently called it
+# a hole.
 BUILD_ERRORS = ("build failed", "cannot use", "undefined:", "declared and not used",
                 "syntax error", "not enough arguments", "too many arguments",
-                "assignment mismatch")
+                "assignment mismatch", "redeclared", "no new variables",
+                "declared and not", "imported and not used", "missing return",
+                "typecheck", "all declarations of", "shadows declaration")
 
 
 def is_build_error(out):

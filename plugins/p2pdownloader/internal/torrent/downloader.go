@@ -131,6 +131,22 @@ type Downloader struct {
 	// decided. Exposed through `LastApplied` for tests, and it is the only
 	// place the difference between the two is observable.
 	lastSpec AppliedSpec
+
+	// lastMagnet is the same idea for the magnet path, kept separately so a
+	// read-back after a magnet add is not confused with one after a complete
+	// torrent. Two records rather than one tagged union, because the fields
+	// overlap and the union would be wrong for whichever the other was written
+	// for.
+	lastMagnet AppliedSpec
+
+	// tiers associates a torrent with the consent tier it was added under.
+	//
+	// A MAP and not a field, because the library owns the `*Torrent` and there
+	// is nowhere on it to record a tier — so the association has to live here.
+	// A torrent missing from it is treated as `""`, which the policy's table
+	// sends to `UploadForbidden`: a torrent whose tier this process has
+	// forgotten must not be permitted to upload because the lookup missed.
+	tiers map[metainfo.Hash]string
 }
 
 // AppliedSpec is what the library was actually handed for one torrent.
@@ -151,6 +167,14 @@ type AppliedSpec struct {
 
 	// InfoHash is the hash the library will use to identify this torrent.
 	InfoHash metainfo.Hash
+
+	// DisplayName is the name recorded for a magnet, verbatim. Present so a
+	// read-back of the magnet path can see what the client was given, for the
+	// same reason `AppliedSpec` exists at all: `Decision` reports intent.
+	DisplayName string
+
+	// GatedAfterMetadata is set once the arrival path has run the gate.
+	GatedAfterMetadata bool
 }
 
 // LastApplied returns what the client was last given.
@@ -183,6 +207,49 @@ type Decision struct {
 	// Added reports whether the client was told about the torrent. False with a
 	// nil `Err` means the torrent was known and needed no action.
 	Added bool
+
+	// Gated reports whether the STORAGE GATE has seen this torrent's file names.
+	//
+	// False for every magnet, without exception, because a magnet has no file
+	// names yet — they arrive by BEP 9 from whichever peer answers first. So
+	// `Added && !Gated` is a real state, not a gap in the reporting: the library
+	// is holding a torrent nobody has examined, and the only thing that makes
+	// that acceptable is that `OnMetadata` runs the gate on arrival.
+	//
+	// A caller that reads `Added` without reading this is trusting that a
+	// magnet's names were checked, and they were not.
+	Gated bool
+
+	// GatedAfterMetadata is `Gated`, stated as a separate flag so a report can
+	// distinguish "never gated" from "gated, and I have not looked since". It
+	// exists because the two look identical in a log line otherwise, and the
+	// operator's question is always which one this is.
+	GatedAfterMetadata bool
+
+	// InfoHash identifies the torrent, so a report can be correlated with the
+	// download it was for. For a magnet this is known BEFORE any file names
+	// are, which is what lets a later refusal name something the operator can
+	// look up.
+	InfoHash metainfo.Hash
+
+	// DisplayName is the name to show the operator, recorded exactly as the peer
+	// supplied it.
+	//
+	// Verbatim, not sanitised. For a magnet this is the ONLY attacker-chosen
+	// string available before the metadata lands, and `BestName()` falls back to
+	// it afterwards — so a sanitised copy would be a record that disagrees with
+	// what the peer actually said, which is worse than one containing something
+	// ugly. It is not a path this package writes to; the gate uses the
+	// metadata's file names.
+	DisplayName string
+
+	// Torrent is the library's handle, when one exists. Nil for a refusal, and
+	// for a spec with no metadata.
+	//
+	// Exposed so a caller can pass it back to `OnMetadata` when BEP 9 metadata
+	// arrives, rather than looking the torrent up by hash and risking a
+	// different one.
+	Torrent *libtorrent.Torrent
 
 	// Err is why not, if not. `storage.ErrRefused` for a torrent whose file
 	// names escape the download root.
@@ -477,6 +544,7 @@ func (d *Downloader) AddTorrent(tier string, mi *metainfo.MetaInfo) Decision {
 	// does not change what the spec contains.
 	spec := libtorrent.TorrentSpecFromMetaInfo(mi)
 	upload := dec.Upload.CanUpload()
+	d.remember(hash, tier)
 	spec.DisallowDataUpload = !upload
 	spec.Storage = d.gate
 	d.lastSpec = AppliedSpec{

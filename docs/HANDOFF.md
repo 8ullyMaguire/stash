@@ -654,7 +654,130 @@ The socket test (`TestTheClientBindsNoSockets`) passes this bar — enabling TCP
 uTP in either `ConfigFor` or `New` makes it fail, and both sites are in the
 harness.
 
-### Nine mutation harnesses, 206 mutations, 0 survivors
+### The library's `AddMagnet` is a bare path to the client, and the fix is a grep
+
+`Client.AddMagnet` is four lines:
+
+```go
+func (cl *Client) AddMagnet(uri string) (T *Torrent, err error) {
+    spec, err := TorrentSpecFromMagnetUri(uri)
+    if err != nil { return }
+    T, _, err = cl.AddTorrentSpec(spec)
+    return
+}
+```
+
+No policy, no gate, no metainfo check, no upload control. Anything added that way
+is a torrent this code has never heard of, from a string a stranger put in a
+database. So the magnet path lives here, and
+`TestAddMagnetOnTheLibraryIsNotReachableFromHere` greps the package's own
+non-test source for `.AddMagnet(` so it cannot be reintroduced by accident.
+
+**The needle is `.AddMagnet(`, not `AddMagnet(`.** The bare name matches this
+package's own declaration — the safe path the file exists to provide — so the
+first version of the guard failed on its own remedy. A check that fails the
+moment you write the thing it asks for is a check that gets deleted.
+
+### A magnet cannot be gated, and saying so is the design
+
+A magnet carries an infohash, a display name and trackers. No `files`, no
+`length` — those arrive by BEP 9 from whichever peer answers first. So
+`checkMetainfo` has nothing to check, the gate has nothing to resolve, and a
+"check" on that input would be a check that always passes.
+
+The gap is a real window in which the library holds a torrent nobody has
+examined. It is acceptable for exactly one reason: **`OnMetadata` runs the full
+sequence again on arrival and DROPS the torrent if the names escape the root.**
+`Decision.Gated` and `GatedAfterMetadata` exist so a caller can tell which side
+of that window it is looking at, and `Gated` is false for a magnet without
+exception.
+
+Dropping rather than marking is deliberate: a client that still holds a torrent
+it cannot open keeps announcing it on the DHT, and a later `AddTorrent*` for the
+same infohash succeeds from its own cache.
+
+**The attack, and getting the fixture wrong hides it.** A magnet for *benign*
+metadata followed by *hostile* metadata is not an attack — the hashes differ, so
+the library rejects the mismatch. The dangerous case is a magnet whose infohash
+**is** the hash of metadata naming an escaping path: the locator looks fine at
+every point where a magnet can be checked, and the data is hostile when it lands.
+
+### Two bugs a test that reads the wrong key cannot see
+
+**The drop assertion was vacuous.** It looked the torrent up with
+`client.Torrent(hash)` — and the fixture built the magnet from benign metadata,
+so the magnet's infohash and the hostile metadata's were different, the lookup
+missed, and "not found" looked identical to "dropped". It passed with `d.drop`
+deleted. Asserted on `len(client.Torrents())` instead, which cannot be wrong that
+way: 1 before the arrival, 0 after.
+
+**The zero-infohash check was never reached.** Every URI in the test table was
+rejected by `ParseMagnetUri` *itself* — "missing v1 infohash", "unexpected
+scheme", "unhandled xt parameter encoding" — so the mutation disabling my
+`IsZero` branch survived. The case that reaches it is
+`magnet:?xt=urn:btih:0000…0000`: a 40-hex all-zero hash is well formed, the
+parser accepts it, `AddTorrentSpec` does not object, and the client ends up
+holding a torrent identified by nothing.
+
+General form: **when a test's URIs are all rejected upstream, the test is
+measuring the upstream.** Find the one input that reaches your branch.
+
+### The same tautology, written twice
+
+`AppliedSpec` exists because `Decision` reports intent and not what the client
+was given. On the magnet path I wrote the record as:
+
+```go
+DisallowDataUpload: !upload,     // recomputed from the policy variable
+```
+
+which is the identical tautology in a second place — a mutation setting
+`spec.DisallowDataUpload = false` leaves that line untouched, so the record still
+agreed with the policy and the test passed on a torrent the client was being
+told to upload. Now `spec.DisallowDataUpload`, read back off the spec.
+
+Six of thirteen magnet-path mutations survived the first run. Every one was a
+missing read-back or a test that observed the wrong thing, and all six are now
+killed. The lesson generalises past this package: **a second path through the
+same decision needs its own read-back**, because copying the first path's
+structure copies its observability too — and its gaps.
+
+### A build-error detector that is missing one form reports its own defect as a hole
+
+The last survivor in the magnet run was scored `SURVIVED — a different test
+failed`. The mutation was:
+
+```go
+-   spec, err := libtorrent.TorrentSpecFromMagnetUri(uri)
+-   if err != nil {
++   var spec *libtorrent.TorrentSpec
++   var err error
++   if false {
+```
+
+which does not compile: `err redeclared in this block`. My `BUILD_ERRORS` list
+had `build failed`, `cannot use`, `undefined:` and several others, but not
+**`redeclared`** — so a probe's own defect was reported as a hole in the tests,
+which is the exact inversion the `SKIP` verdict exists to prevent. The harness was
+confidently wrong about its own instrument.
+
+**The build-error list has to be complete, not representative.** A missing entry
+does not produce a wrong verdict on one row; it produces a *false hole* that sends
+the next person into the tests. Extended to twelve forms, and the row rewritten
+to compile (`spec, _ := ...` with the branch dead), where it correctly reports
+`covered` — the spec builder's own error is unreachable for a URI my upstream
+`ParseMagnetUri` check did not already refuse.
+
+### A real bug the tier test found
+
+`AddMagnet` never called `remember`, so `tierOf` returned `""` for every magnet
+and `OnMetadata` decided every arriving torrent as an unrecognised tier.
+Restrictive, so nothing was ever published and **the downloader was inert rather
+than broken** — no error, no log line, every test green. The association is now
+made at add time on both paths; it is the second time it has been missing from
+one of them.
+
+### Nine mutation harnesses
 
 ```bash
 python3 mutate_seam.py                                  # 6
@@ -665,7 +788,7 @@ python3 internal/collab/mutate_locator.py               # 14
 (cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
 
-206 mutations across nine harnesses, 0 survivors. The earlier figure said
+228 mutations across nine harnesses, 0 survivors. The earlier figure said
 "seven harnesses" and omitted `mutate_seam.py`, `mutate_consent.py` and
 `mutate_media_gate.py` — the plugin harnesses were being counted as the whole
 set, which is the same scope error as the source-scanning test that walked

@@ -2122,9 +2122,8 @@ forty times is a report nobody reads.
 
 **DONE 2026-09-28 (wiring and validation).** `internal/torrent/` — the client
 config, the consent/policy binding, the reachability defaults, and
-`metainfo_check.go`. 26/32 mutations killed, 5 covered by a lower layer, 1
-skipped (a probe that did not compile, which is not a kill), 0 survivors, by
-`internal/torrent/mutate_gate.py`.
+`metainfo_check.go`. 45 mutations across THREE files, 33 killed, 12 covered by a lower
+layer, 0 survivors, 0 skipped, by `internal/torrent/mutate_gate.py`.
 
 **Four library facts found by reading the source rather than the docs, each of
 which contradicted something I had written:**
@@ -2160,6 +2159,43 @@ info.HasV2() { refuse }` refused every legitimate BEP 52 hybrid, because
 `HasV1()` (info.go:212) is true for any torrent with a `length` or a `pieces`
 field. The mutation disabling it survived *because removing it made the code
 correct*. Replaced with a `switch info.MetaVersion`.
+
+**DONE 2026-09-28 (BEP 9 arrival).** `internal/torrent/magnet.go` — the magnet
+path and the arrival path. `Client.AddMagnet` is four lines that bypass this
+package entirely, so the path lives here and a grep test keeps it that way.
+
+A magnet carries an infohash, a display name and trackers — no `files`, no
+`length`. So it **cannot be gated at add time**, and the code says so rather than
+running a check on an empty input. The window is acceptable for one reason:
+`OnMetadata` re-runs the full sequence on arrival and **DROPS** the torrent if the
+names escape the root. `Decision.Gated` is false for every magnet, and
+`GatedAfterMetadata` distinguishes "the gate ran" from "never checked".
+
+**Six of thirteen magnet mutations survived the first run**, and the causes are
+the two most reusable findings in this project:
+
+- The `AppliedSpec` record was written `DisallowDataUpload: !upload` —
+  *recomputed from the policy variable* rather than read back off the spec. The
+  identical tautology `AppliedSpec` was invented to end, written one file over.
+- The drop assertion used `client.Torrent(hash)`, and the fixture gave the magnet
+  and its metadata different hashes — so the lookup missed and "not found" was
+  indistinguishable from "dropped". It passed with `d.drop` deleted. Asserted on
+  `len(client.Torrents())` instead: 1 before, 0 after.
+- Every URI in the zero-infohash test was rejected by `ParseMagnetUri` ITSELF, so
+  the `IsZero` branch was never reached. The case that reaches it is
+  `magnet:?xt=urn:btih:0000…0000` — a well-formed all-zero hash, which the parser
+  accepts and `AddTorrentSpec` does not object to.
+
+**A real bug the tier test found:** `AddMagnet` never recorded the consent tier,
+so `tierOf` returned `""` and the arrival path decided every torrent as an
+unrecognised tier. Restrictive — so nothing was ever published, no error was
+logged, and **the downloader was inert rather than broken.**
+
+**And a harness bug that reported its own defect as a hole:** a mutation that
+produced `err redeclared in this block` was scored `SURVIVED`, because
+`redeclared` was missing from `BUILD_ERRORS`. A build-error list has to be
+complete; a missing entry produces a false hole that sends the next person into
+the tests.
 
 Remaining for this step: the transfer surface itself — metainfo parsing, magnet
 + BEP 9 metadata fetch, Kademlia DHT (BEP 5) discovery, peer wire protocol,
