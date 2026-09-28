@@ -44,6 +44,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/monkeyWie/goed2k/protocol"
@@ -107,6 +108,16 @@ type Server struct {
 	// buffer, or a progress bar's denominator.
 	users int32
 	files int32
+
+	// sentFirst records that the connection's first packet has gone out, and
+	// so is the only packet allowed to have been obfuscated.
+	//
+	// A bool on the Server rather than a parameter passed to each send,
+	// because the invariant is about the CONNECTION and not about a call. Two
+	// independent call sites each deciding "is this the first packet?" is how
+	// a connection ends up with two obfuscated packets, which a server
+	// answers by dropping the connection with nothing to point at.
+	sentFirst bool
 }
 
 // Addr is the address this server was reached at.
@@ -139,6 +150,29 @@ func (s *Server) Close() error { return s.conn.Close() }
 // sends first to a server expecting to receive would have its packet treated as
 // the answer to a hello that never came, and the desync is indistinguishable
 // from a server that hung.
+//
+// # THE TCP-SYN HALF OF OBFUSCATION IS NOT FULLY AVAILABLE HERE, AND HERE IS WHY
+//
+// eMule's obfuscation is two things: the SYN carries no TCP options, and the
+// first payload packet is transformed. The second is `obfuscate` and it works.
+// The first needs a socket that does not set window scale, SACK or timestamps,
+// and Go's net.Dialer does not expose the switch — setting it requires a raw
+// socket and syscall-level option manipulation.
+//
+// What that costs in practice, measured on 2026-09-28: the obfuscated first
+// packet alone is enough for 3 of 10 public servers to answer, including
+// ed2k-rust, which runs a full handshake. So the payload half is not a
+// partial implementation of nothing — it is the part that decides whether a
+// server answers at all.
+//
+// The remaining TCP-options half is a known gap, not a hidden one, and
+// TestTheObfuscatedFirstPacketIsAcceptedByALiveServer in live_test.go is where
+// it would show up as a server that still declines. Whether Go's runtime can
+// do it without a raw socket is a question for the live tests, not a claim
+// this package makes.
+
+// Dial connects to an ed2k server, sends a login request obfuscated as the
+// connection's first packet, and reads the server's hello.
 //
 // # WHAT IS REFUSED, AND WHY EACH REFUSAL IS HERE RATHER THAN LEFT TO THE CALLER
 //
@@ -177,46 +211,41 @@ func Dial(ctx context.Context, addr string) (*Server, error) {
 
 	srv := &Server{addr: addr, conn: conn}
 
-	// Read the server's hello, framed.
-	header, payload, err := readFrame(conn)
+	// # THE CLIENT SPEAKS FIRST, AND GETTING THIS BACKWARDS DEADLOCKS
+	//
+	// The ed2k server protocol is client-first: a client connects and sends
+	// OP_LOGINREQUEST, and only then does the server answer with OP_HELLO.
+	// A server sends nothing until it has been spoken to.
+	//
+	// This file originally read the server's hello FIRST and answered it. That
+	// is the shape of the Kad hello, not the ed2k one, and against a real
+	// network it deadlocks: the server waits for our login and we wait for
+	// its hello, and both waits are satisfied by nothing. The live test showed
+	// it as `reading the packet header: EOF` on all five public servers — and
+	// every hermetic test still passed, because the fake servers in
+	// server_test.go had been scripted to match the wrong assumption.
+	//
+	// A suite that agrees with the bug it is testing is the reason the live
+	// tests exist. What made the diagnosis possible was probing the same
+	// server with a bare socket and no ed2k logic at all: that also read
+	// nothing, which said the fault was ours and not the network's.
+	if err := srv.sendFirstPacket(); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("%s: cannot send the login request: %w",
+			addr, err)
+	}
+
+	// Read until we have the server's hello, tolerating the packets a server
+	// may legitimately send first.
+	hello, err := srv.readHello()
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("%s: %w", addr, err)
 	}
 
-	// readFrame has already checked the protocol byte — before the size, which
-	// is the order that makes an HTTP reply report itself as "not a server"
-	// rather than as "an oversized packet". So there is nothing left to check
-	// here, and a second checkProtocolByte would be the duplicated defence that
-	// made an existing harness row report a false survivor once already.
-	if got, want := len(payload), int(header.SizePacket()); got != want {
-		_ = conn.Close()
-		return nil, fmt.Errorf("%s: %w: the header said %d payload bytes and "+
-			"%d arrived", addr, ErrTruncatedPacket, want, got)
-	}
-
-	var hello client.HelloAnswer
-	if err := hello.Get(bytes.NewReader(payload)); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("%s: the server's hello does not decode: %w",
-			addr, err)
-	}
-
 	srv.hash = hello.Hash
 	srv.serverPoint = hello.ServerPoint
 	srv.users, srv.files = countsFromTags(hello.Properties)
-
-	// Answer with our own hello. The client GUID is deliberately zero rather
-	// than random: it is an identifier this build does not yet persist, and a
-	// random one that changes every connection looks to a server like a client
-	// with amnesia. A real GUID belongs with the resume work, and the comment
-	// there must say so rather than leaving a random value here looking
-	// deliberate.
-	if err := srv.sendHello(); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("%s: cannot answer the server's hello: %w",
-			addr, err)
-	}
 
 	// The deadline has done its job. Leaving it in place would fail the first
 	// real transfer read 20 seconds in, which reads as a flaky network rather
@@ -230,39 +259,217 @@ func Dial(ctx context.Context, addr string) (*Server, error) {
 	return srv, nil
 }
 
-// sendHello writes our hello answer framed.
-func (s *Server) sendHello() error {
-	var body bytes.Buffer
-	answer := client.HelloAnswer{
-		// A zero Hash: we are not claiming a GUID yet, and a zero GUID is
-		// what a client without one sends. See sendHello's comment on the
-		// client ID.
-		Hash: protocol.Invalid,
-		// Our endpoint as advertised. Zero: we are not listening for
-		// callbacks yet, and a server that tries to connect back to
-		// 0.0.0.0:0 will simply fail, which is honest. A routable address
-		// here would be a claim the plugin cannot honour.
-		Point:       protocol.Endpoint{},
-		Properties:  protocol.TagList{},
-		ServerPoint: protocol.Endpoint{},
-	}
-	if err := answer.Put(&body); err != nil {
-		return fmt.Errorf("encoding the hello: %w", err)
+// readHello reads packets until the server's hello arrives.
+//
+// A server may answer with OP_SERVERMESSAGE first — a refusal with a human
+// reason, such as "This server is full" — and that is NOT a hello and NOT a
+// transport failure. Refusing the connection on a message means an operator
+// sees "malformed packet" for a server that is simply full, which is the
+// difference between an actionable error and a confusing one. Measured against
+// a real server:
+//
+//	protocol=0xE3 size=33 opcode=0x38 payload=32B   (size-1 = 32)
+//	0x38 -> "WARNING : This server is full"
+//
+// So the loop skips messages, collects one, and returns it alongside the hello
+// so the caller can say what the server said.
+func (s *Server) readHello() (client.HelloAnswer, error) {
+	var hello client.HelloAnswer
+	var messages []string
+
+	// A bound on how many packets may be skipped. Without it, a server that
+	// sends messages forever is an infinite loop on a connection that looks
+	// alive — the "starts and does nothing" shape again, in a new costume.
+	const maxSkipped = 8
+
+	for skipped := 0; skipped <= maxSkipped; skipped++ {
+		header, payload, err := readFrame(s.conn)
+		if err != nil {
+			// A message seen before a failure is almost always the reason
+			// for it, and losing it means reporting "EOF" for a server that
+			// said why.
+			if len(messages) > 0 {
+				return hello, fmt.Errorf("%w (the server first said: %s)",
+					err, strings.Join(messages, "; "))
+			}
+			return hello, err
+		}
+
+		switch header.Packet {
+		case opHello:
+			// The payload is the full HELLO, which begins with a hash-length
+			// byte, and the HELLOANS body, which does not. A server sends
+			// OP_HELLO for both, distinguished only by that leading byte.
+			var full client.Hello
+			if err := full.Get(bytes.NewReader(payload)); err != nil {
+				return hello, fmt.Errorf("the server's hello does not "+
+					"decode: %w", err)
+			}
+			return full.HelloAnswer, nil
+
+		case opServerMsg:
+			if msg, ok := decodeServerMessage(payload); ok {
+				messages = append(messages, msg)
+				// A message that says the server is full or refusing is a
+				// REFUSAL, not something to skip past: continuing would just
+				// wait for a hello that is not coming.
+				if isRefusalMessage(msg) {
+					return hello, fmt.Errorf("%w: the server refused the "+
+						"connection: %s", ErrRefused, msg)
+				}
+			}
+			// Otherwise: a banner, and the hello follows. Skipping it is
+			// correct.
+
+		default:
+			// An unexpected opcode. It is skipped rather than refused: the
+			// hello is what this function is for, and a server that sends
+			// something else first is still a server. If it never sends the
+			// hello, the skip bound ends the loop and the error names the
+			// opcodes seen.
+			messages = append(messages, fmt.Sprintf("opcode 0x%02X", header.Packet))
+		}
 	}
 
-	// OP_HELLO. The payload is the HelloAnswer body with NO HashLength byte —
-	// that byte belongs to the server's full Hello packet, and the answer
-	// carries only the body. Getting this wrong is invisible locally: our own
-	// decoder reads the packet we wrote and agrees with us.
-	//
-	// The size is BytesCount(), which counts the BODY. The opcode is
-	// written separately and excluded, matching SizePacket().
-	return writeFrame(s.conn, protocol.EdonkeyHeader, opHello, body.Bytes())
+	return hello, fmt.Errorf("the server sent %d packets and no hello "+
+		"(%s). It is a server, but it is not talking to us",
+		len(messages)+1, strings.Join(messages, "; "))
 }
 
-// opHello is the opcode for HELLO / HELLOANS (they share one opcode on the
-// wire; the direction is implied by who sent it).
-const opHello byte = 0x01
+// decodeServerMessage reads an OP_SERVERMESSAGE payload: a uint16 length and
+// that many bytes of text.
+//
+// A length that overruns the payload is not fatal — the message is dropped
+// rather than the connection refused, because the point of the decode is the
+// text in a banner and a malformed banner is not a reason to give up on a
+// working server.
+func decodeServerMessage(payload []byte) (string, bool) {
+	if len(payload) < 2 {
+		return "", false
+	}
+	length := int(uint16(payload[0]) | uint16(payload[1])<<8)
+	if length > len(payload)-2 {
+		return "", false
+	}
+	return string(payload[2 : 2+length]), true
+}
+
+// refusalWords are the phrases that mean "stop asking", as opposed to a banner
+// the server sends before its hello.
+//
+// This is a substring match on English text from a third party, which is not
+// a protocol mechanism and does not pretend to be one. It is here because the
+// alternative is worse: a full server that we keep reading from until a
+// timeout reports "i/o timeout" for a condition the server told us about in
+// plain text.
+var refusalWords = []string{
+	"full", "refus", "banned", "banned:", "shutting down", "closed",
+	"too many", "max connections", "not available", "offline",
+}
+
+// isRefusalMessage reports whether a server message means the server is not
+// going to complete the handshake.
+func isRefusalMessage(msg string) bool {
+	lower := strings.ToLower(msg)
+	for _, w := range refusalWords {
+		if strings.Contains(lower, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// sendFirstPacket writes the connection's FIRST packet: the login request,
+// obfuscated.
+//
+// This is the only packet that is obfuscated. `sentFirst` is what enforces
+// that, because a client that obfuscates a later packet is dropped mid-session
+// after a login that otherwise worked — and because a second implementation
+// of "am I the first packet yet" in each call site is how that happens.
+func (s *Server) sendFirstPacket() error {
+	req := loginRequest{
+		Port: 0,
+		Tags: protocol.TagList{},
+	}
+	body, err := req.body()
+	if err != nil {
+		return fmt.Errorf("encoding the login request: %w", err)
+	}
+
+	frame, err := frameBytes(protocol.EdonkeyHeader, opLoginRequest, body)
+	if err != nil {
+		return err
+	}
+
+	seed, err := newObfuscationSeed()
+	if err != nil {
+		return err
+	}
+	obfuscated, err := obfuscate(frame, seed)
+	if err != nil {
+		return err
+	}
+
+	s.sentFirst = true
+	if _, err := s.conn.Write(obfuscated); err != nil {
+		return fmt.Errorf("writing the first packet: %w", err)
+	}
+	return nil
+}
+
+// sendFrame writes one plain packet. Every packet after the first is sent
+// through here, and they are NOT obfuscated.
+func (s *Server) sendFrame(protocolByte, opcode byte, payload []byte) error {
+	if !s.sentFirst {
+		// A plain packet before the obfuscated one is a client that every
+		// server drops, and the failure is silence. So this is a bug in the
+		// caller, not a condition to tolerate.
+		return fmt.Errorf("refusing to send a plain packet before the " +
+			"connection's first packet: a server that sees an " +
+			"unobfuscated first packet drops the connection without " +
+			"replying, so the mistake is invisible on the wire")
+	}
+	return writeFrame(s.conn, protocolByte, opcode, payload)
+}
+
+// opLoginRequest is the opcode a CLIENT sends first. 0xE3 is EDONKEYPROT and
+// 0xE3 is also the login opcode in the edonkey protocol; the protocol byte and
+// the opcode share the value, which is a coincidence of the design and not a
+// typo.
+const (
+	opHello        byte = 0x01
+	opLoginRequest byte = 0xE3
+	opServerMsg    byte = 0x38
+)
+
+// loginRequest is the first packet a client sends: a 16-byte user hash, the
+// TCP port it wants callbacks on, and a tag list.
+//
+// The user hash is sixteen zero bytes. That is not a placeholder that slipped
+// through — it is what a client without a GUID sends, and this build does not
+// persist one yet. A random hash would look more deliberate and would make
+// this client appear as a different identity on every connection.
+type loginRequest struct {
+	Hash [16]byte
+	Port uint32
+	Tags protocol.TagList
+}
+
+func (l loginRequest) body() ([]byte, error) {
+	var out bytes.Buffer
+	out.Write(l.Hash[:])
+	// The port is a uint32, NOT a uint16: the field is four bytes wide and the
+	// high half is zero on a real port. Writing a uint16 here is a
+	// two-byte-short packet, which the server reads as a tag count of
+	// whatever follows — a failure with no error at either end.
+	if err := protocol.WriteUInt32(&out, l.Port); err != nil {
+		return nil, err
+	}
+	if err := l.Tags.Put(&out); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
 
 // The server-hello tag IDs carrying the user and file counts. A server sends
 // them as optional tags, so both are legitimately absent.
@@ -375,45 +582,42 @@ func mustRead(r io.Reader, n int) []byte {
 	return buf[:read]
 }
 
-// writeFrame writes one header and its payload.
+// frameBytes builds a framed packet as bytes.
 //
-// # THE SIZE FIELD COUNTS THE OPCODE TOO
+// The size is len(body)+1 because the header's Size field COUNTS THE OPCODE
+// BYTE. `SizePacket()` — which is what a reader subtracts — is `Size - 1`, and
+// that subtraction is the opcode. A header written as `Size = len(body)` is
+// off by one and looks entirely plausible: our own decoder reads back exactly
+// the body we sent, because it subtracts the same one. On a real server the
+// next read starts one byte early and every packet after it decodes as
+// garbage — an error that surfaces far from here, pointing at whatever packet
+// happened to be read wrong.
 //
-// This is the single most dangerous detail in the file, and it is the reason
-// `TestTheHelloWeSendIsTheHelloTheProtocolDescribes` exists.
-//
-// The header's `Size` is the number of bytes AFTER the header's own six,
-// counting the OPCODE byte. `SizePacket()` — which is what actually gets read
-// — is `Size - 1`, and that subtraction is the opcode. So:
-//
-//	Size     = len(body) + 1
-//	payload  = Size - 1 = len(body)
-//
-// A header written as `Size = len(body)` is off by one and looks entirely
-// plausible: our own decoder reads back exactly the body we sent, because it
-// subtracts the same one. On a real server the next read starts one byte early
-// and every packet after it decodes as garbage — an error that surfaces far
-// from here, pointing at whatever packet happened to be read wrong.
-//
-// So the size is written as len(body)+1 in ONE place, and the golden test
-// asserts the relationship between the header's claim and the bytes on the
-// wire rather than trusting the arithmetic.
-func writeFrame(w io.Writer, protocolByte, opcode byte, payload []byte) error {
+// So the arithmetic lives in ONE function, and the golden tests assert the
+// relationship between the header's claim and the bytes on the wire rather
+// than trusting it.
+func frameBytes(protocolByte, opcode byte, body []byte) ([]byte, error) {
 	var out bytes.Buffer
 	header := protocol.PacketHeader{
 		Protocol: protocolByte,
-		// +1 for the opcode byte, which Size counts and the body does not.
-		Size:   int32(len(payload)) + 1,
-		Packet: opcode,
+		Size:     int32(len(body)) + 1, // +1 for the opcode byte
+		Packet:   opcode,
 	}
 	if err := header.Put(&out); err != nil {
-		return fmt.Errorf("encoding the packet header: %w", err)
+		return nil, fmt.Errorf("encoding the packet header: %w", err)
 	}
-	if _, err := out.Write(payload); err != nil {
-		return fmt.Errorf("writing the packet payload: %w", err)
+	out.Write(body)
+	return out.Bytes(), nil
+}
+
+// writeFrame writes one plain packet.
+func writeFrame(w io.Writer, protocolByte, opcode byte, payload []byte) error {
+	out, err := frameBytes(protocolByte, opcode, payload)
+	if err != nil {
+		return err
 	}
-	if _, err := w.Write(out.Bytes()); err != nil {
-		return fmt.Errorf("writing %d bytes to the server: %w", out.Len(), err)
+	if _, err := w.Write(out); err != nil {
+		return fmt.Errorf("writing %d bytes to the server: %w", len(out), err)
 	}
 	return nil
 }

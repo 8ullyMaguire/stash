@@ -3,6 +3,7 @@ package ed2kwire
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -65,31 +66,152 @@ func helloServer(t *testing.T, script func(conn net.Conn)) string {
 // twice: our own decoder would still read the body back correctly, so the
 // error is invisible until a real server desynchronises.
 func frameBody(body []byte) []byte {
+	return frameOpcode(opHello, body)
+}
+
+// frameOpcode frames a payload under a given opcode. A fake server that has to
+// send something other than a hello needs this, and writing a second copy of
+// the size arithmetic is how the two would drift apart.
+func frameOpcode(opcode byte, body []byte) []byte {
 	var out bytes.Buffer
 	header := protocol.PacketHeader{
 		Protocol: protocol.EdonkeyHeader,
 		Size:     int32(len(body)) + 1, // +1 for the opcode
-		Packet:   opHello,
+		Packet:   opcode,
 	}
 	_ = header.Put(&out)
 	out.Write(body)
 	return out.Bytes()
 }
 
-// serverHelloBody builds a valid HelloAnswer body, so a test can frame it.
+// serverHelloBody builds a valid OP_HELLO payload, so a test can frame it.
+//
+// # THE HASH-LENGTH BYTE IS PART OF THE PAYLOAD
+//
+// The first thing a server sends is the full HELLO, not the HELLOANS body, and
+// the difference is one leading byte: the hash length. `client.Hello` is
+// `{HashLength byte; HelloAnswer}` and its Get reads that byte first.
+//
+// The first version of this fixture wrote only the HelloAnswer body. Every
+// test using it then failed with "tag list declares 2181038080 tags" — the
+// GUID's first byte was read as the hash length, the next four as a tag count,
+// and the rest of the packet was nonsense. A plausible-looking fixture that
+// encodes the wrong packet is the same failure mode as a plausible-looking
+// encoder, which is why it is now built from the library's own `Hello.Put`.
 func serverHelloBody(t *testing.T, tags protocol.TagList) []byte {
 	t.Helper()
 	var body bytes.Buffer
-	answer := client.HelloAnswer{
-		Hash:        protocol.MustHashFromString("0123456789ABCDEF0123456789ABCDEF"),
-		Point:       protocol.Endpoint{},
-		Properties:  tags,
-		ServerPoint: protocol.Endpoint{},
+	hello := client.Hello{
+		HashLength: 16, // the ed2k hash is always 16 bytes
+		HelloAnswer: client.HelloAnswer{
+			Hash:        protocol.MustHashFromString("0123456789ABCDEF0123456789ABCDEF"),
+			Point:       protocol.Endpoint{},
+			Properties:  tags,
+			ServerPoint: protocol.Endpoint{},
+		},
 	}
-	if err := answer.Put(&body); err != nil {
+	if err := hello.Put(&body); err != nil {
 		t.Fatalf("cannot encode the test's hello: %v", err)
 	}
 	return body.Bytes()
+}
+
+// capturedFrame is what a fake server saw of the client's first packet,
+// separated into the parts that are actually asserted on: the header as it
+// arrived, the seed the obfuscation added, and the login body underneath.
+type capturedFrame struct {
+	header  protocol.PacketHeader
+	seed    []byte
+	body    []byte
+	wireLen int
+}
+
+// headerBytes re-encodes a header, so a captured frame is header+payload in
+// wire order and the assertions can read it as one buffer.
+func headerBytes(h protocol.PacketHeader) []byte {
+	var out bytes.Buffer
+	_ = h.Put(&out)
+	return out.Bytes()
+}
+
+// deobfuscateForTest undoes obfuscate, as a server would, so a fake can read
+// the client's first packet.
+//
+// The verified layout is [0xE3][size][0x01][seed:4][body], so undoing it is
+// stripping the seed. That looks too simple to need a function, and it does —
+// but the SIZE FIELD is not adjusted by a real server, and that is the point
+// worth having in view: the header is untouched by the obfuscation, so
+// `Size - 1` is the seed plus the body, not the body.
+//
+// A helper rather than a bare `payload[4:]` because every fake in this file
+// would otherwise repeat the constant, and one of them repeating it wrongly is
+// a test that fails for a reason nobody can find.
+func deobfuscateForTest(opcode byte, payload []byte) ([]byte, bool) {
+	if opcode != obfuscatedOpcode {
+		return nil, false
+	}
+	if len(payload) < obfuscationSeedSize {
+		return nil, false
+	}
+	// The seed is the first four bytes and the body follows it verbatim.
+	// The real opcode is not recoverable from the seed — the server uses its
+	// own mapping — so the caller supplies it.
+	return payload[obfuscationSeedSize:], true
+}
+
+// serverMessagePayload builds an OP_SERVERMESSAGE payload: a uint16 length and
+// that many bytes of text.
+func serverMessagePayload(msg string) []byte {
+	var out bytes.Buffer
+	var length [2]byte
+	binary.LittleEndian.PutUint16(length[:], uint16(len(msg)))
+	out.Write(length[:])
+	out.WriteString(msg)
+	return out.Bytes()
+}
+
+// awaitLogin reads the client's OP_LOGINREQUEST, so a fake server does not
+// write before the client has spoken.
+//
+// THE ORDER IS CLIENT-FIRST, and this helper is why the fake servers can be
+// trusted. The ed2k handshake is: the client connects and sends
+// OP_LOGINREQUEST, and only then does the server answer with OP_HELLO. The
+// first version of these fakes sent a hello unprompted, which matched the code
+// as it was then written — and both were wrong, so the whole hermetic suite
+// passed against a handshake that cannot complete against a real server. The
+// live test is what caught it, five servers all reporting EOF.
+//
+// So every fake server calls this first, and a fake that skips it is a fake
+// that has stopped modelling the protocol.
+func awaitLogin(t *testing.T, conn net.Conn) {
+	t.Helper()
+	header, payload, err := readFrame(conn)
+	if err != nil {
+		return // the client gave up; the test's own assertion will report it
+	}
+
+	// The first packet arrives OBFUSCATED. A fake that reads it as a plain
+	// packet sees an opcode of 0x01 where a login request should be, and
+	// every fake in this file has to be told about that or the whole hermetic
+	// suite breaks on a change that is correct.
+	if header.Packet == obfuscatedOpcode {
+		deobfuscated, ok := deobfuscateForTest(header.Packet, payload)
+		if !ok {
+			t.Logf("the client's first packet is obfuscated and could not " +
+				"be de-obfuscated")
+			return
+		}
+		payload = deobfuscated
+		header.Packet = opLoginRequest
+	}
+
+	if header.Packet != opLoginRequest {
+		// Not fatal for the fake: a test asserting a refusal does not care
+		// what arrived first. But it is worth nothing to stay silent, so
+		// the mismatch is visible in the test log rather than invisible.
+		t.Logf("the client's first packet was opcode 0x%02X, want 0x%02X "+
+			"(OP_LOGINREQUEST)", header.Packet, opLoginRequest)
+	}
 }
 
 // TestDialRefusesAConnectionThatIsNotAnED2KServer is the captive-portal case.
@@ -126,6 +248,7 @@ func TestDialRefusesAConnectionThatIsNotAnED2KServer(t *testing.T) {
 // a client waiting for a hello that will never come.
 func TestDialRefusesAConnectionThatSpeaksKadOnTCP(t *testing.T) {
 	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
 		_, _ = conn.Write([]byte{byte(protocol.KademliaHeader), 1, 0, 0, 0, 0x01})
 	})
 
@@ -164,6 +287,10 @@ func TestDialRefusesAServerThatHangsBeforeSayingHello(t *testing.T) {
 	// first version's bug, and the `elapsed < dialTimeout` assertion caught
 	// it — which is the reason that lower bound is here at all.
 	addr := helloServer(t, func(conn net.Conn) {
+		// Read the login, THEN promise a payload that never arrives. The
+		// client is waiting on a read, which is the read that has to be
+		// bounded.
+		awaitLogin(t, conn)
 		var out bytes.Buffer
 		header := protocol.PacketHeader{
 			Protocol: protocol.EdonkeyHeader,
@@ -210,6 +337,7 @@ func TestDialRefusesAServerThatHangsBeforeSayingHello(t *testing.T) {
 // the next read would consume payload as a header.
 func TestDialRefusesAPacketThatEndsMidPacket(t *testing.T) {
 	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
 		// A header promising 200 payload bytes, of which 20 arrive.
 		var out bytes.Buffer
 		header := protocol.PacketHeader{
@@ -235,6 +363,7 @@ func TestDialRefusesAPacketThatEndsMidPacket(t *testing.T) {
 // honours it. Without the cap, one crafted header chooses our memory use.
 func TestDialRefusesAnOversizedPacket(t *testing.T) {
 	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
 		var out bytes.Buffer
 		header := protocol.PacketHeader{
 			Protocol: protocol.EdonkeyHeader,
@@ -267,45 +396,67 @@ func TestDialRefusesAnOversizedPacket(t *testing.T) {
 	}
 }
 
-// TestTheHelloWeSendIsTheHelloTheProtocolDescribes is the golden test, and the
-// reason this file is not just refusals.
+// TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes is the golden test,
+// and the reason this file is not only refusals.
 //
-// Every encoder agrees with its own decoder. A hello encoded with the wrong
-// size field decodes correctly HERE and desynchronises the stream on a real
-// server, failing much later with an error pointing somewhere else entirely.
-// So the expected bytes are written out literally, derived from the protocol
-// description rather than from the encoder's output.
+// Every encoder agrees with its own decoder. A login request encoded with the
+// wrong size field decodes correctly HERE and desynchronises the stream on a
+// real server, failing much later with an error pointing somewhere else
+// entirely. So the expected bytes are derived from the protocol description
+// rather than from the encoder's own output.
 //
-// The layout of a HELLOANS payload is:
+// # WHAT WE SEND FIRST CHANGED, AND SO DID THIS TEST
 //
-//	[16] server GUID
-//	[ 6] our endpoint as the server sees it
-//	[ 1] tag count
-//	  ... the tags
-//	[ 6] the server's own endpoint
-func TestTheHelloWeSendIsTheHelloTheProtocolDescribes(t *testing.T) {
-	// A listener that captures exactly what we send.
-	captured := make(chan []byte, 1)
+// This test used to capture a HELLO. The protocol has the CLIENT speak first
+// with OP_LOGINREQUEST, and the first version of this file had that backwards
+// in both the code and the fixture — so the fixture agreed with the bug and
+// the test passed. What a real server does with a client that waits for a
+// hello is send nothing at all, which is how the live test found it.
+//
+// The login payload layout is:
+//
+//	[16] user hash  (all zero: this build does not persist a GUID)
+//	[ 4] TCP port for callbacks, LITTLE-endian, a UINT32
+//	[ 4] tag count, a uint32 -- zero here
+//
+// The port being a uint32 and not a uint16 is the detail worth pinning: a
+// two-byte port makes the packet two bytes short, and the server reads the
+// bytes that follow as a tag count. Nothing errors at either end.
+func TestTheLoginRequestWeSendIsTheOneTheProtocolDescribes(t *testing.T) {
+	captured := make(chan capturedFrame, 1)
 	addr := helloServer(t, func(conn net.Conn) {
-		_, _ = conn.Write(frameBody(serverHelloBody(t, nil)))
+		// Read the client's login ONCE and hand it to the channel. The
+		// first version of this fake called awaitLogin and then read again
+		// to capture -- two reads racing for one packet, so one of them
+		// blocked forever and the test hung at 90s. The capture and the
+		// ordering check are the same read, so they are one function.
+		header, payload, err := readFrame(conn)
+		if err != nil {
+			captured <- capturedFrame{}
+			return
+		}
+		// The first packet is obfuscated. The test asserts on the SEED and
+		// the marker, which are what actually go on the wire, and then on
+		// the de-obfuscated body -- because the body assertions below are
+		// about the login request's layout and they need it decoded.
+		body, ok := deobfuscateForTest(header.Packet, payload)
+		if !ok {
+			t.Errorf("the client's first packet is not obfuscated: "+
+				"opcode 0x%02X. A public ed2k server DROPS the "+
+				"connection, silently", header.Packet)
+			captured <- capturedFrame{}
+			return
+		}
+		captured <- capturedFrame{
+			header:  header,
+			seed:    payload[:obfuscationSeedSize],
+			body:    body,
+			wireLen: len(payload),
+		}
 
-		// Read the header, then the body, exactly as a server would.
-		buf := make([]byte, 6)
-		if _, err := readFull(conn, buf); err != nil {
-			captured <- nil
-			return
-		}
-		var rh protocol.PacketHeader
-		if err := rh.Get(bytes.NewReader(buf)); err != nil {
-			captured <- nil
-			return
-		}
-		body := make([]byte, rh.SizePacket())
-		if _, err := readFull(conn, body); err != nil {
-			captured <- nil
-			return
-		}
-		captured <- append(append([]byte{}, buf...), body...)
+		// Now answer, as a real server does after being spoken to.
+		_, _ = conn.Write(frameBody(serverHelloBody(t, nil)))
+		_, _ = readFull(conn, make([]byte, 4096))
 	})
 
 	srv, err := Dial(context.Background(), addr)
@@ -315,50 +466,152 @@ func TestTheHelloWeSendIsTheHelloTheProtocolDescribes(t *testing.T) {
 	defer srv.Close()
 
 	got := <-captured
-	if len(got) < 6 {
-		t.Fatal("the server received no framed hello")
+	if got.header.Protocol != protocol.EdonkeyHeader {
+		t.Errorf("protocol byte = 0x%02X, want 0x%02X. The obfuscation "+
+			"must not touch it: a server reads the size before it knows "+
+			"the packet is obfuscated",
+			got.header.Protocol, protocol.EdonkeyHeader)
 	}
 
-	// The header: 0xE3, then the size LITTLE-ENDIAN, then the opcode.
-	if got[0] != protocol.EdonkeyHeader {
-		t.Errorf("protocol byte = 0x%02X, want 0x%02X", got[0],
-			protocol.EdonkeyHeader)
-	}
+	// # THE OBFUSCATION MARKER, AND WHY IT IS NOT OPTIONAL
 	//
-	// Size counts the OPCODE byte as well as the body, so the size on the wire
-	// is one MORE than the body length. A header that claims the body length
-	// exactly is the classic off-by-one here, and it is invisible locally
-	// because our decoder subtracts the same one — on a real server every
-	// later packet then decodes as garbage.
-	size := int32(uint32(got[1]) | uint32(got[2])<<8 |
-		uint32(got[3])<<16 | uint32(got[4])<<24)
-	body := len(got) - 6
-	if want := int32(body) + 1; size != want {
-		t.Errorf("the header says %d payload bytes and %d were sent (so the "+
-			"size should be %d, counting the opcode byte). The opcode "+
-			"must be counted: a header that omits it desynchronises the "+
-			"stream and the next read starts one byte early",
-			size, body, want)
-	}
-	if got[5] != opHello {
-		t.Errorf("opcode = 0x%02X, want 0x%02X (HELLO)", got[5], opHello)
+	// Measured against a live server on 2026-09-28:
+	//
+	//	opcode 0x01 + 4-byte seed   -> 26-byte reply, a real handshake
+	//	opcode 0xE3 + 4-byte seed   -> silence
+	//
+	// So prepending a seed is not enough; the opcode has to be replaced as
+	// well. An implementation that only prepends is dropped by every server
+	// on the network, and reports nothing at all.
+	if got.header.Packet != obfuscatedOpcode {
+		t.Errorf("opcode = 0x%02X, want 0x%02X (the obfuscation marker). "+
+			"A server given an unobfuscated opcode drops the connection "+
+			"without replying", got.header.Packet, obfuscatedOpcode)
 	}
 
-	// The body decodes, and the fields are the ones we meant to send. A
-	// zero GUID and a zero endpoint are deliberate — see sendHello.
-	var answer client.HelloAnswer
-	if err := answer.Get(bytes.NewReader(got[6:])); err != nil {
-		t.Fatalf("our own hello does not decode: %v", err)
+	// A seed of all zeros is not a seed: a constant obfuscation is
+	// fingerprintable, which is the whole point of the mechanism.
+	allZero := true
+	for _, b := range got.seed {
+		if b != 0 {
+			allZero = false
+			break
+		}
 	}
-	if !answer.Hash.Equal(protocol.Invalid) {
-		t.Errorf("GUID = %s, want the zero GUID. This build does not persist "+
-			"one yet, and a random GUID that changes every connection looks "+
-			"to a server like a client with amnesia", answer.Hash)
+	if allZero {
+		t.Errorf("the obfuscation seed is all zeros. A constant seed is " +
+			"trivially fingerprintable and is what a server's " +
+			"de-obfuscator looks for; the seed must come from " +
+			"crypto/rand")
 	}
-	if !answer.Point.IsZero() {
-		t.Errorf("our endpoint = %s, want zero. We are not listening for "+
-			"callbacks, and advertising a routable address would be a "+
-			"claim the plugin cannot honour", answer.Point)
+
+	// The size INCLUDES the seed, because the seed is bytes on the wire
+	// and the header has to describe what is there. A reader computes
+	// `Size - 1` as the payload length; if that excludes the seed, the read
+	// stops four bytes early and everything after it is shifted.
+	//
+	// The first version of this test asserted the OPPOSITE, on the theory
+	// that a server reads the size before it knows the packet is
+	// obfuscated. That reasoning is right about the PROTOCOL BYTE -- which
+	// really is read first and really is unchanged -- and wrong about the
+	// size, which is validated after the marker is seen. The result was a
+	// login body arriving four bytes short, which is exactly the kind of
+	// error that surfaces as a nonsense tag count far from its cause.
+	if want := int32(got.wireLen) + 1; got.header.Size != want {
+		t.Errorf("the header says %d payload bytes and %d were sent "+
+			"(so the size should be %d, counting the opcode byte and "+
+			"the seed). Excluding the seed shifts every byte after it",
+			got.header.Size, got.wireLen, want)
+	}
+
+	// Now the de-obfuscated body, which is the login request itself.
+	body := got.body
+	if len(body) != 24 {
+		t.Errorf("the login body is %d bytes, want 24 (16 hash + 4 port + "+
+			"4 tag count)", len(body))
+	}
+	if len(body) < 24 {
+		return
+	}
+
+	// The user hash is all zero, deliberately: this build does not persist
+	// a GUID, and a random one changing every connection looks to a server
+	// like a client with amnesia.
+	for i := 0; i < 16; i++ {
+		if body[i] != 0 {
+			t.Errorf("user hash byte %d = 0x%02X, want 0x00. A random "+
+				"GUID here would be a different identity on every "+
+				"connection", i, body[i])
+			break
+		}
+	}
+
+	// The port is a uint32. Writing it as a uint16 makes the packet two
+	// bytes short and the server reads the bytes after it as a tag count.
+	port := binary.LittleEndian.Uint32(body[16:20])
+	if port != 0 {
+		t.Errorf("advertised port = %d, want 0. This build does not yet "+
+			"listen for peer connections, and advertising a port it "+
+			"cannot accept on is a claim the plugin cannot honour", port)
+	}
+
+	// And the tag count is a uint32 zero.
+	tags := binary.LittleEndian.Uint32(body[20:24])
+	if tags != 0 {
+		t.Errorf("tag count = %d, want 0", tags)
+	}
+}
+
+// TestAServerMessageBeforeTheHelloIsSkippedWhenItIsABanner: a server may send
+// a banner before its hello, and skipping it is correct.
+func TestAServerMessageBeforeTheHelloIsSkippedWhenItIsABanner(t *testing.T) {
+	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
+		_, _ = conn.Write(frameOpcode(opServerMsg,
+			serverMessagePayload("**** eMule-Security.org Server ****")))
+		_, _ = conn.Write(frameBody(serverHelloBody(t, nil)))
+		_, _ = readFull(conn, make([]byte, 4096))
+	})
+
+	srv, err := Dial(context.Background(), addr)
+	if err != nil {
+		t.Fatalf("Dial: %v. A banner before the hello is normal and must "+
+			"be skipped, not refused", err)
+	}
+	defer srv.Close()
+	if srv.Hash().String() != "0123456789ABCDEF0123456789ABCDEF" {
+		t.Errorf("GUID = %s, want the one the server sent", srv.Hash())
+	}
+}
+
+// TestAServerThatSaysItIsFullIsRefusedWithItsReason: the measured real-world
+// case. A full server answers the login with a message and no hello, so
+// continuing to read would mean a timeout for a condition the server already
+// stated in plain text.
+func TestAServerThatSaysItIsFullIsRefusedWithItsReason(t *testing.T) {
+	// Verbatim from a real server, which is why the refusal words list
+	// exists at all.
+	const said = "WARNING : This server is full"
+
+	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
+		_, _ = conn.Write(frameOpcode(opServerMsg, serverMessagePayload(said)))
+		time.Sleep(2 * time.Second) // and then sends no hello
+	})
+
+	_, err := Dial(context.Background(), addr)
+	if err == nil {
+		t.Fatal("a full server produced a Server")
+	}
+	if !errors.Is(err, ErrRefused) {
+		t.Errorf("err = %v, want ErrRefused. A full server is a refusal, "+
+			"not a transport failure -- the caller's next move differs: "+
+			"stop, or try another server", err)
+	}
+	if !strings.Contains(err.Error(), "full") {
+		t.Errorf("err = %q, want it to carry the server's own words. The "+
+			"server told us why in plain text; reporting a timeout "+
+			"instead throws that away", err)
 	}
 }
 
@@ -434,6 +687,7 @@ func TestTheServerGUIDAndCountsComeFromItsHello(t *testing.T) {
 func dialFake(t *testing.T, body []byte) *Server {
 	t.Helper()
 	addr := helloServer(t, func(conn net.Conn) {
+		awaitLogin(t, conn)
 		_, _ = conn.Write(frameBody(body))
 		// Drain whatever we send, then let the test close.
 		_, _ = readFull(conn, make([]byte, 4096))
