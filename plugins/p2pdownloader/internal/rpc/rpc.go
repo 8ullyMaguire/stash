@@ -377,9 +377,23 @@ func downloadWithGate(ctx context.Context, input PluginInput, override Proposer)
 		return nil, err
 	}
 
-	// Stand-in for the transfer. See the comment above on why it waits on the
-	// context rather than a timer.
+	// The transfer itself is not run here. The gate has granted the
+	// proposal, and what is missing is not consent but a SOURCE: nothing
+	// has found a peer holding this file, because Kad source lookup is not
+	// implemented. internal/ed2ktransfer can fetch a one-part ed2k file and
+	// will not write a byte it has not proven, but it needs a source to ask.
+	//
+	// So the refusal names the missing half rather than a transfer path that
+	// now exists. Waiting on the context first is unchanged and is still the
+	// contract: the host closes the client when Run returns, so returning
+	// immediately would hand back a finished task that fetched nothing.
 	<-ctx.Done()
+
+	if isED2KLocator(locator) {
+		return nil, fmt.Errorf("%w: %s. The transfer itself is implemented "+
+			"and verifies what it writes -- what is missing is the step "+
+			"that finds a source to ask", ErrNoED2KSource, locator)
+	}
 	return nil, fmt.Errorf("%w: %s", ErrTransferNotImplemented, locator)
 }
 
@@ -445,11 +459,40 @@ func proposerFor(input PluginInput) Proposer {
 	return newHTTPProposer(input.ServerConnection)
 }
 
-// ErrTransferNotImplemented is what the unimplemented transfer path returns.
+// ErrNoED2KSource means this plugin cannot obtain the file, and says which
+// of the two reasons applies.
 //
-// Named so a caller can tell "the plugin is a stub" from "the download failed",
-// and so the next milestone has something to replace rather than a string to
-// grep for in a log.
+// # IT REPLACES ErrTransferNotImplemented, AND NAMES MORE
+//
+// The blanket "the transfer path is not implemented yet" was true and
+// useless: it applies equally to a magnet this plugin could fetch tomorrow
+// and to an ed2k link that needs Kad source lookup, which is a different
+// piece of work entirely. One error for both means a caller cannot tell
+// which problem it has, and the plugin's own advertisement stops matching
+// what it can do.
+//
+// The transfer path now EXISTS -- internal/ed2ktransfer fetches a one-part
+// ed2k file, verifies it against the link's hash, and writes nothing that
+// has not been proven. What is missing is the half before it: finding a
+// source. So the refusal is now about THAT, by name, rather than about a
+// transfer path that exists.
+//
+// # AND ErrTransferNotImplemented IS KEPT, FOR THE OTHER PROTOCOLS
+//
+// A magnet still cannot be transferred from here, and saying so is the
+// honest answer for it. Deleting the sentinel would leave that path with a
+// lie in place of a truth.
+var ErrNoED2KSource = errors.New("no ed2k source for this file: the transfer " +
+	"works but nothing has found a source to fetch from, because Kad " +
+	"source lookup is not implemented")
+
+// ErrTransferNotImplemented is what a protocol this plugin cannot fetch with
+// returns -- a magnet, as of this writing.
+//
+// A magnet is not a refusal of the transfer PATH, which exists for ed2k. It
+// is a refusal of this one protocol, and the two are named apart so that
+// "ed2k cannot find a source" and "magnet is not implemented" do not read
+// as the same limitation.
 var ErrTransferNotImplemented = errors.New("the transfer path is not implemented yet")
 
 // LocatorFrom reads the locator out of the host's argument map.

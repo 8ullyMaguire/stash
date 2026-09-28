@@ -268,17 +268,46 @@ func TestTheED2KPrefixIsRecognisedTheSameWayTwice(t *testing.T) {
 // validation runs before the gate, so a reader could reasonably wonder
 // whether it now REPLACES the stub's error. It does not: a granted, well-formed
 // ed2k link still arrives at the transfer stub, because there is still no
-// ed2k transport. That is the honest state, and this row says so.
-func TestTheDownloadStubStillReportsTheTransferIsUnimplemented(t *testing.T) {
+// A granted, well-formed ed2k link reaches the transfer and the refusal
+// NAMES THE MISSING HALF, which is the source lookup.
+//
+// # THE NAME CHANGED BECAUSE THE MEANING CHANGED
+//
+// This was TestTheDownloadStubStillReportsTheTransferIsUnimplemented, and
+// it asserted that the transfer path does not exist. Both were true when it
+// was written and neither is now: internal/ed2ktransfer fetches a one-part
+// ed2k file, verifies it against the link's hash, and writes nothing
+// unproven.
+//
+// A test that keeps its old name while asserting new behaviour is a lie
+// about what is being tested, and the lie is load-bearing: the name is what
+// a reader trusts when the assertion is not read.
+func TestAnEd2kLinkWithNoSourceSaysSoByName(t *testing.T) {
 	core := grantingProposer()
 	_, err := runDownload(t, core, ArgsMap{"url": goodED2K})
-	if !errors.Is(err, ErrTransferNotImplemented) {
-		t.Errorf("err = %v, want ErrTransferNotImplemented. A granted, "+
-			"well-formed ed2k link passes validation and then reaches the "+
-			"transfer stub, because the ed2k TRANSPORT does not exist yet — "+
-			"and the error has to say that rather than implying a download "+
-			"was attempted", err)
+	if !errors.Is(err, ErrNoED2KSource) {
+		t.Errorf("err = %v, want ErrNoED2KSource.\n\n"+
+			"A blanket ErrTransferNotImplemented applied equally to a "+
+			"magnet and to an ed2k link, and those are different "+
+			"problems: the ed2k transfer works and what is missing "+
+			"is the step that finds a source. The error has to say "+
+			"that rather than implying a download was attempted or "+
+			"that nothing was built", err)
 	}
+
+	// # AND IT IS NOT ALSO THE BLANKET ERROR
+	//
+	// errors.Is both ways is the only way to show the two are kept
+	// apart. A caller switching on either sentinel has to land in a
+	// different branch, and "wraps both" would silently defeat that.
+	if errors.Is(err, ErrTransferNotImplemented) {
+		t.Error("the error is also ErrTransferNotImplemented, so the two " +
+			"limitations cannot be told apart by errors.Is")
+	}
+
+	// The gate still ran: a refusal at the transfer says nothing about
+	// whether the proposal was made, and this row is also the record that
+	// a well-formed ed2k link is still proposed for exactly once.
 	if len(core.asked) != 1 {
 		t.Errorf("core was asked about %d proposals, want 1", len(core.asked))
 	}
