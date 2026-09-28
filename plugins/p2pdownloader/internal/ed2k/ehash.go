@@ -26,7 +26,28 @@ import (
 //   - only the part HASHES are concatenated, and only the first EIGHT bytes of
 //     each. A concatenation of full 16-byte hashes is a different file.
 //
-// # WHY MD4 IS USED AT ALL
+// # THE GO LIBRARY GETS THIS WRONG, MEASURED
+//
+// The eDonkey ecosystem in Go is sparse but not empty, and the fullest client
+// library is `github.com/monkeyWie/goed2k` (MIT). It was evaluated for the wire
+// work and REJECTED for hashing, on evidence rather than on inspection:
+//
+//	goed2k.HashFromHashSet([]Hash{p0, p1}) -> 90955B3AFD7D14B68B672C584F88DD93
+//	the ed2k-correct value                 -> 735E6A43667B72334F8E27F9C46D263B
+//	HashFile in THIS file                  -> 735E6A43667B72334F8E27F9C46D263B
+//
+// (a 19,456,000-byte input: two exact parts, bytes `i % 251`.) Its
+// `HashFromHashSet` MD4s the concatenated FULL 16-byte part hashes; there is no
+// 8-byte truncation anywhere in the library. It is otherwise a good library —
+// real `protocol`, `protocol/client` and `protocol/kad` packages, opcodes,
+// `nodes.dat` loading, the Kad message set — so it is the reference for the
+// WIRE work, and it is not the source of truth for the hash.
+//
+// That asymmetry is worth stating plainly: adopting it wholesale is how a
+// plugin ends up computing a hash that matches nothing on the real network
+// while every unit test passes, because its own tree hash agrees with itself.
+//
+// WHY MD4 IS USED AT ALL
 //
 // Because the protocol says so, and because both ends must agree. MD4 is broken
 // for every purpose anyone would choose it for today; here it is a protocol

@@ -2206,8 +2206,43 @@ multi-connection, piece verification, resume, rate limits — with
 ### Step 5.4 — ed2k
 
 eMule protocol: eDonkey2000 server + Kademlia (Kad) node list, eHash (MD4)
-chunk hashes, the eMule extended handshake. No Go library provides this, so it
-is written against the protocol description.
+chunk hashes, the eMule extended handshake.
+
+**The "no Go library provides this" claim in this step was WRONG and is
+corrected here.** The eDonkey ecosystem in Go is sparse but not empty. The
+user found it, the plan's author had not looked. Evaluated 2026-09-28:
+
+| Package | Verdict |
+|---|---|
+| `github.com/monkeyWie/goed2k` (MIT) | **Adopted as the wire reference.** Real `protocol`, `protocol/client` and `protocol/kad` subpackages; the opcode set, `nodes.dat` loading, the Kad message set (`BootstrapReq`, `Hello`, `PublishSourcesReq`, …) and the extended handshake. Fetches and builds. **Its hashing is wrong — see below — so it is not the source of truth for the eHash.** |
+| `GopeedLab/gopeed` `internal/protocol/ed2k` (Apache-2.0) | Not adopted. `internal/`, so it is not importable; useful for reading `fetcher.go` if the wire work stalls. |
+| `eyedeekay/gomule` (GPL-3.0) | Not adopted. A **server**, not a client, and GPL-3.0 is incompatible with this fork's licensing. |
+| `libp2p/go-libp2p-kad-dht` | Not applicable. Generic Kademlia with a different node-ID format and message set; eDonkey's Kad would need an adapter that is larger than the protocol itself. |
+
+**`goed2k`'s tree hash is wrong, and this is measured, not suspected.** It MD4s
+the concatenated FULL 16-byte part hashes; the protocol requires each part hash
+TRUNCATED TO ITS FIRST 8 BYTES. There is no 8-byte truncation anywhere in the
+library. On a 19,456,000-byte input (two exact parts):
+
+```
+goed2k.HashFromHashSet([]Hash{p0, p1}) -> 90955B3AFD7D14B68B672C584F88DD93
+the ed2k-correct value                 -> 735E6A43667B72334F8E27F9C46D263B
+internal/ed2k.HashFile                 -> 735E6A43667B72334F8E27F9C46D263B
+```
+
+**Consequence, and it is the reason this table exists:** adopting the library
+wholesale gives every multi-part file a hash that matches nothing on the real
+network, while its own unit tests pass — because its tree hash agrees with
+itself. The split is therefore: **our `internal/ed2k` owns the eHash, and
+`goed2k` is the reference for the wire.** That asymmetry is deliberate and is
+recorded in `ehash.go` next to the arithmetic.
+
+**Network access for verification: permitted.** The user approved live
+connections to public ed2k servers for interop checks, so a wrong opcode is
+found against a real daemon rather than by reading a spec. Unit tests stay
+hermetic — a live suite that depends on a third party's uptime is not a test —
+and live interop is behind an explicit build tag or env var so it cannot
+silently skip into a green run.
 
 ### Step 5.5 — Library integration, through the plugin API only
 
