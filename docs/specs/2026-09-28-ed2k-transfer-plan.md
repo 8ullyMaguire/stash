@@ -203,19 +203,54 @@ and never writes, and asserts the error names the address.
 **New file:** `internal/ed2kwire/part.go`
 
 ```go
-// The wire constants. PARTSIZE is 9500 and is not negotiable: it is what
-// both ends use to size the window, and a source that answers with a
-// different amount is not an error -- the last part is shorter by nature.
+// # THE WIRE CONSTANTS, CORRECTED AGAINST eMule's OWN opcodes.h
+//
+// The first draft of this step had opRequestPart = 0xD4 and opPartPacket =
+// 0xD5, both invented. Checking them against eMule's opcodes.h (the upstream
+// C++ client) found 0xD4 is OP_PACKEDPROT -- the zlib-compressed PROTOCOL
+// BYTE, already used by the search result decoder in this package. Writing
+// 0xD4 as a request opcode would have asked a source for something in a
+// protocol this client does not speak.
+//
+// The real source-side pair, verbatim from opcodes.h with its own comments:
+//
+//	#define OP_SENDINGPART   0x46   // <HASH 16><von 4><bis 4><Daten len:(von-bis)>
+//	#define OP_REQUESTPARTS  0x47   // <HASH 16><von[3] 4*3><bis[3] 4*3>
+//	#define OP_FILEREQANSNOFIL 0x48  // <HASH 16>
+//
+// # AND THE PAYLOAD IS OFFSETS, NOT A PART NUMBER
+//
+// This is the part the draft got most wrong, and it is worth stating
+// because "part N" is the natural mental model and it is not the wire.
+// A part request carries a THIRD hash (the transfer's identity, distinct
+// from the file's), then three start offsets and three end offsets, asking
+// for three part-sized blocks in one packet. The answer is OP_SENDINGPART
+// with the file hash, a start offset, an end offset, and the bytes between.
+//
+// The draft's `Part uint32` does not exist on the wire. There is no part
+// index in either packet; both speak in byte offsets, and the 9500-byte
+// window is a division the two ends apply to those offsets.
 const (
-	opRequestPart  byte = 0xD4  // TO BE VERIFIED against a live source; see below
-	opPartPacket   byte = 0xD5  // likewise
-	PartSize            = 9500
+	opSendingPart  byte = 0x46
+	opRequestParts byte = 0x47
+	opFileReqAnsNoFile byte = 0x48
+
+	// PartSize is the 9500-byte window. eMule's own constant, and both
+	// ends divide a file by it, so it is not negotiable -- though the
+	// LAST window of a file is short by nature and is not an error.
+	PartSize = 9500
 )
 
-// PartRequest asks a source for one part of a file.
+// PartRequest asks a source for one window of a file.
 type PartRequest struct {
-	Hash [16]byte
-	Part uint32
+	// FileHash is the file's 16-byte ed2k hash.
+	FileHash [16]byte
+
+	// Start and End are BYTE OFFSETS, half-open: [Start, End). End is
+	// therefore Start + the window length, and there is no inclusive
+	// bound to get wrong by one.
+	Start uint32
+	End   uint32
 }
 
 // Build returns the part request's PAYLOAD, not a framed packet, for the
@@ -224,35 +259,40 @@ func (r PartRequest) Build() ([]byte, error)
 
 // PartAnswer is a source's reply to a part request.
 type PartAnswer struct {
-	Data      []byte
-	FileSize  uint32
-	HasChecksum bool
+	// FileHash is the file the bytes are for, as the source states it. A
+	// source answering about a file we did not ask for is a protocol
+	// error and not a confusing name later.
+	FileHash [16]byte
+
+	// Start and End are the offsets of the bytes, half-open.
+	Start uint32
+	End   uint32
+
+	// Data is the window's bytes: len(Data) == End-Start.
+	Data []byte
 }
 
 func (s *Source) RequestPart(ctx context.Context, r PartRequest) (*PartAnswer, error)
 ```
 
-> ### THE OPCODES IN THIS STEP ARE UNVERIFIED, AND THE PLAN SAYS SO
+> ### THE OPCODES ARE NOW CITED, NOT ASSUMED — AND ONE WAS PLAINLY WRONG
 >
-> This package has **never observed a source-side packet**. Every opcode above
-> `0x33` in this document is the published eDonkey2000 value taken on trust,
-> and the two constants in the snippet are written as placeholders precisely
-> so an implementer cannot copy them past a check.
+> The draft marked these TO BE VERIFIED and said a live failure in step 5
+> would be a successful plan. Checking them against eMule's `opcodes.h`
+> before writing the code was cheaper than a live test and found a worse
+> error than a wrong constant: **`0xD4` is `OP_PACKEDPROT`**, a protocol
+> byte this package already reads, not a request opcode at all.
 >
-> **The check is step 5, and a failure there is a successful plan** — a live
-> source that does not answer `0xD4` has told us the constant is wrong, which
-> no amount of reading would have. The values are then corrected in this file
-> in the same commit as the code, per the rule that the plan is a living
-> contract.
->
-> This is the opposite situation from step 5.4, where every constant was
-> confirmed against a real server before it was written down. There is no
-> such confirmation available here yet, and pretending otherwise is how a
-> plausible-but-wrong opcode becomes a permanent assumption.
+> The values now in the plan are quoted from that file, comments included,
+> and `docs/PROVENANCE.md` records where they came from so the next person
+> can re-verify rather than trust. What remains genuinely unverified is
+> whether a real source accepts this client's handshake *and then* answers —
+> that is behavioural, not a constant, and only step 5 can settle it.
 
-**The payload is a 4-byte little-endian part number followed by the 16-byte
-hash** — a tag-free binary body, unlike every other packet in this package,
-and that asymmetry is worth its own comment in the code.
+**The payload is tag-free binary, unlike every other packet in this package**
+— no tag count, no tags, just a hash and offsets. That asymmetry is worth
+its own comment in the code, because `parseTagList` applied to a part request
+would read the hash's first bytes as a tag count.
 
 **Verify:**
 
@@ -405,8 +445,48 @@ its own spec when it starts:
 - multi-source and parallel transfer
 - the plug-in UI's progress reporting, which is the host's concern
 
-**Provenance.** Third-party protocol behaviour is verified by the live tests
-in step 5, not by this document. This plan cites opcode values and payload
-layouts it has not itself observed, and marks them TO BE VERIFIED; a capture
-in `internal/ed2kwire/testdata/` is the durable form of that evidence, and the
-search milestone's capture is the precedent.
+## 9. PROVENANCE — where every constant in this plan came from
+
+Kept here rather than in a separate file, because a value and its source
+belong in the same place and separating them is how a value loses its source.
+
+**Two classes of constant, and the difference is the whole point.**
+
+**Observed here.** Every server-side constant — the login, the extended
+hello, the search request and result, the Kad bootstrap — was confirmed
+against a real server at `85.17.116.222:6082` before it was written down.
+The durable form is `internal/ed2kwire/testdata/searchresult_live.bin`, a
+real `OP_SEARCHRESULT` frame, and the tests decode that capture rather than
+bytes this package produced. The opcodes in `server.go` carry the captured
+byte sequences in their comments for the same reason.
+
+**Cited, not observed.** The source-side opcodes in step 2 are quoted from
+eMule's own `opcodes.h` (`irwir/eMule`, the upstream C++ client), with its
+layout comments intact:
+
+| Constant | Value | eMule's comment |
+|---|---|---|
+| `OP_SENDINGPART` | `0x46` | `<HASH 16><von 4><bis 4><Daten len:(von-bis)>` |
+| `OP_REQUESTPARTS` | `0x47` | `<HASH 16><von[3] 4*3><bis[3] 4*3>` |
+| `OP_FILEREQANSNOFIL` | `0x48` | `<HASH 16>` |
+| `OP_COMPRESSEDPART` | `0x40` | `<HASH 16><von 4><size 4><Daten len:size>` |
+
+**How to re-verify:**
+
+```bash
+curl -s https://raw.githubusercontent.com/irwir/eMule/master/opcodes.h \
+  | grep -E 'OP_(SENDINGPART|REQUESTPARTS|FILEREQANSNOFIL|COMPRESSEDPART) '
+```
+
+**Why citing beats inventing, and what it caught.** The first draft of step 2
+used `0xD4` and `0xD5`, both plausible and both wrong — `0xD4` is
+`OP_PACKEDPROT`, the zlib protocol byte this package already reads in
+`DecodeSearchResult`. A value that reads like a real constant is more
+dangerous than an obvious placeholder, because nothing about it invites a
+second look. That one is the argument for citing.
+
+**What citing does NOT establish.** That a real source will accept this
+client's handshake and then answer. Constants are static; behaviour is not,
+and a peer may also speak a newer dialect. That is what step 5 is for, and
+until it passes, every source-side constant here is *correct as cited* and
+*unconfirmed in use*.

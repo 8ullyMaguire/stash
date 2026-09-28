@@ -68,6 +68,7 @@ EXTHELLO = os.path.join("internal", "ed2kwire", "exthello.go")
 SEARCH = os.path.join("internal", "ed2kwire", "search.go")
 SEARCHRESULT = os.path.join("internal", "ed2kwire", "searchresult.go")
 SOURCE = os.path.join("internal", "ed2kwire", "source.go")
+PART = os.path.join("internal", "ed2kwire", "part.go")
 
 # The suite's own timeout. Without it, a mutation that makes a read block
 # forever hangs the sweep rather than failing it, and a hang is not a kill.
@@ -544,6 +545,80 @@ MUTATIONS = [
      SOURCE, "body, err := req.body()",
      "body, err := req.body(); body = body[:len(body)-2]",
      "TheSourceFirstPacketIsTheSameObfuscatedLogin"),
+    # ---- one WINDOW of a file, asked for and read back ----
+    #
+    # The opcodes are CITED from eMule's opcodes.h, not recalled: the
+    # first draft of the plan used 0xD4, which is OP_PACKEDPROT -- a
+    # protocol byte this package already reads. The provenance section of
+    # the transfer plan records the curl that re-verifies them.
+    #
+    # The golden test assembles the expected bytes BY HAND, because a
+    # part request has no tag list and a round trip through our own writer
+    # would pass if both halves drifted together.
+
+    # THE HASH IS THE FIRST SIXTEEN BYTES, and the first four of those are
+    # what a tag reader would take for a count. Getting the order wrong
+    # here is invisible to a length check.
+    ("part: the request does not lead with the file hash",
+     PART, "out = append(out, r.FileHash[:]...)",
+     "out = append(out, r.End, r.Start, 0, 0)",
+     "PartRequestIsAHashAndThreeOffsetPairs|TheRequestCarriesNoTagCount"),
+
+    # THE THREE PAIRS. eMule batches three windows per packet; we ask for
+    # one and leave the other two zero-length. Sending one pair, or running
+    # the starts together, is a packet a source cannot parse.
+    ("part: the request carries one pair instead of three",
+     PART, "for i := 0; i < 3; i++ {", "for i := 0; i < 1; i++ {",
+     "PartRequestIsAHashAndThreeOffsetPairs|FirstPairIsTheWindow"),
+
+    # The empty pairs, and specifically that they are EMPTY rather than
+    # repeating the first window's offsets.
+    ("part: the unused offset pairs repeat the first window",
+     PART, "		if i == 0 {", "		if true {",
+     "FirstPairIsTheWindowAndTheRestAreEmpty"),
+
+    # End is one PAST the last byte. Sending it as an inclusive bound is
+    # the off-by-one this file's whole shape is designed to avoid.
+    ("part: the window's end is sent one byte short",
+     PART, "binary.LittleEndian.PutUint32(end[:], r.End)",
+     "binary.LittleEndian.PutUint32(end[:], r.End-1)",
+     "PartRequestIsAHashAndThreeOffsetPairs|FirstPairIsTheWindow"),
+
+    # The answer's hash is CHECKED against the request's. A check that
+    # passes when the hashes differ writes one file's bytes into another
+    # file, and the hash check much later has nothing to point at.
+    ("part: a wrong-file answer is not checked",
+     PART, "if ans.FileHash != req.FileHash {", "if false {",
+     "AnswerForADifferentFileIsRefused"),
+
+    # And the same for the range.
+    ("part: a wrong-range answer is not checked",
+     PART, "if ans.Start != req.Start || ans.End != req.End {", "if false {",
+     "AnswerForTheWrongRangeIsRefused"),
+
+    # The length must match the offsets. Truncating instead of refusing
+    # writes a short window and the file fails much later.
+    ("part: a short answer is accepted anyway",
+     PART, "if want := int(ans.End - ans.Start); len(ans.Data) != want {",
+     "if false {", "ShortAnswerIsRefused"),
+
+    # OP_FILEREQANSNOFIL is a normal ANSWER, not a malformed packet. Folding
+    # it into a generic error makes a transfer ask a peer that will never
+    # have the file, forever.
+    ("part: a source saying it has no file is treated as unexpected",
+     PART, "if hdr.Packet == opFileReqAnsNoFile {", "if false {",
+     "SourceThatSaysItDoesNotHaveTheFile"),
+
+    # The header is 24 bytes and the data is what follows. Reading data
+    # from the wrong offset yields plausible bytes of the wrong length.
+    ("part: the answer's data is read from the wrong offset",
+     PART, "ans.Data = payload[fixedLen:]", "ans.Data = payload[16:]",
+     "OnePartComesBackWithTheBytes"),
+
+    # The fixed-packet check. Without it a short answer is indexed past.
+    ("part: a short answer is not refused",
+     PART, "if len(payload) < fixedLen {", "if false {",
+     "OnePartComesBackWithTheBytes"),
 ]
 
 
@@ -628,7 +703,7 @@ def main():
     # the loop reaching its own epilogue.
     originals = {}
     for rel in (SERVER, OBFUSCATE, TAG, EXTHELLO, SEARCH, SEARCHRESULT,
-                SOURCE):
+                SOURCE, PART):
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
             print("FATAL: %s does not exist under %s" % (rel, REPO))
