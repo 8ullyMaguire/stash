@@ -525,6 +525,73 @@ golden test tried to assert it after de-obfuscating, which cannot work; the
 existing `deobfuscateForTest` already took the opcode as an argument for
 exactly this reason.
 
+### M5 step 5, step 2 of the plan: ONE WINDOW of a file
+
+`internal/ed2kwire/part.go`, at `20cbe9c09`. `PartRequest` asks a source for
+one 9,500-byte window; `PartAnswer` carries it back. Nothing writes a file
+yet — that is step 3 — and `internal/rpc` is untouched.
+
+**THE PLAN'S OPCODES WERE WRONG, AND CITING CAUGHT IT BEFORE ANY CODE.** The
+plan had `opRequestPart = 0xD4` and `opPartPacket = 0xD5`, both invented.
+Checked against eMule's `opcodes.h` first, `0xD4` turned out to be
+**`OP_PACKEDPROT`** — the zlib protocol byte this package already reads in
+`DecodeSearchResult`. A source handed an `0xD4` packet would be reading a
+protocol this client does not speak, and answering with silence.
+
+The real values, quoted with eMule's own layout comments: **`OP_SENDINGPART`
+`0x46`**, **`OP_REQUESTPARTS` `0x47`**, **`OP_FILEREQANSNOFIL` `0x48`**. The
+plan's step 2 and a new **PROVENANCE** section (§9) now record the `curl` that
+re-verifies them, so a constant keeps its source instead of becoming folklore.
+
+Worth naming as a class of error: `0xD4` is a **real** constant, from the
+right document, in the right numeric range. Nothing about it looks wrong —
+which is exactly why a placeholder like `0xFF` would have been *safer* to
+copy past a review.
+
+**AND THE PAYLOAD IS OFFSETS, NOT A PART NUMBER.** "Part 7 of 12" is the
+natural mental model of a chunked transfer and it is **not the wire**. Neither
+packet contains a part index: a request asks for `[Start, End)` and an answer
+states the same range then the bytes. The 9,500-byte window is a division
+both ends apply to those offsets — it is not a number on the wire. So the
+draft's `Part uint32` does not exist, and every length here is `End-Start`,
+never `End-Start+1`.
+
+**Three offset pairs, not one.** eMule's `OP_REQUESTPARTS` is
+`<HASH 16><von[3]><bis[3]>` — three windows per packet. This client asks for
+one, so the other two pairs are **zero-length**. Sending a one-pair packet
+would be inventing a variant; sending the documented layout with less in it is
+not.
+
+**The golden bytes are hand-assembled in the test.** A part request has no tag
+list, so nothing in this package's machinery could check it, and a round trip
+through our own writer would pass if both halves drifted together. There is
+also a test that a part request must **not** begin with a tag count: every
+other packet here does, and a hash's first four bytes are arbitrary — for
+this package's test hash that reads as 2.4 billion tags.
+
+**A source saying "no file" is an answer, not a malformed packet**, and gets
+its own `ErrNoFile` carrying the hash. The caller's next move is a different
+source; folding this into a generic error is how a transfer spends its life
+asking a peer that will never have the file.
+
+**Answers are checked field by field against the request** — file hash,
+range, byte count — and a refusal names **both** values, because a "hash
+mismatch" that doesn't say which two is a log line nobody can act on. A
+declared range of 100 with 10 bytes sent is refused rather than truncated;
+writing a short window fails the file's hash check much later with nothing
+pointing back here. `0x40` (`OP_COMPRESSEDPART`) is **named** as undecoded
+rather than inflated — silently inflating a volunteer packet would turn "not
+implemented yet" into "wrong".
+
+**Three of my own test bugs, all in the tests:** a hash assertion compared raw
+bytes against a message that prints hex; a "silent peer" test had the peer
+close the connection, which is **EOF, not silence**, testing something else
+entirely; and a timeout assertion demanded the request finish faster than a
+peer that never answers possibly could — the opposite of the property worth
+having.
+
+**85 tests in the package, 0 skips. 52 mutation probes, 10 of them new.**
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
