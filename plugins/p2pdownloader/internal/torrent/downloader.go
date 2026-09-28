@@ -324,14 +324,28 @@ func ConfigFor(cfg Config) (*libtorrent.ClientConfig, error) {
 	// operator's.
 	c.UploadRateLimiter = rate.NewLimiter(rate.Inf, c.MaxAllocPeerRequestDataPerConn)
 
-	// ---- transport: off until `Listen` -------------------------------------
+	// ---- transport: off, and there is NO separate "listen" step ------------
 	//
-	// A client that never listens cannot be reached and cannot be found. The
-	// DHT and both transports are enabled in `Listen`, not here, so constructing
-	// a downloader is not the same as announcing one. That ordering matters:
-	// M5's consent gate decides whether a locator may be acted on AT ALL, and
-	// being reachable on the network before that decision is made would be
-	// acting on it.
+	// There is no `Listen` method in this library. I documented one for two
+	// commits' worth of a milestone, and it does not exist -- the sockets are
+	// created inside `NewClient` (client.go:385-420) and the port forwarder is
+	// started there too, so reachability is decided ENTIRELY by this config and
+	// is not something a later call can change.
+	//
+	// That makes the default load-bearing rather than advisory. Measured, with
+	// this exact config:
+	//
+	//	DHT off, TCP off, UTP off   -> 0 listeners, no port
+	//	DHT ON,  TCP off, UTP off   -> 0 listeners, no port
+	//	DHT ON,  TCP ON,  UTP off   -> 2 listeners, 0.0.0.0:42069
+	//	DHT ON,  TCP ON,  UTP ON    -> 4 listeners
+	//
+	// The second row is the one worth knowing: a live DHT is not a listener.
+	// Turning the DHT on alone makes this box findable to peers while binding
+	// nothing to accept them, which is the worst of both -- announcing without
+	// being reachable, so the DHT's only effect is to be a worse leech than a
+	// box that never joined. So the DHT is off too, and `AddTorrent` is the
+	// point at which the operator's decision to transfer anything exists at all.
 	c.NoDHT = true
 	c.DisableTCP = true
 	c.DisableUTP = true
@@ -429,6 +443,29 @@ func (d *Downloader) AddTorrent(tier string, mi *metainfo.MetaInfo) Decision {
 	// has been through a JSON round trip, and the hash is what identifies the
 	// torrent to every peer.
 	hash := mi.HashInfoBytes()
+
+	// THE METADATA CHECK, BEFORE THE GATE.
+	//
+	// The library validates piece length and piece-table length too, but inside
+	// `AddTorrentSpec` -- which is after this point. Measured: all three of a
+	// zero piece length, a negative one, and a short piece table parse cleanly
+	// and are accepted by the gate, and are only refused when the client is
+	// finally asked to add them.
+	//
+	// The outcome would be right and the report wrong. The decision would say
+	// the library declined the torrent "after the storage gate accepted it",
+	// which is true and useless: the operator needs to know the torrent is
+	// MALFORMED, because a malformed torrent is worth retrying against another
+	// source and a path refusal is not.
+	if err := checkMetainfo(&info); err != nil {
+		return Decision{
+			Tier:          tier,
+			Policy:        dec,
+			UploadAllowed: false,
+			Added:         false,
+			Err:           err,
+		}
+	}
 
 	// The spec, built BEFORE the gate runs, so the record of what the client
 	// would have been given is written whether or not the gate agrees.
@@ -572,6 +609,20 @@ func (d *Downloader) AddTorrentSpec(tier string, spec *libtorrent.TorrentSpec) D
 		}
 	}
 	//
+	// The metadata check, before the gate, for the same reason as in
+	// `AddTorrent`: a magnet's file names arrive by BEP 9 from peers, which is
+	// exactly where an attacker chooses them, and a torrent whose own fields
+	// disagree should not be name-checked at all.
+	if err := checkMetainfo(&info); err != nil {
+		return Decision{
+			Tier:          tier,
+			Policy:        dec,
+			UploadAllowed: false,
+			Added:         false,
+			Err:           err,
+		}
+	}
+
 	// Recorded BEFORE the gate, for the same reason as in `AddTorrent`: a
 	// refusal that leaves the previous torrent's hash behind is a report that
 	// names the wrong download.

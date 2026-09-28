@@ -2120,6 +2120,47 @@ from success to everything downstream, so a task report has to be able to say
 `OpenTorrent` is called again on every retry and a report listing one refusal
 forty times is a report nobody reads.
 
+**DONE 2026-09-28 (wiring and validation).** `internal/torrent/` — the client
+config, the consent/policy binding, the reachability defaults, and
+`metainfo_check.go`. 26/32 mutations killed, 5 covered by a lower layer, 1
+skipped (a probe that did not compile, which is not a kill), 0 survivors, by
+`internal/torrent/mutate_gate.py`.
+
+**Four library facts found by reading the source rather than the docs, each of
+which contradicted something I had written:**
+
+1. **There is no `Client.Listen`.** Sockets are bound inside `NewClient`
+   (`client.go:385-420`) and `if !cfg.NoDefaultPortForwarding { go cl.forwardPort() }`
+   is there too. I had documented reachability as "deferred to `Listen`" for two
+   commits. The design was right; the mechanism was invented.
+2. **A DHT with both transports off binds nothing** — measured. So it is a box
+   peers can find and that cannot serve them, which is worse than never joining.
+   The DHT is off with the transports.
+3. **`UploadRateLimiter = nil` panics** (`config.go:278` calls `.Burst()`
+   unguarded on every `NewClient`), while the download side handles nil
+   explicitly. `NewDefaultClientConfig` sets it to an *unlimited* limiter, so
+   `rate.Inf` is the value and nil was never available.
+4. **`TorrentSpec.InfoBytes` is the INNER info dict**, not a metainfo
+   (`spec.go:81`). `metainfo.Load` on it fails with EOF on a good torrent.
+
+**The library validates the same metainfo fields, LATER than the gate.** Zero
+piece length, negative piece length and a short piece table all parse cleanly and
+are only refused by `AddTorrentSpec`. So a nonsense torrent was being gated —
+paths built, nothing reserved, accepted — and then declined by the client, with a
+report saying "the library declined the torrent after the storage gate accepted
+it". True, and useless: the operator needs to know it is MALFORMED, because
+malformed is worth retrying against another source and a path refusal is not.
+Hence `ErrMalformed`, distinct from `storage.ErrRefused`, checked before the
+gate. The one check the library does not make is piece coverage — a torrent
+declaring 1 GiB with one 20-byte hash parses, is added, and then the swarm stalls
+with no error anywhere.
+
+**A surviving mutation that meant the CODE was wrong.** `if info.HasV1() &&
+info.HasV2() { refuse }` refused every legitimate BEP 52 hybrid, because
+`HasV1()` (info.go:212) is true for any torrent with a `length` or a `pieces`
+field. The mutation disabling it survived *because removing it made the code
+correct*. Replaced with a `switch info.MetaVersion`.
+
 Remaining for this step: the transfer surface itself — metainfo parsing, magnet
 + BEP 9 metadata fetch, Kademlia DHT (BEP 5) discovery, peer wire protocol,
 multi-connection, piece verification, resume, rate limits — with

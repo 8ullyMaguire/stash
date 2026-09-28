@@ -601,7 +601,60 @@ My test asserted the upload limiter was nil, on the reasoning that a client-wide
 upload limit is a permission-shaped knob. The *reasoning* was right and the
 *assertion* was wrong: it failed, and the fix was `rate.Inf`, not nil.
 
-### Nine mutation harnesses, 194 mutations, 0 survivors
+### There is no `Client.Listen`, and I documented one for two commits
+
+`internal/torrent`'s comments said reachability was "deferred to `Listen`" —
+that a downloader that has not been told to listen cannot announce itself, and
+that UPnP belongs "at `Listen`" rather than in the config. **There is no
+`Listen` method in `anacrolix/torrent` v1.61.0.** The sockets are created inside
+`NewClient` (`client.go:385-420`) and the port forwarder is started there too:
+
+```go
+if !cfg.NoDefaultPortForwarding {
+    go cl.forwardPort()
+}
+```
+
+So reachability is decided **entirely by the config**, and the design was right
+while the stated mechanism was invented. That is the failure mode this project's
+notes keep hitting, in a new costume: I had `go doc`-ed `Client` and read the
+`Listeners()` method next to it, and read a `Listen` into the gap.
+
+Measured, with the real client:
+
+| DHT | TCP | uTP | listeners |
+|---|---|---|---|
+| off | off | off | **0** |
+| **on** | off | off | **0** |
+| on | on | off | 2 (`0.0.0.0:42069`, `[::]:42069`) |
+| on | on | on | 4 |
+
+The middle row is the one worth keeping. A live DHT with both transports off binds
+**nothing**: the box is findable by peers and cannot serve them. It advertises
+interest, earns leech credit it cannot return, and disappoints everyone it
+attracts — strictly worse than never having joined. So the DHT is off with the
+transports, and the comment records the measurement so the "harmless" reading has
+something to check against.
+
+### A test that asserts a property of the DEPENDENCY is a tautology
+
+The first version of the DHT test built a DHT-only client and asserted
+`len(Listeners()) == 0`. It passed — and passed because of how the *library*
+behaves, not because of anything this package does. Turning the DHT on in
+`ConfigFor` left it green.
+
+This is the "asserting your own return value" trap from the last commit, one level
+up: the subject was the dependency, so no mutation to my code could ever fail it.
+The fix was to assert `cfg.NoDHT` — a field this package sets — and keep the
+listener measurement in a *comment* as the reason the field matters.
+
+The general rule: **name the layer the assertion is about, and if a mutation to
+your own code cannot change the result, the assertion is about something else.**
+The socket test (`TestTheClientBindsNoSockets`) passes this bar — enabling TCP or
+uTP in either `ConfigFor` or `New` makes it fail, and both sites are in the
+harness.
+
+### Nine mutation harnesses, 206 mutations, 0 survivors
 
 ```bash
 python3 mutate_seam.py                                  # 6
@@ -612,7 +665,7 @@ python3 internal/collab/mutate_locator.py               # 14
 (cd plugins/p2pdownloader && python3 mutate_rpc.py)                    # 23
 ```
 
-194 mutations across nine harnesses, 0 survivors. The earlier figure said
+206 mutations across nine harnesses, 0 survivors. The earlier figure said
 "seven harnesses" and omitted `mutate_seam.py`, `mutate_consent.py` and
 `mutate_media_gate.py` — the plugin harnesses were being counted as the whole
 set, which is the same scope error as the source-scanning test that walked
