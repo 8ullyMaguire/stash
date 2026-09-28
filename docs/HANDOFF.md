@@ -687,6 +687,28 @@ mechanically instead of by eye. It immediately flagged one probe whose
 false positive of the preflight's own, since a probe may carry an identical
 pair as a position anchor.
 
+**Gate for this milestone, with the exit code captured rather than read from a
+log tail:**
+
+```
+preflight=0
+HARNESS_EXIT=0
+57 killed, 8 covered by a lower layer, 0 survived, 0 malformed
+go vet ./internal/...   clean
+go test ./... -count=1  all 9 packages ok
+ed2k 51, ed2kwire 89
+```
+
+Two process notes. The first harness run was reported "still running" four
+times by `pgrep -f mutate_ed2k.py` -- which was matching **its own shell
+wrapper's command line**, not a live process. The honest read is that `ps`
+on the real process is the authority, and a `pgrep` pattern that appears in
+the tool call that runs it will always match. The second: this milestone's
+first harness run **crashed**, and the log's last line was a successful
+summary from the *previous* run, so the run and its output had to be
+correlated before either could be believed.
+
+
 ### The computer-use route to the captures — investigated, and it does not work here
 
 A later session wrote that the captures were "not work an LLM can do alone", on
