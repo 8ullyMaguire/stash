@@ -4,11 +4,11 @@ Where StashForge is, what is verified, and what the next person should know
 before touching anything. Written for a cold start: no context from the session
 that produced it.
 
-Last updated: **M5 in progress** — a real ed2k login now completes against a
-live public server. Branch **`develop`** at `a82f2d809`. **Read "RESUME HERE"
-below before anything else**; it carries the verified numbers, the five bugs
-the live tests caught while the hermetic suite stayed green, and the exact
-next task.
+Last updated: **M5 in progress** — BOTH the ed2k login and the Kad bootstrap
+now complete against live servers. Branch **`develop`** at `ead1cb705`. **Read
+"RESUME HERE" below before anything else**; it carries the verified numbers,
+the two byte-order bugs that cancelled each other, the two open questions that
+need a reference-client capture, and the exact next task.
 
 ---
 
@@ -37,14 +37,15 @@ The governing documents are `docs/GOAL.md` (milestone state) and
 
 ---
 
-## RESUME HERE — M5 in progress, a REAL ed2k LOGIN NOW COMPLETES
+## RESUME HERE — BOTH NETWORKS NOW TALK TO REAL SERVERS
 
-**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `a82f2d809`.**
+**Last updated 2026-09-28, at a clean milestone. Branch `develop` at `ead1cb705`.**
 
 ### The headline
 
-**`Dial` completes a real ed2k login against a live public server.** Against
-`85.17.116.222:6082` (ed2k-rust), on 2026-09-28:
+**Two live proofs, on the same day, and the second one is bigger.**
+
+**ed2k: `Dial` completes a real login.** Against `85.17.116.222:6082`:
 
 ```
 connected: network users=12181 files=4137451 | this server: users=103755 files=17885
@@ -52,125 +53,126 @@ messages=[VPN with port forwarding (for High ID) ... Open-source ed2k-server
           > https://github.com/andrey23127/ed2k-server]
 ```
 
-That is the first end-to-end proof in this layer: a real server decoded our
-obfuscated login request, accepted us, and told us what it is. Everything
-before this point was verified against fakes.
+**Kad: 40 of 40 contacts complete the hello**, each returning a distinct node
+ID, from a real published contact list. `kad.go` had never touched a real node
+before this session.
 
 ### Where the work stands
 
 | Commit | What |
 |---|---|
-| `a82f2d809` | test deadlines shrinkable in the suite, with the real ones pinned |
-| `2713e1711` | **a real ed2k login completes** — five bugs, all found by live tests |
-| `b06fcca35` | the ed2k tag decoder, because the library reads the wire wrong |
-| `c7f32e039` | **the handshake order fixed, and SYN obfuscation added** |
-| `09b1d34f1` | this file, at the previous milestone |
+| `ead1cb705` | **Kad reaches the real network**; two byte-order bugs fixed |
+| `8e6efcbb1` | the live-login milestone recorded |
+| `a82f2d809` | test deadlines shrinkable in the suite, real ones pinned |
+| `2713e1711` | a real ed2k login completes |
+| `c7f32e039` | the handshake order fixed, SYN obfuscation added |
 
-### The lesson from this stretch, which is the part worth keeping
+### The bug worth more than the feature
 
-**Every single bug was found by a live test, and every one was a plausible
-guess that the hermetic suite was built to agree with.** The fakes had been
-written to match the code, so the suite was green throughout. A suite that
-agrees with the bug it exists to catch is worse than no suite, because it
-reports green.
+**Two byte-order bugs that cancelled each other.** `ipv4FromLE` swapped the
+bytes of an address the library had *already* swapped, and `endpointFromNode`
+mirrored it on write. All 154 contacts in a real `nodes.dat` came out
+reversed — Kad was dialling `127.0.0.1`, its own machine.
 
-The five:
+It stayed invisible because the two errors cancelled. A round trip through a
+wrong encoder and a wrong decoder returns what it started with, so
+`TestANodesDatRoundTrips` was green on a decoder that could not reach one real
+node.
 
-1. **The ed2k login response has no hello.** `OP_HELLO` (0x01) is the KAD UDP
-   packet. A server that accepts a login confirms with *nothing* — it starts
-   talking. Waiting for a hello meant waiting forever, so every server timed
-   out *after having plainly answered*.
-2. **Neither count packet is a session token, and one was read as a GUID.**
-   `0x40` and `0x34` are both two uint32s and both change every connection
-   (98261 → 99488 → 102254 users). Reading `0x40` as a 16-byte GUID produced
-   `2A8F0100DD450000C2170000551174DE` — visibly the user count followed by the
-   server's own address. `Hash()` was deleted rather than renamed.
-3. **`mustRead` discarded its error.** `io.ReadFull` returns the error that
-   stopped it; the code threw it away with `_`, so a read that ended because
-   the *deadline expired* was indistinguishable from a peer closing. Every
-   quiet server reported EOF and failed the dial, in the normal case.
-4. **"Quiet" and "silent" are different.** Both end in the same read error.
-   Treating a timeout as success let a server that stalled mid-packet produce
-   a usable `Server` — the exact "starts and does nothing" failure this layer
-   exists to prevent.
-5. **The timeouts were guesses, and a loopback server cannot catch that.**
-   400 ms passed every hermetic test. A real server measured **3093 ms, 3094 ms
-   and 3093 ms** to its first byte, then 11.4 s of quiet. Now 8 s and 15 s, with
-   `TestTheRealDeadlinesAreTheMeasuredOnes` pinning them to those numbers.
+**A round-trip test proves the halves agree. It never proves either is right,
+and two mirrored halves agree perfectly.** Byte order is now pinned against the
+*format* — golden bytes copied from a real file — in
+`TestAKnownAddressSurvivesTheRoundTrip`. A fixture written by the code under
+test is circular; that is the whole lesson.
 
-### Two things a later reader should not rediscover the hard way
+### Three things a later reader should not rediscover
 
-**Probe with a bare socket first.** When the live tests reported EOF on every
-server, a Python socket with *no ed2k logic at all* also read nothing — which
-proved the fault was ours and not the network's, and that distinction is what
-made the next step obvious. A connection that is *accepted and then never
-spoken to* is a peer deciding to ignore you; a closed socket is a different
-finding and should be reported as one.
+**Probe with a bare socket first.** When every server read EOF, a Python socket
+with *no ed2k logic at all* also read nothing — which proved the fault was
+ours. An accepted-then-silent connection is a peer ignoring you; a closed
+socket is a different finding and should be reported as one.
 
-**Never trust a probe loop against a rate-limited server.** This bit, and cost
-an hour. Those servers limit by source address, and a 16-probe parallel sweep
-finished in 0.87 s — physically impossible against a server whose first-byte
-latency is 3 s. The threads were being refused, not answered. It then drove
-`91.208.162.87` to total silence for over 45 s, *including the baseline packet
-that had answered moments earlier*, and `193.187.90.12` changed behaviour
-mid-sweep. **A baseline that stops answering means the measurement is measuring
-the rate limit, not the protocol.**
+**Never trust a probe loop against a rate-limited server.** Cost an hour. A
+16-probe parallel sweep finished in 0.87 s against a server whose first-byte
+latency is 3 s — the threads were being refused, not answered. It then drove
+one server to total silence for over 45 s, *including the baseline packet that
+had answered moments earlier*. **A baseline that stops answering means the
+measurement is measuring the rate limit, not the protocol.**
 
-### What is deliberately NOT done
+**A mutation SKIP reads as "nothing wrong" in a summary line.** Two probes in
+the first harness run had patterns that no longer matched the source. Both are
+now taken from the source bytes rather than transcribed by hand.
 
-**The TCP half of SYN obfuscation.** Real eMule also sends its SYN with no TCP
-options; that needs a raw socket, which `net.Dialer` does not expose. The
-payload half alone is enough for the ed2k-rust server to complete a full login,
-and the gap is documented in `Dial`.
+### The mutation harness, which this package did not have
 
-**No client version tag.** Three of five public servers answer with
-"ERROR : Your edonkey client is too old". The obvious fix was tried across
-every plausible tag id and encoding, and the result is **not trustworthy** —
-see the rate-limit note above. The reasons it is still unsent, and the three
-ways to establish it properly, are written up at length in `server.go` above
-`frameBytes`. Summary: run a reference eMule/aMule against one of those
-servers, capture its login request, and read the tag list out of the capture.
-One run answers it definitively. A guessed tag is *worse* than none, because a
-malformed one produces silence — which looks exactly like a server that is
-down.
+`internal/ed2kwire/mutate_ed2kwire.py` — 19 probes, four verdicts (KILLED /
+COVERED / SURVIVED / SKIP). Exit **1** for a hole in the tests, **2** for a
+defect in the harness, so one non-zero code sends the reader to the shorter
+list. Every probe is bounded and restores its file: a sweep of
+`internal/library` was once interrupted by a SIGTERM and left a mutation
+applied to `integrate.go`.
+
+First run: 13 killed, 3 survived, 2 malformed. The three survivors were all
+the same species — a load-bearing flag or bound with no test on it
+(`sentFirst`, `heardAnything`, the zero-seed fallback). `guards_test.go` now
+covers four.
+
+### What is deliberately NOT done, and why
+
+**The Kad tag list does not decode.** The header is established and correct on
+six captured answers: `[E4][09][id:16][tcpport:2 LE][version:1][count:1]`,
+version 8 and port 4662 on every node. Byte 22 is `0x00`, and the library
+reads tags as `[type|0x80][id][value]` — the eMule **ED2K** format — so the
+first tag always failed. Four layouts were tried and ruled out; the analysis is
+written up in full above `Bootstrap` in `kad.go`.
+
+`decodeKadAnswer` therefore reads the header and **stops**, carrying the tag
+bytes unparsed and the claimed count beside them so the discrepancy stays
+visible. A guessed layout is worse than none: a wrong one yields plausible
+node IDs and a routing table keyed on them.
+
+**The ed2k client version tag.** Same answer, same reason: needs a reference
+client's capture, not a probe loop.
+
+> Both open questions close with **one run of a real eMule or aMule against a
+> server, captured**. That is the highest-value hour available and it is not
+> work an LLM can do alone.
+
+Also still open: the **TCP half of SYN obfuscation** (needs a raw socket, not
+exposed by `net.Dialer`; the payload half alone is enough for a full login),
+and **every public `nodes.dat` URL in `live_test.go` 404s** — the working one
+is `upd.emule-security.org`, and that test needs updating.
 
 ### THE NEXT TASK
 
-1. **The version tag**, by the capture method above. That unblocks three of
-   five public servers, and nothing else in this layer is blocked on it.
-2. **The eMule extended handshake** (plan §3). Required for file search, which
-   is the actual feature; the login is only the door.
-3. **`mutate_ed2kwire.py`** — the package has no mutation harness yet, unlike
-   `internal/ed2k` and `internal/rpc`. Five ad-hoc mutations were run by hand
-   this session and all five were killed; that should be repeatable.
-4. **Kad** (`kad.go` exists and passes hermetically, but has never touched a
-   real node). Blocked on a working `nodes.dat` — see below.
+1. **The two captures** (Kad tags, ed2k version tag). One reference-client
+   session closes both.
+2. **The eMule extended handshake** (plan §3) — *this is the actual feature*.
+   The login is the door; the handshake is what gets you file search. It is
+   the only thing standing between this work and a working download.
+3. Fix the dead URLs in `live_test.go` (`TestLiveKadNodesDatDownloads` fails
+   on `www.emule-security.org`; the live URL is `upd.emule-security.org`).
+4. Re-run the mutation harness to confirm 0 survivors after `guards_test.go`.
 
 ### How to run the tests
 
 ```
 cd plugins/p2pdownloader
-go test ./... -count=1                     # whole plugin, ~40s
+go test ./... -count=1                     # whole plugin
 go test ./internal/ed2kwire/ -count=1      # ed2kwire, ~10s
+python3 internal/ed2kwire/mutate_ed2kwire.py   # 19 probes, bounded
 
-ED2K_LIVE_SERVERS="85.17.116.222:6082,176.123.5.89:4725" \
+curl -o /tmp/nodes.dat https://upd.emule-security.org/nodes.dat
+ED2K_LIVE_NODES_DAT=/tmp/nodes.dat \
+  go test -tags ed2klive ./internal/ed2kwire/ -run TestLiveKadBootstraps -v
+
+ED2K_LIVE_SERVERS="85.17.116.222:6082" \
   go test -tags ed2klive ./internal/ed2kwire/ -run TestLiveAServer -v
 ```
 
-The live test is behind `-tags ed2klive` and **fails rather than skips** when
-no servers are configured, on purpose: a live test that skips reports `ok`
-having proved nothing.
-
-**Expect the live test to fail on most servers.** Three say the client is too
-old and one is full. Only `85.17.116.222` currently completes. That is a
-finding about the network, not a regression — the run log says which is which.
-
-### One operational fact
-
-**Every public `nodes.dat` URL tried is dead** — 404 from emule-security.org,
-emule-project.net and the trackers-list mirror. The live Kad test needs a
-contact list supplied via `ED2K_LIVE_NODES_DAT`. Real-world finding, not a code
-problem, and it will not resolve itself.
+Both live tests **fail rather than skip** when unconfigured, on purpose: a
+live test that skips reports `ok` having proved nothing. Read the *exit code of
+the command*, not of the pipe.
 
 ---
 
