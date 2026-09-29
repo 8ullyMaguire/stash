@@ -40,40 +40,12 @@ func (d *FileDeleter) MarkGeneratedFiles(scene *models.Scene) error {
 
 	var files []string
 
-	streamPreviewPath := d.Paths.Scene.GetVideoPreviewPath(sceneHash)
-	exists, _ = fsutil.FileExists(streamPreviewPath)
-	if exists {
-		files = append(files, streamPreviewPath)
-	}
-
-	streamPreviewImagePath := d.Paths.Scene.GetWebpPreviewPath(sceneHash)
-	exists, _ = fsutil.FileExists(streamPreviewImagePath)
-	if exists {
-		files = append(files, streamPreviewImagePath)
-	}
-
-	transcodePath := d.Paths.Scene.GetTranscodePath(sceneHash)
-	exists, _ = fsutil.FileExists(transcodePath)
-	if exists {
-		files = append(files, transcodePath)
-	}
-
-	spritePath := d.Paths.Scene.GetSpriteImageFilePath(sceneHash)
-	exists, _ = fsutil.FileExists(spritePath)
-	if exists {
-		files = append(files, spritePath)
-	}
-
-	vttPath := d.Paths.Scene.GetSpriteVttFilePath(sceneHash)
-	exists, _ = fsutil.FileExists(vttPath)
-	if exists {
-		files = append(files, vttPath)
-	}
-
-	heatmapPath := d.Paths.Scene.GetInteractiveHeatmapPath(sceneHash)
-	exists, _ = fsutil.FileExists(heatmapPath)
-	if exists {
-		files = append(files, heatmapPath)
+	// Both the sharded location and the pre-sharding flat one. Deleting only
+	// the sharded path would leave the flat copy behind for every scene deleted
+	// before its file was regenerated -- which for a large library is most of
+	// them, and the leftovers are what keep the directory large. (stash#2824)
+	for _, f := range paths.SceneGeneratedFiles(*d.Paths, sceneHash) {
+		files = append(files, paths.ResolveForDelete(f)...)
 	}
 
 	return d.FilesWithoutTrash(files)

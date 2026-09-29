@@ -13,6 +13,7 @@ import (
 	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 	"github.com/stashapp/stash/pkg/txn"
 	"github.com/stashapp/stash/pkg/utils"
 )
@@ -26,7 +27,10 @@ func KillRunningStreams(scene *models.Scene, fileNamingAlgo models.HashAlgorithm
 		return
 	}
 
-	transcodePath := GetInstance().Paths.Scene.GetTranscodePath(sceneHash)
+	// Must resolve the same way the streamer resolved it, or the cancel
+	// targets a path nothing is reading. (stash#2824)
+	sp := GetInstance().Paths.Scene
+	transcodePath := paths.ResolveGeneratedFile(sp.GetTranscodePath(sceneHash), sp.GetLegacyTranscodePath(sceneHash))
 	instance.ReadLockManager.Cancel(transcodePath)
 }
 

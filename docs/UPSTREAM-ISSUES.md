@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 438 planned, 225 not planned, 12 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 437 planned, 225 not planned, 13 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**438 planned, 225 not planned, 12 closed, 675 total.**
+**437 planned, 225 not planned, 13 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -50,7 +50,7 @@ These carry a label the maintainers themselves applied.
 | 4336 | Renaming and presentation of all tagging/scraper components and relate | upstream-marked (help wanted) | planned |
 | 3530 | Support multiple scenes in a single file | upstream-marked (bounty) | planned |
 | 3065 | Make Stash more suitable for JAV | upstream-marked (help wanted) | planned |
-| 2824 | Slow scanning with huge amounts of videos | upstream-marked (bug report) | planned |
+| 2824 | Slow scanning with huge amounts of videos | upstream-marked (bug report) | closed |
 | 2122 | Filter Functionality UI/UX Refactor Discussion | upstream-marked (help wanted) | planned |
 | 5731 | Hardware decoding in generation tasks | upstream-marked (help wanted) | planned |
 | 5683 | High CPU / looping read access when loading scene associated with remo | upstream-marked (bug report) | closed |

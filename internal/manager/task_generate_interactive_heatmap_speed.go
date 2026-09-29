@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/stashapp/stash/pkg/file/video"
-	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 )
 
 type GenerateInteractiveHeatmapSpeedTask struct {
@@ -83,6 +83,9 @@ func (t *GenerateInteractiveHeatmapSpeedTask) doesHeatmapExist(sceneChecksum str
 		return false
 	}
 
-	imageExists, _ := fsutil.FileExists(instance.Paths.Scene.GetInteractiveHeatmapPath(sceneChecksum))
-	return imageExists
+	// The legacy flat path counts too. Without it every scene that already has a
+	// heatmap regenerates one after the upgrade, which decodes the whole video
+	// again for nothing. (stash#2824)
+	sp := instance.Paths.Scene
+	return paths.ResolveGeneratedFile(sp.GetInteractiveHeatmapPath(sceneChecksum), sp.GetLegacyInteractiveHeatmapPath(sceneChecksum)) != ""
 }

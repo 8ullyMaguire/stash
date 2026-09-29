@@ -18,6 +18,7 @@ import (
 	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 	"github.com/stashapp/stash/pkg/utils"
 )
 
@@ -262,7 +263,8 @@ func (rs sceneRoutes) Screenshot(w http.ResponseWriter, r *http.Request) {
 func (rs sceneRoutes) Preview(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
 	sceneHash := scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
-	filepath := manager.GetInstance().Paths.Scene.GetVideoPreviewPath(sceneHash)
+	sp := manager.GetInstance().Paths.Scene
+	filepath := paths.ResolveGeneratedFile(sp.GetVideoPreviewPath(sceneHash), sp.GetLegacyVideoPreviewPath(sceneHash))
 
 	utils.ServeStaticFile(w, r, filepath)
 }
@@ -270,7 +272,8 @@ func (rs sceneRoutes) Preview(w http.ResponseWriter, r *http.Request) {
 func (rs sceneRoutes) Webp(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
 	sceneHash := scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
-	filepath := manager.GetInstance().Paths.Scene.GetWebpPreviewPath(sceneHash)
+	sp := manager.GetInstance().Paths.Scene
+	filepath := paths.ResolveGeneratedFile(sp.GetWebpPreviewPath(sceneHash), sp.GetLegacyWebpPreviewPath(sceneHash))
 
 	utils.ServeStaticFile(w, r, filepath)
 }
@@ -357,7 +360,8 @@ func (rs sceneRoutes) VttThumbs(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sceneHash = chi.URLParam(r, "sceneHash")
 	}
-	filepath := manager.GetInstance().Paths.Scene.GetSpriteVttFilePath(sceneHash)
+	sp := manager.GetInstance().Paths.Scene
+	filepath := paths.ResolveGeneratedFile(sp.GetSpriteVttFilePath(sceneHash), sp.GetLegacySpriteVttFilePath(sceneHash))
 
 	w.Header().Set("Content-Type", "text/vtt")
 	utils.ServeStaticFile(w, r, filepath)
@@ -371,7 +375,8 @@ func (rs sceneRoutes) VttSprite(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sceneHash = chi.URLParam(r, "sceneHash")
 	}
-	filepath := manager.GetInstance().Paths.Scene.GetSpriteImageFilePath(sceneHash)
+	sp := manager.GetInstance().Paths.Scene
+	filepath := paths.ResolveGeneratedFile(sp.GetSpriteImageFilePath(sceneHash), sp.GetLegacySpriteImageFilePath(sceneHash))
 
 	utils.ServeStaticFile(w, r, filepath)
 }
@@ -400,7 +405,8 @@ func (rs sceneRoutes) InteractiveCSV(w http.ResponseWriter, r *http.Request) {
 func (rs sceneRoutes) InteractiveHeatmap(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
 	sceneHash := scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
-	filepath := manager.GetInstance().Paths.Scene.GetInteractiveHeatmapPath(sceneHash)
+	sp := manager.GetInstance().Paths.Scene
+	filepath := paths.ResolveGeneratedFile(sp.GetInteractiveHeatmapPath(sceneHash), sp.GetLegacyInteractiveHeatmapPath(sceneHash))
 
 	utils.ServeStaticFile(w, r, filepath)
 }

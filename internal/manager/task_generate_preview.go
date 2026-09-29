@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 	"github.com/stashapp/stash/pkg/scene/generate"
 )
 
@@ -98,7 +98,8 @@ func (t *GeneratePreviewTask) videoPreviewRequired() bool {
 	}
 
 	if t.videoPreviewExists == nil {
-		videoExists, _ := fsutil.FileExists(instance.Paths.Scene.GetVideoPreviewPath(sceneChecksum))
+		sp := instance.Paths.Scene
+		videoExists := paths.ResolveGeneratedFile(sp.GetVideoPreviewPath(sceneChecksum), sp.GetLegacyVideoPreviewPath(sceneChecksum)) != ""
 		t.videoPreviewExists = &videoExists
 	}
 
@@ -124,7 +125,8 @@ func (t *GeneratePreviewTask) imagePreviewRequired() bool {
 	}
 
 	if t.imagePreviewExists == nil {
-		imageExists, _ := fsutil.FileExists(instance.Paths.Scene.GetWebpPreviewPath(sceneChecksum))
+		sp := instance.Paths.Scene
+		imageExists := paths.ResolveGeneratedFile(sp.GetWebpPreviewPath(sceneChecksum), sp.GetLegacyWebpPreviewPath(sceneChecksum)) != ""
 		t.imagePreviewExists = &imageExists
 	}
 

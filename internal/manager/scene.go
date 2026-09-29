@@ -6,8 +6,8 @@ import (
 
 	"github.com/stashapp/stash/internal/manager/config"
 	"github.com/stashapp/stash/pkg/ffmpeg"
-	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 )
 
 type SceneStreamEndpoint struct {
@@ -232,7 +232,9 @@ func HasTranscode(scene *models.Scene, fileNamingAlgo models.HashAlgorithm) bool
 		return false
 	}
 
-	transcodePath := instance.Paths.Scene.GetTranscodePath(sceneHash)
-	ret, _ := fsutil.FileExists(transcodePath)
-	return ret
+	// The legacy flat path counts too: without it every scene that already has
+	// a transcode would re-encode it once after the upgrade, which for a large
+	// library is a very expensive no-op. (stash#2824)
+	sp := instance.Paths.Scene
+	return paths.ResolveGeneratedFile(sp.GetTranscodePath(sceneHash), sp.GetLegacyTranscodePath(sceneHash)) != ""
 }

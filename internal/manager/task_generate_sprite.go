@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 )
 
 type GenerateSpriteTask struct {
@@ -78,7 +78,10 @@ func (t *GenerateSpriteTask) doesSpriteExist(sceneChecksum string) bool {
 		return false
 	}
 
-	imageExists, _ := fsutil.FileExists(instance.Paths.Scene.GetSpriteImageFilePath(sceneChecksum))
-	vttExists, _ := fsutil.FileExists(instance.Paths.Scene.GetSpriteVttFilePath(sceneChecksum))
+	// Both paths count for both files, for the same reason as the transcode
+	// check: a false negative here re-generates the sprite for every scene. (stash#2824)
+	sp := instance.Paths.Scene
+	imageExists := paths.ResolveGeneratedFile(sp.GetSpriteImageFilePath(sceneChecksum), sp.GetLegacySpriteImageFilePath(sceneChecksum)) != ""
+	vttExists := paths.ResolveGeneratedFile(sp.GetSpriteVttFilePath(sceneChecksum), sp.GetLegacySpriteVttFilePath(sceneChecksum)) != ""
 	return imageExists && vttExists
 }
