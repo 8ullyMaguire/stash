@@ -295,14 +295,84 @@ func (sm *StreamManager) getTranscodeStream(ctx *fsutil.LockContext, options Tra
 	mimeType := options.StreamType.MimeType
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+
+		// #5683 - do not claim success before ffmpeg has produced anything.
+		//
+		// The status was written unconditionally, so a transcode that died
+		// instantly -- most often because the source file is gone, e.g. the
+		// scene lives on a drive that was removed, or was moved without a
+		// rescan -- answered the request with "200 OK, Content-Type:
+		// video/mp4" and an empty body. Firefox treats that as a stream that
+		// ended unexpectedly and re-requests it, forever: each attempt
+		// spawns another ffmpeg, so a page left open burns 60-80% of a core
+		// and fills the log with thousands of identical errors.
+		//
+		// Waiting for the first byte before writing the header turns that
+		// into a single failure the client will not retry. It costs nothing
+		// on the happy path: ffmpeg emits the container header within
+		// milliseconds, and for MP4 the -movflags frag_keyframe+empty_moov
+		// combination makes the first fragment available immediately.
+		//
+		// The Content-Type is set AFTER the peek for the same reason. A 500
+		// advertising video/mp4 is the exact shape the browser misreads: a
+		// client that keys off the content type rather than the status will
+		// treat it as a stream and retry. On the failure path the type is
+		// left unset, so nothing claims to be video.
+		//
+		// Errors that arrive AFTER the first byte cannot be reported as a
+		// status code -- the header is already sent -- so they are logged and
+		// the connection is simply closed, which is the correct signal for a
+		// truncated stream.
+		firstByte := make([]byte, 1)
+		n, readErr := stdout.Read(firstByte)
+		if n == 0 && readErr != nil {
+			// Nothing was produced. Report the failure as a status code so
+			// the client stops asking.
+			//
+			// Cancellation must NOT become a 500, and it does not arrive in
+			// the shape the obvious check assumes. When the context is
+			// already done, exec.CommandContext refuses to start the process
+			// at all, so cmd.Start() returns "context canceled" here, and the
+			// pipe read that follows fails with EOF or a bare "file already
+			// closed" -- neither of which is context.Canceled and neither of
+			// which unwraps to it. Checking only errors.Is(err,
+			// context.Canceled) therefore misses the case and turns every
+			// cancelled playback into an error in the UI, which is the mirror
+			// image of the bug being fixed.
+			//
+			// The authoritative question is not "what error is this" but
+			// "was this stream cancelled", and the context the command is
+			// parented to is the thing that answers it. The request context
+			// is NOT a substitute: it is a different context, and a user
+			// navigating away does not necessarily trip it before the pipe
+			// fails.
+			if sm.context.Err() != nil || r.Context().Err() != nil ||
+				errors.Is(readErr, context.Canceled) {
+				return
+			}
+			logger.Errorf("[transcode] ffmpeg produced no output: %v", readErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", mimeType)
 		w.WriteHeader(http.StatusOK)
 
+		// Write the byte we consumed in order to read it, then the rest.
+		if n > 0 {
+			if _, err := w.Write(firstByte[:n]); err != nil {
+				logger.Warnf("[transcode] error writing response: %v", err)
+				return
+			}
+		}
+
 		// process killing should be handled by command context
 
-		_, err := io.Copy(w, stdout)
-		if err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
-			logger.Errorf("[transcode] error serving transcoded video file: %v", err)
+		if readErr == nil {
+			_, err = io.Copy(w, stdout)
+			if err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
+				logger.Errorf("[transcode] error serving transcoded video file: %v", err)
+			}
 		}
 
 		w.(http.Flusher).Flush()
