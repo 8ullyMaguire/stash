@@ -84,23 +84,83 @@ func (r mappedResult) IntPtr(key string) *int {
 }
 
 func (r mappedResults) setSingleValue(index int, key string, value string) mappedResults {
-	if index >= len(r) {
-		r = append(r, make(mappedResult))
-	}
-
+	r = r.growTo(index)
 	logger.Debugf(`[%d][%s] = %s`, index, key, value)
 	r[index][key] = value
 	return r
 }
 
 func (r mappedResults) setMultiValue(index int, key string, value []string) mappedResults {
-	if index >= len(r) {
-		r = append(r, make(mappedResult))
-	}
-
+	r = r.growTo(index)
 	logger.Debugf(`[%d][%s] = %s`, index, key, value)
 	r[index][key] = value
 	return r
+}
+
+// growTo extends r so that index is addressable, padding with empty results.
+//
+// #7263. The original code appended ONE element when index >= len(r), which is
+// only correct when the indices arrive in order. They no longer do: with
+// per-attribute cleaning removed, a performer list whose first attribute is
+// empty for entries 0-2 and populated from 3 onwards writes at index 3 while
+// len(r) is 0, leaving a slice of length 1 and a panic on the next write.
+// Growing to the index also makes a genuinely sparse attribute list produce
+// empty objects rather than silently shifting every later attribute.
+func (r mappedResults) growTo(index int) mappedResults {
+	for len(r) <= index {
+		r = append(r, make(mappedResult))
+	}
+	return r
+}
+
+// dedupeByName removes duplicate sub-objects that share a Name, keeping the
+// first. #7263.
+//
+// This is the deduplication that per-attribute cleaning used to do, and doing
+// it here instead is the whole point of the fix: at this stage an object is
+// complete, so two entries with the same name really are the same entity
+// listed twice on the page, and dropping one loses nothing. Removing a
+// duplicate name from the name list but not from the gender list -- which is
+// what cleanResults did -- cannot express that.
+//
+// NAMELESS OBJECTS ARE DROPPED. A scraper slot with no name is a page
+// artifact: a container that matched the selector with nothing in it. There is
+// no entity to describe and nothing downstream can match on, so keeping it
+// only produces an object that will be offered to the user as a blank entry.
+//
+// The rule is uniform rather than per-type, which is the point: a single
+// predicate at one place, instead of each consumer deciding for itself. An
+// earlier version of this fix kept nameless objects on the reasoning that a
+// performer might have a gender even without a name -- true, and useless,
+// because ScrapedPerformer.Name is a pointer and a performer with no name
+// cannot be created, matched or tagged. Note that this DOES change what a
+// performer list loses relative to the old code: the old code deleted the
+// empty name from the name list and kept the rest of the attributes, so a
+// nameless slot contributed a gender to whoever landed at that index -- which
+// is the crossing this fix exists to remove.
+func (r mappedResults) dedupeByName() mappedResults {
+	if len(r) == 0 {
+		return r
+	}
+
+	seen := make(map[string]bool, len(r))
+	ret := make(mappedResults, 0, len(r))
+
+	for _, result := range r {
+		name, ok := result["Name"].(string)
+		if !ok || name == "" {
+			logger.Debug("Dropping sub-object with no name")
+			continue
+		}
+		if seen[name] {
+			logger.Debugf("Dropping duplicate sub-object %q", name)
+			continue
+		}
+		seen[name] = true
+		ret = append(ret, result)
+	}
+
+	return ret
 }
 
 func (r mappedResults) scrapedTags() []*models.ScrapedTag {

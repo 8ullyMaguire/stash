@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 442 planned, 225 not planned, 8 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 441 planned, 225 not planned, 9 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**442 planned, 225 not planned, 8 closed, 675 total.**
+**441 planned, 225 not planned, 9 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -105,7 +105,7 @@ These carry a label the maintainers themselves applied.
 | 2773 | Stash is unaware when an image has been replaced if the name is the sa | upstream-marked (bug report) | planned |
 | 2765 | Lightbox image changes on rating/o-counter value change | upstream-marked (bug report) | planned |
 | 2464 | Change default setting of PHash generation to ON for Scans | upstream-marked (help wanted) | planned |
-| 7263 | Mapped scrapers assign wrong attributes to sub-objects when values rep | upstream-marked (bug report) | planned |
+| 7263 | Mapped scrapers assign wrong attributes to sub-objects when values rep | upstream-marked (bug report) | closed |
 | 7256 | Input file buttons in firefox unresponsive | upstream-marked (bug report) | planned |
 | 7240 | [security] Zip-Slip arbitrary file write in import and package install | upstream-marked (bug report) | closed |
 | 7239 | Hardware transcode: [InitHWSupport] Supported HW codecs [0] gives no a | upstream-marked (bug report) | planned |

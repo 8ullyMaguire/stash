@@ -254,13 +254,23 @@ func TestMappedResultsSetSingleValue(t *testing.T) {
 			shouldPanic:    false,
 		},
 		{
-			name:           "sparse index causes panic",
+			// #7263. This case used to assert a PANIC, which is how the bug
+			// survived: setSingleValue appended exactly one element, so any
+			// index beyond the current length wrote out of range on the
+			// following attribute. The case's own expectedLen was already 6,
+			// so the intent was padding and only the assertion disagreed.
+			//
+			// With per-attribute cleaning removed, a sparse index is normal
+			// rather than exceptional: a performer whose gender is empty
+			// shifts every later write up one index, and the first write lands
+			// past the end of the slice.
+			name:           "sparse index pads rather than panicking",
 			initialResults: mappedResults{mappedResult{}},
 			index:          5,
 			key:            "name",
 			value:          "test",
 			expectedLen:    6,
-			shouldPanic:    true,
+			shouldPanic:    false,
 		},
 	}
 

@@ -46,7 +46,41 @@ func extractHostname(urlStr string) string {
 
 type isMultiFunc func(key string) bool
 
+// process builds a single object (or, during a search, one object per search
+// result), so index N is the Nth RESULT and each attribute can be cleaned
+// independently. See processSubObjects for the list-of-objects case.
 func (s mappedConfig) process(ctx context.Context, q mappedQuery, common commonMappedConfig, isMulti isMultiFunc) mappedResults {
+	return s.processInternal(ctx, q, common, isMulti, false)
+}
+
+// processSubObjects builds a LIST of sub-objects -- the performers of a scene,
+// the movies of a gallery -- where index N must mean the same object for every
+// attribute. #7263.
+//
+// It is the same walk as process with one difference: the per-attribute results
+// are NOT deduplicated. Deduplicating each attribute's list independently
+// destroys the only thing that links a name to its gender, because the two
+// lists collapse differently. Ten performers with two genders came out as ten
+// names and two genders; index 1 of the gender list then attached to whichever
+// performer happened to be at index 1 after the shift, and everyone after the
+// first duplicate got somebody else's attributes.
+//
+// Cleaning is also skipped for SearchQuery in postProcess, and that is not a
+// workaround -- it is the same requirement. Both routes need index N to line
+// up. The deduplication that IS wanted happens once, on the assembled objects,
+// in dedupeByName.
+//
+// The other half of the fix lives in splitString: it drops empty segments on
+// its own, so "Anne,Beth,,Dora" lost a slot before cleanResults was ever
+// reached. postProcess uses splitStringPreservingEmpty for this route.
+func (s mappedConfig) processSubObjects(ctx context.Context, q mappedQuery, common commonMappedConfig, isMulti isMultiFunc) mappedResults {
+	return s.processInternal(ctx, q, common, isMulti, true)
+}
+
+// processInternal is the shared walk behind process and processSubObjects.
+// keepPositions selects between them; see those two for why the difference
+// matters.
+func (s mappedConfig) processInternal(ctx context.Context, q mappedQuery, common commonMappedConfig, isMulti isMultiFunc, keepPositions bool) mappedResults {
 	var ret mappedResults
 
 	for k, attrConfig := range s {
@@ -71,7 +105,7 @@ func (s mappedConfig) process(ctx context.Context, q mappedQuery, common commonM
 			}
 
 			if len(found) > 0 {
-				result := s.postProcess(ctx, q, attrConfig, found)
+				result := s.postProcess(ctx, q, attrConfig, found, keepPositions)
 
 				// HACK - if the key is URLs, then we need to set the value as a multi-value
 				isMulti := isMulti != nil && isMulti(k)
@@ -89,16 +123,33 @@ func (s mappedConfig) process(ctx context.Context, q mappedQuery, common commonM
 	return ret
 }
 
-func (s mappedConfig) postProcess(ctx context.Context, q mappedQuery, attrConfig mappedScraperAttrConfig, found []string) []string {
+// postProcess turns raw query matches into the final list of values for one
+// attribute.
+//
+// keepPositions is true when the caller is building a list of sub-objects
+// (#7263). In that case NOTHING may be removed here: dropping a duplicate or an
+// empty value shortens this list relative to the others, and index N stops
+// meaning the same object for every attribute. That applies to splitString too,
+// which drops empty segments on its own -- hence the two helpers.
+//
+// keepPositions is also forced true for SearchQuery, for the same underlying
+// reason: a search result's index has to line up too. That behaviour predates
+// this fix and is not changed.
+func (s mappedConfig) postProcess(ctx context.Context, q mappedQuery, attrConfig mappedScraperAttrConfig, found []string, keepPositions bool) []string {
 	// check if we're concatenating the results into a single result
 	var ret []string
 	if attrConfig.hasConcat() {
 		result := attrConfig.concatenateResults(found)
 		result = attrConfig.postProcess(ctx, result, q)
 		if attrConfig.hasSplit() {
-			results := attrConfig.splitString(result)
+			var results []string
+			if keepPositions {
+				results = attrConfig.splitStringPreservingEmpty(result)
+			} else {
+				results = attrConfig.splitString(result)
+			}
 			// skip cleaning when the query is used for searching
-			if q.getType() == SearchQuery {
+			if q.getType() == SearchQuery || keepPositions {
 				return results
 			}
 			results = attrConfig.cleanResults(results)
@@ -110,13 +161,16 @@ func (s mappedConfig) postProcess(ctx context.Context, q mappedQuery, attrConfig
 		for _, text := range found {
 			text = attrConfig.postProcess(ctx, text, q)
 			if attrConfig.hasSplit() {
+				if keepPositions {
+					return attrConfig.splitStringPreservingEmpty(text)
+				}
 				return attrConfig.splitString(text)
 			}
 
 			ret = append(ret, text)
 		}
 		// skip cleaning when the query is used for searching
-		if q.getType() == SearchQuery {
+		if q.getType() == SearchQuery || keepPositions {
 			return ret
 		}
 		ret = attrConfig.cleanResults(ret)
@@ -526,6 +580,27 @@ func (c mappedScraperAttrConfig) splitString(value string) []string {
 	}
 
 	return res
+}
+
+// splitStringPreservingEmpty is the same split WITHOUT dropping empty segments.
+//
+// #7263. A comma-separated list scraped out of one node -- "Anne,Beth,,Dora"
+// where one performer has no name -- loses the empty slot here, and every
+// attribute after it moves up by one. This is a SEPARATE shift from the one in
+// cleanResults, on a different code path, and it survives the main fix: the
+// list is already collapsed before cleanResults is ever called.
+//
+// The empty segments are kept for sub-object lists and dropped for everything
+// else, because a trailing separator on a single-value attribute ("Anne,,")
+// is a typo rather than a nameless performer. The callers know which case they
+// are in -- see postProcess.
+func (c mappedScraperAttrConfig) splitStringPreservingEmpty(value string) []string {
+	separator := c.Split
+	if separator == "" {
+		return []string{value}
+	}
+
+	return strings.Split(value, separator)
 }
 
 func (c mappedScraperAttrConfig) postProcess(ctx context.Context, value string, q mappedQuery) string {
