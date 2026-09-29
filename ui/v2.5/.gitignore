@@ -7,6 +7,12 @@ src/core/generated-graphql.ts
 # testing
 /coverage
 
+# transient build output from scripts/check-country-names.mjs, which
+# compiles src/ on the fly to drive the real library. The script removes it on
+# a clean exit; a Ctrl-C or a failed compile can leave it behind, and it must
+# never reach a commit.
+/.country-check-build
+
 # production
 /build
 

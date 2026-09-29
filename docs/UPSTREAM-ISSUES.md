@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 448 planned, 225 not planned, 2 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 445 planned, 225 not planned, 5 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**448 planned, 225 not planned, 2 closed, 675 total.**
+**445 planned, 225 not planned, 5 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -56,7 +56,7 @@ These carry a label the maintainers themselves applied.
 | 5683 | High CPU / looping read access when loading scene associated with remo | upstream-marked (bug report) | planned |
 | 5538 | Performer Image Malformed via Local Image URL when API/Creds Enabled | upstream-marked (bug report) | planned |
 | 5317 | Sometimes images are placed outside the viewport in lightbox on Androi | upstream-marked (bug report) | planned |
-| 5237 | Naming issue for Taiwan in list of countries | upstream-marked (bug report) | planned |
+| 5237 | Naming issue for Taiwan in list of countries | upstream-marked (bug report) | closed |
 | 5002 | Plugin settings UI/UX | upstream-marked (help wanted) | planned |
 | 4136 | Can't cast any video to Chromecast | upstream-marked (bug report) | planned |
 | 3722 | pHash Improvement for Short Durations | upstream-marked (help wanted) | planned |
@@ -107,7 +107,7 @@ These carry a label the maintainers themselves applied.
 | 2464 | Change default setting of PHash generation to ON for Scans | upstream-marked (help wanted) | planned |
 | 7263 | Mapped scrapers assign wrong attributes to sub-objects when values rep | upstream-marked (bug report) | planned |
 | 7256 | Input file buttons in firefox unresponsive | upstream-marked (bug report) | planned |
-| 7240 | [security] Zip-Slip arbitrary file write in import and package install | upstream-marked (bug report) | planned |
+| 7240 | [security] Zip-Slip arbitrary file write in import and package install | upstream-marked (bug report) | closed |
 | 7239 | Hardware transcode: [InitHWSupport] Supported HW codecs [0] gives no a | upstream-marked (bug report) | planned |
 | 7238 | paths.funscript should use signed URLs when authentication is enabled | upstream-marked (bug report) | planned |
 | 7234 | Details for Performers being shown below Picture on Safari | upstream-marked (bug report) | planned |
@@ -120,7 +120,7 @@ These carry a label the maintainers themselves applied.
 | 7198 | Updating scrapers does not install new requirements | upstream-marked (bug report) | planned |
 | 7179 | `.nogallery` does not remove an existing folder-based gallery during C | upstream-marked (bug report) | planned |
 | 7155 | Stale sprite/preview/cover/transcode after a same path file content ch | upstream-marked (bug report) | planned |
-| 7152 | Studio Tagger batch update panics when scraped studio has nil StoredID | upstream-marked (bug report) | planned |
+| 7152 | Studio Tagger batch update panics when scraped studio has nil StoredID | upstream-marked (bug report) | closed |
 | 7149 | Panning images in lightbox with the mouse wheel can result in navigati | upstream-marked (bug report) | planned |
 | 7148 | Drags that overshoot the image boundaries result in the lightbox/image | upstream-marked (bug report) | planned |
 | 7147 | Fast dragging motions in the lightbox/image-viewer navigate to the nex | upstream-marked (bug report) | planned |
