@@ -37,8 +37,18 @@ RUN make flags-release flags-pie stash
 
 # Final Runnable Image
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates vips-tools ffmpeg
+RUN apk add --no-cache ca-certificates vips-tools ffmpeg su-exec
 COPY --from=backend /stash/stash /usr/bin/
+COPY docker/entrypoint.sh /usr/bin/stash-entrypoint
+RUN chmod +x /usr/bin/stash-entrypoint \
+ && addgroup -g 1000 -S stash \
+ && adduser -D -H -u 1000 -G stash stash
 ENV STASH_CONFIG_FILE=/root/.stash/config.yml
+# No USER line: the process has to start as root to chown the data dirs and
+# then drop privileges, because the documented bind mount is /root/.stash and a
+# non-root process cannot write to it until the entrypoint has arranged that.
+# See docker/entrypoint.sh -- PUID/PGID/UMASK control the resulting uid, gid and
+# file mode, and RUN_AS_ROOT=1 opts out. (stash#684)
 EXPOSE 9999
-ENTRYPOINT ["stash"]
+ENTRYPOINT ["/usr/bin/stash-entrypoint"]
+CMD ["stash"]

@@ -231,6 +231,11 @@ jobs:
         mkdir -p dist
         cp artifacts/build-*/* dist/
         chmod +x dist/*
+        # docker/ci/x86_64/Dockerfile builds with dist/ as its context, so the
+        # privilege-dropping entrypoint has to be inside it. Without this the
+        # COPY in that Dockerfile has no source and the release build fails.
+        # (stash#684)
+        cp docker/entrypoint.sh dist/entrypoint.sh
 
     - name: Zip UI
       run: |

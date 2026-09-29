@@ -25,6 +25,13 @@ services:
       ## Set your timezone, e.g. America/New_York or Europe/Berlin
       ## see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
       - TZ=Etc/UTC
+      ## The container drops to an unprivileged user before running stash, so
+      ## files it writes are yours on the host rather than root's. Set these to
+      ## your own ids to be sure -- `id -u` and `id -g`.
+      - PUID=1000
+      - PGID=1000
+      ## Uncomment to keep the old behaviour and run as root.
+      # - RUN_AS_ROOT=1
     volumes:
       ## Adjust below paths (the left part) to your liking.
       ## E.g. you can change ./config:/root/.stash to ./stash:/root/.stash

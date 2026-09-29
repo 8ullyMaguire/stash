@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 440 planned, 225 not planned, 10 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 439 planned, 225 not planned, 11 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**440 planned, 225 not planned, 10 closed, 675 total.**
+**439 planned, 225 not planned, 11 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -44,7 +44,7 @@ These carry a label the maintainers themselves applied.
 |---|---|---|---|
 | 571 | Support for multiple performer images | upstream-marked (bounty) | planned |
 | 2049 | Request for Submissions: Stash Logo | upstream-marked (help wanted) | planned |
-| 684 | Non-privileged user in Docker build | upstream-marked (bounty) | planned |
+| 684 | Non-privileged user in Docker build | upstream-marked (bounty) | closed |
 | 398 | Groups section Suggested Improvements | upstream-marked (help wanted) | planned |
 | 13 | Scene upload from UI | upstream-marked (bounty) | planned |
 | 4336 | Renaming and presentation of all tagging/scraper components and relate | upstream-marked (help wanted) | planned |
