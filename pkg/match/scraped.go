@@ -90,8 +90,75 @@ func ScrapedPerformer(ctx context.Context, qb PerformerFinder, p *models.Scraped
 		}
 	}
 
-	if len(performers) != 1 {
-		// ignore - cannot match
+	// WHY THE LENGTH IS NOT CHECKED FOR EXACTLY ONE.
+	//
+	// A library may legitimately hold several performers sharing a name and
+	// distinguished by disambiguation -- that is what disambiguation is for,
+	// and the uniqueness constraint is on (name, disambiguation), never on
+	// name alone. The name lookup is case-insensitive and ignores
+	// disambiguation, so it returns every performer carrying this name.
+	//
+	// Requiring exactly one match treated that ambiguity as ABSENCE. StoredID
+	// was left nil, the caller concluded the performer did not exist and
+	// created it, and the insert then failed on the database's own uniqueness
+	// constraint, surfacing as
+	//
+	//	error creating performer: ... UNIQUE constraint failed: performers.name
+	//
+	// and through the create-then-save path as
+	//
+	//	performer with name 'X' already exists
+	//
+	// which reads as a failed existence check. The check did not fail; its
+	// result was discarded because there was more than one of it.
+	//
+	// THE FIX: disambiguate with the disambiguation the scraper itself
+	// supplied, and only with that. ScrapedPerformer carries a
+	// Disambiguation field which the name lookup never looked at, so the
+	// information needed to resolve the collision was present and unused.
+	//
+	// If that narrows the candidates to one, the match is made. If it does
+	// not -- no disambiguation supplied, or several candidates still share it
+	// -- the name stays unmatched. Guessing between two real people is worse
+	// than not matching, so ambiguity is never resolved by picking the first
+	// row. It resolves to "create it, and let the user see the name that
+	// collided", which is a state they can act on.
+	//
+	// Note this does NOT make the ambiguous case a duplicate any more: if the
+	// library holds two performers named "Mia Ipanema" and the scraper
+	// proposes the same name, creation still trips the constraint. What
+	// changes is that the collision is now reported as a name that is
+	// genuinely occupied rather than as a mysterious UNIQUE failure on a
+	// column the user never knew was unique, and the create path can key off
+	// the disambiguation the scraper gave us.
+	if len(performers) == 0 {
+		// genuinely absent -- create it
+		return nil
+	}
+
+	if len(performers) > 1 {
+		// Ambiguous by name. Resolve it the way the database itself would:
+		// on (name, disambiguation). The scraper's Disambiguation is the
+		// only disambiguating input we have, and using anything else would be
+		// a guess dressed up as a lookup.
+		//
+		// A candidate with an empty disambiguation and a scraper that sent ""
+		// compare equal, which is correct: NULL and the empty string are the
+		// same statement about a person, and treating them as different would
+		// fail to resolve a case that is in fact decided.
+		if p.Disambiguation != nil {
+			var narrowed []*models.Performer
+			for _, cand := range performers {
+				if cand.Disambiguation == *p.Disambiguation {
+					narrowed = append(narrowed, cand)
+				}
+			}
+			if len(narrowed) == 1 {
+				id := strconv.Itoa(narrowed[0].ID)
+				p.StoredID = &id
+			}
+		}
+		// If it is still ambiguous, StoredID stays nil on purpose. See above.
 		return nil
 	}
 
