@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 443 planned, 225 not planned, 7 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 442 planned, 225 not planned, 8 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**443 planned, 225 not planned, 7 closed, 675 total.**
+**442 planned, 225 not planned, 8 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -67,7 +67,7 @@ These carry a label the maintainers themselves applied.
 | 2833 | `e` keyboard shortcut collides with subpages that use the same shortcu | upstream-marked (bug report) | planned |
 | 2540 | Image HTTP request referrer behavior | upstream-marked (help wanted) | planned |
 | 2293 | Non-ASCII performers fail to be tagged with Auto Tag | **CLOSED** `6e3e5e1e8` — already fixed upstream; regression guard added | closed |
-| 2149 | Phash validation | upstream-marked (bug report) | planned |
+| 2149 | Phash validation | upstream-marked (bug report) | closed |
 | 1961 | Performers sub-page and performer cards include objects from other stu | upstream-marked (bug report) | planned |
 | 647 | Add keyboard shortcuts to focus selector fields | upstream-marked (help wanted) | planned |
 | 7247 | VR videos get super bright and washed out when played in VR mode | upstream-marked (bug report) | planned |
