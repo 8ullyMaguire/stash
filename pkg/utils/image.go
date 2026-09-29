@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -308,26 +307,12 @@ func ReadImageFromURL(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 
-	// assume is a URL for now
-
-	// set the host of the URL as the referer
-	if req.URL.Scheme != "" {
-		req.Header.Set("Referer", req.URL.Scheme+"://"+req.Host+"/")
-	}
 	req.Header.Set("User-Agent", getUserAgent())
 
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("http error %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	// The Referer ladder. The first attempt sends the image host, which is what
+	// Stash has always done and what hotlink-protected hosts need; the
+	// alternatives are tried only on 403. #2540.
+	_, body, err := DoWithRefererLadder(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}

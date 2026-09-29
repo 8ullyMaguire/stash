@@ -2,13 +2,10 @@ package scraper
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/stashapp/stash/pkg/models"
-	"github.com/stashapp/stash/pkg/utils"
 )
 
 func setPerformerImage(ctx context.Context, client *http.Client, p *models.ScrapedPerformer, globalConfig GlobalConfig) error {
@@ -87,54 +84,6 @@ type imageGetter struct {
 	client          *http.Client
 	globalConfig    GlobalConfig
 	requestModifier func(req *http.Request)
-}
-
-func (i *imageGetter) getImage(ctx context.Context, url string) (*string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	userAgent := i.globalConfig.GetScraperUserAgent()
-	if userAgent != "" {
-		req.Header.Set("User-Agent", userAgent)
-	}
-
-	// assume is a URL for now
-
-	// set the host of the URL as the referer
-	if req.URL.Scheme != "" {
-		req.Header.Set("Referer", req.URL.Scheme+"://"+req.Host+"/")
-	}
-
-	if i.requestModifier != nil {
-		i.requestModifier(req)
-	}
-
-	resp, err := i.client.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("http error %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// determine the image type and set the base64 type
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = http.DetectContentType(body)
-	}
-
-	img := "data:" + contentType + ";base64," + utils.GetBase64StringFromData(body)
-	return &img, nil
 }
 
 func getImage(ctx context.Context, url string, client *http.Client, globalConfig GlobalConfig) (*string, error) {
