@@ -41,6 +41,18 @@ function acceptExtensions(acceptSVG: boolean = false) {
   return `.jpg,.jpeg,.png,.webp,.gif${acceptSVG ? ",.svg" : ""}`;
 }
 
+// #7256. The file input needs a stable id so a <label htmlFor> can point at
+// it. React 17 has no useId, so this counter does the job: it is assigned once
+// per mounted ImageInput and never reused, which is all htmlFor requires. It
+// does not need to be unique across page loads or across sessions, only among
+// the inputs on the current page -- two ImageInputs open at once must not share
+// an id, or the second label would activate the first input.
+let fileInputSeq = 0;
+function nextFileInputId() {
+  fileInputSeq += 1;
+  return `image-file-input-${fileInputSeq}`;
+}
+
 export const ImageInput: React.FC<IImageInput> = PatchComponent(
   "ImageInput",
   ({
@@ -54,18 +66,28 @@ export const ImageInput: React.FC<IImageInput> = PatchComponent(
   }) => {
     const [isShowDialog, setIsShowDialog] = useState(false);
     const [url, setURL] = useState("");
+    // #7256 - the id for the file input this component owns. See
+    // nextFileInputId for why it is a counter and not useId.
+    const [fileInputId] = useState(nextFileInputId);
     const intl = useIntl();
     const Toast = useToast();
     if (!isEditing) return <div />;
 
     if (!onImageURL) {
       // just return the file input
+      //
+      // The <label> is the button, not a <button> wrapping the input. An
+      // interactive element inside a <button> is invalid HTML, and Firefox
+      // refuses to activate the nested file input -- which is #7256. A label
+      // with htmlFor is the standard, valid way to make a styled control open a
+      // file picker.
       return (
         <Form.Label className="image-input">
-          <Button variant="secondary">
+          <label className="btn btn-secondary" htmlFor={fileInputId}>
             {text ?? <FormattedMessage id="actions.browse_for_image" />}
-          </Button>
+          </label>
           <Form.Control
+            id={fileInputId}
             type="file"
             onChange={onImageChange}
             accept={acceptExtensions(acceptSVG)}
@@ -147,17 +169,26 @@ export const ImageInput: React.FC<IImageInput> = PatchComponent(
         <Popover.Content>
           <div>
             <span className="image-input">
-              <Button className="minimal">
+              {/* #7256. This was a <Button> with the file input nested inside
+                  it, which is invalid HTML -- an interactive element inside a
+                  button -- and Firefox never opened the picker. "From URL" kept
+                  working because that button has an onClick and no nested
+                  input, which is exactly the contrast in the bug report. A
+                  label with htmlFor is the valid, browser-independent
+                  equivalent and renders identically because the .btn.minimal
+                  class is applied here too. */}
+              <label className="btn minimal" htmlFor={fileInputId}>
                 <Icon icon={faFile} className="fa-fw" />
                 <span>
                   <FormattedMessage id="actions.from_file" />
                 </span>
-                <Form.Control
-                  type="file"
-                  onChange={onImageChange}
-                  accept={acceptExtensions(acceptSVG)}
-                />
-              </Button>
+              </label>
+              <Form.Control
+                id={fileInputId}
+                type="file"
+                onChange={onImageChange}
+                accept={acceptExtensions(acceptSVG)}
+              />
             </span>
           </div>
           <div>

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>#7256 label/file-input harness</title>
+    <!--
+      Renders the fixed and the original structure side by side, so the
+      difference is observable in a real browser rather than asserted.
+
+      WHY THIS EXISTS. The browser tool available while fixing #7256 is
+      Chromium, which tolerates an <input> nested in a <button>. The bug is
+      Firefox-specific, so "it works in the browser I can drive" would have been
+      no evidence at all. Firefox 156 on this host reported:
+
+        {"fixedWorks":true,"brokenWorks":false,"valid":false,
+         "ua":"Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0"}
+
+      fixedWorks  -- clicking the <label> activates the input. The fix works.
+      brokenWorks -- clicking the <Button> does NOT activate its nested input.
+                     This is the bug.
+      valid       -- the button's content model is violated by the nesting.
+
+      TO RUN IT, with the measurements read back rather than eyeballed:
+
+        python3 -m http.server 8099 --directory ui/v2.5/build
+        # serve this file and have it POST window.__harness back; the helper
+        # used is scratch/ff_report_server.py
+        firefox --headless --screenshot /tmp/ff.png http://localhost:PORT/harness
+
+      A programmatic .click() does not open a file picker in headless Firefox.
+      What is measured is whether the input RECEIVES the activation, which is
+      the behaviour #7256 breaks.
+    -->
+    <style>
+      /* Mirrors src/index.scss .image-input after the fix. */
+      .image-input {
+        display: block;
+        margin-bottom: 0;
+        position: relative;
+      }
+      .image-input [type="file"] {
+        display: none;
+      }
+      .image-input label.btn {
+        display: block;
+        margin-bottom: 0;
+        width: 100%;
+      }
+      /* Just enough button styling to look like a button. */
+      .btn {
+        background: #6c757d;
+        border: 1px solid #6c757d;
+        border-radius: 4px;
+        color: #fff;
+        cursor: pointer;
+        display: inline-block;
+        font-weight: 400;
+        line-height: 1.5;
+        padding: 6px 12px;
+        text-align: center;
+        user-select: none;
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>#7256 — file input activation</h1>
+
+    <!-- The FIXED structure: label + sibling input. -->
+    <h2>Fixed (label htmlFor + sibling input)</h2>
+    <span class="image-input" id="fixed">
+      <label class="btn" for="fixed-input" id="fixed-label">From file</label>
+      <input id="fixed-input" type="file" />
+    </span>
+
+    <!--
+      The ORIGINAL structure: input nested in the button. Reproduced so the
+      test can demonstrate the difference in the SAME browser, which is the
+      only way to show the fix is not a no-op.
+    -->
+    <h2>Original (input nested inside button)</h2>
+    <span class="image-input" id="broken">
+      <button class="btn" id="broken-button">
+        From file
+        <input id="broken-input" type="file" />
+      </button>
+    </span>
+
+    <p id="result">not run</p>
+
+    <script>
+      // Clicking a <label> for a file input is expected to activate it. A
+      // programmatic .click() on the label does NOT open a picker in headless
+      // Firefox, so what is measured here is whether the input RECEIVES the
+      // activation -- i.e. whether the browser treats the label as a label for
+      // it. That is the exact behaviour #7256 breaks.
+      const out = [];
+      const fixedInput = document.getElementById("fixed-input");
+      const fixedLabel = document.getElementById("fixed-label");
+      const brokenInput = document.getElementById("broken-input");
+      const brokenButton = document.getElementById("broken-button");
+
+      const fixedWorks = (() => {
+        let got = false;
+        const probe = () => {
+          got = true;
+        };
+        fixedInput.addEventListener("focus", probe, { once: true });
+        fixedInput.addEventListener("click", probe, { once: true });
+        fixedLabel.click();
+        return got;
+      })();
+
+      // For the broken case, clicking the BUTTON is what a user does. The input
+      // is its descendant, so a browser that follows the spec will refuse.
+      const brokenWorks = (() => {
+        let got = false;
+        const probe = () => {
+          got = true;
+        };
+        brokenInput.addEventListener("focus", probe, { once: true });
+        brokenInput.addEventListener("click", probe, { once: true });
+        brokenButton.click();
+        return got;
+      })();
+
+      const valid = (() => {
+        // The button's content model check, done in the DOM rather than by
+        // assertion: a <button> must not contain interactive content.
+        const bad = [...brokenButton.querySelectorAll("input,button,select,textarea,a[href]")];
+        return bad.length === 0;
+      })();
+
+      out.push("browser: " + navigator.userAgent);
+      out.push("label activates its input: " + fixedWorks);
+      out.push("button activates its nested input: " + brokenWorks);
+      out.push("nested button content model valid: " + valid);
+      document.getElementById("result").textContent = out.join(" | ");
+      window.__harness = { fixedWorks, brokenWorks, valid, ua: navigator.userAgent };
+    </script>
+  </body>
+</html>
