@@ -114,10 +114,10 @@ func TestUnzipFileStillExtractsOrdinaryArchives(t *testing.T) {
 	}
 	zipPath := filepath.Join(root, "normal.zip")
 	writeZip(t, zipPath, map[string]string{
-		"scene.mp4":             "video",
-		"extras/behind.mp4":     "bonus",
+		"scene.mp4":              "video",
+		"extras/behind.mp4":      "bonus",
 		"extras/nested/deep.txt": "deep",
-		".hidden":               "dotfile",
+		".hidden":                "dotfile",
 	})
 
 	task := &ImportTask{BaseDir: base, TmpZip: zipPath}

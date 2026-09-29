@@ -60,10 +60,10 @@ func TestWriteFileStillWritesNormalPackageFiles(t *testing.T) {
 	store := &Store{BaseDir: base}
 
 	entries := map[string]string{
-		"plugin.js":              "// plugin",
-		"lib/helper.js":          "// helper",
-		"lib/nested/deep.json":   `{"a":1}`,
-		"README.md":              "# readme",
+		"plugin.js":            "// plugin",
+		"lib/helper.js":        "// helper",
+		"lib/nested/deep.json": `{"a":1}`,
+		"README.md":            "# readme",
 	}
 	for name, content := range entries {
 		if err := store.writeFile("mypkg", name, 0o644, strings.NewReader(content)); err != nil {
