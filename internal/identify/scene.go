@@ -267,7 +267,10 @@ func (g sceneRelationships) cover(ctx context.Context) ([]byte, error) {
 		logger.Errorf("Error getting scene cover: %v", err)
 	}
 
-	data, err := utils.ProcessImageInput(ctx, *scraped)
+	// nil resolver: sceneRelationships has a scene reader but no repository, so
+	// a URL pointing back at this instance is fetched over HTTP as before. The
+	// mutation resolvers, which do have a repository, pass a real resolver.
+	data, err := utils.ProcessImageInput(ctx, *scraped, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error processing image input: %w", err)
 	}

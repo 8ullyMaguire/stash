@@ -78,7 +78,11 @@ func (s *ScrapedStudio) GetImage(ctx context.Context, excluded map[string]bool) 
 	// Process the base 64 encoded image string
 	if len(s.Images) > 0 && !excluded["image"] {
 		var err error
-		img, err := utils.ProcessImageInput(ctx, *s.Image)
+		// nil resolver: this layer has no repository, so a URL pointing back
+		// at this instance is fetched over HTTP as before. Scraped items reach
+		// the database through the mutation resolvers, which do resolve
+		// locally -- see the callers of ProcessImageInput in internal/api.
+		img, err := utils.ProcessImageInput(ctx, *s.Image, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -337,7 +341,8 @@ func (p *ScrapedPerformer) GetImage(ctx context.Context, excluded map[string]boo
 	// Process the base 64 encoded image string
 	if len(p.Images) > 0 && !excluded["image"] {
 		var err error
-		img, err := utils.ProcessImageInput(ctx, p.Images[0])
+		// nil resolver: no repository at this layer. See ScrapedStudio.GetImage.
+		img, err := utils.ProcessImageInput(ctx, p.Images[0], nil)
 		if err != nil {
 			return nil, err
 		}

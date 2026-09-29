@@ -116,7 +116,7 @@ func (r *mutationResolver) PerformerCreate(ctx context.Context, input models.Per
 	// Process the base 64 encoded image string
 	var imageData []byte
 	if input.Image != nil {
-		imageData, err = utils.ProcessImageInput(ctx, *input.Image)
+		imageData, err = utils.ProcessImageInput(ctx, *input.Image, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing image: %w", err)
 		}
@@ -372,7 +372,7 @@ func (r *mutationResolver) PerformerUpdate(ctx context.Context, input models.Per
 	var imageData []byte
 	imageIncluded := translator.hasField("image")
 	if input.Image != nil {
-		imageData, err = utils.ProcessImageInput(ctx, *input.Image)
+		imageData, err = utils.ProcessImageInput(ctx, *input.Image, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing image: %w", err)
 		}
@@ -659,7 +659,7 @@ func (r *mutationResolver) PerformerMerge(ctx context.Context, input PerformerMe
 
 		if input.Values.Image != nil {
 			var err error
-			imageData, err = utils.ProcessImageInput(ctx, *input.Values.Image)
+			imageData, err = utils.ProcessImageInput(ctx, *input.Values.Image, r.localImageResolverFor(ctx))
 			if err != nil {
 				return nil, fmt.Errorf("processing cover image: %w", err)
 			}

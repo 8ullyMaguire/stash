@@ -14,7 +14,14 @@ import (
 	"github.com/stashapp/stash/pkg/utils"
 )
 
-func groupFromGroupCreateInput(ctx context.Context, input GroupCreateInput) (*models.CreateGroupInput, error) {
+// groupFromGroupCreateInput builds a group from create input.
+//
+// localResolver is threaded through rather than reaching for a global because
+// this is a free function: it has no resolver receiver, and the repository it
+// would need lives on mutationResolver. The one caller passes
+// r.localImageResolverFor(ctx), so the same local-URL handling applies to
+// group images as to every other image input.
+func groupFromGroupCreateInput(ctx context.Context, input GroupCreateInput, localResolver utils.LocalImageResolver) (*models.CreateGroupInput, error) {
 	translator := changesetTranslator{
 		inputMap: getUpdateInputMap(ctx),
 	}
@@ -67,7 +74,7 @@ func groupFromGroupCreateInput(ctx context.Context, input GroupCreateInput) (*mo
 
 	// Process the base 64 encoded image string
 	if input.FrontImage != nil {
-		newGroupInput.FrontImageData, err = utils.ProcessImageInput(ctx, *input.FrontImage)
+		newGroupInput.FrontImageData, err = utils.ProcessImageInput(ctx, *input.FrontImage, localResolver)
 		if err != nil {
 			return nil, fmt.Errorf("processing front image: %w", err)
 		}
@@ -75,7 +82,7 @@ func groupFromGroupCreateInput(ctx context.Context, input GroupCreateInput) (*mo
 
 	// Process the base 64 encoded image string
 	if input.BackImage != nil {
-		newGroupInput.BackImageData, err = utils.ProcessImageInput(ctx, *input.BackImage)
+		newGroupInput.BackImageData, err = utils.ProcessImageInput(ctx, *input.BackImage, localResolver)
 		if err != nil {
 			return nil, fmt.Errorf("processing back image: %w", err)
 		}
@@ -91,7 +98,7 @@ func groupFromGroupCreateInput(ctx context.Context, input GroupCreateInput) (*mo
 }
 
 func (r *mutationResolver) GroupCreate(ctx context.Context, input GroupCreateInput) (*models.Group, error) {
-	createGroupInput, err := groupFromGroupCreateInput(ctx, input)
+	createGroupInput, err := groupFromGroupCreateInput(ctx, input, r.localImageResolverFor(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +189,7 @@ func (r *mutationResolver) GroupUpdate(ctx context.Context, input GroupUpdateInp
 	var frontimageData []byte
 	frontImageIncluded := translator.hasField("front_image")
 	if input.FrontImage != nil {
-		frontimageData, err = utils.ProcessImageInput(ctx, *input.FrontImage)
+		frontimageData, err = utils.ProcessImageInput(ctx, *input.FrontImage, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing front image: %w", err)
 		}
@@ -191,7 +198,7 @@ func (r *mutationResolver) GroupUpdate(ctx context.Context, input GroupUpdateInp
 	var backimageData []byte
 	backImageIncluded := translator.hasField("back_image")
 	if input.BackImage != nil {
-		backimageData, err = utils.ProcessImageInput(ctx, *input.BackImage)
+		backimageData, err = utils.ProcessImageInput(ctx, *input.BackImage, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing back image: %w", err)
 		}

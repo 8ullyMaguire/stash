@@ -67,7 +67,7 @@ func (r *mutationResolver) TagCreate(ctx context.Context, input TagCreateInput) 
 	// Process the base 64 encoded image string
 	var imageData []byte
 	if input.Image != nil {
-		imageData, err = utils.ProcessImageInput(ctx, *input.Image)
+		imageData, err = utils.ProcessImageInput(ctx, *input.Image, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing image: %w", err)
 		}
@@ -161,7 +161,7 @@ func (r *mutationResolver) TagUpdate(ctx context.Context, input TagUpdateInput) 
 	var imageData []byte
 	imageIncluded := translator.hasField("image")
 	if input.Image != nil {
-		imageData, err = utils.ProcessImageInput(ctx, *input.Image)
+		imageData, err = utils.ProcessImageInput(ctx, *input.Image, r.localImageResolverFor(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("processing image: %w", err)
 		}
@@ -361,7 +361,7 @@ func (r *mutationResolver) TagsMerge(ctx context.Context, input TagsMergeInput) 
 
 		if input.Values.Image != nil {
 			var err error
-			imageData, err = utils.ProcessImageInput(ctx, *input.Values.Image)
+			imageData, err = utils.ProcessImageInput(ctx, *input.Values.Image, r.localImageResolverFor(ctx))
 			if err != nil {
 				return nil, fmt.Errorf("processing cover image: %w", err)
 			}
