@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
 )
@@ -216,6 +217,16 @@ func (m *Manager) installPackage(pkg RemotePackage, store *Store, zr *zip.Reader
 		i, err := f.Open()
 		if err != nil {
 			return err
+		}
+
+		// stash#7240: validate the entry name here as well as in
+		// store.writeFile. Two reasons: the manifest records these names and
+		// uninstall later replays them, so a rejected name must never reach
+		// the manifest; and failing before the file is opened keeps the
+		// failure attributable to the offending entry.
+		if _, err := fsutil.SafeJoin(store.packageDir(pkg.ID), f.Name); err != nil {
+			i.Close()
+			return fmt.Errorf("refusing package entry %q: %w", f.Name, err)
 		}
 
 		fn := filepath.Clean(f.Name)

@@ -16,6 +16,33 @@ import (
 	"github.com/stashapp/stash/pkg/tag"
 )
 
+// stash#7152: a scraped item matched against a stash-box can come back with a
+// nil StoredID, and the batch tasks dereference it unconditionally. That
+// aborts the whole batch job with a nil pointer panic, losing the remaining
+// items in the run -- the manual one-at-a-time path works because it does not
+// go through here.
+//
+// This helper is the only sanctioned way to read a scraped item's StoredID.
+// It returns ok=false for a nil pointer, an empty string, or a non-numeric
+// value, so a caller cannot reintroduce the panic by forgetting the check.
+func scrapedStoredID(storedID *string) (int, bool) {
+	if storedID == nil || *storedID == "" {
+		return 0, false
+	}
+	id, err := strconv.Atoi(*storedID)
+	if err != nil {
+		return 0, false
+	}
+	// A stash-box entity id of 0 is not a real entity. Accepting it would
+	// turn the update path into a query for a row that cannot exist, and
+	// into an update of whatever row does carry id 0 -- which is how an
+	// unrelated record gets clobbered. Unusable, not merely absent.
+	if id <= 0 {
+		return 0, false
+	}
+	return id, true
+}
+
 // stashBoxBatchPerformerTagTask is used to tag or create performers from stash-box.
 //
 // Two modes of operation:
@@ -165,7 +192,11 @@ func (t *stashBoxBatchPerformerTagTask) handleMergedPerformer(ctx context.Contex
 
 func (t *stashBoxBatchPerformerTagTask) processMatchedPerformer(ctx context.Context, p *models.ScrapedPerformer, excluded map[string]bool, merge map[string]bool) {
 	if t.performer != nil {
-		storedID, _ := strconv.Atoi(*p.StoredID)
+		storedID, ok := scrapedStoredID(p.StoredID)
+		if !ok {
+			logger.Errorf("Skipping performer update for %s: stash-box returned no usable stored id", p.Name)
+			return
+		}
 
 		image, err := p.GetImage(ctx, excluded)
 		if err != nil {
@@ -368,7 +399,11 @@ func (t *stashBoxBatchStudioTagTask) findStashBoxStudio(ctx context.Context) (*m
 
 func (t *stashBoxBatchStudioTagTask) processMatchedStudio(ctx context.Context, s *models.ScrapedStudio, excluded map[string]bool) {
 	if t.studio != nil {
-		storedID, _ := strconv.Atoi(*s.StoredID)
+		storedID, ok := scrapedStoredID(s.StoredID)
+		if !ok {
+			logger.Errorf("Skipping studio update for %s: stash-box returned no usable stored id", s.Name)
+			return
+		}
 
 		if s.Parent != nil && t.createParent {
 			err := t.processParentStudio(ctx, s.Parent, excluded)
@@ -392,7 +427,10 @@ func (t *stashBoxBatchStudioTagTask) processMatchedStudio(ctx context.Context, s
 				return err
 			}
 
-			partial := s.ToPartial(*s.StoredID, t.box.Endpoint, excluded, existingStashIDs)
+			// storedID is the already-validated int; re-deriving the string
+			// from *s.StoredID here would be a second deref guarded only by
+			// luck of control flow.
+			partial := s.ToPartial(strconv.Itoa(storedID), t.box.Endpoint, excluded, existingStashIDs)
 
 			if err := studio.ValidateModify(ctx, partial, qb); err != nil {
 				return err
@@ -494,7 +532,11 @@ func (t *stashBoxBatchStudioTagTask) processParentStudio(ctx context.Context, pa
 		}
 		return err
 	} else {
-		storedID, _ := strconv.Atoi(*parent.StoredID)
+		storedID, ok := scrapedStoredID(parent.StoredID)
+		if !ok {
+			logger.Errorf("Skipping parent studio creation for %s: stash-box returned no usable stored id", parent.Name)
+			return nil
+		}
 
 		image, err := parent.GetImage(ctx, excluded)
 		if err != nil {
@@ -511,7 +553,7 @@ func (t *stashBoxBatchStudioTagTask) processParentStudio(ctx context.Context, pa
 				return err
 			}
 
-			partial := parent.ToPartial(*parent.StoredID, t.box.Endpoint, excluded, existingStashIDs)
+			partial := parent.ToPartial(strconv.Itoa(storedID), t.box.Endpoint, excluded, existingStashIDs)
 
 			if err := studio.ValidateModify(ctx, partial, qb); err != nil {
 				return err
@@ -706,8 +748,8 @@ func (t *stashBoxBatchTagTagTask) processMatchedTag(ctx context.Context, s *mode
 	tagID := 0
 	if t.tag != nil {
 		tagID = t.tag.ID
-	} else if s.StoredID != nil {
-		tagID, _ = strconv.Atoi(*s.StoredID)
+	} else if id, ok := scrapedStoredID(s.StoredID); ok {
+		tagID = id
 	}
 
 	if s.Parent != nil && t.createParent {

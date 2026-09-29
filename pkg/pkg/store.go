@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/stashapp/stash/pkg/fsutil"
 )
 
 // ManifestFile is the default filename for the package manifest.
@@ -103,7 +105,17 @@ func (r *Store) ensurePackageExists(packageID string) error {
 }
 
 func (r *Store) writeFile(packageID string, name string, mode fs.FileMode, i io.Reader) error {
-	fn := filepath.Join(r.packageDir(packageID), name)
+	// stash#7240: `name` originates from a zip entry in a package being
+	// installed, and the caller used to pass filepath.Clean(f.Name) -- which
+	// cleans "../../evil" into a valid path but does not contain it. The
+	// containment check lives HERE as well as at the parse site, because this
+	// is the function that performs the write: a future caller that forgets to
+	// validate its names still cannot escape the package directory.
+	base := r.packageDir(packageID)
+	fn, err := fsutil.SafeJoin(base, name)
+	if err != nil {
+		return fmt.Errorf("refusing package file %q: %w", name, err)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(fn), os.ModePerm); err != nil {
 		return fmt.Errorf("creating directory %v: %w", fn, err)
