@@ -81,7 +81,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
-	github.com/enetx/http v1.0.28 // indirect
+	github.com/enetx/http v1.0.29 // indirect
 	github.com/enetx/http2 v1.0.26 // indirect
 	github.com/enetx/http3 v1.0.7 // indirect
 	github.com/enetx/iter v0.0.0-20250912135656-f1583323588f // indirect

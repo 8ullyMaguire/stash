@@ -64,3 +64,7 @@ node_modules
 dist
 .DS_Store
 /.local*
+
+# The P2P downloader plugin lives on the stashforge branch. main is the soft
+# fork of upstream and carries only fixes for upstream issues.
+plugins/
