@@ -75,16 +75,77 @@ from becoming two sources of truth for one fact.
 | `docs/ALIGNMENT.md` | **written, uncommitted** |
 | `docs/specs/2026-09-30-priority-shift-spec.md` (§6b) | **written, uncommitted** |
 | `docs/GOAL.md` | **amended, uncommitted** — #11 retracted, #11a + #12–#16 added, M8 row |
-| `docs/requirements.csv` | **amended, uncommitted** — R074–R086 added (86 rows, 0 pre-existing fields changed) |
-| `scripts/add_shift_requirements.py` | new; regenerates the ledger addition, self-validating |
-| stash#5850 (thumbnail alpha) | **fixed and green** — 2 of its 4 test files did not compile |
+| `docs/requirements.csv` | **committed** `b710ebcf2` — R074–R086 added (86 rows, 0 pre-existing fields changed) |
+| `scripts/add_shift_requirements.py` | **committed** — regenerates the ledger addition, self-validating |
+| stash#5850 (thumbnail alpha) | **DONE and committed on `main`**: `6d392659b` (fix) + `02d0d0476` (ledgers). Mutation: 10 killed, 0 survived, 1 exempt. Full suite green at 35 packages, exit 0. |
+
+**stash#5850 is closed, and it was in the goal agent's Phase 2 queue.** It was
+marked `planned` in `docs/UPSTREAM-ISSUES.md` on `main` while `coding-3` held
+15 uncommitted files for it. It is now `closed` with the test named in
+`docs/closed-issues.md`, and `python3 docs/check-issue-ledgers.py` exits 0.
+**The goal agent should not redo it** — and should re-derive the roster's state
+from the ledgers rather than from any document, including this one.
+
+**Also pushed:** `m6-upstream-issues` is now on `origin`. It was 12 commits from
+being unrecoverable (`git rev-list --count m6-upstream-issues --not --remotes`
+-> 12; the 3461 total is upstream history the remotes already had, which is why
+it looked alarming). Do not push it again.
 
 ### stash-box (the other profile) — `master` branch
 
+Last updated by the stash-box profile: **2026-09-30 ~11:50 CEST**.
+
 | Item | State |
 |---|---|
-| `docs/SPEC.md` §8 (commons half of the alignment) | **not yet written** — that profile's job |
-| Requirement **R074** (receiving-end path guard) | **not yet written** — see §4 |
+| `docs/SPEC.md` §8 (commons half of the alignment) | **not yet written** — acknowledged, queued behind R074 |
+| Requirement **R074** (receiving-end path guard) | **accepted as next task.** §4's measurement was **wrong and has been corrected in place** — see below. Scope is now concrete: 7 columns, 3 distinct rules, and one reachable SSRF hole. |
+| Peer selection + `Cosine` (SPEC D2 step 2) | **built and committed** — `f5601107`, pushed to origin + forgejo |
+
+#### What the stash-box profile was doing when this was written
+
+Two unrelated threads, both in `~/code-local/go/stash-box` on `master`:
+
+1. **`cmd/sdbimport` — bulk import from stashdb.org into the thinkcentre
+   deployment.** A new binary, `internal/sdbimport/`, committed as `45ce957b`
+   and pushed to origin + forgejo. ~1.23M records: tags 2,934 and studios 14,662
+   are in; performers were at ~106k of 111,704 with 0 failures; scenes
+   (1,104,004) run afterwards under a systemd unit `stashbox-import-chain` on
+   thinkcentre. **Nothing here touches stash or the node side, and nothing here
+   changes any shared contract.** Flagging it because the file is about the
+   split and a second long-running job in this profile is worth stating.
+
+2. **SPEC D2, "the identification board federates"** — the last unbuilt row of
+   the §7.23 D1–D8 obligation. Spec and plan written
+   (`docs/spec/feature-04-identification-federation.md`,
+   `docs/plan/feature-04-identification-federation.md`, commit `1cf35daf`),
+   steps 1–3 built. **This one DOES touch the shared contract** and is the
+   reason §3's status table needs a new row — see §9 below.
+
+#### The one thing the stash side should know about D2
+
+D2's first three pieces are a **peer registry, taste-based peer selection, and a
+broadcast that carries questions and candidate evidence only**. Three
+properties were decided and are worth stating early, because the node side will
+meet all three:
+
+- **No content crosses the boundary.** The broadcast payload is a closed struct
+  with no field a media reference can be put into, and a test reflects over it to
+  prove the field-type set is closed. This is the same boundary as R074, from
+  the other direction: R074 stops the commons *storing* a path, and this stops
+  the commons *sending* one.
+- **A peer's answer is evidence, never a vote, and never a local row.** It lands
+  in `identification_foreign_candidates`, not `identification_candidates`, so it
+  cannot be voted on locally and cannot become a canonical link. The
+  identification service's own rule is "a vote is EVIDENCE, not authority" — a
+  remote suggestion is evidence squared and does not get a vote.
+- **A peer's answer is scoped to one query and expires.** There is no
+  `entity_id` column on the foreign-candidate table, so there is nowhere for a
+  peer's opinion to attach to an entity and outlive the question.
+
+**What this means for the node side: a node that does not implement D2 receives
+nothing.** There is no discovery protocol, so an unconfigured peer is simply
+never asked. A node that later wants to answer identification queries implements
+the same `Question`/`Answer` pair and nothing else.
 
 ---
 
@@ -98,28 +159,85 @@ positive control.
 exporter can be perfect and the commons can still acquire a path, a hostname or
 an IP from a peer that does not have the guard.
 
-**Measured on 2026-09-30, so the implementer does not rediscover it:** grepping
-every stash-box migration for a `text`/`varchar`/`inet` column whose name
-contains `path|url|host|dir|file` returns exactly **one**:
+**Measured on 2026-09-30, so the implementer does not rediscover it.** The
+handoff originally recorded this as *"returns exactly one"* — `images.url` in
+`04_image_tables.up.sql`. **That measurement is wrong, and it was re-measured
+before any code was written.** A word-boundary grep across all 89 migrations for
+a text/varchar/inet column named `*path*|*url*|*host*|*dir*|*file*` returns
+**six**, not one:
 
-```
-internal/database/migrations/postgres/04_image_tables.up.sql:3:    url VARCHAR NOT NULL
-```
+| Migration | Line | Column | Table | Direction |
+|---|---|---|---|---|
+| `01_initial` | 33 | `url` | `performer_urls` | inbound reference |
+| `01_initial` | 89 | `url` | `studio_urls` | inbound reference |
+| `01_initial` | 109 | `url` | `scene_urls` | inbound reference |
+| `04_image_tables` | 3 | `url` | `images` | **served** (this is the one the original note found) |
+| `21_site_urls` | 5 | `url` | `sites` | inbound reference |
+| `84_add_webhooks` | 27 | `target_url` | `webhook_endpoints` | **outbound dial** |
+| `89_identification_federation` | 28 | `base_url` | `federation_peers` | **outbound dial** |
 
-`images.url` is a **served URL** on the stash-box host — legitimate, and what
-the public API needs. So the guard is **not** "no column may look like a path";
-that fails on the first run and gets deleted. It is:
+Two measurement traps in the original count, both worth recording because R074's
+own guard will be a source-scanning test and would hit both:
 
-> A path, a hostname, or an IP address must not be **storable**, and a served
-> URL must not become a proxy for one — `file://`, `\\host\share`, and a bare
-> `/etc/passwd` are all accepted by a string column, and all three are the
-> attack.
+1. **Substring matching is wrong.** The original grep matched `03_misc.up.sql`'s
+   `director TEXT` as a path column, because `dir` is a substring of `director`.
+   A guard written the same way will demand that the commons stop storing a
+   person's director, and someone will "fix" that by weakening the guard.
+2. **Quoted-name matching is wrong too.** `images.url` is written *unquoted*
+   (`url VARCHAR NOT NULL`) while every other column here is `"url" varchar`. A
+   regex that requires the quotes misses the one column the original note found,
+   and the first version of the scanner would "pass" while the column it is
+   supposed to police goes unwatched. **A guard that scans source needs a
+   positive control for the scanner itself** — see §8 rule 4.
 
-**And the first version must include a positive control** — a deliberately dirty
-value the guard rejects. By the measurement above the existing schema is already
+**The two `*outbound* columns are the interesting ones and the original note
+missed them entirely.** A webhook `target_url` and a federation peer's
+`base_url` are not records of where something came from — they are addresses the
+box itself **dials**. A path in one of those is an SSRF primitive aimed at the
+box's own network, which is a strictly worse outcome than storing a leaked path
+in a metadata row.
+
+**And one of the two already has the right guard.** `webhook/service.go`
+`ValidateTargetURL` parses the URL, resolves it in DNS, and validates *every*
+address it resolves to — which is the correct shape, because it closes the
+rebinding hole rather than only checking the literal host.
+
+**`federation_peers.base_url` has no such validation, and this is the concrete
+hole.** Verified: `internal/queries/sql/federation.sql` ships
+`CreateFederationPeer` and `UpdateFederationPeer`, so the write path is real,
+while `internal/service/federation/` contains no `url.Parse`, no `LookupHost`,
+no `Resolver` and no call to `ValidateTargetURL`. `peer.go` reads the column and
+hands it to the dialer.
+
+This is the **second** half of R074's receiving guard and the more urgent half,
+because the sender-side guard stash already has cannot help here: nothing on
+this side of the wire stops the box from being pointed at `127.0.0.1`,
+`169.254.169.254`, or a `file://` URL by anyone who can write a peer row. The
+fix is to reuse the *existing* webhook validator rather than write a second one —
+same resolve-then-check-every-address shape, one implementation, two callers.
+
+So the guard is **not** "no column may look like a path" — that fails on the
+first run and gets deleted. It is three rules, and they are not the same rule
+applied six times:
+
+> 1. A path, a hostname, or an IP address must not be **storable** — not in
+>    `*_urls.url`, not in `sites.url`.
+> 2. An address the box **dials** (`target_url`, `base_url`) must be validated
+>    by resolve-then-check-every-address, at **write time AND at dial time** —
+>    a URL that validated on insert can resolve differently later, which is
+>    exactly what `84_add_webhooks`' own comment already says.
+> 3. A served URL (`images.url`) must not become a proxy for one: `file://`,
+>    `\\host\share`, and a bare `/etc/passwd` are all accepted by a string
+>    column, and all three are the attack.
+
+**And every version needs a positive control** — a deliberately dirty value the
+guard rejects. By the measurement above the existing schema is mostly already
 clean, so a test that only scans the schema passes vacuously. That is the exact
 trap the `stash` exporter fell into: its guard scanned the marshalled JSON for
 values that *began* with a path, and only a deliberately dirty payload found it.
+The same applies to a resolver that only sees a *mocked* resolver: rule 2 needs
+a control where the hostname resolves to `127.0.0.1` and a second lookup returns
+a different address.
 
 ---
 
@@ -163,6 +281,32 @@ one (switching content sharing on is a publish action nobody consented to).
 number. Metadata is small and the commons is already the durable copy; content
 is large and must be spread. N is configurable, default 3, and is a **view over
 verified replica rows** — never a stored counter.
+
+**D4 — R074 is three rules, not one rule applied N times** (stash-box profile,
+2026-09-30). The measurement behind it found seven columns in three distinct
+classes: *storable references* (`*_urls.url`, `sites.url`), a *served* URL
+(`images.url`), and two *outbound dials* (`webhook_endpoints.target_url`,
+`federation_peers.base_url`). Treating them as one rule is what produces a guard
+that fails on first run and gets deleted. The outbound pair is the sharp end:
+those are addresses the box dials, so a path in one is an SSRF primitive aimed
+at the box's own network.
+
+**D5 — reuse `webhook.ValidateTargetURL` for `federation_peers.base_url`; do
+not write a second resolver validator** (stash-box profile, 2026-09-30). The
+webhook service already has the correct shape — parse, resolve, validate *every*
+resolved address, which is what closes the rebinding hole. A second
+implementation of that rule is a second thing to keep in sync and a second thing
+to get subtly wrong. The cost is a package dependency from `federation` to
+`webhook`, which is accepted deliberately: it is a shared *validator*, not shared
+business logic, and inverting it (a small `internal/netguard` both import) is the
+better move if the dependency later reads badly.
+
+**D6 — the `n<=0` guard in `SelectPeers` is pinned by a white-box source test.**
+Its behaviour is identical with and without the guard, because the final
+truncation produces the same empty result. Two attempts to kill the mutant
+through the return value failed. The guard is kept because it makes "n<=0 is a
+no-op" explicit rather than incidental, and the test stops a later edit from
+deleting it as redundant — which is how it looks from the outside.
 
 ---
 
