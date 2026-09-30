@@ -96,9 +96,22 @@ if ! getent passwd stash >/dev/null 2>&1; then
     adduser -D -H -u "${uid_arg:-1000}" -G stash stash 2>/dev/null || true
 fi
 
-# No explicit request: run as the default account at whatever id it has, which
-# is what the Dockerfile or this block gave it. Resolved by name, never by
-# feeding a uid back into id(1) -- see the note above.
+# Docker can start the container as a chosen uid (`user: "1500:1600"`). If it
+# did, and nothing asked for a different identity, then the uid we are ALREADY
+# running as is the request -- reading the image's own stash account instead
+# makes the script try to setuid to 1000 from 1500, which a non-root process
+# cannot do and which under `set -e` kills the container.
+#
+# Only when we are root does the image's default account decide, because root
+# genuinely can drop to it and that is the whole point of the default.
+if [ -z "$uid_arg" ] && [ "$(id -u 2>/dev/null || echo 0)" != "0" ]; then
+    uid_arg="$(id -u 2>/dev/null || echo "")"
+    gid_arg="${gid_arg:-$(id -g 2>/dev/null || echo "")}"
+fi
+
+# No explicit request and still root: run as the default account at whatever id
+# it has, which is what the Dockerfile or this block gave it. Resolved by name,
+# never by feeding a uid back into id(1) -- see the note above.
 if [ -z "$uid_arg" ]; then
     if [ -n "$gid_arg" ] && getent passwd "$STASH_USER" >/dev/null 2>&1; then
         # Only a gid was given. Match it, keeping the account name.
@@ -133,6 +146,24 @@ for dir in /root /root/.stash; do
     fi
 done
 chmod u+rwx /root 2>/dev/null || true
+
+# Already the identity we want? Then there is nothing to drop.
+#
+# This is the case a compose file with `user: "1000:1000"` produces: Docker
+# starts the process as that uid, so the entrypoint is ALREADY non-root before it
+# runs a line. su-exec then tries to setuid again and fails -- a non-root process
+# cannot setuid, even to itself, because setgroups/clear-groups needs privilege:
+# `setpriv --reuid=1000` from uid 1000 gives "setresuid failed: Operation not
+# permitted". Under `set -e` that killed the container with no message.
+#
+# The chowns above are harmless because they are `|| true`; this one is not, so
+# the case has to be handled rather than tolerated.
+cur_uid="$(id -u 2>/dev/null || echo "")"
+cur_gid="$(id -g 2>/dev/null || echo "")"
+if [ -n "$cur_uid" ] && [ "$cur_uid:$cur_gid" = "$uid_arg:$gid_arg" ]; then
+    echo "stash: already uid=$cur_uid gid=$cur_gid; not dropping privileges again" >&2
+    exec "$@"
+fi
 
 # Hand over. su-exec is setuid-root and execs without spawning a shell in
 # between, so the process stash sees is the stash binary itself -- no extra

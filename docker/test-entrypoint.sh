@@ -52,6 +52,30 @@ assert_writable() {
     fi
 }
 
+# run_as <expected-uid> <expected-gid> <description> -- the `user: "N:M"` path.
+#
+# Docker starts the container as that uid, so the entrypoint is ALREADY
+# non-root and su-exec has nothing to do. Before the fix it tried to setuid
+# anyway and died: a non-root process cannot setresuid, not even to itself,
+# because clear-groups needs privilege ("setresuid failed: Operation not
+# permitted"), and the script runs under `set -e`.
+run_as() {
+    local want_uid="$1" want_gid="$2" desc="$3"
+    shift 3
+    local out
+    out="$(docker run --rm --user "$want_uid:$want_gid" "$@" "$IMAGE" \
+        sh -c 'echo "U=$(id -u) G=$(id -g)"' 2>/dev/null)"
+    local got
+    got="$(echo "$out" | grep -o 'U=[0-9]* G=[0-9]*' | head -1)"
+    if [ "$got" = "U=$want_uid G=$want_gid" ]; then
+        echo "  ok    $desc ($got)"
+        PASS=$((PASS + 1))
+    else
+        echo "  FAIL  $desc: want U=$want_uid G=$want_gid, got '${got:-<no output>}'"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 echo "entrypoint tests against $IMAGE"
 
 # The default. The whole point of the issue.
@@ -113,6 +137,30 @@ else
     echo "  FAIL  a fresh bind mount is ${owned:-<no output>}"
     FAIL=$((FAIL + 1))
 fi
+
+# --- the `user:` path (PR #7159) --------------------------------------
+# The compose file's alternative to PUID/PGID. Docker picks the identity, so the
+# entrypoint must notice it is already there instead of dropping again.
+
+run_as 1000 1000 "user: 1000:1000 comes up already unprivileged"
+
+# The case that motivated the fix: an id the image never had a passwd entry for.
+run_as 4242 4242 "user: with an id that has no passwd entry still runs"
+
+# A DIFFERENT id from the image default, so the entrypoint has to resolve rather
+# than merely echo back what it was handed.
+run_as 1500 1600 "user: 1500:1600 is honoured"
+
+# uids match, gids differ -- a split identity is easy to get wrong in a string
+# comparison, which is exactly how the fix compares them.
+run_as 1000 1600 "user: a differing gid is honoured"
+
+# The combination that the README documents: `user:` together with HOME pointing
+# at the mounted config, which is what GetHomeDirectory now reads.
+run_as 1000 1000 "user: plus HOME=/config comes up" -e HOME=/config
+
+# And it must not be broken by RUN_AS_ROOT being set from an old compose file.
+run_as 1000 1000 "user: wins over a leftover RUN_AS_ROOT=1" -e RUN_AS_ROOT=1
 
 echo
 echo "  $PASS passed, $FAIL failed"
