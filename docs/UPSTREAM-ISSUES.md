@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 427 planned, 221 not planned, 27 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 426 planned, 221 not planned, 28 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**427 planned, 221 not planned, 27 closed, 675 total.**
+**426 planned, 221 not planned, 28 closed, 675 total.**
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
 93 marked `deferred`. The table has four status values but the tally has three, so
@@ -140,7 +140,7 @@ These carry a label the maintainers themselves applied.
 | 7028 | Inconsistent File Info shortcut on gallery/image pages conflicts with  | upstream-marked (bug report) | planned |
 | 6949 | Animated Images using VideoFile in GQL | upstream-marked (bug report) | planned |
 | 6939 | Phash Generation task does not generate for videos classified as image | upstream-marked (bug report) | planned |
-| 6814 | Queue gets stuck on fileless scenes | upstream-marked (bug report) | planned |
+| 6814 | Queue gets stuck on fileless scenes | upstream-marked (bug report). **FIXED** (upstream PR #7227, still open upstream). `queueNext` advanced to `currentQueueIndex + 1` and loaded it; a scene with no file has no streams, so `onComplete` never fired and the queue never advanced — matching the report's “previous scene’s video in a stopped state, no seek bar”, unblocked only by seeking to the end with the keyboard. `queueNext` now takes `skipUnplayable`, passed as true **only from `onComplete`**, so a manual next still lands on the fileless scene and shows a “This scene has no file.” placeholder — a user pressing next asked for that scene. **The guard the PR removes is the real content**: `else if (currentQueueIndex === queueScenes.length - 1)` was false once a skip could advance PAST the last loaded index, so the code did nothing at all with more scenes waiting. **PR gap fixed here: it added the locale key to en-GB only, which broke `test-locale-structure.mjs`** — sw-KE is registered as must-be-complete, so a new key without its translation is a gap. | closed |
 | 5979 | Top navigation bar cut off on mobile devices with notch/floating islan | upstream-marked (bug report) | planned |
 | 5953 | Deleting a file while generating for it locks up scan/generate | upstream-marked (bug report) | planned |
 | 5758 | Scene save activity causing re-queries for plugin | upstream-marked (bug report) | planned |
