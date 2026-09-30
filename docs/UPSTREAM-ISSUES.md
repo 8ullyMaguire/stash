@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 433 planned, 225 not planned, 17 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 432 planned, 225 not planned, 18 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**433 planned, 225 not planned, 17 closed, 675 total.**
+**432 planned, 225 not planned, 18 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -349,7 +349,7 @@ Ranked by discussion volume and age, among issues with no maintainer label.
 | 6050 | Ability to start marker in AB Loop mode if it has start/stop time | R9/R10 lowest-signal feature request | planned |
 | 6013 | sys.stdin.read function response is too long | R9/R10 lowest-signal feature request | planned |
 | 5966 | Pattern Match Studio URLs | R9/R10 lowest-signal feature request | planned |
-| 5944 | Include settings when executing plugin task | R9/R10 lowest-signal feature request | planned |
+| 5944 | Include settings when executing plugin task | **CLOSED** `6d5a8131c` — see closed-issues.md | closed |
 | 5942 | Ability to edit scene marker directly from scene card | R9/R10 lowest-signal feature request | planned |
 | 5823 | Show 100% identical duplicates on Scene Duplicate Checker | R9/R10 lowest-signal feature request | planned |
 | 5806 | Improve the layout for comparing existing and new values when scraping | R9/R10 lowest-signal feature request | planned |

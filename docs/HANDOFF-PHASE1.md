@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            63635bcc0  [origin/main: ahead 15]     clean
-merged          6 PRs -> 5 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722)
-issue ledgers   17 closed · 93 deferred · 132 not-planned · 433 planned · 675 total
-next PR         #7257
+main            6d5a8131c  [origin/main: ahead 17]     clean
+merged          7 PRs -> 6 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944)
+issue ledgers   18 closed · 93 deferred · 132 not-planned · 432 planned · 675 total
+next PR         #7196
 ```
 
 ## The first action
@@ -42,12 +42,42 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7257** is next. One commit, one
+it: **#7196** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
-deferred — the goal document's ordering is deliberate, and Phase 2 is 433
+deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 7 — #7257 merged, `stash#5944` closed, and a clone that was half a clone
+
+One commit, `6d5a8131c`. A JS plugin could not read its own configured settings —
+only `args` and `server_connection` — so `input.Settings` now carries them.
+Merged as written, upstream's own tests included.
+
+**Changed: deep clone instead of `maps.Clone`.** `maps.Clone` copies the top level
+only, settings come from Viper's `Raw()`, and goja hands a Go map to JS as a
+reference — so a plugin writing to `input.Settings.tags[0]` writes into the live
+config, which the next `SetPluginConfiguration` persists. Measured: the stored
+settings came back mutated.
+
+**The recognisable shape:** a test named after a property, asserting it on the one
+input where it trivially holds. Upstream's isolation test mutates `enabled` — a
+*scalar*, the one value a shallow clone detaches. Not a bad test; a test that
+cannot fail, and its presence is evidence the harder case was never considered.
+
+**Measuring the boundary library changed the assertions.** My first list test
+asserted `push` is contained. True — and it passes against the broken clone too.
+goja's array wrapper is not a live view: `push`/`splice`/`pop` hit the VM's own
+array, only element assignment writes through. "The slice is copied" and "the
+elements are copied" are separate guarantees and only the second is violable.
+
+9 new tests, **5 fail against `maps.Clone`**. The clone is also load-bearing for
+the concurrency claim — a shared nested map handed to a VM beside the settings
+writer is a data race, not a leak.
+
+Gates: suite 3/3 clean, **38 ok** (up from 36), 0 FAIL; `-race` on `pkg/plugin`
+×5 clean.
 
 ## Session 6 — #7225 merged, `stash#3722` closed, and a correction
 
@@ -219,10 +249,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **6** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`) |
+| Merged and committed | **7** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 15, from `02d0d0476` to `63635bcc0` |
+| Commits on `main` | 17, from `02d0d0476` to `6d5a8131c` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -287,7 +317,7 @@ it. Both runs identical: **35 packages ok, 0 FAIL.** Baseline was also 35 ok /
   the reconciliation anyway.
 - **Did not touch `stash-box`, `~/code-local/worktrees/stashforge`, or
   `~/code/go/stash`.** Owned by other profiles / a stale pre-tag copy.
-- **Did not start Phase 2.** 433 planned issues, one commit and one named test
+- **Did not start Phase 2.** 432 planned issues, one commit and one named test
   each. Starting it without finishing Phase 1 would produce a half-run.
 
 ## The one finding that is not bookkeeping
@@ -365,12 +395,13 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 ## Phase 2, ready to start
 
-433 planned issues, none started. The ledger is in agreement (17 closed, 93
-deferred, 132 not-planned, 433 planned, 675 total). Work them in the
+432 planned issues, none started. The ledger is in agreement (17 closed as of
+that gate; 18 after session 7, 93
+deferred, 132 not-planned, 432 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#3722`, `stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.

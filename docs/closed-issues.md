@@ -66,6 +66,33 @@ The harness scores a `WARNING: DATA RACE` as a kill even when the test's own
 assertions pass, because the race test only checks the end state: a torn read
 can satisfy `isJSON == true` and the race is the only evidence.
 | stash#3722 | pHash Improvement for Short Durations | The phash sprite was a fixed 5x5 grid, so a 30-second clip got 25 frames sampled 1.08 seconds apart. Those frames are near-identical, the montage is repetitive, and unrelated short videos hash alike — so they match each other and match the wrong scenes when tagging. The grid is now NxN with N chosen by duration: 2 frames up to 45s, 3 up to 90s, 4 up to 150s, 5 beyond. An unknown (zero) duration is treated as full length, since there is nothing to scale by. **The threshold is the whole risk, and it is a contract rather than a literal.** `150` appeared in the Go switch *and* in migration 87's SQL with nothing connecting them, and both failure modes are silent: a migration that is too narrow leaves incomparable hashes in every existing database while the note tells the user it was fixed; too wide and every affected video is re-hashed for nothing. So the threshold is an exported `MaxChangedDuration`, and a test reads the migration file and compares its literals against the algorithm — plus three the literals cannot see: that the algorithm really treats the boundary as the boundary, that the migration filters on `type = 'phash'` (without it every fingerprint goes, oshash and MD5 included, which this change does not affect), and that `appSchemaVersion` reaches 87. A second test **runs the migration** against a real SQLite built from the real column shapes and asserts the surviving row set, because reading the SQL proves the text and running it proves the rows. | `TestSpriteColumns` and `TestCombineImages` (upstream's), plus `TestPhashMigrationThresholdMatchesTheAlgorithm`, `TestPhashAlgorithmChangesEveryVideoUpToTheMigrationBoundary`, `TestPhashMigrationDeletesOnlyPhashes`, `TestPhashMigrationIsReachableFromTheSchemaVersion`, and `TestMigration87ActuallyDeletes` — which executes the migration and asserts short-phash deleted, short-oshash kept, long-phash kept, unknown-duration kept, 150 deleted, 150.1 kept. **10 mutations, all killed**: ceiling 150→200, phash filter dropped, boundary made exclusive, `duration > 0` removed, algorithm boundary moved off the constant, `spriteColumns` ignoring duration, `appSchemaVersion` not bumped. | `63635bcc0` |
+| stash#5944 | Include settings when executing plugin task | A JS plugin had no access to its own configured settings — only `args` and `server_connection` — so a plugin could not read a value the user had set for it in the UI. `input.Settings` now carries them, via `Settings map[string]interface{}` on `PluginInput` (and so on the wire format), a new `GetPluginConfiguration(pluginID)` on `ServerConfig`, and `buildPluginInput` made a `Cache` method so it can reach the config. An unconfigured plugin receives `{}` rather than `null`, and settings without a configured value are omitted. **The snapshot is a DEEP clone, and that is the part worth keeping.** Upstream used `maps.Clone`, which copies the top level only — while plugin settings come from Viper's `Raw()`, so any structured value (a list, a nested object) is the *same memory* the configuration holds, and goja hands a Go map to JS as a reference. A plugin doing `input.Settings.tags[0] = "x"` writes straight into the live config, which the next `SetPluginConfiguration` persists. Upstream's own `TestJSPluginCannotMutateStoredPluginSettings` covers a **scalar** — the one value a top-level clone does detach — so it passes while the guarantee it is named for does not hold. Measured goja's real semantics, which are two different things: `push`/`splice`/`pop` do **not** reach the Go slice (the VM grows its own array), while `tags[0] = …` **does** write through. So "the slice is copied" and "the elements are copied" are separate guarantees and only the second is violable. | Upstream's 8 tests, plus 9 added here — including the goja-semantics probe kept as a named test so the reasoning survives, per-invocation independence, a list-of-objects case, and preservation of empty/nil shapes (a plugin doing `settings.empty.x = 1` must not hit nil). **Against `maps.Clone`, 5 fail**: the nested-object write, element assignment and splice, per-invocation independence, and the semantics probe. The deep clone is also load-bearing for the *concurrency* claim — a shared nested map handed to a VM running beside the settings writer is a data race, not just a leak. `cloneSettings` recurses only through `map[string]interface{}` and `[]interface{}`, the sole compound types `json.Unmarshal` produces and therefore the only ones a config file can yield. | `6d5a8131c` |
+
+## A test that exercises the case the implementation already handles
+
+`TestJSPluginCannotMutateStoredPluginSettings` sets `input.Settings.enabled =
+false`. `enabled` is a **scalar**, and a top-level clone detaches a scalar — so the
+test passes, is named for isolation, and the isolation does not hold for any
+value a real plugin setting can contain.
+
+This is the shape to look for in an incoming PR: a test named after a property,
+asserting it on the one input where the property trivially holds. It is not a bad
+test; it is a test that cannot fail, and its presence is evidence the harder case
+was never considered.
+
+## Measuring the boundary library before asserting on it
+
+The first list test asserted that `push` is contained. That is **true** — and it
+passes against the broken clone too, so it proved nothing. goja wraps a Go slice
+into a JS array that is not a live view: `push`/`splice`/`pop` mutate the VM's own
+array, and only in-place element assignment writes through.
+
+So the assertion set had to change, not just the code: measure what the boundary
+library actually does (`push`, `splice`, `elem`, `pop` against a known slice),
+then test the operations that can really reach memory. Two of my own fixtures
+were wrong the same way — one routed through `buildPluginInput` while trying to
+*measure* goja, so the clone hid the effect; another left `plugin` nil, which
+`initVM` dereferences at `js.go:87`.
 
 ## Two fixture bugs that would have shipped false confidence
 
