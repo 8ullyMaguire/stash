@@ -1,6 +1,7 @@
 import * as GQL from "src/core/generated-graphql";
 import { useTagCreate } from "src/core/StashService";
 import { useEffect, useState } from "react";
+import { useInitialState } from "src/hooks/state";
 import { Tag, TagSelect, TagSelectProps } from "src/components/Tags/TagSelect";
 import { useToast } from "src/hooks/Toast";
 import { useIntl } from "react-intl";
@@ -17,7 +18,14 @@ export function useTagsEdit(
   const Toast = useToast();
   const [createTag] = useTagCreate();
 
-  const [tags, setTags] = useState<Tag[]>([]);
+  // useInitialState, not useState: stash#6466. A background refetch replaces the
+  // scene object -- playing a scene fires sceneSaveActivity every 10 seconds and
+  // Apollo normalises the response back into the cache -- which gives srcTags a
+  // new identity while the user is mid-edit. Plain useEffect on [srcTags] then
+  // discards the unsaved draft. useInitialState only applies the incoming value
+  // while `tags` is still pristine, so a dirty draft survives a refetch and an
+  // explicit resetTagsState() still works.
+  const [tags, setTags, setTagsInitial] = useInitialState<Tag[]>([]);
   const [newTags, setNewTags] = useState<GQL.ScrapedTag[]>();
 
   function onSetTags(items: Tag[]) {
@@ -26,13 +34,13 @@ export function useTagsEdit(
   }
 
   function resetTagsState() {
-    setTags(srcTags ?? []);
+    setTagsInitial(srcTags ?? []);
     setNewTags(undefined);
   }
 
   useEffect(() => {
-    setTags(srcTags ?? []);
-  }, [srcTags]);
+    setTagsInitial(srcTags ?? []);
+  }, [srcTags, setTagsInitial]);
 
   async function createNewTag(toCreate: GQL.ScrapedTag) {
     const tagInput: GQL.TagCreateInput = { name: toCreate.name ?? "" };

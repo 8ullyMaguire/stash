@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useInitialState } from "src/hooks/state";
 import { FormattedMessage, useIntl } from "react-intl";
 import {
   Button,
@@ -89,10 +90,19 @@ export const SceneEditPanel: React.FC<IProps> = ({
   const intl = useIntl();
   const Toast = useToast();
 
-  const [galleries, setGalleries] = useState<Gallery[]>([]);
-  const [performers, setPerformers] = useState<Performer[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [studio, setStudio] = useState<Studio | null>(null);
+  // useInitialState for each: these are DRAFTS of props that also arrive by
+  // background refetch. See the note above the syncing effects below for why a
+  // plain useState loses unsaved edits (stash#6466).
+  const [galleries, setGalleries, setGalleriesInitial] = useInitialState<
+    Gallery[]
+  >([]);
+  const [performers, setPerformers, setPerformersInitial] = useInitialState<
+    Performer[]
+  >([]);
+  const [groups, setGroups, setGroupsInitial] = useInitialState<Group[]>([]);
+  const [studio, setStudio, setStudioInitial] = useInitialState<Studio | null>(
+    null
+  );
 
   const Scrapers = useListSceneScrapers();
 
@@ -120,8 +130,27 @@ export const SceneEditPanel: React.FC<IProps> = ({
   const [scrapedScene, setScrapedScene] = useState<GQL.ScrapedScene | null>();
   const [endpoint, setEndpoint] = useState<string>();
 
+  // Each of these drafts is synced from `scene` when the prop changes. They use
+  // useInitialState rather than useState so a DRAFT the user has edited survives
+  // a background refetch -- stash#6466.
+  //
+  // `scene` is replaced wholesale whenever the query returns, and a playing video
+  // makes that happen on a timer: track-activity.ts calls sceneSaveActivity every
+  // 10 seconds, Apollo normalises the result back into the cache, and
+  // useLayoutEffect in Scene.tsx sets a new `scene` object. Every
+  // `scene.performers`-style value is then a fresh array, so a plain
+  // `useEffect(() => setPerformers(scene.performers ?? []), [scene.performers])`
+  // re-runs and overwrites the unsaved draft. The reporter lost typed-but-unsaved
+  // tag and performer entries this way, intermittently, and more often with a
+  // large maxOptionsShown because a slower select query keeps the input focused
+  // with an unsaved entry for longer.
+  //
+  // useInitialState applies the incoming value only while the draft is pristine,
+  // so the first sync wins and a dirty draft is never clobbered. The explicit
+  // resets below (after a successful save, and on cancel) still work because they
+  // go through the setter.
   useEffect(() => {
-    setGalleries(
+    setGalleriesInitial(
       scene.galleries?.map((g) => ({
         id: g.id,
         title: galleryTitle(g),
@@ -129,19 +158,19 @@ export const SceneEditPanel: React.FC<IProps> = ({
         folder: g.folder,
       })) ?? []
     );
-  }, [scene.galleries]);
+  }, [scene.galleries, setGalleriesInitial]);
 
   useEffect(() => {
-    setPerformers(scene.performers ?? []);
-  }, [scene.performers]);
+    setPerformersInitial(scene.performers ?? []);
+  }, [scene.performers, setPerformersInitial]);
 
   useEffect(() => {
-    setGroups(scene.groups?.map((m) => m.group) ?? []);
-  }, [scene.groups]);
+    setGroupsInitial(scene.groups?.map((m) => m.group) ?? []);
+  }, [scene.groups, setGroupsInitial]);
 
   useEffect(() => {
-    setStudio(scene.studio ?? null);
-  }, [scene.studio]);
+    setStudioInitial(scene.studio ?? null);
+  }, [scene.studio, setStudioInitial]);
 
   const { configuration: stashConfig } = useConfigurationContext();
 
@@ -309,6 +338,8 @@ export const SceneEditPanel: React.FC<IProps> = ({
       await onSubmit(input, andNew);
       formik.resetForm();
       if (andNew) {
+        // Explicit post-save reset: the user asked for this, so it must apply
+        // even though the drafts above are dirty-checked.
         setGalleries(
           scene.galleries?.map((g) => ({
             id: g.id,
