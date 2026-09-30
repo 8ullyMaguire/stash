@@ -42,7 +42,7 @@ partition that does is stated explicitly at the foot.
 | #6986 | **Decline** | **Non-negotiable #12, as a rule question rather than a verdict on the author.** A fingerprint *submission queue* sends scene fingerprints to Stash-box in batches. Fingerprints are derived from media content and are not identifying **as sent**. But the change lives in `pkg/stashbox/graphql/generated_client.go` and the queue is a **bulk egress** path — the exact shape where a later field addition quietly becomes identifying. Declined, and recorded as a standing rule: **if Stash-box adds a field to the submission payload, the exporter's guard must be extended in the same commit.** A one-sided guard is half a guard (#12). |
 | #5265 | **Decline** | **A framework major bump from a bot, in a triage batch.** `bootstrap 4.6.2 → 5.0.0`, conflicting, 744 days stale. Nothing here breaks a non-negotiable, so the rule that declines it is deliberately a *process* rule: do not take a UI framework major in a batch of unrelated triage. Re-take it on its own, with `vite build` green. |
 
-## Group B — deferred, sound, not now (59)
+## Group B — deferred, sound, not now (58)
 
 Same reason in every row: **sound upstream, no rule conflict, deferred to the
 post-reconciliation batch**, each on its own commit with its own verification.
@@ -52,14 +52,14 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-`````````
+````````````
 
-**B2 — mergeable, and a Group C candidate this batch (15).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (14).** Listed in Group C.
 
 ```
-#6917 #7093 #7159 #7166 #7181 #7196 #7199 #7225 #7235 #7245 #7249 #7252
-#7254 #7257 #7261
-`````````
+#6917 #7093 #7159 #7166 #7181 #7196 #7199 #7235 #7245 #7249 #7252 #7254
+#7257 #7261
+````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -70,7 +70,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-`````````
+````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -97,11 +97,10 @@ Each is still one commit and one verification. **The first two are already done.
 | 2b | **#7180 — DONE** | `68192aa59`. Merged as written; one test added. See below. |
 | 2c | **#7137 — DONE** | `3f6678e73`. Merged as written, decision EXTRACTED so it could be tested. Closes `stash#7136`. |
 | 3 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
-| 3 | #7225 | **Renumber its migration** — see below. |
-| 4 | #7257 | 7 files, 2 test files. |
-| 5 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
-| 6 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
-| 7 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
+| 3 | #7257 | 7 files, 2 test files. |
+| 4 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
+| 5 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| 6 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -266,6 +265,45 @@ the whole misreading in the first place.
 
 Suite: **6/6 rounds clean**, 35 ok, 0 FAIL, against a 2-in-18 baseline.
 
+## #7225 — merged, closing `stash#3722`, and the threshold that is really a contract
+
+`63635bcc0`. The sprite was a fixed 5x5 grid, so a 30-second clip got 25 frames
+sampled 1.08 seconds apart — near-identical frames, a repetitive montage, and
+unrelated short videos hashing alike. The grid is now NxN: 2 frames to 45s, 3 to
+90s, 4 to 150s, 5 beyond. Merged as written, upstream's own tests included.
+
+**The merge was easy; the threshold was the work.** `150` appeared in the Go
+switch *and* in migration 87's SQL with nothing connecting them, and both failure
+modes are silent:
+
+- too narrow — incomparable hashes survive in every existing database while the
+  migration note tells the user the problem was fixed;
+- too wide — every affected video is re-hashed for nothing.
+
+So it is an exported `MaxChangedDuration` documented as a contract *with the
+migration*, and a test reads the migration file and compares its literals against
+the algorithm. Three more cover what literals cannot see: that the algorithm
+really treats the boundary as the boundary (a switch edited to `<= 90` leaves the
+constant at 150 and passes a literals-only check), that the migration filters on
+`type = 'phash'`, and that `appSchemaVersion` reaches 87.
+
+A second test **runs** the migration against a real SQLite. Reading the SQL
+proves the text; running it proves the rows.
+
+**Two fixture bugs, and both are the same lesson.** The first probe invented its
+own schema (`id INTEGER PRIMARY KEY`, no `fingerprint` column), so the
+migration's own subquery failed to resolve — and a failed subquery inside `IN()`
+does not abort the `DELETE`, so every phash went including the 200-second ones.
+The report read *"this migration destroys far too much"*, which is exactly what a
+destructive migration looks like. **The migration was right and the fixture was
+fiction.** The second: every row shared one fingerprint string, and the table is
+keyed `(file_id, type, fingerprint)`, so two inserts silently vanished — caught
+only because the seeded count is asserted, and that count was itself in the wrong
+place, sitting *after* the migration and so reporting survivors instead of seeds.
+**Assert a precondition where the precondition holds.**
+
+10 mutations, all killed. Suite 3/3 clean, 36 packages ok (up from 35).
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -277,9 +315,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  5
+merged + committed ...................................  6
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  15
+deferred, mergeable, Group C candidate ...............  14
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

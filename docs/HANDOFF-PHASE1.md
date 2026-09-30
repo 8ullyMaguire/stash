@@ -26,10 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            5ca4c5806  [origin/main: ahead 12]     clean
-merged          5 PRs -> 4 issues closed (#7241, #7255, #7180/#7179, #7137/#7136, #7265/no issue)
-issue ledgers   16 closed · 93 deferred · 132 not-planned · 434 planned · 675 total
-next PR         #7225
+main            63635bcc0  [origin/main: ahead 15]     clean
+merged          6 PRs -> 5 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722)
+issue ledgers   17 closed · 93 deferred · 132 not-planned · 433 planned · 675 total
+next PR         #7257
 ```
 
 ## The first action
@@ -41,12 +42,53 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7225** is next. One commit, one
+it: **#7257** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
-deferred — the goal document's ordering is deliberate, and Phase 2 is 434
+deferred — the goal document's ordering is deliberate, and Phase 2 is 433
 issues, which is weeks.
+
+## Session 6 — #7225 merged, `stash#3722` closed, and a correction
+
+Two commits. `f36bce276` is a correction to the previous session's claims;
+`63635bcc0` is the merge.
+
+**The "~0.3% still truncates" caveat in `037c9d6d1` was wrong.** Classifying by
+**status code** rather than body length: **3840 concurrent serves, zero truncated
+200s.** Every "short body" was a 500 carrying `fork/exec ...: text file busy` —
+**ETXTBSY**, the kernel refusing to exec a file whose descriptor is still open for
+writing, because the hammer wrote stubs into a shared `t.TempDir()` that sibling
+goroutines were already exec'ing. My test's artifact, not a bug. The fix is
+complete.
+
+Two mistakes, both now structural rather than remembered: a body-length check
+cannot tell a truncated stream from a failed start, and **I named
+`LockContext.Cancel` as the cause before measuring it**. It does contain a second
+`Wait()`, but it was never what the hammer showed. The guard
+(`pkg/ffmpeg/stream_transcode_race_test.go`) asserts the classification itself,
+since a guard that cannot tell those two apart is what caused the misreading.
+
+**#7225** makes the phash sprite NxN by duration (2 to 45s, 3 to 90s, 4 to 150s,
+5 beyond) — a 30-second clip no longer gets 25 frames 1.08s apart, which is why
+unrelated short videos hashed alike. Closes `stash#3722`.
+
+The merge was easy; **the threshold was the work**. `150` lived in the Go switch
+*and* in migration 87's SQL with nothing connecting them, and both failure modes
+are silent: too narrow leaves incomparable hashes everywhere while the note says
+it was fixed; too wide re-hashes everything for nothing. Now an exported
+`MaxChangedDuration`, with a test that reads the migration file and compares its
+literals to the algorithm, plus three for what literals cannot see, plus one that
+**runs** the migration against a real SQLite.
+
+Two fixture bugs, one lesson: a probe with an invented schema made the migration
+look destructive (a failed subquery inside `IN()` does not abort the `DELETE`), and
+a duplicated primary key silently dropped rows — caught only by asserting the
+seeded count, which was itself asserted *after* the migration and so counting
+survivors. **Assert a precondition where the precondition holds.**
+
+Gates: suite 3/3 clean, **36 ok** (up from 35), 0 FAIL; 10 mutations killed; tsc
+clean; 107/107 frontend.
 
 ## Session 5 — #7265 merged (no issue), and a race nobody was looking for
 
@@ -177,10 +219,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **5** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue) |
+| Merged and committed | **6** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 12, from `02d0d0476` to `5ca4c5806` |
+| Commits on `main` | 15, from `02d0d0476` to `63635bcc0` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -245,7 +287,7 @@ it. Both runs identical: **35 packages ok, 0 FAIL.** Baseline was also 35 ok /
   the reconciliation anyway.
 - **Did not touch `stash-box`, `~/code-local/worktrees/stashforge`, or
   `~/code/go/stash`.** Owned by other profiles / a stale pre-tag copy.
-- **Did not start Phase 2.** 434 planned issues, one commit and one named test
+- **Did not start Phase 2.** 433 planned issues, one commit and one named test
   each. Starting it without finishing Phase 1 would produce a half-run.
 
 ## The one finding that is not bookkeeping
@@ -323,12 +365,12 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 ## Phase 2, ready to start
 
-434 planned issues, none started. The ledger is in agreement (16 closed, 93
-deferred, 132 not-planned, 434 planned, 675 total). Work them in the
+433 planned issues, none started. The ledger is in agreement (17 closed, 93
+deferred, 132 not-planned, 433 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#3722`, `stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.

@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 434 planned, 225 not planned, 16 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 433 planned, 225 not planned, 17 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**434 planned, 225 not planned, 16 closed, 675 total.**
+**433 planned, 225 not planned, 17 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -59,7 +59,7 @@ These carry a label the maintainers themselves applied.
 | 5237 | Naming issue for Taiwan in list of countries | upstream-marked (bug report) | closed |
 | 5002 | Plugin settings UI/UX | upstream-marked (help wanted) | planned |
 | 4136 | Can't cast any video to Chromecast | upstream-marked (bug report) | planned |
-| 3722 | pHash Improvement for Short Durations | upstream-marked (help wanted) | planned |
+| 3722 | pHash Improvement for Short Durations | **CLOSED** `63635bcc0` — see closed-issues.md | closed |
 | 3318 | Studio Code display improvement | upstream-marked (help wanted) | planned |
 | 3299 | Native Remote UI | upstream-marked (help wanted) | planned |
 | 3172 | Stash icon almost invisible on windows 10 dark mode | upstream-marked (help wanted) | planned |

@@ -65,6 +65,31 @@ returned string is one line away from asserting its own input.
 The harness scores a `WARNING: DATA RACE` as a kill even when the test's own
 assertions pass, because the race test only checks the end state: a torn read
 can satisfy `isJSON == true` and the race is the only evidence.
+| stash#3722 | pHash Improvement for Short Durations | The phash sprite was a fixed 5x5 grid, so a 30-second clip got 25 frames sampled 1.08 seconds apart. Those frames are near-identical, the montage is repetitive, and unrelated short videos hash alike — so they match each other and match the wrong scenes when tagging. The grid is now NxN with N chosen by duration: 2 frames up to 45s, 3 up to 90s, 4 up to 150s, 5 beyond. An unknown (zero) duration is treated as full length, since there is nothing to scale by. **The threshold is the whole risk, and it is a contract rather than a literal.** `150` appeared in the Go switch *and* in migration 87's SQL with nothing connecting them, and both failure modes are silent: a migration that is too narrow leaves incomparable hashes in every existing database while the note tells the user it was fixed; too wide and every affected video is re-hashed for nothing. So the threshold is an exported `MaxChangedDuration`, and a test reads the migration file and compares its literals against the algorithm — plus three the literals cannot see: that the algorithm really treats the boundary as the boundary, that the migration filters on `type = 'phash'` (without it every fingerprint goes, oshash and MD5 included, which this change does not affect), and that `appSchemaVersion` reaches 87. A second test **runs the migration** against a real SQLite built from the real column shapes and asserts the surviving row set, because reading the SQL proves the text and running it proves the rows. | `TestSpriteColumns` and `TestCombineImages` (upstream's), plus `TestPhashMigrationThresholdMatchesTheAlgorithm`, `TestPhashAlgorithmChangesEveryVideoUpToTheMigrationBoundary`, `TestPhashMigrationDeletesOnlyPhashes`, `TestPhashMigrationIsReachableFromTheSchemaVersion`, and `TestMigration87ActuallyDeletes` — which executes the migration and asserts short-phash deleted, short-oshash kept, long-phash kept, unknown-duration kept, 150 deleted, 150.1 kept. **10 mutations, all killed**: ceiling 150→200, phash filter dropped, boundary made exclusive, `duration > 0` removed, algorithm boundary moved off the constant, `spriteColumns` ignoring duration, `appSchemaVersion` not bumped. | `63635bcc0` |
+
+## Two fixture bugs that would have shipped false confidence
+
+Both in `TestMigration87ActuallyDeletes`, both caught by asserting something the
+code under test was not at fault for — which is the only reason they surfaced.
+
+**1. The fixture did not match the schema.** The first probe declared
+`video_files(id INTEGER PRIMARY KEY, duration REAL)` and a `files_fingerprints`
+with no `fingerprint` column. The migration's subquery is
+`SELECT file_id FROM video_files`, so against that fixture it failed to resolve —
+and a failed subquery inside `IN()` does **not** abort the `DELETE`, so every
+phash row went, including the 200-second ones. The report was *"this migration
+destroys far too much"*, which is exactly what a destructive migration looks
+like. The migration was correct; the fixture was fiction. The shapes now come
+from `32_files.up.sql` verbatim.
+
+**2. Every row shared one fingerprint string.** `files_fingerprints` is keyed
+`(file_id, type, fingerprint)`, so two inserts collided and two rows were
+silently dropped. Caught only because the seeded row count is asserted — and
+that count was in the wrong place the first time too: it sat *after* the
+migration, so it was reporting **survivors** (4) against an expected 6, which
+reads as "the fixture lost rows" and is really "the precondition was checked
+after the thing that changes it". **Assert a precondition where the precondition
+holds.**
 
 ## The test this issue did not get, and why the guard was worth a row
 
