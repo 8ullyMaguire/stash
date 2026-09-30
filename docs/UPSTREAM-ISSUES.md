@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 428 planned, 221 not planned, 26 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 427 planned, 221 not planned, 27 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**428 planned, 221 not planned, 26 closed, 675 total.**
+**427 planned, 221 not planned, 27 closed, 675 total.**
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
 93 marked `deferred`. The table has four status values but the tally has three, so
@@ -88,7 +88,7 @@ These carry a label the maintainers themselves applied.
 | 6732 | HEIC/HEIF Image Format Support with Live Photo Pairing | upstream-marked (help wanted) | planned |
 | 6577 | No way to prevent .webm files from being categorized as "videos"/scene | upstream-marked (bug report) | planned |
 | 6526 | Player bottom controls are clipped (fullscreen missing) + menus overla | upstream-marked (bug report) | planned |
-| 6466 | Unsaved entries intermittently lost in Scene Edit Tags or Performers b | upstream-marked (bug report) | planned |
+| 6466 | Unsaved entries intermittently lost in Scene Edit Tags or Performers | upstream-marked (bug report). **FIXED.** The reporter's two clues — “more likely with a large maxOptionsShown” and “does not reproduce when the video is paused” — both point away from the select box and at the real trigger: a **10-second timer**. `track-activity.ts` runs a 1s interval and every `sendInterval = 10` calls `sendActivity()`, which awaits `sceneSaveActivity`/`sceneIncrementPlayCount`; Apollo normalises those mutation results back into the cache, so `data` changes identity and Scene.tsx's `useLayoutEffect(… setScene(data?.findScene) …, [data, loading])` sets a brand-new `scene` object. The editor’s DRAFTS were synced from it with `useEffect(() => setPerformers(scene.performers ?? []), [scene.performers])` and the same in `tagsEdit.tsx` — every `scene.performers`-shaped value is a fresh array on the new object, so the effect re-ran and **overwrote the unsaved draft with the saved values**. Both boxes, matching “both may be lost”. The large dropdown size is only an **amplifier**: a slower select query keeps the input focused with an unsaved entry for longer. **`useInitialState` already existed and already documented exactly this** (“only updated if the current state is unchanged from the initial state”) — these two call sites were not using it. All five drafts now use it; a pristine draft still syncs so a real server change lands, and the explicit post-save/cancel resets use the plain setter. **A hypothesis I had to discard:** a stale-response race in FilterSelect’s `debounceLoadOptions`. lodash debounce genuinely cancels no in-flight request, but react-select guards it — `if (request !== lastRequest.current) return;` (`useAsync-c64f5536.esm.js:119`) — so that path was a plausible fix in the wrong file. | closed |
 | 6456 | bfcache not used because WebSocket connection is not closed | upstream-marked (bug report) | planned |
 | 6452 | Tagger View Jumps Position | upstream-marked (bug report) | planned |
 | 6246 | Scene Tagger Navbar floats out of position | upstream-marked (bug report) | planned |
