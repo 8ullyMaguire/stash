@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            c2bfd44ce  [origin/main: ahead 25]     clean
-merged          11 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198)
+main            5d699a4b4  [origin/main: ahead 27]     clean
+merged          12 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7261
+next PR         #7181
 ```
 
 ## The first action
@@ -42,12 +42,37 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7261** is next. One commit, one
+it: **#7181** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 12 — #7261 merged: three Makefile lines, and the check that mattered
+
+`5d699a4b4`, no linked issue. Upstream folds the host os/arch into the build stamp and
+splits the env-prefix out of the `$(shell)`. The Windows mechanism — `GOOS=x GOARCH=y
+cmd` is a POSIX env prefix that cmd.exe lacks — is **unverifiable on this Linux host**,
+so it is merged on the mechanism being coherent. The verifiable part was verified.
+
+**The hazard: upstream assigns `GOOS`/`GOARCH`, the variables the cross-builds use.**
+Every `build-cc-*` target exports its pair target-locally and wins, so today it is
+harmless — confirmed by running the real shape. But that is luck: a plain global
+`GOOS :=` would be silently overwritten by a build stamp and the build would target the
+host **while reporting success**, demonstrated. Renamed to `BUILD_HOST_OS`/
+`BUILD_HOST_ARCH` so the hazard cannot exist rather than merely not exist today.
+
+**Verified end to end, because nothing in the Go suite would catch an empty stamp:**
+`make` yields `BUILD_DATE=[linux amd64 2026-09-30 20:32:26]` against the old form's
+`2026-09-30 20:32:26`, and a binary linked **through the real Makefile** carries
+`linux amd64 2026-09-30 20:35:52` per `strings`. The multi-word value links fine
+because the whole `-X` is single-quoted — both forms checked against the linker.
+`VITE_APP_DATE` consumers were read too: both are display strings, neither parses.
+
+**Trap:** `build-info`'s recipe is *empty*, so the evals run only when the target is
+invoked. A probe that does not depend on it sees an **empty** `BUILD_DATE` and looks
+like the stamp is broken. It is not.
 
 ## Session 11 — #7199 merged, `stash#7198` closed, and two fixes with no witness
 
@@ -412,10 +437,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **11** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`) |
+| Merged and committed | **12** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 25, from `02d0d0476` to `c2bfd44ce` |
+| Commits on `main` | 27, from `02d0d0476` to `5d699a4b4` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

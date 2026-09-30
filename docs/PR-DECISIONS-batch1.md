@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-```````````````````````````
+``````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (9).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (8).** Listed in Group C.
 
 ```
-#6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 #7261
-```````````````````````````
+#6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254
+``````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-```````````````````````````
+``````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 #7261 | Next. |
+| 4 | #6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 | Next. |
+| — | **#7261 — DONE** | `5d699a4b4`. Merged with the two eval'd names changed to `BUILD_HOST_OS`/`BUILD_HOST_ARCH` — upstream assigns `GOOS`/`GOARCH`, which every `build-cc-*` target exports target-locally, so it is harmless today but a global `GOOS :=` would be silently overwritten and the build would target the host while reporting success. Verified end to end: the stamp `linux amd64 2026-09-30 20:35:52` is in the linked binary. Closes nothing — no linked issue. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -567,6 +568,59 @@ The general rule: **when a fix cannot be made to fail, say so in the test that a
 to cover it.** A test named for a fix implies the fix is verified, and the next person
 to revert that line will trust the test rather than re-derive the reasoning.
 
+## #7261 — merged: three lines in the Makefile, and the verification that actually mattered
+
+`5d699a4b4`. No linked issue. Upstream folds the host os/arch into the build stamp
+and splits the env-prefix assignment out of the `$(shell)`:
+
+    $(eval GOOS := $(shell go env GOHOSTOS))
+    $(eval GOARCH := $(shell go env GOHOSTARCH))
+    $(eval BUILD_DATE := $(GOOS) $(GOARCH) $(shell go run scripts/getDate.go))
+
+The reported symptom is a Windows local build showing no build info. The mechanism
+is that `GOOS=x GOARCH=y cmd` is a POSIX shell env prefix, which cmd.exe does not
+have, and a native Windows make runs `$(shell)` through it — so splitting the
+assignment means only the plain `go run` reaches the shell.
+
+**That part is unverifiable on a Linux host**, and it is merged on the mechanism
+being coherent rather than on a reproduction. The part that *is* verifiable was
+verified, and it is the part that can bite.
+
+### The hazard: upstream assigns the variables the cross-builds use
+
+Every `build-cc-*` target sets its pair as a **target-local** export
+(`build-cc-windows: export GOOS := windows`), and a target-local export beats the
+global assignment — so today's clobber is harmless. Ran the real shape to check:
+`build-info` reports `HOSTOS`, `build-cc-windows` still reports `windows`.
+
+**That is luck, not design.** Demonstrated the failure it is one edit away from:
+after `build-info` runs, a following target sees `GOOS=linux` rather than the
+`windows` it was given. A plain global `GOOS := ...` anywhere in this file would be
+silently overwritten by a build stamp, and the build would target the host **while
+reporting success**.
+
+So the two names are `BUILD_HOST_OS` and `BUILD_HOST_ARCH`. The hazard then cannot
+exist, rather than merely not exist today.
+
+### A Makefile change that quietly yields an empty string is the real risk
+
+Nothing in the Go suite would catch that, so it was checked directly:
+
+- `make -f probe probe` with `probe: build-info` → `BUILD_DATE=[linux amd64
+  2026-09-30 20:32:26]`; the old form gives `2026-09-30 20:32:26`, so the date
+  survives and the host is added.
+- A binary linked **through the real Makefile** carries the string `linux amd64
+  2026-09-30 20:35:52` — `strings` on the output, not just the flag string. The
+  multi-word value links correctly because the whole `-X` is single-quoted; both
+  one-word and three-word forms were checked against the linker.
+- `BUILD_DATE` also feeds `VITE_APP_DATE`, which is why the consumers were read:
+  `Changelog.tsx` and `SettingsAboutPanel.tsx` both take it as a display string and
+  neither parses it, so the extra words are cosmetic rather than a format change.
+
+**One trap worth carrying:** `build-info`'s recipe is *empty* — the `$(eval)`s happen
+at parse time only when the target is invoked — so a probe that does not depend on
+it sees an **empty** `BUILD_DATE` and looks like the stamp is broken. It is not.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -578,9 +632,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  11
+merged + committed ...................................  12
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  9
+deferred, mergeable, Group C candidate ...............  8
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
