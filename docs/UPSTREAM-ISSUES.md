@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 432 planned, 222 not planned, 21 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 431 planned, 222 not planned, 22 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**432 planned, 222 not planned, 21 closed, 675 total.**
+**431 planned, 222 not planned, 22 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -117,7 +117,7 @@ These carry a label the maintainers themselves applied.
 | 7217 | Scene preview videos play with 20-30s delay / choppy in Firefox on Lin | upstream-marked (bug report) | planned |
 | 7216 | Windows FFmpeg download uses the "essentials" build, which has no libd | upstream-marked (bug report) | planned |
 | 7209 | Freeones: `Could not parse career length 2016-now` | upstream-marked (bug report) | planned |
-| 7198 | Updating scrapers does not install new requirements | upstream-marked (bug report) | planned |
+| 7198 | Updating scrapers does not install new requirements | **CLOSED** `c2bfd44ce` via PR #7199 — see closed-issues.md | closed |
 | 7179 | `.nogallery` does not remove an existing folder-based gallery during C | **CLOSED** `68192aa59` — see closed-issues.md | closed |
 | 7155 | Stale sprite/preview/cover/transcode after a same path file content ch | upstream-marked (bug report) | planned |
 | 7152 | Studio Tagger batch update panics when scraped studio has nil StoredID | upstream-marked (bug report) | closed |

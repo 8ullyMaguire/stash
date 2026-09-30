@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-````````````````````````
+```````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (10).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (9).** Listed in Group C.
 
 ```
-#6917 #7093 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
-````````````````````````
+#6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 #7261
+```````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-````````````````````````
+```````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -101,7 +101,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7196 — DONE** | `b14aef421`. Merged as written; media-src made a slice like its siblings; 8 tests for a header builder that had none. Closes `stash#7197`. |
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
-| 4 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
+| — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
+| 4 | #6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 #7261 | Next. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -509,6 +510,63 @@ Also verified rather than assumed: the `.dockerignore` negation
 (`!docker/build/x86_64/cuda-entrypoint.sh`) actually lets the `COPY` resolve under
 an excluded `docker/` directory — built a probe image and compared the sha256.
 
+## #7199 — merged, closing `stash#7198`, and two fixes that have NO WITNESS
+
+`c2bfd44ce`. `Requires` was parsed into the remote index and never acted on, so a
+plugin naming a dependency produced an install that could not run. Install now walks
+the tree, installing what is missing and updating what is outdated.
+
+`stash#7198` was correctly ticketed **planned**, so unlike #7197/#7165/#7071 this one
+needed no correction — worth saying, since three of the last four were wrong.
+
+### The one fix with a witness: a crash
+
+`packageByID` returns `(nil, nil)` when the ID is not in the index, and `install`
+dereferenced it unconditionally:
+
+    fromRemote, err := remote.GetPackageZip(ctx, *pkg)   // panic
+
+So a requirement the source does not publish — an ordinary condition — **crashed the
+process**. Pre-existing in `Install`, but recursive requirement resolution is exactly
+what turns a bad requirement name into a normal input. 13 tests drive the real path
+against a `file://` repository, so real zips, real sha256 and real manifests; the nil
+guard is killed by reverting it.
+
+Kept upstream's `remotePkg == nil || !local.Upgradable(...)` branch deliberately: an
+installed package the source no longer publishes must not fail the whole install.
+
+### Two fixes with NO witness, recorded as such
+
+Both were added, and in both cases **reverting the fix leaves the suite green.**
+
+**The `installing` map is never undone.** Upstream marks `spec.ID` and never removes
+it, making the map a "seen in this call tree" set rather than a cycle guard. Added
+`defer delete`. Then found the fix is undetectable, for two reasons:
+
+- `Install` builds a **fresh map per call**, so a cross-call leak is invisible from
+  outside by construction.
+- Within one call tree the two guards produce **different visit sequences but the
+  same outcome**, because `install()` is idempotent for an already-installed package
+  — it uninstalls and reinstalls the same bytes.
+
+Ran both shapes side by side to confirm the second point rather than assuming it.
+
+**The cycle guard is not load-bearing.** Deleting it entirely still passes: the test
+traced `err=nil` with both packages installed. The reason is in
+`installRequirements` — it recurses into a requirement only when that requirement is
+missing or outdated, so on the second visit to an ID in a cycle the package is
+already current and the `continue` fires.
+
+Both kept anyway. A guard should be scoped to the path it guards, and a future change
+to `installRequirements` would turn a hang into a stack overflow. But they are
+insurance, not fixes, and **a test that cannot fail is worse than no test** — so both
+were relabelled in the test file to say they have no witness, and one entirely vacuous
+test was deleted rather than kept to pad the count.
+
+The general rule: **when a fix cannot be made to fail, say so in the test that appears
+to cover it.** A test named for a fix implies the fix is verified, and the next person
+to revert that line will trust the test rather than re-derive the reasoning.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -520,9 +578,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  10
+merged + committed ...................................  11
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  10
+deferred, mergeable, Group C candidate ...............  9
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

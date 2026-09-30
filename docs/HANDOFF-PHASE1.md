@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            352c7d105  [origin/main: ahead 23]     clean
-merged          10 PRs -> 8 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended)
-issue ledgers   21 closed · 93 deferred · 129 not-planned · 432 planned · 675 total
-next PR         #7199
+main            c2bfd44ce  [origin/main: ahead 25]     clean
+merged          11 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198)
+issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
+next PR         #7261
 ```
 
 ## The first action
@@ -42,12 +42,53 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7199** is next. One commit, one
+it: **#7261** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 11 — #7199 merged, `stash#7198` closed, and two fixes with no witness
+
+`c2bfd44ce`. `Requires` was parsed into the index and never acted on, so a plugin
+naming a dependency produced an install that could not run. Install now walks the tree,
+installing what is missing and updating what is outdated.
+
+`stash#7198` was correctly ticketed **planned** — unlike #7197/#7165/#7071, this one
+needed no correction. Worth saying, since three of the last four were wrong.
+
+**One fix with a witness: a crash.** `packageByID` returns `(nil, nil)` for an ID not
+in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a
+requirement the source does not publish **crashed the process**. Pre-existing, but
+recursive resolution is exactly what makes a bad requirement name an ordinary input.
+
+**Two fixes with NO witness — and that is the part worth keeping.**
+
+Upstream never deletes from `installing`, so it is a "seen in this call tree" set, not
+a cycle guard. Added `defer delete` — then found **reverting it leaves the suite
+green**. Two reasons: `Install` builds a *fresh map per call*, so a cross-call leak is
+invisible by construction; and within one call tree the two guards produce different
+visit sequences but the **same outcome**, because `install()` is idempotent for an
+already-installed package. Ran both shapes side by side rather than assuming.
+
+The cycle guard is likewise not load-bearing: deleting it entirely still passes, since
+`installRequirements` recurses only into a requirement that is missing or outdated, so
+on the second visit to an ID in a cycle the package is already current and `continue`
+fires. Traced it — `err=nil`, both packages installed.
+
+Both kept as insurance, since a future change to `installRequirements` would turn a
+hang into a stack overflow. But **a test that cannot fail is worse than no test**, so
+both were relabelled in the test file to say they have no witness, and one entirely
+vacuous test was deleted rather than kept to pad the count. A test named for a fix
+implies the fix is verified, and the next person to revert that line will trust the test
+instead of re-deriving the reasoning.
+
+13 tests drive the real install path against a `file://` repository — real zips, real
+sha256, real manifests, no mocking. A mock cannot tell you a package was skipped on a
+second visit because a map still held it, which is the defect class here. 3 mutations,
+all killed: the nil guard removed (panic), the requirement walk removed (9 tests), and
+`Requires` dropped from the manifest (1 test).
 
 ## Session 10 — #7159 merged: a second mechanism for `stash#684`, and a container that died
 
@@ -371,10 +412,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **10** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed) |
+| Merged and committed | **11** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 23, from `02d0d0476` to `352c7d105` |
+| Commits on `main` | 25, from `02d0d0476` to `c2bfd44ce` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -519,11 +560,11 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 432 planned issues, none started. The ledger is in agreement (17 closed as of
 that gate; 18 after session 7, 93
-deferred, 129 not-planned, 432 planned, 675 total). Work them in the
+deferred, 129 not-planned, 431 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179`, `stash#7197`, `stash#7165`, `stash#7071` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179`, `stash#7197`, `stash#7165`, `stash#7071`, `stash#7198` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.
