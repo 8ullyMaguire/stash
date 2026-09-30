@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/plugin"
 )
 
@@ -54,10 +55,15 @@ func (rs pluginRoutes) Assets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dir = filepath.Join(pluginDir, filepath.FromSlash(dir))
-
-	// ensure directory is still within the plugin directory
-	if !strings.HasPrefix(dir, pluginDir) {
+	// Containment, not a prefix test. #7241 fixed this line with a
+	// trailing-separator HasPrefix, which is correct and is still a string
+	// comparison: a sibling directory whose name begins with the plugin
+	// directory's name -- <plugins>/myplugin-evil against <plugins>/myplugin --
+	// shares the prefix while being outside the directory. This tree already
+	// has the real gate in fsutil.SafeJoin (stash#7240), used by the other two
+	// archive call sites, so the three sites share one check rather than three.
+	dir, err := fsutil.SafeJoin(pluginDir, filepath.FromSlash(dir))
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
