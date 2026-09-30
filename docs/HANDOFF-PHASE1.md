@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            c71899e7f  [origin/main: ahead 21]     clean
-merged          9 PRs -> 8 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165)
+main            352c7d105  [origin/main: ahead 23]     clean
+merged          10 PRs -> 8 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended)
 issue ledgers   21 closed · 93 deferred · 129 not-planned · 432 planned · 675 total
-next PR         #7159
+next PR         #7199
 ```
 
 ## The first action
@@ -42,12 +42,66 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7159** is next. One commit, one
+it: **#7199** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 10 — #7159 merged: a second mechanism for `stash#684`, and a container that died
+
+`352c7d105`. Not new work — we already fixed #684 with `PUID`/`PGID` + `su-exec`,
+verified against a real image. Upstream's mechanism (`user: "N:M"` in compose) now
+coexists with ours.
+
+**The Go half is one real bug, and the ordering is the fix.** `GetHomeDirectory`
+called `user.Current()`, which **panicked** on error; verified from the Go source
+that `os/user` returns `user: unknown userid N` for an unresolvable uid — which a
+numeric uid with no passwd entry is. It now reads `$HOME` via `os.UserHomeDir()`
+first, and *that* is what matters: `os.UserHomeDir()` consults the environment and
+never the passwd db.
+
+**The collision only a container could reveal.** With `user:` Docker starts the
+process already non-root, and our entrypoint then tried to drop again:
+
+```
+su-exec: setgroups(1000): Operation not permitted     exit 1
+```
+
+Reproduced against a real image, not inferred. A non-root process cannot setresuid,
+**not even to itself**, because clear-groups needs privilege. The `chown`s are
+`|| true` so they were harmless; this line is not, and `set -e` kills the container
+with no useful message.
+
+**Two fixes, neither sufficient alone** — and that shape is the evidence:
+
+| variant | result |
+| --- | --- |
+| both reverted | 5 of 6 new tests fail |
+| only fix 1 | 5 of 6 fail |
+| only fix 2 | 3 of 6 fail |
+| both | **16/16**, all 10 pre-existing still green |
+
+Fix 1: with `--user 1500:1600` the script ignored the uid Docker started it as,
+resolved the image's `stash` account (1000), and attempted an impossible 1500→1000
+drop. A non-root start with no requested identity now treats the current uid as the
+request. Fix 2: exec straight through when the current uid:gid already equals the
+target.
+
+One of the six passes in every variant (`user:` vs a leftover `RUN_AS_ROOT=1`) —
+correct, since `RUN_AS_ROOT` exits before `su-exec`, so it proves nothing. Kept to
+pin precedence and marked as such rather than counted as proof.
+
+The harness gains 6 container tests via a `run_as` helper using `docker run
+--user`, including a **split identity** (1000:1600), which is precisely how a string
+comparison goes wrong.
+
+Two environment gotchas worth remembering: `COPY` does **not** preserve the
+executable bit, so a scratch build context needs `chmod +x` (or `--no-cache`) or the
+layer silently reuses a non-executable copy and *every* test fails at 0/16 — which
+looks exactly like a code failure. And my stub image needed `CMD ["stash"]`, or
+`exec "$@"` runs with no command and prints a `su-exec` usage error.
 
 ## Session 9 — #7166 merged, `stash#7165` closed, a CSP hole, and a sweep that found a third
 
@@ -317,10 +371,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **9** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`) |
+| Merged and committed | **10** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 21, from `02d0d0476` to `c71899e7f` |
+| Commits on `main` | 23, from `02d0d0476` to `352c7d105` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

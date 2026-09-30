@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-`````````````````````
+````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (11).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (10).** Listed in Group C.
 
 ```
-#6917 #7093 #7159 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
-`````````````````````
+#6917 #7093 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
+````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-`````````````````````
+````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -99,7 +99,7 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7225 — DONE** | `63635bcc0`. Merged as written; threshold made a contract with migration 87, 10 mutations. Closes `stash#3722`. |
 | — | **#7257 — DONE** | `6d5a8131c`. Merged as written except settings snapshot made a DEEP clone, not `maps.Clone`. Closes `stash#5944`. |
 | — | **#7196 — DONE** | `b14aef421`. Merged as written; media-src made a slice like its siblings; 8 tests for a header builder that had none. Closes `stash#7197`. |
-| 3 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | 4 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
@@ -448,6 +448,67 @@ the queue is the thing that changes — so **check whether an open PR already cl
 an issue before honouring a not-planned verdict**, and batch the check rather than
 running it per issue.
 
+## #7159 — merged: the second mechanism for an issue we had already closed
+
+`352c7d105`, closing `stash#684`. Not new work — this fork already fixed #684 with
+`PUID`/`PGID` and `su-exec`, verified against a real built image. Upstream's is a
+different mechanism (`user: "1000:1000"` in compose), so both now coexist.
+
+The Go half is one real bug, and it is worth being precise about *why*: the old
+`GetHomeDirectory` called `user.Current()`, which **panicked** on error. Verified
+from the Go source that this is reachable — `os/user` returns
+`user: unknown userid N` for a uid it cannot resolve, and a numeric uid with no
+passwd entry is exactly that. The fix reads `$HOME` via `os.UserHomeDir()` first.
+**The ordering is the fix, not the existence of the call** — `os.UserHomeDir()`
+consults the environment and never the passwd db, which is the whole property that
+makes a numeric uid work.
+
+### The collision, which only a container could have revealed
+
+Upstream's mode starts the process as uid 1000, so our entrypoint is **already
+non-root** and then tries to drop privileges again:
+
+    su-exec: setgroups(1000): Operation not permitted
+    exit 1
+
+Reproduced against a real image, not inferred. A non-root process cannot setresuid,
+**not even to itself**, because clear-groups needs privilege. The `chown`s above are
+`|| true` so they were harmless; this line is not, and under `set -e` it kills the
+container with no useful message.
+
+Two fixes, and the *shape* of the verification is the point:
+
+1. **The uid Docker started us as was ignored.** With `--user 1500:1600` and no
+   `PUID`, the script resolved the image's own `stash` account (1000) and attempted
+   an impossible 1500→1000 drop — the same failure reached a different way. Now a
+   non-root start with no requested identity treats the current uid as the request;
+   only root falls back to the image default, because root genuinely can drop.
+2. **Guard the hand-over**: if the current uid:gid already equals the target, exec
+   straight through instead of calling `su-exec`.
+
+### Neither fix is sufficient alone, and that is the evidence
+
+Removing one at a time against a built image:
+
+| variant | result |
+| --- | --- |
+| both reverted | 5 of 6 new tests fail |
+| only fix 1 | 5 of 6 fail |
+| only fix 2 | 3 of 6 fail |
+| both present | **16/16 pass**, all 10 pre-existing tests still green |
+
+If either fix were dead code, one of the "only" rows would have been clean. They are
+not, so neither is dead, and the tests are not passing for a shared reason.
+
+One of the six passes in every variant: `user:` beating a leftover `RUN_AS_ROOT=1`.
+That is *correct* — `RUN_AS_ROOT` exits before `su-exec`, so it is not evidence for
+anything. Kept only to pin precedence, and marked as such rather than counted as
+proof.
+
+Also verified rather than assumed: the `.dockerignore` negation
+(`!docker/build/x86_64/cuda-entrypoint.sh`) actually lets the `COPY` resolve under
+an excluded `docker/` directory — built a probe image and compared the sha256.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -459,9 +520,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  9
+merged + committed ...................................  10
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  11
+deferred, mergeable, Group C candidate ...............  10
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
