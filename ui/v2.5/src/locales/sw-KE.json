@@ -1446,6 +1446,7 @@
   "scenes_size": "Ukubwa wa Scene",
   "scene_created_at": "Scene Imetengenezwa",
   "scene_date": "Tarehe ya Scene",
+  "scene_has_no_file": "Scene hiki hana faili.",
   "scene_id": "ID ya Scene",
   "scene_tags": "Tags za Scene",
   "scene_updated_at": "Scene Imesasishwa",
