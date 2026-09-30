@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            8c1601ecf  [origin/main: ahead 33]     clean
-merged          15 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue)
+main            cd19a72ea  [origin/main: ahead 35]     clean
+merged          16 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7093
+next PR         #7235
 ```
 
 ## The first action
@@ -42,12 +42,48 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7093** is next. One commit, one
+it: **#7235** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 16 — #7093 merged: a draft kept on merit, and a flag that must not move
+
+`cd19a72ea`, no linked issue, **draft upstream**, one file. Waits for in-flight queries
+before `resetStore()`.
+
+**Kept rather than declined.** The #6824 precedent was 40 files, CONFLICTING, and a schema
+rewrite — every disqualifier a merit, draft flag one of several. This is one mergeable
+file, no schema surface, and the change is correct. The flag alone is not decisive.
+
+**Premise confirmed from Apollo's own source**, `QueryManager.clearStore` (core.cjs:1554):
+`this.cancelPendingFetches(globals.newInvariantError(42))` — every in-flight query is
+REJECTED with an invariant, which is exactly the "Error loading items" the user sees. The
+other half also checked: `getCurrentResult()` is a **pure read** of `queryInfo.networkStatus`,
+so the 100ms poll generates no load.
+
+**`resetQueued = false` sits BEFORE `await client.resetStore()`, and that is load-bearing.**
+It reads like a tidiness slip. Moving it after — the obvious "tidy up" edit — would coalesce
+every event arriving during a reset, **which is the race this fixes**. Upstream's comment
+justified the coalescing for the wrong reason; rewritten to state the actual invariant so
+nobody tidies the flag.
+
+**16 checks against a real ApolloClient** (a fake store proves nothing about cancellation),
+including the reported bug observed: resetting with a query in flight REJECTS it.
+
+**Four fixture bugs of my own**, each reading like a finding about the code: a bare promise
+as the link instead of a real `Observable` (fails inside `utilities.cjs` as
+`Cannot read properties of undefined (reading 'subscribe')`); `@apollo/client/core` is
+`ERR_UNSUPPORTED_DIR_IMPORT` (the package ships `core.cjs`); `await q.settled()` hung on the
+probe's own instrumentation because `resetStore()` is blocked on the gated query the case
+holds open; and `requests() === 1` after a reset, when `resetStore()` refetches so 2 is
+correct.
+
+**One assertion wrong about correct code**: two back-to-back resets gave 1, because the first
+callback is still in its poll loop — so it is coalesced, the documented intent. Rewritten to
+exercise the window that exists.
 
 ## Session 15 — #6917 merged: a guard that could not latch
 
@@ -548,10 +584,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **15** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue) |
+| Merged and committed | **16** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 33, from `02d0d0476` to `8c1601ecf` |
+| Commits on `main` | 35, from `02d0d0476` to `cd19a72ea` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

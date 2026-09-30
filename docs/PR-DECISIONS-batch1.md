@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-```````````````````````````````````````
+``````````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (5).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (4).** Listed in Group C.
 
 ```
-#7093 #7235 #7245 #7249 #7254
-```````````````````````````````````````
+#7235 #7245 #7249 #7254
+``````````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-```````````````````````````````````````
+``````````````````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #7093 #7235 #7245 #7249 #7254 | Next. |
+| 4 | #7235 #7245 #7249 #7254 | Next. |
+| — | **#7093 — DONE** | `cd19a72ea`. Waits for in-flight queries before `resetStore()`, which cancels them. **Premise confirmed from Apollo's own source**: `QueryManager.clearStore` calls `cancelPendingFetches(newInvariantError(42))` (core.cjs:1554), and `getCurrentResult()` is a pure read of `queryInfo.networkStatus` so the 100ms poll generates no load. **The fix is correct as written, including a placement that looks like a mistake**: `resetQueued = false` sits BEFORE `await client.resetStore()` on purpose — moving it after would coalesce every event arriving during a reset, which is the race being fixed. Upstream's comment justified the coalescing for the wrong reason; rewritten to state the load-bearing invariant so nobody “tidies up” the flag. **16-check probe against a real ApolloClient** (a fake store proves nothing about cancellation), including the reported bug observed: resetting with a query in flight REJECTS it. **Kept rather than declined** despite being draft — the #6824 precedent was 40 files, conflicting, and a schema rewrite, every disqualifier a merit; this is one mergeable file. Four fixture bugs of my own, each reading like a finding about the code. |
 | — | **#6917 — DONE** | `8c1601ecf`. Persists DisplayMode per view to IndexedDB. **The Go file is a drift fix, not a change**: `//go:generate` has said `FolderRelatedFolderIDsLoader` for a while and the checked-in file still carried `FolderParentFolderIDs` — the PR is byte-identical to regenerated output, verified. **Regenerating ALL loaders is not safe**: it rewrites three unrelated ones with a duplicate `"time"` import (`time redeclared in this block`) — reverted. **The frontend guard could not latch**: `location.search.includes("disp=")` is unsound because `filter.ts:382` emits `disp` only when the mode differs from the default Grid, so for a default-mode user the guard never latches and the effect re-runs on every filter change. Underneath that the restore and useFilterURL's empty-search branch are **two writers to one state**, and the winner was decided by effect declaration order. Now a ref keyed by view: restore once per view per mount. **19-check harness that asserts its own premise first** — the guard's soundness is a fact about another file. Verified it fails on revert. |
 | — | **#7252 — DONE** | `799ac6f70`. Swahili (Kenya), 1384 keys, exact structural match against en-GB (0 missing, 0 unknown); registered in all three places. **Removed the “(Preview)” suffix** — the tree's convention is ≥80% complete goes unlabelled, and sw-KE is 100%. **Found and fixed a pre-existing bug: 14 locales were sorting with English collation rules** (af-ZA, ar, ja-JP, hi-IN, vi-VN, …) because locale.go never registered them; af-ZA and nb-NO were worse, resolving to nl-NL and da-DK. **8 tests over the 3-point registration invariant** — after five broken revisions, the worst being an empty parse that made the assertion pass trivially. Verified end to end: the locale lands in its own code-split chunk and the main bundle references it. |
 | — | **#7181 — DONE** | `921edd649`. gorilla/websocket 1.5.0 -> 1.5.3, go.mod/go.sum exactly as upstream sent them (`go mod tidy` leaves both untouched) and both hashes checked against sum.golang.org. **Not a no-op**: server.go changes `challengeKey == ""` to `!isValidChallengeKey(...)`, so 1.5.0 accepted any non-empty key and 1.5.3 requires base64 decoding to 16 bytes. **8 tests added** — the transport had zero coverage. The first draft was **vacuous**: the Dialer generates its own Sec-WebSocket-Key, so passing one in a header map made a *duplicate* and every rejection test passed for the wrong reason — caught only because the valid-key control failed too. Key now injected on a raw socket. Verified against the old dep: `go get @v1.5.0` fails all five with `status = 101, want 400`. |
@@ -850,6 +851,78 @@ hitting), and that the write spreads `...prev.viewConfig?.[view]` so a co-reside
 Verified it detects its defect: reverting the ref latch fails the run, restoring the
 fix turns it green — done in one process so no mutation was left behind.
 
+## #7093 — merged: a draft kept on merit, and a flag placement that looks like a mistake
+
+`cd19a72ea`, no linked issue. Draft upstream, 38+3 in one file.
+
+### Kept, not declined — and why the #6824 precedent did not apply
+
+#6824 was declined as WIP, but that PR was **40 files, CONFLICTING, and a schema
+rewrite**: every disqualifier there was a merit in its own right, and the draft flag was
+one of several. This is **one mergeable file with no schema surface**, and the change is
+correct. The flag alone was not treated as decisive, and this is recorded so the next
+draft is judged the same way rather than by the flag.
+
+### The premise, confirmed from Apollo's own source
+
+`@apollo/client` 3.14.1, `QueryManager.clearStore` (core.cjs:1554):
+
+    QueryManager.prototype.clearStore = function (options) {
+      ...
+      this.cancelPendingFetches(globals.newInvariantError(42));
+
+so **every in-flight query is rejected with an invariant**. That invariant is what the
+user sees as "Error loading items", and it is why a reset must wait for quiet. Read from
+the installed package, not recalled from documentation.
+
+The other half of the premise also checked, since the fix polls it: `getCurrentResult()`
+is a **pure read** — core.cjs:301 computes `loading: isNetworkRequestInFlight(networkStatus)`
+from `queryInfo.networkStatus` and fetches nothing, so the 100 ms poll generates no load.
+
+### `resetQueued = false` sits BEFORE the reset, and that is load-bearing
+
+It reads like a tidiness slip. It is not. While `resetStore()` is refetching, a newly
+arrived event must be able to queue **its own** reset rather than being swallowed by
+this one, and `resetChain` then makes it run strictly after — so the two cannot cancel
+each other's refetches.
+
+**Moving the flag after the reset — the obvious "tidy up" edit — would coalesce every
+event arriving during a reset, which is the very race this fixes.**
+
+Upstream's comment justified the coalescing for the wrong reason ("events arriving
+before this point are covered by the reset below"). The code does hold, but because the
+refetches happen *after the wait*, not because an event is "covered". Rewritten to state
+the invariant that is actually load-bearing, so the next reader does not "fix" the flag.
+
+### 16 checks against a real ApolloClient
+
+A fake store would prove nothing about what `resetStore` does to in-flight queries, which
+is the entire claim. The probe pins: the poll issues no network request; a query in flight
+defers the reset; the reset runs once quiet and refetches the active query; three
+back-to-back events produce exactly one reset; the deadline bounds the wait; and
+**resetting with a query still in flight REJECTS it** — the reported bug, observed rather
+than asserted. It reads `clearStore` out of the installed package so the premise cannot rot.
+
+**Four fixture bugs of my own, each of which read like a finding about the code:**
+
+- a bare promise as the link instead of a real `Observable`. Apollo's Concast subscribes to
+  it, and a promise fails deep inside `utilities.cjs` with *"Cannot read properties of
+  undefined (reading 'subscribe')"* — indistinguishable from an Apollo bug.
+- `import ... from "@apollo/client/core"` is `ERR_UNSUPPORTED_DIR_IMPORT` under node's ESM
+  resolver. The package ships `core.cjs` for exactly this case.
+- `await q.settled()` in the deadline case hung on the probe's **own instrumentation** —
+  `resetStore()` is blocked on the gated query the case deliberately holds open. Raced it
+  against a bounded wait.
+- asserting `requests() === 1` after a reset. `resetStore()` **refetches** every active
+  query, so 2 is correct; asserting 1 asserts the reset did *not* refetch, the opposite of
+  what the PR depends on.
+
+**And one assertion that was simply wrong about correct code:** two back-to-back
+`queueResetStore()` calls produced one reset, not two, because the first callback is still
+inside its poll loop when the second event arrives — so it is coalesced, which is the
+documented intent. The case was rewritten to exercise the window that actually exists: an
+event arriving after the flag clears but while the reset is refetching.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -861,9 +934,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  15
+merged + committed ...................................  16
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  5
+deferred, mergeable, Group C candidate ...............  4
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
