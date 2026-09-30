@@ -95,6 +95,7 @@ type ServerConfig interface {
 	HasTLSConfig() bool
 	GetPluginsPath() string
 	GetDisabledPlugins() []string
+	GetPluginConfiguration(pluginID string) map[string]interface{}
 	GetPythonPath() string
 }
 
@@ -227,7 +228,7 @@ func (c Cache) ListPluginTasks() []*PluginTask {
 	return ret
 }
 
-func buildPluginInput(plugin *Config, operation *OperationConfig, serverConnection common.StashServerConnection, args OperationInput) common.PluginInput {
+func (c Cache) buildPluginInput(plugin *Config, operation *OperationConfig, serverConnection common.StashServerConnection, args OperationInput) common.PluginInput {
 	if args == nil {
 		args = make(OperationInput)
 	}
@@ -235,9 +236,72 @@ func buildPluginInput(plugin *Config, operation *OperationConfig, serverConnecti
 		applyDefaultArgs(args, operation.DefaultArgs)
 	}
 	serverConnection.PluginDir = plugin.getConfigPath()
+	// Each invocation receives its own settings snapshot so that plugin code and
+	// subsequent configuration updates cannot change an in-flight invocation.
+	//
+	// DEEP, not maps.Clone. maps.Clone copies the top level only, and plugin
+	// settings are Viper's Raw() tree, so any structured value -- a list, a
+	// nested object -- is still the SAME memory the configuration holds. A plugin
+	// that does `input.Settings.tags.push("x")` or assigns into a nested object
+	// therefore writes straight into the live config, and the next
+	// SetPluginConfiguration persists it. Measured through this function: a
+	// plugin mutating `tags[0]` or `nested.k` changed what
+	// GetPluginConfiguration then returned.
+	//
+	// The snapshot also has to be deep for the CONCURRENCY claim to hold. The
+	// settings are handed to a JS VM that runs concurrently with the settings
+	// writer, so a shared nested map is a data race, not merely a leak.
+	settings := cloneSettings(c.config.GetPluginConfiguration(plugin.id))
+	// Keep the plugin input shape stable: an unconfigured plugin should receive
+	// an empty settings object rather than null.
+	if settings == nil {
+		settings = make(map[string]interface{})
+	}
+
 	return common.PluginInput{
 		ServerConnection: serverConnection,
 		Args:             toPluginArgs(args),
+		Settings:         settings,
+	}
+}
+
+// cloneSettings deep-copies a plugin's settings so that a plugin holding the
+// snapshot cannot reach the live configuration through it.
+//
+// The types that need recursing are exactly the ones Viper's Raw() produces for
+// structured plugin settings: map[string]interface{}, and []interface{} for a
+// list. Every other scalar (string, bool, float64, json.Number) is immutable in
+// Go and is shared deliberately -- copying it would change nothing and cost an
+// allocation per invocation.
+//
+// A type not handled here is returned as-is rather than copied, because a
+// partial deep copy is worse than a shallow one: it looks like the guarantee
+// holds. json.Unmarshal can only produce the types above, so reaching anything
+// else means a caller built the map by hand.
+func cloneSettings(in map[string]interface{}) map[string]interface{} {
+	if in == nil {
+		return nil
+	}
+
+	out := make(map[string]interface{}, len(in))
+	for k, v := range in {
+		out[k] = cloneSettingValue(v)
+	}
+	return out
+}
+
+func cloneSettingValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		return cloneSettings(t)
+	case []interface{}:
+		out := make([]interface{}, len(t))
+		for i, item := range t {
+			out[i] = cloneSettingValue(item)
+		}
+		return out
+	default:
+		return v
 	}
 }
 
@@ -287,7 +351,7 @@ func (c Cache) CreateTask(ctx context.Context, pluginID string, operationName *s
 	task := pluginTask{
 		plugin:       plugin,
 		operation:    operation,
-		input:        buildPluginInput(plugin, operation, serverConnection, args),
+		input:        c.buildPluginInput(plugin, operation, serverConnection, args),
 		progress:     progress,
 		gqlHandler:   c.gqlHandler,
 		serverConfig: c.config,
@@ -305,7 +369,7 @@ func (c Cache) RunPlugin(ctx context.Context, pluginID string, args OperationInp
 	// find the plugin
 	plugin := c.getPlugin(pluginID)
 
-	pluginInput := buildPluginInput(plugin, nil, serverConnection, args)
+	pluginInput := c.buildPluginInput(plugin, nil, serverConnection, args)
 
 	pt := pluginTask{
 		plugin:       plugin,
@@ -404,7 +468,7 @@ func (c Cache) executePostHooks(ctx context.Context, hookType hook.TriggerEnum, 
 			newCtx := session.AddVisitedPluginHook(ctx, p.id, hookType)
 			serverConnection := c.makeServerConnection(newCtx)
 
-			pluginInput := buildPluginInput(&p, &h.OperationConfig, serverConnection, nil)
+			pluginInput := c.buildPluginInput(&p, &h.OperationConfig, serverConnection, nil)
 			addHookContext(pluginInput.Args, hookContext)
 
 			pt := pluginTask{
