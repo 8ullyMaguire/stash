@@ -21,6 +21,55 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
+
+## Repo-level finding — `go test ./...` was never running the integration suite
+
+Found by a background verification run on 2026-09-30, **pre-existing and not caused
+by any Phase 2 work** (verified by extracting the tree at `bde5006f5` — a docs-only
+commit — and reproducing the identical failure there; `git log bde5006f5..HEAD --
+pkg/sqlite/` is empty).
+
+`go test ./...` reports **38 packages, 0 failures, green** — and silently runs
+**none** of the `pkg/sqlite` integration tests, because every one of them is behind
+`//go:build integration`. Running them explicitly:
+
+    go test -tags integration ./pkg/sqlite/ -count=1
+    --- FAIL: TestStudioQueryFast (0.01s)
+    ... no such function: mod
+
+**Root cause, traced:** `pkg/sqlite/sql.go:144` builds the random sort as
+`ORDER BY mod((id + seed) * (id + seed) * 52959209 + (id + seed) * 1047483763, 2147483647)`.
+`mod` is a SQLite **built-in** math function, present only in an amalgamation built
+with `SQLITE_ENABLE_MATH_FUNCTIONS`. `pkg/sqlite/driver.go` registers four custom
+functions (`regexp`, `durationToTinyInt`, `basename`, `phash_distance`) and the
+`NATURAL_CI` collation in its `ConnectHook` — and correctly does **not** register
+`mod`, because it should be built in. So this is a **build-configuration property of
+the go-sqlite3 CGO build**, not an application defect.
+
+**It is user-facing, not just a test problem:** a user who sorts any list by random
+gets this error, in production, from the same driver. It has survived because the
+default gate cannot see it.
+
+**The other three failures in that run were cascade, not bugs.**
+`TestPerformerQuerySortScenesCount`, `TestPerformerCount` and `TestPerformerAll` fail
+only when run after the random-sort test — the package-level test DB is shared, so
+one aborted setup poisons the fixture for everything after it. Run alone at HEAD,
+only `TestStudioQueryFast` fails. This is the order-dependence the goal file warns
+about, confirmed rather than assumed.
+
+**Not fixed here, deliberately.** The fix is a build flag (`-tags sqlite_math_functions`)
+that must be set in **every** build path — Makefile, CI, cross-compile, release — or
+a switch to a pure-Go driver, which would change driver behaviour wholesale and
+likely affect the four custom functions and the collation. That is a build-config
+decision, not an issue fix, and doing it silently would change how every binary here
+is compiled.
+
+**What this changes about the goal's own exit condition:** “the full suite is green”
+has been reading as green while a whole build-tagged suite fails. The gate needs to
+be `go test ./... && go test -tags integration ./...`, and until that is agreed, a
+green suite here means less than it appears to.
+
+
 **424 planned, 221 not planned, 30 closed, 675 total.**
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
