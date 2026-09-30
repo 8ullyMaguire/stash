@@ -527,13 +527,29 @@ func (i *Config) setDefault(key string, value interface{}) {
 	}
 }
 
-func (i *Config) SetPassword(value string) {
+// SetPassword returns an error for a password bcrypt refuses (stash#7135).
+// Before, a password over 72 bytes was stored as an empty hash, which made
+// HasCredentials() false and therefore made ValidateCredentials() accept
+// anything -- so a user who chose a long password ended up with no
+// authentication at all, silently.
+//
+// An empty value is still a deliberate "clear the credential" and is not an
+// error. That distinction is the whole point: "" means clear, an overlong
+// password means refuse loudly.
+func (i *Config) SetPassword(value string) error {
 	// if blank, don't bother hashing; we want it to be blank
 	if value == "" {
 		i.SetString(Password, "")
-	} else {
-		i.SetString(Password, hashPassword(value))
+		return nil
 	}
+
+	hash, err := hashPassword(value)
+	if err != nil {
+		return err
+	}
+
+	i.SetString(Password, hash)
+	return nil
 }
 
 func (i *Config) Write() error {
@@ -1220,14 +1236,59 @@ func (i *Config) HasCredentials() bool {
 	return username != "" && pwHash != ""
 }
 
-func hashPassword(password string) string {
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+// hashPassword returns an error rather than swallowing bcrypt's.
+//
+// stash#7135: this was `hash, _ :=`, so a password past bcrypt's 72-byte limit
+// produced a ZERO-LENGTH hash with no error raised. Measured: len=72 -> 60
+// bytes, len=73 -> 0 bytes + "password length exceeds 72 bytes". The discarded
+// error turned a refused input into a stored empty credential, and because
+// HasCredentials() requires a non-empty hash, ValidateCredentials() then took
+// its "no credentials saved, nothing to authenticate" branch and returned TRUE
+// for any input at all -- turning a rejected password into disabled
+// authentication.
+//
+// The 72-byte limit is bcrypt's own documented behaviour and is left alone.
+// What changes is that we stop throwing away the refusal.
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		return "", err
+	}
 
-	return string(hash)
+	return string(hash), nil
 }
 
+// ValidateCredentials fails CLOSED once a username is configured (stash#7135).
+//
+// It used to be:
+//
+//	if !i.HasCredentials() { return true }   // "no credentials saved, nothing to check"
+//
+// which is correct for a genuinely fresh instance and wrong for a corrupted
+// one. A username with an unusable hash -- exactly what `hash, _ :=` wrote for
+// a password over bcrypt's 72-byte limit -- is indistinguishable from a
+// never-configured instance to HasCredentials(), so the instance came up
+// accepting ANY username and ANY password. Verified live before this change:
+//
+//	ValidateCredentials("attacker", "wrong") == true
+//
+// The distinction that matters: no username at all means "nobody has set this
+// up yet", and returning true lets a fresh install be claimed. A username with
+// a hash that will not verify means somebody DID set it up and we cannot check
+// them, and that must be a rejection. Returning true there is not convenience,
+// it is an open door.
 func (i *Config) ValidateCredentials(username string, password string) bool {
 	if !i.HasCredentials() {
+		// No usable credentials. If a username is configured, this is a
+		// corrupted credential, not a fresh instance, and we must not wave
+		// anyone through.
+		if i.getString(Username) != "" {
+			logger.Error("a username is configured but the stored password hash is " +
+				"missing or unusable; refusing all authentication. Reset the " +
+				"password to restore access")
+			return false
+		}
+
 		// don't need to authenticate if no credentials saved
 		return true
 	}

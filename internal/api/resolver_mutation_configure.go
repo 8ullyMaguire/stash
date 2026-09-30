@@ -353,7 +353,11 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 			} else {
 				logger.Info("Password changed")
 			}
-			c.SetPassword(*input.Password)
+			// stash#7135: surface a password bcrypt refuses instead of storing
+			// an empty hash, which silently disables authentication.
+			if err := c.SetPassword(*input.Password); err != nil {
+				return makeConfigGeneralResult(), fmt.Errorf("error setting password: %w", err)
+			}
 		}
 	}
 

@@ -294,7 +294,13 @@ func (s *Manager) Setup(ctx context.Context, input SetupInput) error {
 
 	if input.InitialUsername != "" && input.InitialPassword != "" {
 		cfg.SetString(config.Username, input.InitialUsername)
-		cfg.SetPassword(input.InitialPassword)
+		// stash#7135: a password bcrypt refuses (over its 72-byte limit) must
+		// fail setup, not be written as an empty hash. An empty hash makes
+		// HasCredentials() false, so the instance would come up with
+		// authentication effectively disabled.
+		if err := cfg.SetPassword(input.InitialPassword); err != nil {
+			return fmt.Errorf("error setting initial password: %w", err)
+		}
 	}
 
 	if err := cfg.Write(); err != nil {
