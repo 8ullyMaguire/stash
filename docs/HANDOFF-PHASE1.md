@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            799ac6f70  [origin/main: ahead 31]     clean
-merged          14 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue)
+main            8c1601ecf  [origin/main: ahead 33]     clean
+merged          15 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #6917
+next PR         #7093
 ```
 
 ## The first action
@@ -42,12 +42,44 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#6917** is next. One commit, one
+it: **#7093** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 15 — #6917 merged: a guard that could not latch
+
+`8c1601ecf`, no linked issue. Persists DisplayMode per view to IndexedDB.
+
+**`go generate ./...` IS NOT SAFE IN THIS TREE.** Regenerating all the dataloaders
+rewrites three unrelated ones with a **duplicate `"time"` import** —
+`time redeclared in this block`, which does not compile. Confirmed by applying it and
+reading the build error. The three files are reverted; the PR including only one of
+the four is correct, not an oversight.
+
+The Go file itself is a **drift fix, not a change**: `dataloaders.go:14` has said
+`FolderRelatedFolderIDsLoader` for a while while the checked-in file still carried
+`FolderParentFolderIDs`. Verified byte-identical to regenerated output.
+
+**The frontend guard could not latch, and the reason is in another file.**
+`location.search.includes("disp=")` is unsound because `filter.ts:382` emits `disp`
+only when the mode differs from the default `Grid`. For a default-mode user — the
+majority — the URL never has `disp=`, the guard never latches, and the effect re-runs
+on every filter change. It latched for a non-default mode *by accident*, because
+`makeQueryParameters` then writes `disp=List`.
+
+**Underneath: two writers to one state.** `setFilter` is `updateFilter`, which when
+URL sync is active only calls `history.replace`; state updates when `useFilterURL`
+re-parses its own output. So the restore and `useFilterURL`'s empty-search branch
+(`updateFilter(defaultFilter.clone())`, displayMode Grid because `useDefaultFilter`
+never consults the store) both write, and the winner was decided by **effect
+declaration order**. Now a ref keyed by view: restore once per view per mount.
+
+**19-check harness that asserts its own premise first** — the guard's soundness is a
+fact about `filter.ts`, so if that changes the test says so rather than measuring
+nothing. Verified it fails on revert (done in one process, so no mutation was left).
 
 ## Session 14 — #7252 merged: 14 locales were sorting with English rules
 
@@ -516,10 +548,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **14** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue) |
+| Merged and committed | **15** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 31, from `02d0d0476` to `799ac6f70` |
+| Commits on `main` | 33, from `02d0d0476` to `8c1601ecf` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
