@@ -68,3 +68,12 @@ dist
 # The P2P downloader plugin lives on the stashforge branch. main is the soft
 # fork of upstream and carries only fixes for upstream issues.
 plugins/
+# The PR triage snapshot is a derived artefact, not a source file.
+# Regenerate with:  python3 docs/pr_triage.py fetch
+#
+# It is a point-in-time view of an upstream queue and changes hourly. Committing
+# it would put a file in the history that is wrong within the hour, and a
+# reviewer reading the history would see 70 rows churn with no code change --
+# which is the same noise `internal/api/generated_*.go` is already ignored for,
+# and for the same reason.
+docs/pr-queue.json
