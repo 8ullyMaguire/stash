@@ -32,12 +32,61 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7180** is next (2 files, `task_clean.go` + its own test). One commit, one
+it: **#7137** is next (2 files, `pkg/scraper/url.go` + a test). One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
-deferred — the goal document's ordering is deliberate, and Phase 2 is 436
+deferred — the goal document's ordering is deliberate, and Phase 2 is 435
 issues, which is weeks.
+
+## Session 3 — #7180 merged, and the one issue it closed
+
+Worked the next merge candidate. `68192aa59`, closing **`stash#7179`**.
+
+The bug: a clean removed an *empty* gallery but never one whose folder carries
+`.nogallery`, because the filter was `ImageCount = 0` and nothing else. Scan has
+always honoured the marker (`pkg/image/scan.go:415`), so scan and clean
+disagreed about the same directory.
+
+**Merged as written** — no departure from upstream's patch needed. Its refactor
+splits the decider (`findGalleriesToClean`) from the deleter (`cleanGalleries`),
+and that split is what exposed the real finding.
+
+**The finding: upstream's test never calls the deleter.** So `if !j.input.DryRun`
+was untested, and `docs/mutate_7180.py` scored it **SURVIVED** — deleting the
+guard left every upstream test green.
+
+A survivor normally means the line is dead or redundant and the check should go.
+**Not here.** A dry run exists so a user can see what a clean would remove, and
+its entire value is that it removes nothing; a regression is data loss on the
+strength of a preview click. So the outcome was to **add a test and keep the
+row**: `TestACleanDryRunDeletesNothing`, driving the deleter in both directions,
+with the non-dry half as the control that proves the path is reachable at all.
+
+**Generalisable, and a sibling of the "wrong layer" rule: a test that exercises
+only the decider cannot see a guard in the deleter.** Two functions split for
+testability — and the split is also a seam the test must cross deliberately.
+
+Two fixture traps, both recorded in the files, both presenting as something else:
+
+- **A mock expectation with no count constraint is permanent.** The batch loop's
+  terminating empty page matched the populated one forever; the test hung to its
+  own `-timeout` with the stack in `mock.MethodCalled`. Reads as a slow test.
+- **`&plugin.Cache{}` panics *after* `Destroy` has already run** —
+  `enabledPlugins` calls a method on a nil interface.
+
+### Gates at `c54dd1926`
+
+```bash
+$ go test ./... -count=1   # twice
+exit1=0 FAIL1=0 ok1=35
+exit2=0 FAIL2=0 ok2=35
+$ python3 docs/mutate_7180.py     # 6/6 killed, 0 survived, 0 skipped
+$ python3 docs/mutate_7135.py     # 3/3 killed, 0 survived
+$ python3 docs/check-issue-ledgers.py
+  closed 15 · deferred 93 · not-planned 132 · planned 435   (675 total)
+OK: header, table and log agree
+```
 
 ## What this session actually did
 
@@ -47,10 +96,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **2** (`#7241`, `#7255`) |
+| Merged and committed | **3** (`#7241`, `#7255`, `#7180` → `stash#7179`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 4, from `02d0d0476` to `ed14c3de2` |
+| Commits on `main` | 7, from `02d0d0476` to `c54dd1926` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -71,7 +120,7 @@ justified departing from upstream:
   Verified live on the tree before the fix:
   `ValidateCredentials("attacker", "totally wrong") == true`.
 
-## Gates run, with verbatim output
+## Gates run at session 2, with verbatim output (superseded by the session-3 block above)
 
 ```bash
 $ go build ./internal/... ./pkg/...                      # exit 0
@@ -115,7 +164,7 @@ it. Both runs identical: **35 packages ok, 0 FAIL.** Baseline was also 35 ok /
   the reconciliation anyway.
 - **Did not touch `stash-box`, `~/code-local/worktrees/stashforge`, or
   `~/code/go/stash`.** Owned by other profiles / a stale pre-tag copy.
-- **Did not start Phase 2.** 436 planned issues, one commit and one named test
+- **Did not start Phase 2.** 435 planned issues, one commit and one named test
   each. Starting it without finishing Phase 1 would produce a half-run.
 
 ## The one finding that is not bookkeeping
@@ -193,12 +242,12 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 ## Phase 2, ready to start
 
-436 planned issues, none started. The ledger is in agreement (14 closed, 93
-deferred, 132 not-planned, 436 planned, 675 total). Work them in the
+435 planned issues, none started. The ledger is in agreement (15 closed, 93
+deferred, 132 not-planned, 435 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#5850` is already closed** (it is in `closed-issues.md` with named
+**`stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.
