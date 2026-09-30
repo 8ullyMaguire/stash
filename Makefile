@@ -106,7 +106,16 @@ flags-static-windows:
 .PHONY: build-info
 build-info:
 ifndef BUILD_DATE
-	$(eval BUILD_DATE := $(shell GOOS=$$(go env GOHOSTOS) GOARCH=$$(go env GOHOSTARCH) go run scripts/getDate.go))
+	# BUILD_HOST_OS/ARCH, not GOOS/GOARCH. Upstream's version assigns GOOS and
+	# GOARCH, which are the variables the cross-compile targets set (as
+	# target-local `export`), so the assignment is a live hazard: today every
+	# `build-cc-*` target exports its own pair and wins, but a plain global
+	# `GOOS := ...` anywhere in this file would be silently overwritten by a
+	# stamp, and the build would target the host while reporting success.
+	# Dedicated names cannot collide, and the eval stops at `endif`.
+	$(eval BUILD_HOST_OS := $(shell go env GOHOSTOS))
+	$(eval BUILD_HOST_ARCH := $(shell go env GOHOSTARCH))
+	$(eval BUILD_DATE := $(BUILD_HOST_OS) $(BUILD_HOST_ARCH) $(shell go run scripts/getDate.go))
 endif
 ifndef GITHASH
 	$(eval GITHASH := $(shell git rev-parse --short HEAD))
