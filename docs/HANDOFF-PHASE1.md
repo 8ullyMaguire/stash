@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            921edd649  [origin/main: ahead 29]     clean
-merged          13 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue)
+main            799ac6f70  [origin/main: ahead 31]     clean
+merged          14 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7252
+next PR         #6917
 ```
 
 ## The first action
@@ -42,12 +42,55 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7252** is next. One commit, one
+it: **#6917** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 14 — #7252 merged: 14 locales were sorting with English rules
+
+`799ac6f70`, no linked issue. Swahili (Kenya), 1384 keys, exact structural match.
+
+**A locale lives in three places and nothing checks any of them**: `locale.go` (collator
+tags), `index.ts` (loader), and the picker `<option>`. Miss one and it is silent.
+
+**Removed the "(Preview)" suffix** — the tree's convention is ≥80% complete goes
+unlabelled (de-DE, fr-FR, es-ES are unlabelled at 97%), and sw-KE is 100%.
+
+**Found a pre-existing collation bug**: 14 picker locales were never registered in
+`locale.go`, so `newCollator` resolved them to en-US. Japanese users got codepoint order
+instead of kana order, and af-ZA and nb-NO were worse — resolving to nl-NL and da-DK,
+sorted by a *different language's* rules. Cost checked first: exactly those 14 change,
+the 32 working locales do not.
+
+**8 tests added over that 3-point invariant.** The worst bug in the file: it anchored on
+`</select>`, which does not exist (the picker is a `<SelectSetting>` wrapper), parsed
+**nothing**, and the main assertion passed **trivially on zero input**. It now refuses to
+run if it found no options. Also: matched `<option>` across the whole component and picked
+up `video`/`image`; camelCase→kebab split before every capital (`swKE`→`sw-k-e`);
+lowercased the region. Each test verified by breaking one registration point at a time.
+
+**A placeholder check that was wrong.** i18next accepts both `{x}` and `{{x}}` — the
+doubled form is the escaped brace required *inside a plural branch*, which is where en-GB
+puts them. My regex matched only the doubled form and called correct French a defect
+(19 false positives), and flagged `{{Tiefe}}` for `{{depth}}` as broken. Now a warning,
+because the **caller** decides the variable names and that varies per call site.
+
+**What it really found** (by reading the call site): es-ES `"added_entity":
+"{entity} añadida"` while the caller supplies `singularEntity`/`pluralEntity` — the
+Spanish toast renders with the entity name missing. Left as a translation fix.
+
+**Two bugs in my own harness**: integer division made 1383/1384 display as `100%`, so a
+new locale missing one key read as complete — which is what hid the defect from me.
+
+**Verified end to end**: locales are code-split per language, so grepping `build/assets`
+for the payload proves nothing. The evidence is the chunk `sw-KE-DG5w_jI6.js.gz` holding
+it *and* the main bundle referencing `sw-KE`.
+
+**Not closed**: the 40 pre-existing incomplete locales (zh-CN 97%, missing keys
+concentrated in `config`). Now measured rather than invisible.
 
 ## Session 13 — #7181 merged: a bump that was not a no-op, and vacuous tests
 
@@ -473,10 +516,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **13** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue) |
+| Merged and committed | **14** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 29, from `02d0d0476` to `921edd649` |
+| Commits on `main` | 31, from `02d0d0476` to `799ac6f70` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

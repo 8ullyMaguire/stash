@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-`````````````````````````````````
+````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (7).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (6).** Listed in Group C.
 
 ```
-#6917 #7093 #7235 #7245 #7249 #7252 #7254
-`````````````````````````````````
+#6917 #7093 #7235 #7245 #7249 #7254
+````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-`````````````````````````````````
+````````````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #6917 #7093 #7235 #7245 #7249 #7252 #7254 | Next. |
+| 4 | #6917 #7093 #7235 #7245 #7249 #7254 | Next. |
+| — | **#7252 — DONE** | `799ac6f70`. Swahili (Kenya), 1384 keys, exact structural match against en-GB (0 missing, 0 unknown); registered in all three places. **Removed the “(Preview)” suffix** — the tree's convention is ≥80% complete goes unlabelled, and sw-KE is 100%. **Found and fixed a pre-existing bug: 14 locales were sorting with English collation rules** (af-ZA, ar, ja-JP, hi-IN, vi-VN, …) because locale.go never registered them; af-ZA and nb-NO were worse, resolving to nl-NL and da-DK. **8 tests over the 3-point registration invariant** — after five broken revisions, the worst being an empty parse that made the assertion pass trivially. Verified end to end: the locale lands in its own code-split chunk and the main bundle references it. |
 | — | **#7181 — DONE** | `921edd649`. gorilla/websocket 1.5.0 -> 1.5.3, go.mod/go.sum exactly as upstream sent them (`go mod tidy` leaves both untouched) and both hashes checked against sum.golang.org. **Not a no-op**: server.go changes `challengeKey == ""` to `!isValidChallengeKey(...)`, so 1.5.0 accepted any non-empty key and 1.5.3 requires base64 decoding to 16 bytes. **8 tests added** — the transport had zero coverage. The first draft was **vacuous**: the Dialer generates its own Sec-WebSocket-Key, so passing one in a header map made a *duplicate* and every rejection test passed for the wrong reason — caught only because the valid-key control failed too. Key now injected on a raw socket. Verified against the old dep: `go get @v1.5.0` fails all five with `status = 101, want 400`. |
 | — | **#7261 — DONE** | `5d699a4b4`. Merged with the two eval'd names changed to `BUILD_HOST_OS`/`BUILD_HOST_ARCH` — upstream assigns `GOOS`/`GOARCH`, which every `build-cc-*` target exports target-locally, so it is harmless today but a global `GOOS :=` would be silently overwritten and the build would target the host while reporting success. Verified end to end: the stamp `linux amd64 2026-09-30 20:35:52` is in the linked binary. Closes nothing — no linked issue. |
 
@@ -681,6 +682,96 @@ on a wrapped `ResponseWriter` does not fix it — the handler is on another
 goroutine, so reading its variable after the dial returns is a data race. The raw
 handshake path returns the status directly, which is why it is the one used.
 
+## #7252 — merged: a translation that was sound, and a collation bug that was not
+
+`799ac6f70`, no linked issue. Adds `sw-KE.json` (1384 keys) and registers it in the
+three places a locale must be. The translation is exact: 0 missing, 0 unknown keys
+against en-GB.
+
+**Removed the "(Preview)" suffix.** The tree's own convention is that a locale at
+≥80% completeness goes unlabelled and anything below is "(Preview)" — de-DE, fr-FR
+and es-ES are all unlabelled at 97%. sw-KE is 100%, the most complete locale in the
+tree, so the label was the outlier.
+
+### The bug this found, which predates the PR
+
+**14 locales were sorting with English collation rules.** The picker offers af-ZA,
+ar, bg-BG, ca-ES, hi-IN, id-ID, ja-JP, lv-LV, lt-LT, nb-NO, nn-NO, sk-SK, ur-PK and
+vi-VN; `locale.go` registered none of them, so `newCollator` silently resolved every
+one to en-US. A user reading the Japanese UI got names sorted by Unicode codepoint
+rather than kana order. Two were worse than a fallback: af-ZA resolved to **nl-NL** and
+nb-NO to **da-DK**, so they were sorted with a different language's rules entirely.
+
+Cost checked before changing it: exactly those 14 registrations change their resolved
+tag, and the 32 working locales do not move.
+
+### Three registration points, no check on any of them
+
+A locale must appear in `locale.go` (collator tags), `index.ts` (loader) and the
+picker (`<option>`). Miss one and it is silent. `locale_registry_test.go` now pins all
+three, and `en-AU` is expressed as a *rule* rather than an exemption — a tag with no
+JSON on disk is a collator-only tag like en-AU, while a tag **with** a JSON file and no
+picker entry is a translation nobody can reach.
+
+**This test file went through five broken revisions**, and the worst one is worth
+keeping in mind: it anchored on `</select>`, which does not exist — the picker is a
+`<SelectSetting>` wrapper — so it parsed **nothing**, and "every picker locale is
+registered" passed **trivially on zero input**. An empty parse is the dangerous kind of
+test failure: the assertion holds and nothing looks wrong. It now refuses to run unless
+it found options. The others: matching `<option>` across the whole component (collecting
+`video`/`animation`/`image` from two unrelated selects), camelCase→kebab splitting before
+*every* capital (`swKE` → `sw-k-e`), and lowercasing the region (`af-za`, not `af-ZA`).
+
+Each test was verified to detect the defect it exists for by breaking one registration
+point at a time — all three failed naming the exact locale, all three green on restore.
+
+### A placeholder check that was wrong, and what it actually found
+
+`test-locale-structure.mjs` reported 19 mismatches in mature, working locales. **The
+check was at fault.** i18next accepts both `{name}` and `{{name}}`; the doubled form is
+just the escaped literal brace a placeholder needs *inside a plural branch* — which is
+exactly where en-GB puts them:
+
+    en  "added_entity": "Added {count, plural, one {{singularEntity}} other {{pluralEntity}}}"
+    fr  "added_entity": "{count, plural, one {{singularEntity} ajouté} other {{pluralEntity} ajoutés}}"
+
+Both interpolate. A regex matching only the doubled form calls correct French a defect,
+and flagged `{{Tiefe}}` for `{{depth}}` as broken, which is right German.
+
+It is a **warning** now, and the reason is structural: the *caller* decides which variable
+names a key receives, and that varies by call site — `GalleryAddPanel` passes
+`{count, singularEntity, pluralEntity}`, other components pass `entityType` or
+`entity_type` to sibling keys. A JSON-to-JSON comparison cannot know that, so it yields
+false positives and cannot be trusted for real breakage either.
+
+What it *did* find, by reading the call site rather than pattern matching: es-ES has
+`"added_entity": "{entity} añadida"` while the caller supplies
+`singularEntity`/`pluralEntity`, so the Spanish toast renders with the entity name
+missing. Real, left as a translation fix, and not detectable by comparing files.
+
+Fatal checks are the ones needing no caller knowledge — a locale that is not valid JSON,
+and a **newly registered** locale without full coverage. The older 40 are reported, not
+blocked on: they have been incomplete for years and finishing them is a translation job.
+A half-translated locale that is *new* is a regression the moment it is registered.
+
+Two bugs in my own harness while proving it: coverage used **integer division**, so
+1383/1384 displayed as `100%` and a new locale missing ONE key read as complete — which
+is precisely what hid the defect from me; and the parse-failure counter was incremented
+but never reached an exit.
+
+### Verified end to end, because registration breaks at runtime
+
+The locales are code-split per language, so a plain grep for `Ongeza` across
+`build/assets` finds nothing and proves nothing. The evidence is the chunk
+`sw-KE-DG5w_jI6.js.gz` containing the payload, **and** the main bundle referencing
+`sw-KE` — the dynamic import resolves.
+
+### What this PR does not close
+
+The 40 pre-existing incomplete locales, now measured rather than invisible: zh-CN is
+97% and missing 42 keys, and the missing keys concentrate in `config`, so they predate
+newer features.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -692,9 +783,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  13
+merged + committed ...................................  14
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  7
+deferred, mergeable, Group C candidate ...............  6
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
