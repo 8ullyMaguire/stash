@@ -68,8 +68,8 @@ type Deleter struct {
 	RenamerRemover RenamerRemover
 	files          []string
 	dirs           []string
-	TrashPath      string            // if set, files will be moved to this directory instead of being permanently deleted
-	trashedPaths   map[string]string // map of original path -> trash path (only used when TrashPath is set)
+	TrashPath      string              // if set, files will be moved to this directory instead of being permanently deleted
+	trashedPaths   map[string]string   // map of original path -> trash path (only used when TrashPath is set)
 	zipEntries     map[string][]string // zipPath -> entries to remove; rewrites happen at Commit
 }
 
