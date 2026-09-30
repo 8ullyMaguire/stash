@@ -572,7 +572,16 @@ func setPageSecurityHeaders(w http.ResponseWriter, r *http.Request, plugins []*p
 		"'self'",
 		"'unsafe-inline'",
 	}
-	mediaSrc := "blob: 'self'"
+	// mediaSrc is a SLICE like connectSrcSlice/scriptSrcSlice/styleSrcSlice,
+	// not a bare string that gets `+=`-ed inside the plugin loop. The string
+	// form works -- a stray space is harmless to a browser -- but it differs in
+	// shape from the three directives beside it and accumulates an empty
+	// segment per plugin that configures none. Joining once, at the end, is the
+	// same thing the other three do.
+	mediaSrcSlice := []string{
+		"blob:",
+		"'self'",
+	}
 
 	// Workaround Safari bug https://bugs.webkit.org/show_bug.cgi?id=201591
 	// Allows websocket requests to any origin
@@ -611,11 +620,13 @@ func setPageSecurityHeaders(w http.ResponseWriter, r *http.Request, plugins []*p
 		connectSrcSlice = append(connectSrcSlice, ui.CSP.ConnectSrc...)
 		scriptSrcSlice = append(scriptSrcSlice, ui.CSP.ScriptSrc...)
 		styleSrcSlice = append(styleSrcSlice, ui.CSP.StyleSrc...)
+		mediaSrcSlice = append(mediaSrcSlice, ui.CSP.MediaSrc...)
 	}
 
 	connectSrc := strings.Join(connectSrcSlice, " ")
 	scriptSrc := strings.Join(scriptSrcSlice, " ")
 	styleSrc := strings.Join(styleSrcSlice, " ")
+	mediaSrc := strings.Join(mediaSrcSlice, " ")
 
 	cspDirectives := fmt.Sprintf("default-src %s; connect-src %s; img-src %s; script-src %s; style-src %s; media-src %s;", defaultSrc, connectSrc, imageSrc, scriptSrc, styleSrc, mediaSrc)
 	cspDirectives += " worker-src blob:; child-src 'none'; object-src 'none'; form-action 'self';"
