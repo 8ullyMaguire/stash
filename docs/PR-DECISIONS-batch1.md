@@ -42,7 +42,7 @@ partition that does is stated explicitly at the foot.
 | #6986 | **Decline** | **Non-negotiable #12, as a rule question rather than a verdict on the author.** A fingerprint *submission queue* sends scene fingerprints to Stash-box in batches. Fingerprints are derived from media content and are not identifying **as sent**. But the change lives in `pkg/stashbox/graphql/generated_client.go` and the queue is a **bulk egress** path — the exact shape where a later field addition quietly becomes identifying. Declined, and recorded as a standing rule: **if Stash-box adds a field to the submission payload, the exporter's guard must be extended in the same commit.** A one-sided guard is half a guard (#12). |
 | #5265 | **Decline** | **A framework major bump from a bot, in a triage batch.** `bootstrap 4.6.2 → 5.0.0`, conflicting, 744 days stale. Nothing here breaks a non-negotiable, so the rule that declines it is deliberately a *process* rule: do not take a UI framework major in a batch of unrelated triage. Re-take it on its own, with `vite build` green. |
 
-## Group B — deferred, sound, not now (57)
+## Group B — deferred, sound, not now (56)
 
 Same reason in every row: **sound upstream, no rule conflict, deferred to the
 post-reconciliation batch**, each on its own commit with its own verification.
@@ -52,14 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-```````````````
+``````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (13).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (12).** Listed in Group C.
 
 ```
-#6917 #7093 #7159 #7166 #7181 #7196 #7199 #7235 #7245 #7249 #7252 #7254
-#7261
-```````````````
+#6917 #7093 #7159 #7166 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
+``````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -70,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-```````````````
+``````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -96,10 +95,12 @@ Each is still one commit and one verification. **The first two are already done.
 | 2 | **#7255 — DONE** | `60ba6c051`. See `docs/PR-TRIAGE.md`. |
 | 2b | **#7180 — DONE** | `68192aa59`. Merged as written; one test added. See below. |
 | 2c | **#7137 — DONE** | `3f6678e73`. Merged as written, decision EXTRACTED so it could be tested. Closes `stash#7136`. |
-| 3 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
-| 3 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
-| 4 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
-| 5 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
+| 3 | **#7265 — DONE** | `5ca4c5806`. Merged as written; 107-check frontend harness added (no JS runner existed). Closes nothing — no linked issue. |
+| — | **#7225 — DONE** | `63635bcc0`. Merged as written; threshold made a contract with migration 87, 10 mutations. Closes `stash#3722`. |
+| — | **#7257 — DONE** | `6d5a8131c`. Merged as written except settings snapshot made a DEEP clone, not `maps.Clone`. Closes `stash#5944`. |
+| — | **#7196 — DONE** | `b14aef421`. Merged as written; media-src made a slice like its siblings; 8 tests for a header builder that had none. Closes `stash#7197`. |
+| 3 | #7159 #7166 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| 4 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -338,6 +339,39 @@ settings writer is a data race, not merely a leak.
 
 Suite 3/3 clean, **38 packages ok** (up from 36).
 
+## #7196 — merged, closing `stash#7197`, which was ticketed *not-planned*
+
+`b14aef421`. A plugin whose UI loads media from an external origin had no way to
+allow it: `media-src` was a fixed `blob: 'self'`. So the media failed to load
+**with nothing in any log** — the most expensive kind of bug, because there is no
+error to grep for.
+
+**Two changes beyond the merge, and the second is the point.**
+
+`media-src` is now a **slice** like its three siblings. Upstream added it as a
+bare string `+=`-ed inside the plugin loop, which works — a stray space is
+harmless to a browser — but differs in shape from connect-src/script-src/style-src
+and accumulates an empty segment per plugin that configures none. Printing the
+header both ways: identical apart from a trailing space.
+
+**`setPageSecurityHeaders` had no test at all.** That is exactly what a one-line
+addition to a header builder needs a test for, because the failure mode is a
+silently dropped origin. 8 tests now cover it, and they are mutation-checked: the
+PR's line removed kills 5 of the 8; the `plugin.Enabled` gate removed kills the
+disabled-plugin test; only the first entry kept kills the all-entries test; the
+default dropped kills 4.
+
+**A mis-ticketed issue is worth noticing.** `stash#7197` was marked
+*not-planned* on rule R10, yet #7196 exists upstream and closes it in three
+files and six lines. The rule was applied to the issue's phrasing rather than to
+whether the work was about to land. Recorded because the next R10 issue may have
+the same problem: **check whether an upstream PR already closes it before
+honouring a not-planned verdict.**
+
+Also fixed in the ledger while here: #7265 was still listed as a pending Group C
+row long after it merged, and a renumbering had duplicated #7159. The table now
+asserts no merged PR appears as pending and carries no duplicate rows.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -349,9 +383,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  7
+merged + committed ...................................  8
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  13
+deferred, mergeable, Group C candidate ...............  12
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            6d5a8131c  [origin/main: ahead 17]     clean
-merged          7 PRs -> 6 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944)
-issue ledgers   18 closed · 93 deferred · 132 not-planned · 432 planned · 675 total
-next PR         #7196
+main            b14aef421  [origin/main: ahead 19]     clean
+merged          8 PRs -> 7 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197)
+issue ledgers   19 closed · 93 deferred · 131 not-planned · 432 planned · 675 total
+next PR         #7166
 ```
 
 ## The first action
@@ -42,12 +42,39 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7196** is next. One commit, one
+it: **#7166** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 8 — #7196 merged, `stash#7197` closed (which was ticketed *not-planned*)
+
+One commit, `b14aef421`, six lines upstream across three files. A plugin loading
+media from an external origin had no way to allow it — `media-src` was a fixed
+`blob: 'self'` — so the media failed **with nothing in any log**. The most
+expensive kind of bug: no error to grep for.
+
+**Changed `media-src` to a slice** like its three siblings. Upstream used a bare
+string `+=`-ed in the plugin loop; it works (a stray space is harmless to a
+browser) but differs in shape and accumulates an empty segment per plugin that
+configures none. Printing the header both ways: identical apart from a trailing
+space.
+
+**`setPageSecurityHeaders` had zero tests** — exactly what a one-line change to a
+header builder needs one for. 8 tests now, mutation-checked: the PR's line removed
+kills 5, the `Enabled` gate removed kills the disabled-plugin test, first-entry-only
+kills the all-entries test, the default dropped kills 4.
+
+**A mis-ticketed issue worth noticing.** `stash#7197` was marked *not-planned* on
+R10 — yet #7196 exists and closes it in six lines. The rule was applied to the
+issue's phrasing, not to whether the work was about to land. **Check whether an
+upstream PR already closes an issue before honouring a not-planned verdict.**
+
+Ledger hygiene while here: #7265 was still a pending Group C row after merging,
+and a renumbering had duplicated #7159. The table now asserts no merged PR appears
+as pending, and carries no duplicates.
 
 ## Session 7 — #7257 merged, `stash#5944` closed, and a clone that was half a clone
 
@@ -249,10 +276,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **7** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`) |
+| Merged and committed | **8** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 17, from `02d0d0476` to `6d5a8131c` |
+| Commits on `main` | 19, from `02d0d0476` to `b14aef421` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -397,11 +424,11 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 432 planned issues, none started. The ledger is in agreement (17 closed as of
 that gate; 18 after session 7, 93
-deferred, 132 not-planned, 432 planned, 675 total). Work them in the
+deferred, 131 not-planned, 432 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179`, `stash#7197` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.
