@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
@@ -253,6 +254,17 @@ func urlFromCDP(ctx context.Context, urlCDP string, driverOptions scraperDriverO
 	var res string
 	headers := cdpHeaders(driverOptions)
 
+	// Track the main document so a JSON response can be read via its raw
+	// body instead of Chrome's HTML-wrapped OuterHTML view.
+	var jsonDoc jsonDocumentTracker
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		if ev, ok := ev.(*network.EventResponseReceived); ok {
+			if ev.Type == network.ResourceTypeDocument {
+				jsonDoc.markDocument(ev.RequestID, ev.Response.MimeType)
+			}
+		}
+	})
+
 	if proxyUsesAuth(globalConfig.GetProxy()) {
 		_, user, pass := splitProxyAuth(globalConfig.GetProxy())
 
@@ -294,7 +306,27 @@ func urlFromCDP(ctx context.Context, urlCDP string, driverOptions scraperDriverO
 		chromedp.Navigate(urlCDP),
 		chromedp.Sleep(sleepDuration),
 		setCDPClicks(driverOptions),
-		chromedp.OuterHTML("html", &res, chromedp.ByQuery),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			requestID, isJSON := jsonDoc.mainDocument()
+
+			// A LOCAL, not the outer `err`: that one is introduced by the
+			// `err := chromedp.Run(` statement this closure is an ARGUMENT to,
+			// so it is not in scope inside the function literal.
+			content, err := readMainDocument(ctx,
+				func(ctx context.Context, id network.RequestID) ([]byte, error) {
+					return network.GetResponseBody(id).Do(ctx)
+				},
+				func(ctx context.Context) (string, error) {
+					var html string
+					return html, chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(ctx)
+				},
+				requestID, isJSON)
+			if err != nil {
+				return err
+			}
+			res = content
+			return nil
+		}),
 		printCDPCookies(driverOptions, "Cookies set"),
 	)
 
@@ -359,6 +391,92 @@ func getRemoteCDPWSAddress(ctx context.Context, url string) (string, error) {
 	remote := result["webSocketDebuggerUrl"].(string)
 	logger.Debugf("Remote cdp instance found %s", remote)
 	return remote, err
+}
+
+// readMainDocument returns the content of the navigated document, choosing
+// between the two ways of getting it.
+//
+// The bug (stash#7136): `chromedp.OuterHTML` asks Chrome for the DOM as HTML,
+// so a scraper whose target is a JSON *document* received Chrome's HTML wrapper
+// around the JSON -- valid HTML, invalid JSON, and a parse failure that looked
+// like a broken scraper rather than a broken extractor. A JSON document has no
+// DOM worth serialising; the bytes Chrome already received are the answer, and
+// `network.GetResponseBody` returns them.
+//
+// The two accessors are parameters rather than direct chromedp calls, for one
+// reason: a test cannot drive a live Chrome. Inlining the decision inside the
+// `chromedp.ActionFunc` left the actual fix with NO test -- the helper tests
+// covered the mime sniff and the tracker, and the branch that reads the body
+// was only reachable by running a browser. Extraction is the seam, and its
+// existence is the test's precondition.
+//
+// The fallback on a GetResponseBody error is deliberate and logs: the body can
+// be evicted from Chrome's cache, and OuterHTML is better than returning
+// nothing -- while the warning says the scrape will probably still fail, so the
+// user is not sent looking for a scraper bug that is really a timing one.
+func readMainDocument(
+	ctx context.Context,
+	getBody func(context.Context, network.RequestID) ([]byte, error),
+	outerHTML func(context.Context) (string, error),
+	requestID network.RequestID,
+	isJSON bool,
+) (string, error) {
+	if !isJSON {
+		return outerHTML(ctx)
+	}
+
+	body, err := getBody(ctx, requestID)
+	if err != nil {
+		// e.g. evicted from Chrome's cache.
+		logger.Warnf("[scraper] could not get raw response body for JSON document, falling back to OuterHTML (the scrape will likely still fail as a result): %v", err)
+		return outerHTML(ctx)
+	}
+
+	return string(body), nil
+}
+
+// isJSONMimeType reports whether mimeType indicates JSON content.
+func isJSONMimeType(mimeType string) bool {
+	mimeType, _, _ = strings.Cut(mimeType, ";")
+	mimeType = strings.TrimSpace(strings.ToLower(mimeType))
+
+	return mimeType == "application/json" ||
+		strings.HasSuffix(mimeType, "+json") ||
+		mimeType == "text/json"
+}
+
+// jsonDocumentTracker records the first Document response's request ID
+// and whether it's JSON. Iframes fire later Document responses too, so
+// only the first counts. Mutex-guarded: written on chromedp's event
+// goroutine, read from the action sequence.
+type jsonDocumentTracker struct {
+	mutex     sync.Mutex
+	requestID network.RequestID
+	isJSON    bool
+	recorded  bool
+}
+
+// markDocument records requestID as the main document if no document has
+// been recorded yet. Subsequent calls after the first are no-ops.
+func (t *jsonDocumentTracker) markDocument(requestID network.RequestID, mimeType string) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	if t.recorded {
+		return
+	}
+	t.recorded = true
+	t.requestID = requestID
+	t.isJSON = isJSONMimeType(mimeType)
+}
+
+// mainDocument returns the main document's request ID and whether it was
+// JSON.
+func (t *jsonDocumentTracker) mainDocument() (network.RequestID, bool) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	return t.requestID, t.isJSON
 }
 
 func cdpHeaders(driverOptions scraperDriverOptions) map[string]interface{} {
