@@ -54,10 +54,10 @@ re-listing it adds nothing.
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
 ````````````````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (1).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (0).** Listed in Group C.
 
 ```
-#7254
+(none — the last Group C candidate is merged)
 ````````````````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #7254 | Next. |
+| 4 |  | Next. |
+| — | **#7254 — DONE** | `160d6c723`. Closes **stash#7160**. 4+1 in one file. Active state `#664c3f` → `#ffffff`: **1.35:1 → 10.64:1** on the `.btn-secondary` background. The number that matches the complaint is the other one — **2.10:1 against the button's own inactive state**, since "hard to distinguish" is a claim about the two states against each other; white widens that to **3.73:1**. The old colour was also *worse* on hover (1.91:1, since Bootstrap darkens the background to `#23272b`) while white is 15.04:1 there — so white is robust across both and a merely-lighter brown would not have been. Measured in headless Chromium, resolving the real painted background by walking ancestors rather than assuming it; confirmed no theme layer overrides Bootstrap's `#3a3f44`. **The PR's scope claim is false** — it says only `Scene.tsx` imports the button, but `Gallery.tsx:442` and `Image.tsx:368` do too (harmlessly: same variant, same background, all three benefit). **My first probe was hollow**: it hardcoded both colours, so reverting the rule still exited 0. It now reads the stylesheet, and that caught a regression the hardcoded version structurally could not — raising the inactive alpha 0.5→0.9 passes every naive "is it white" check while collapsing active-vs-inactive to **1.90:1**, destroying the distinction this PR adds. |
 | — | **#7249 — DONE** | `57bc44f3c`. 1+0 in one file. `.VideoPlayer.portrait .video-wrapper` was `height: 177.78vw` (100vw×16/9, sized from WIDTH, unbounded) — 3413px on a 1920px screen — and the wrapper's box extended below the visible video, covering the scene tabs and rating buttons; `overflow:hidden` is on the wrapper, so it clips its own video, not itself. Capped at the container's own bound. **I could NOT reproduce the reported overflow from the SCSS as written, and the probe says so rather than implying otherwise**: at ≥1200px the container has a definite `height:100vh` so flex-shrink pulls the item in; below 1200px the height is auto so shrink does not apply, but `overflow:hidden` makes the item's automatic minimum size resolve to ZERO, so it still shrinks. The 3413px figure needs `flex-shrink:0`, which the SCSS does not set — it is 1.7778×1920, arithmetic on the declared value, which is what a fixed multiplier makes easy to produce. The fix rests on what IS established: `max-height` only ever clamps DOWN, so it cannot grow the box or regress a correctly sized video, and it binds as soon as anything prevents the shrink. **Two claims I started with were wrong and measurement killed both**: (1) "`56.25vw` in the base rule has the same defect" — no, it shrinks identically (462 in a 536 container at 1920×600); unbounded-vw is not a bug, the missing shrink is. (2) "`overflow:hidden` proves the click blocker" — the first check reported overflow=0 with the wrapper at 3413px because it measured a FLOW SIBLING, which stacks below and can never overlap. Measuring fixed chrome showed 48px of real overlap; whether a click is eaten then depends on paint order, settled by reading the tree — `SceneLoader` renders `<ScenePage>` first and the player container LAST (Scene.tsx:1045-1079), and the tabs are inside `ScenePage`, so the wrapper is the later sibling and paints over them. `Wall/styles.scss:6` has the same shape and is already capped at 253px — the pattern exists, `ScenePlayer` just lacked it. Landscape left uncapped: measured inert, so the cap would be dead code. |
 | — | **#7245 — DONE** | `374a9e7cf`. **Closes stash#7236** — 1000 scene cards took 215s on Safari vs 2s on Chrome. Two layers: `IntersectionObserver` delivers an INITIAL callback on `observe()` (specified, not incidental), so 1000 cards produce 1000 initial entries and the old `else pause()` called `pause()` once per offscreen card — in WebKit that begins media player setup; and every `<video>` with a src costs player work regardless of `preload=none`. Fixed by `else if (!el.paused) el.pause()` and deferring the src. **Verified in a real browser** (jsdom has no IntersectionObserver and no media stack, so it could not measure any of it) — and **my first probe measured the wrong quantity**: it asserted N callbacks for N observe() calls and got 1, because entries are batched into one callback; ENTRIES are what `entries.forEach` multiplies. Also `ratio=1` for every video, because a src-less `<video>` has no intrinsic size so all 200 collapsed to zero height and intersected. **The fix was half the surface** — `SceneList.tsx:222` branches to `SceneWallPanel` for wall mode and `WallItem` had the identical defect with no virtualisation, so it got the same treatment. **And I shipped a regression first**: setting the src only on hover left `autoPlay={previewType === "video"}` with a permanent undefined src, so wall video mode would render nothing. The harness caught it. |
 | — | **#7235 — DONE** | `3de3de80c`. **Closes stash#7234** — Safari rendered performer details BELOW the picture. A dependency rename the string match never followed: ua-parser-js v2 reports `macOS`, the old code matched `"Mac OS"`, so the substring never occurred and every desktop Safari user got `false`. Verified against the installed package, not the changelog. **Why a util file is a layout bug**: the one call site sets the `apple` class, and index.scss gates the whole layout on `.apple .detail-container { display: flex }`. Also one parse instead of two, and a real `boolean` return instead of `boolean | undefined`. **9 checks driving the real parser**, asserting the premise (the parser says `macOS`, `"Mac OS"` does not match it) and restating the defect independently of the source's shape. **Three fixture bugs produced a FALSE PASS** — ua-parser-js captures `window.navigator` at import time, so rebinding `globalThis.navigator` cannot work and three of six checks failed, which is what a harness measuring nothing looks like. |
@@ -1122,6 +1123,55 @@ would be dead code.
 Kept `ui/v2.5/scripts/probe-portrait-cap.mjs` (19 checks) in the repo alongside the
 #7245 DOM probe.
 
+## #7254 — merged: closes stash#7160, and my first harness could not fail
+
+`160d6c723`, 4+1 in one file.
+
+The `organized` toggle's active state was `color: #664c3f` on a `btn-secondary`
+background — **1.35:1**, below the 3.0 WCAG 1.4.11 minimum for a graphical object. But
+the number that matches the complaint is the second one: **2.10:1 against the
+button's own inactive state** (`rgba(191,204,214,0.5)` composited over the background),
+because "hard to distinguish" is a claim about the two states against each other, not
+about the glyph against the panel. `#ffffff` gives **10.64:1**, clears AAA, and widens
+the active/inactive gap to **3.73:1**.
+
+The old colour was also *worse* on hover (1.91:1) — Bootstrap darkens
+`.btn-secondary:hover` to `#23272b` — while white is 15.04:1 there. That is why white
+is robust across both backgrounds and a merely-lighter brown would not have been.
+
+### Measured, not assumed
+
+The whole fix rests on the foreground-to-background ratio, so
+`probe-organized-contrast.mjs` drives headless Chromium and **resolves the real painted
+background by walking ancestors**. Confirmed the app's theme layer does not override
+Bootstrap's `#3a3f44`: the only `.btn` overrides are scoped to `.list` and
+`.changelog`, and there is no light/dark switch.
+
+### The PR body's scope claim is false
+
+It says the class "is only emitted by `OrganizedButton.tsx`, which is only imported by
+`Scene.tsx`". `Gallery.tsx:442` and `Image.tsx:368` import it too. Harmless — all three
+render `<Button variant="secondary">`, so the same background applies and all three
+benefit — but the claim would have hidden the real blast radius.
+
+### My first version of the probe was hollow
+
+It **hardcoded both colours**, so reverting the rule to `#664c3f` still exited 0: a
+harness that cannot fail is not a harness. It now reads the colour out of the real
+stylesheet, and the revert fails it by name. That change found something the hardcoded
+version structurally could not — raising the inactive alpha from 0.5 to 0.9 passes
+every naive "is the active colour white" assertion while collapsing active-vs-inactive
+from 3.73:1 to **1.90:1**, destroying the exact distinction this PR adds. A guard that
+only checks the thing it changed is blind to the thing it depended on.
+
+### #7160 was not-planned here, and R10 does not mean "rejected"
+
+Our ledger had 7160 at `not-planned` under bucket R10. R10 is **exactly** the 129
+not-planned rows — a triage bucket meaning "lowest-signal, cut to reach two thirds", so
+deprioritised rather than refused on merit. Upstream has now fixed it. A later PR
+landing on an R10 issue is not a contradiction of the triage; it is the triage's
+consequence.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -1133,9 +1183,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  19
+merged + committed ...................................  20
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  1
+deferred, mergeable, Group C candidate ...............  0
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

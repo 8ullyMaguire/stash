@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 429 planned, 222 not planned, 24 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 429 planned, 221 not planned, 25 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,13 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**429 planned, 222 not planned, 24 closed, 675 total.**
+**429 planned, 221 not planned, 25 closed, 675 total.**
+
+`not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
+93 marked `deferred`. The table has four status values but the tally has three, so
+"not planned" is not a column you can read off — recompute it as
+`not-planned + deferred`, or the sum stops matching the total. `docs/check-issue-ledgers.py`
+enforces this (it was written after that invariant broke once).
 
 ## How to read `planned`
 
@@ -621,7 +627,7 @@ than silent.
 | 7194 | Show free/available disk space on the Statistics page | R10 | not-planned |
 | 7192 | Option to disable automatic file hash merging for Images/Galleries and | R10 | not-planned |
 | 7165 | Plugin settings should be able to add connect-src CSP sources | **CLOSED** `c71899e7f` via PR #7166 — see closed-issues.md (was mis-ticketed *not-planned*) | closed |
-| 7160 | [UI/UX] Organized icon state is hard to distinguish on scene detail pa | R10 | not-planned |
+| 7160 | [UI/UX] Organized icon state is hard to distinguish on scene detail pa | R10 | closed |
 | 7157 | Option to play next scene after deleting | R10 | not-planned |
 | 7118 | Duration filtering for scene identification | R10 | not-planned |
 | 7086 | Add `{inputName}` placeholder for searchByName scrapers | R10 | not-planned |

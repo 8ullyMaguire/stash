@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            57bc44f3c  [origin/main: ahead 45]     clean
-merged          19 PRs -> 11 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+main            160d6c723  [origin/main: ahead 47]     clean
+merged          20 PRs -> 12 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
                 #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue, #7235/stash#7234, #7245/stash#7236)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7254
+next PR         none — all 70 accounted for
 ```
 
 ## The first action
@@ -42,12 +42,54 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7254** is next. One commit, one
+**No merge candidates remain.** One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 20 — #7254 merged: the last candidate. Closes stash#7160
+
+`160d6c723`, 4+1 in one file. **With this, all 70 queued PRs are accounted for and
+NO merge candidates remain** — 20 merged, 6 declined, 12 CONFLICTING, 32 deferred as
+not-candidates.
+
+Active state `#664c3f` → `#ffffff` on `.btn-secondary`: **1.35:1 → 10.64:1**. The
+number that actually matches the complaint is the other one — **2.10:1 against the
+button's own inactive state**, because "hard to distinguish" is a claim about the two
+states against each other; white widens that to **3.73:1**. The old colour was also
+*worse* on hover (1.91:1, Bootstrap darkens the background to `#23272b`) while white is
+15.04:1 there — so white is robust across both and a merely-lighter brown would not
+have been.
+
+Measured in headless Chromium, **resolving the real painted background by walking
+ancestors** rather than assuming it; confirmed no theme layer overrides Bootstrap's
+`#3a3f44`.
+
+**The PR's scope claim is false** — it says only `Scene.tsx` imports the button, but
+`Gallery.tsx:442` and `Image.tsx:368` do too. Harmlessly: same variant, same
+background, all three benefit.
+
+**My first probe was hollow.** It hardcoded both colours, so reverting the rule to
+`#664c3f` still exited 0 — a harness that cannot fail is not a harness. It now reads
+the stylesheet, and that caught something the hardcoded version structurally could not:
+raising the inactive alpha 0.5 → 0.9 passes every naive "is it white" assertion while
+collapsing active-vs-inactive to **1.90:1**, destroying the exact distinction this PR
+adds. **A guard that checks only what it changed is blind to what it depended on.**
+
+### And I broke the ledger tally, and the checker caught it
+
+Regenerating the counts from a `Counter` produced 429/128/25 = 582 against a stated
+total of 675. Cause: `not planned` is a **combined** bucket — 128 `not-planned` + 93
+`deferred` = 221 — while the table has four status values and the tally has three. My
+rewrite read a column that does not exist. `check-issue-ledgers.py` flagged it
+immediately; I recovered the invariant from `git show HEAD~1` (429/222/24 summed to
+675) and have now written it into `UPSTREAM-ISSUES.md` itself, since the checker
+existing is not the same as the rule being legible.
+
+Ledger: 429 planned, 221 not planned, 25 closed, 675 total. #7160 moved from
+`not-planned` to `closed`.
 
 ## Session 19 — #7249 merged: a fix I could not reproduce, and said so
 
@@ -674,10 +716,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **19** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`, `#7245` → `stash#7236`; `#7249` no linked issue) |
+| Merged and committed | **20** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`, `#7245` → `stash#7236`, `#7254` → `stash#7160`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 40, from `02d0d0476` to `57bc44f3c` |
+| Commits on `main` | 41, from `02d0d0476` to `160d6c723` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
