@@ -775,7 +775,21 @@ func (s *Scanner) onExistingFile(ctx context.Context, f ScannedFile, existing mo
 
 	fileModTime := f.ModTime
 	// #6326 - also force a rescan if the basename changed
-	updated := !fileModTime.Equal(base.ModTime) || base.Basename != f.Basename
+	// #2773 - also force a rescan if the size changed. A file whose CONTENT was
+	// replaced underneath the same path is invisible to a modtime test, because `mv`
+	// preserves mtime: rename image00001 -> image00003 then image00002 ->
+	// image00001 and the file at image00001 has different bytes, the same path and
+	// the same mtime. Size is already stored on every scanned file, so comparing it
+	// is free, and it is the only cheap signal that catches the common shape of that
+	// replacement.
+	//
+	// LIMITATION, deliberately not solved here: a same-size, same-mtime overwrite at
+	// the same path is indistinguishable from no change without reading the bytes,
+	// which would defeat the modtime fast path the scanner is built around. The
+	// reporter's literal repro is that case, since both their images are the same
+	// size. TestScannerSameSizeSwapAtIdenticalMTimeIsNotDetectedByDesign pins this
+	// so the boundary is visible rather than assumed.
+	updated := !fileModTime.Equal(base.ModTime) || base.Basename != f.Basename || base.Size != f.Size
 	forceRescan := s.Rescan
 
 	if !updated && !forceRescan {
