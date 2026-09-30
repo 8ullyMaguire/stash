@@ -42,7 +42,7 @@ partition that does is stated explicitly at the foot.
 | #6986 | **Decline** | **Non-negotiable #12, as a rule question rather than a verdict on the author.** A fingerprint *submission queue* sends scene fingerprints to Stash-box in batches. Fingerprints are derived from media content and are not identifying **as sent**. But the change lives in `pkg/stashbox/graphql/generated_client.go` and the queue is a **bulk egress** path — the exact shape where a later field addition quietly becomes identifying. Declined, and recorded as a standing rule: **if Stash-box adds a field to the submission payload, the exporter's guard must be extended in the same commit.** A one-sided guard is half a guard (#12). |
 | #5265 | **Decline** | **A framework major bump from a bot, in a triage batch.** `bootstrap 4.6.2 → 5.0.0`, conflicting, 744 days stale. Nothing here breaks a non-negotiable, so the rule that declines it is deliberately a *process* rule: do not take a UI framework major in a batch of unrelated triage. Re-take it on its own, with `vite build` green. |
 
-## Group B — deferred, sound, not now (62)
+## Group B — deferred, sound, not now (61)
 
 Same reason in every row: **sound upstream, no rule conflict, deferred to the
 post-reconciliation batch**, each on its own commit with its own verification.
@@ -54,11 +54,11 @@ re-listing it adds nothing.
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
 ```
 
-**B2 — mergeable, and a Group C candidate this batch (18).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (17).** Listed in Group C.
 
 ```
-#6917 #7093 #7137 #7159 #7166 #7180 #7181 #7196 #7199 #7225 #7235 #7245
-#7249 #7252 #7254 #7257 #7261 #7265
+#6917 #7093 #7137 #7159 #7166 #7181 #7196 #7199 #7225 #7235 #7245 #7249
+#7252 #7254 #7257 #7261 #7265
 ```
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
@@ -94,14 +94,14 @@ Each is still one commit and one verification. **The first two are already done.
 |---|---|---|
 | 1 | **#7241 — DONE** | `6b8448b0d`. See `docs/PR-TRIAGE.md`. |
 | 2 | **#7255 — DONE** | `60ba6c051`. See `docs/PR-TRIAGE.md`. |
-| 3 | #7180 | 2 files, `task_clean.go` + its own test. Same bug class as the `.nogallery` case we already track. |
-| 4 | #7137 | 2 files, and it **ships with** a test (`pkg/scraper/url_test.go`). |
-| 5 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
-| 6 | #7225 | **Renumber its migration** — see below. |
-| 7 | #7257 | 7 files, 2 test files. |
-| 8 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
-| 9 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
-| 10 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
+| 2b | **#7180 — DONE** | `68192aa59`. Merged as written; one test added. See below. |
+| 3 | #7137 | 2 files, and it **ships with** a test (`pkg/scraper/url_test.go`). |
+| 4 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
+| 5 | #7225 | **Renumber its migration** — see below. |
+| 6 | #7257 | 7 files, 2 test files. |
+| 7 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
+| 8 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| 9 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -126,6 +126,34 @@ number space is 106 while upstream's 87 comes from a branch that does not know
 the fork exists. Recorded rather than silently renumbered, because whoever does
 the reconciliation has to see it.
 
+## #7180 — merged, and the one test that had to be written
+
+`68192aa59`. Upstream's fix needed no departure from the patch: a
+`.nogallery`/`.forcegallery` check, plus a refactor splitting
+`findGalleriesToClean` (decides) from `cleanGalleries` (deletes).
+
+That split is what made a real gap visible. Upstream's test calls only the
+decider, so `if !j.input.DryRun` — which lives in the deleter — was untested.
+`docs/mutate_7180.py` scored it **SURVIVED**: deleting the guard left every
+upstream test green.
+
+**A survivor here is not a redundant line.** A dry run exists so a user can see
+what a clean would remove; its whole value is that it removes nothing. A
+regression is data loss on the strength of a preview click. So the fix was to
+**add a test**, not to delete the row — `TestACleanDryRunDeletesNothing`, which
+drives the deleter in both directions, with the non-dry half as the control
+that proves the deletion path is reachable at all.
+
+Harness: **6/6 killed, 0 survived, 0 skipped**. Suite green twice, 35 packages
+ok, verdict-identical between runs.
+
+Two fixture traps are recorded in the files because both cost real time and
+both present as something else: an unbounded mock expectation is permanent, so
+the batch loop's terminating empty page matched forever and the test hung to its
+own `-timeout` (looks like a slow test, not a broken mock); and `&plugin.Cache{}`
+panics *after* `Destroy` has already run, because `enabledPlugins` calls a
+method on a nil interface.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -137,12 +165,12 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed this session ......................  2
-deferred, CONFLICTING by git ......................... 12
-deferred, mergeable, Group C candidate ............... 18
-deferred, mergeable, not a candidate in this batch ... 32
+merged + committed ...................................  3
+deferred, CONFLICTING by git .........................  12
+deferred, mergeable, Group C candidate ...............  17
+deferred, mergeable, not a candidate in this batch ...  32
                                                      --
-total ............................................... 70
+total ...............................................  70
 ```
 
 **All six declines are `CONFLICTING` PRs.** That is not a coincidence and it is
