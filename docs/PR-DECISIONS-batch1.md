@@ -42,7 +42,7 @@ partition that does is stated explicitly at the foot.
 | #6986 | **Decline** | **Non-negotiable #12, as a rule question rather than a verdict on the author.** A fingerprint *submission queue* sends scene fingerprints to Stash-box in batches. Fingerprints are derived from media content and are not identifying **as sent**. But the change lives in `pkg/stashbox/graphql/generated_client.go` and the queue is a **bulk egress** path — the exact shape where a later field addition quietly becomes identifying. Declined, and recorded as a standing rule: **if Stash-box adds a field to the submission payload, the exporter's guard must be extended in the same commit.** A one-sided guard is half a guard (#12). |
 | #5265 | **Decline** | **A framework major bump from a bot, in a triage batch.** `bootstrap 4.6.2 → 5.0.0`, conflicting, 744 days stale. Nothing here breaks a non-negotiable, so the rule that declines it is deliberately a *process* rule: do not take a UI framework major in a batch of unrelated triage. Re-take it on its own, with `vite build` green. |
 
-## Group B — deferred, sound, not now (61)
+## Group B — deferred, sound, not now (60)
 
 Same reason in every row: **sound upstream, no rule conflict, deferred to the
 post-reconciliation batch**, each on its own commit with its own verification.
@@ -52,14 +52,14 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-```
+``````
 
-**B2 — mergeable, and a Group C candidate this batch (17).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (16).** Listed in Group C.
 
 ```
-#6917 #7093 #7137 #7159 #7166 #7181 #7196 #7199 #7225 #7235 #7245 #7249
-#7252 #7254 #7257 #7261 #7265
-```
+#6917 #7093 #7159 #7166 #7181 #7196 #7199 #7225 #7235 #7245 #7249 #7252
+#7254 #7257 #7261 #7265
+``````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -70,7 +70,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-```
+``````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -95,13 +95,13 @@ Each is still one commit and one verification. **The first two are already done.
 | 1 | **#7241 — DONE** | `6b8448b0d`. See `docs/PR-TRIAGE.md`. |
 | 2 | **#7255 — DONE** | `60ba6c051`. See `docs/PR-TRIAGE.md`. |
 | 2b | **#7180 — DONE** | `68192aa59`. Merged as written; one test added. See below. |
-| 3 | #7137 | 2 files, and it **ships with** a test (`pkg/scraper/url_test.go`). |
-| 4 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
-| 5 | #7225 | **Renumber its migration** — see below. |
-| 6 | #7257 | 7 files, 2 test files. |
-| 7 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
-| 8 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
-| 9 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
+| 2c | **#7137 — DONE** | `3f6678e73`. Merged as written, decision EXTRACTED so it could be tested. Closes `stash#7136`. |
+| 3 | #7265 | 8 files, 4 of them tests; date parsing is pure and cheap to verify. |
+| 4 | #7225 | **Renumber its migration** — see below. |
+| 5 | #7257 | 7 files, 2 test files. |
+| 6 | #7196 #7166 | Plugin CSP sources, 3 + 5 files. |
+| 7 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| 8 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
 ## The migration collision — the one finding here worth acting on
 
@@ -154,6 +154,37 @@ own `-timeout` (looks like a slow test, not a broken mock); and `&plugin.Cache{}
 panics *after* `Destroy` has already run, because `enabledPlugins` calls a
 method on a nil interface.
 
+## #7137 — merged, and the fix arrived with no test on the fix
+
+`3f6678e73`, closing **`stash#7136`**. The bug: `urlFromCDP` always finished with
+`chromedp.OuterHTML`, so a scraper whose target is a JSON *document* got Chrome's
+HTML wrapper around it — valid HTML, invalid JSON, a parse failure that looks
+like a broken scraper.
+
+**Merged as written, except that the decision was extracted.** Upstream's three
+parts are the mime sniff, the tracker, and the branch that reads the body. The
+first two arrived well tested; the third was inline in a `chromedp.ActionFunc`
+and reachable only by running a browser, so **the repair itself had no test** —
+sitting in a file that looks thorough.
+
+The harness row for it reported `SKIP / anchor not found`, which the standing
+rule reads as "the code moved". What it meant was that the branch **could not be
+guarded at all**. So the decision moved into `readMainDocument` with the two
+Chrome accessors as parameters, and four tests now drive it — written to record
+*which accessor was asked*, not what came back, since a test asserting the
+returned string is one line from asserting its own input.
+
+**That is the second time this session that a `SKIP` was a finding rather than a
+stale anchor**, and the two are hard to tell apart. The discriminator: a stale
+anchor is post-fix source that has *moved*; an unobservable branch is post-fix
+source that was **never reachable from a test**. Reading the source settles it in
+two minutes, and guessing wrong means either deleting a real fix or leaving an
+untested one.
+
+Harness `docs/mutate_7137.py`: **7/7 killed**, including the data race — scored
+as a kill even though the test's own assertions pass on a torn read, because it
+checks only the end state. `go test -race ./pkg/scraper/` clean.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -165,9 +196,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  3
+merged + committed ...................................  4
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  17
+deferred, mergeable, Group C candidate ...............  16
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

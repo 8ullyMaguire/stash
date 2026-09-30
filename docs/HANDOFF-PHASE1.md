@@ -23,6 +23,15 @@ chosen because the ledger tooling lives on `main` and Phase 1 merges into it.
 **Nothing is unpushed on `goal/upstream` relative to `main`**; the branch is the
 mechanism, not a queue of unmerged work.
 
+## Where it stands now
+
+```
+main            69e4c171b  [origin/main: ahead 10]     clean
+merged          4 PRs -> 4 issues closed (#7241, #7255, #7180/#7179, #7137/#7136)
+issue ledgers   16 closed · 93 deferred · 132 not-planned · 434 planned · 675 total
+next PR         #7265
+```
+
 ## The first action
 
 ```bash
@@ -32,12 +41,38 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7137** is next (2 files, `pkg/scraper/url.go` + a test). One commit, one
+it: **#7265** is next (8 files, 4 of them tests; date parsing is pure). One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
-deferred — the goal document's ordering is deliberate, and Phase 2 is 435
+deferred — the goal document's ordering is deliberate, and Phase 2 is 434
 issues, which is weeks.
+
+## Session 4 — #7137 merged, `stash#7136` closed
+
+Second merge this session. `3f6678e73`. `urlFromCDP` always finished with
+`chromedp.OuterHTML`, so a scraper targeting a JSON *document* received Chrome's
+HTML wrapper around it — valid HTML, invalid JSON, and a parse failure that looks
+like a broken scraper rather than a broken extractor.
+
+**Merged as written, except the decision was extracted.** Upstream's three parts
+are the mime sniff, the tracker, and the branch that reads the body. The first
+two arrived well tested. The third was inline in a `chromedp.ActionFunc` and
+reachable only by running a browser — so **the repair had no test at all**, in a
+file that looks thorough. The harness row reported `SKIP / anchor not found`,
+which the standing rule reads as "the code moved"; what it meant was that the
+branch could not be guarded. The decision now lives in `readMainDocument` with
+the two Chrome accessors as parameters, and four tests drive it.
+
+**That is the second `SKIP` this session that was a finding rather than a stale
+anchor**, and the two are hard to tell apart. The discriminator: a stale anchor
+is post-fix source that has *moved*; an unobservable branch is post-fix source
+that was **never reachable from a test**. Read the source — two minutes —
+because guessing wrong means either deleting a real fix or leaving an untested
+one.
+
+Harness: **7/7 killed**, including the data race, scored as a kill even though
+the test's own assertions pass on a torn read.
 
 ## Session 3 — #7180 merged, and the one issue it closed
 
@@ -75,7 +110,7 @@ Two fixture traps, both recorded in the files, both presenting as something else
 - **`&plugin.Cache{}` panics *after* `Destroy` has already run** —
   `enabledPlugins` calls a method on a nil interface.
 
-### Gates at `c54dd1926`
+### Gates at `c54dd1926` (session 3 — a record, not current state; the figures below are what was true then)
 
 ```bash
 $ go test ./... -count=1   # twice
@@ -96,10 +131,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **3** (`#7241`, `#7255`, `#7180` → `stash#7179`) |
+| Merged and committed | **4** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 7, from `02d0d0476` to `c54dd1926` |
+| Commits on `main` | 10, from `02d0d0476` to `69e4c171b` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -120,7 +155,7 @@ justified departing from upstream:
   Verified live on the tree before the fix:
   `ValidateCredentials("attacker", "totally wrong") == true`.
 
-## Gates run at session 2, with verbatim output (superseded by the session-3 block above)
+## Gates run at session 2, with verbatim output (a record; superseded by the session-3 and session-4 blocks above)
 
 ```bash
 $ go build ./internal/... ./pkg/...                      # exit 0
@@ -164,7 +199,7 @@ it. Both runs identical: **35 packages ok, 0 FAIL.** Baseline was also 35 ok /
   the reconciliation anyway.
 - **Did not touch `stash-box`, `~/code-local/worktrees/stashforge`, or
   `~/code/go/stash`.** Owned by other profiles / a stale pre-tag copy.
-- **Did not start Phase 2.** 435 planned issues, one commit and one named test
+- **Did not start Phase 2.** 434 planned issues, one commit and one named test
   each. Starting it without finishing Phase 1 would produce a half-run.
 
 ## The one finding that is not bookkeeping
@@ -242,12 +277,12 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 ## Phase 2, ready to start
 
-435 planned issues, none started. The ledger is in agreement (15 closed, 93
-deferred, 132 not-planned, 435 planned, 675 total). Work them in the
+434 planned issues, none started. The ledger is in agreement (16 closed, 93
+deferred, 132 not-planned, 434 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#7136`, `stash#7179` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.
