@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 435 planned, 225 not planned, 15 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 434 planned, 225 not planned, 16 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**435 planned, 225 not planned, 15 closed, 675 total.**
+**434 planned, 225 not planned, 16 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -126,7 +126,7 @@ These carry a label the maintainers themselves applied.
 | 7147 | Fast dragging motions in the lightbox/image-viewer navigate to the nex | upstream-marked (bug report) | planned |
 | 7145 | Remote image downloader sends no User-Agent, causing HTTP 418 | upstream-marked (bug report) | planned |
 | 7142 | Scroll position is lost when navigating back to a list | upstream-marked (bug report) | planned |
-| 7136 | JSON based scrapers fail with Chrome CDP | upstream-marked (bug report) | planned |
+| 7136 | JSON based scrapers fail with Chrome CDP | **CLOSED** `3f6678e73` — see closed-issues.md | closed |
 | 7135 | Unmentioned/bugged max password length | upstream-marked (bug report) | planned |
 | 7133 | Using "excludes" or "is not" with the disambiguation filter hides non- | upstream-marked (bug report) | planned |
 | 7130 | App not responding on RClone drive - "Loading ..." forever | upstream-marked (bug report) | planned |
