@@ -40,6 +40,46 @@ Columns:
 ---
 
 | stash#5850 | Thumbnails generated as JPEG drop transparency resulting in black thumbnails | Generated thumbnails were encoded as `.jpg`, which has no alpha channel, so line art with transparency got an opaque background and read as a black box. The defect was in **three independent places** — `pkg/image/vips.go` (the output specifier), `pkg/ffmpeg/transcoder/image.go` (the encoder, set independently of the output muxer, so a webp container carried mjpeg data and still had no alpha) and `pkg/models/paths/paths_generated.go` (the on-disk extension, which `http.ServeFile` turns into the response Content-Type) — plus a consequence easy to leave behind: every `.jpg` already on disk became an orphan, because `GetThumbnailPath` no longer resolved it. All three call sites that must clean up the old name — the generate task, image delete, and the scan path — now do. `Q=70` is kept deliberately so this is a format change and not a quality change. Diagnosis was measured against the real vips binary, not taken from the report. | `TestAVipsThumbnailKeepsTransparency`, `TestTheOpaquePartOfTheArtworkSurvives`, `TestAnOpaqueSourceIsNotDamaged`, `TestTheEncoderRequestsWebp`, `TestWebPIsNotJPEG` (pkg/image) · `TestAChangedFileClearsItsPreUpgradeJpegThumbnail`, `TestAChangedFileClearsBothFormatsWhenBothExist`, `TestAnUnchangedChecksumIsNotAContentChange`, `TestTwoMissingHashesAreNotAContentChange` (pkg/image) · `TestTheEncoderAndTheMuxerAgree`, `TestTheEncoderFollowsTheWebpOutputFormat` (pkg/ffmpeg/transcoder) · `TestTheThumbnailExtensionIsWebp`, `TestTheLegacyThumbnailIsAJpegUnderTheSameShard`, `TestRemoveLegacyThumbnailDeletesTheOldFile` (pkg/models/paths) · `TestRegeneratingAThumbnailRemovesTheLegacyJpeg`, `TestTheGeneratedThumbnailIsAWebpAndNotAJpeg`, `TestAFailedRegenerationLeavesTheLegacyJpegInPlace` (internal/manager, driving the real task). Mutation harness `pkg/image/mutate_thumbnail_alpha.py`: **10 killed, 0 survived, 1 exempt** — and the exempt row is a guard that is genuinely unreachable (`thumbnailExt` is a `const ".webp"` while the legacy path hardcodes `.jpg`, so the equality branch no test can drive), stated rather than counted as a kill. | `6d392659b` |
+| stash#7179 | `.nogallery` does not remove an existing folder-based gallery during Clean | A clean removed an **empty** gallery but never one whose folder carries a `.nogallery` marker, because `cleanEmptyGalleries` filtered on `ImageCount = 0` and nothing else. Those are the two halves of the same file: a folder that has explicitly opted out of being a gallery survived a clean whenever it still held an image. The scan side has always honoured the marker (`pkg/image/scan.go:415`, `forceGallery`/`||`/`(config && !exemptGallery)`), so **scan and clean disagreed about the same directory** — the gallery was created because the marker was not there yet, and the marker then made it permanently unremovable. The check reads `.forcegallery` first, so a folder with both markers is a gallery, matching scan semantics rather than inventing a third rule. It runs **after the transaction is released**: gallery folders can be on network filesystems, and a stat per gallery inside a write transaction holds the database for the length of a slow share. Upstream's refactor also splits the decider (`findGalleriesToClean`) from the deleter (`cleanGalleries`), which is what made the gap below visible. | `TestFindGalleriesToCleanIncludesNoGalleryFolders` (upstream's, and thorough: an empty gallery, a gallery matching BOTH rules returned once, a populated `.nogallery` folder, an ordinary folder, a gallery outside the requested paths, and `.forcegallery` precedence) and **`TestACleanDryRunDeletesNothing`** (added here — see the note). Mutation harness `docs/mutate_7180.py`: **6/6 killed, 0 survived, 0 skipped**. | `68192aa59` |
+
+## The test this issue did not get, and why the guard was worth a row
+
+Upstream's test exercises `findGalleriesToClean`, the function that only
+**decides**. The deletion is a separate function, `cleanGalleries`, and the
+`if !j.input.DryRun` guard lives there — so nothing tested it.
+`docs/mutate_7180.py` scored that **SURVIVED**: deleting the guard left every
+upstream test green.
+
+**A survivor is not automatically a redundant line.** The standing rule is that
+a surviving mutation means the guarded code is dead or redundant and the check
+should be deleted — but that rule assumes the guard is redundant. This one is
+not redundant, it is *unobserved*: a dry run exists so a user can see what a
+clean would remove, and its entire value is that it removes nothing. A
+regression is data loss on the strength of a preview click.
+
+So the outcome here was to **add a test and keep the row**:
+`TestACleanDryRunDeletesNothing` drives `cleanGalleries` in both directions and
+asserts a dry run reaches no `Destroy`. Its non-dry half is the control — without
+it the dry-run half also passes against a `cleanGalleries` that never deletes
+anything, which is the read-back-your-own-return-value trap in a place where the
+return value is a deleted row.
+
+Two fixture traps, both recorded in the files because each presents as something
+else:
+
+- **A mock expectation with no count constraint is permanent.** The batch loop's
+  terminating empty page then matched the populated one forever and the test hung
+  to its own `-timeout`, with the stack pointing at `mock.MethodCalled`. That
+  reads as a slow test, not a broken mock. `.Once()` per page.
+- **`&plugin.Cache{}` panics *after* `Destroy` has already run.**
+  `enabledPlugins` calls `c.config.GetDisabledPlugins()` on a nil interface. Use
+  `plugin.NewCache(cfg)`, as `init.go` does.
+
+**Generalisable, and it is a sibling of the "test measures the wrong layer" rule:
+a test that exercises only the decider cannot see a guard in the deleter.** Two
+functions split for testability, and the split is also a seam the test has to
+cross deliberately.
+
 ## Not yet closed
 
 437 issues are marked `planned` in `docs/UPSTREAM-ISSUES.md` and none of them
