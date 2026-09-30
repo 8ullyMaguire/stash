@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            3de3de80c  [origin/main: ahead 37]     clean
-merged          17 PRs -> 10 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue, #7235/stash#7234)
+main            374a9e7cf  [origin/main: ahead 39]     clean
+merged          18 PRs -> 11 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue, #7235/stash#7234, #7245/stash#7236)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7245
+next PR         #7249
 ```
 
 ## The first action
@@ -42,12 +42,38 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7245** is next. One commit, one
+it: **#7249** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 18 — #7245 merged: closes stash#7236, and the fix was half the surface
+
+`374a9e7cf`, **closes stash#7236**. 1000 scene cards: 215s on Safari, 2s on Chrome.
+
+**Two layers, both measured.** `IntersectionObserver` delivers an INITIAL callback on
+`observe()` (specified), so 1000 cards give 1000 initial entries and the old
+`else pause()` called `pause()` once per offscreen card — in WebKit that begins media player
+setup. And every `<video>` with a src costs player work regardless of `preload=none`. Fixed by
+`else if (!el.paused) el.pause()` plus deferring the src.
+
+**Verified in a real browser** — jsdom has no IntersectionObserver and no media stack, so a
+passing jsdom test would prove nothing. **My first probe measured the wrong quantity and the
+browser caught it**: it asserted N callbacks for N observe() calls and got 1, because entries
+are batched into one callback and **ENTRIES are what `entries.forEach` multiplies**. Also
+`ratio=1` for every video, because a src-less `<video>` has no intrinsic size so all 200
+collapsed to zero height and intersected. Chromium is at
+`~/.cache/ms-playwright/chromium-<build>/chrome-linux64/chrome`; no system Chromium here.
+
+**The fix was half the surface.** `SceneList.tsx:222` branches to `SceneWallPanel` for wall
+mode; `WallItem` had the identical defect with an unconditional src and a `pause()` on mount,
+and `SceneWallPanel` has **no virtualisation** — one item per scene. Same treatment applied.
+
+**A regression I shipped first, caught by the harness:** setting the src only on hover left
+`autoPlay={previewType === "video"}` with a permanent undefined src, so wall video mode would
+render nothing. `needsVideo = previewType === "video" || active`.
 
 ## Session 17 — #7235 merged: closes stash#7234, a dependency rename a string match never followed
 
@@ -612,10 +638,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **17** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`) |
+| Merged and committed | **18** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`, `#7245` → `stash#7236`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 37, from `02d0d0476` to `3de3de80c` |
+| Commits on `main` | 39, from `02d0d0476` to `374a9e7cf` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

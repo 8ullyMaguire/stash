@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-`````````````````````````````````````````````
+````````````````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (3).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (2).** Listed in Group C.
 
 ```
-#7245 #7249 #7254
-`````````````````````````````````````````````
+#7249 #7254
+````````````````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-`````````````````````````````````````````````
+````````````````````````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #7245 #7249 #7254 | Next. |
+| 4 | #7249 #7254 | Next. |
+| — | **#7245 — DONE** | `374a9e7cf`. **Closes stash#7236** — 1000 scene cards took 215s on Safari vs 2s on Chrome. Two layers: `IntersectionObserver` delivers an INITIAL callback on `observe()` (specified, not incidental), so 1000 cards produce 1000 initial entries and the old `else pause()` called `pause()` once per offscreen card — in WebKit that begins media player setup; and every `<video>` with a src costs player work regardless of `preload=none`. Fixed by `else if (!el.paused) el.pause()` and deferring the src. **Verified in a real browser** (jsdom has no IntersectionObserver and no media stack, so it could not measure any of it) — and **my first probe measured the wrong quantity**: it asserted N callbacks for N observe() calls and got 1, because entries are batched into one callback; ENTRIES are what `entries.forEach` multiplies. Also `ratio=1` for every video, because a src-less `<video>` has no intrinsic size so all 200 collapsed to zero height and intersected. **The fix was half the surface** — `SceneList.tsx:222` branches to `SceneWallPanel` for wall mode and `WallItem` had the identical defect with no virtualisation, so it got the same treatment. **And I shipped a regression first**: setting the src only on hover left `autoPlay={previewType === "video"}` with a permanent undefined src, so wall video mode would render nothing. The harness caught it. |
 | — | **#7235 — DONE** | `3de3de80c`. **Closes stash#7234** — Safari rendered performer details BELOW the picture. A dependency rename the string match never followed: ua-parser-js v2 reports `macOS`, the old code matched `"Mac OS"`, so the substring never occurred and every desktop Safari user got `false`. Verified against the installed package, not the changelog. **Why a util file is a layout bug**: the one call site sets the `apple` class, and index.scss gates the whole layout on `.apple .detail-container { display: flex }`. Also one parse instead of two, and a real `boolean` return instead of `boolean | undefined`. **9 checks driving the real parser**, asserting the premise (the parser says `macOS`, `"Mac OS"` does not match it) and restating the defect independently of the source's shape. **Three fixture bugs produced a FALSE PASS** — ua-parser-js captures `window.navigator` at import time, so rebinding `globalThis.navigator` cannot work and three of six checks failed, which is what a harness measuring nothing looks like. |
 | — | **#7093 — DONE** | `cd19a72ea`. Waits for in-flight queries before `resetStore()`, which cancels them. **Premise confirmed from Apollo's own source**: `QueryManager.clearStore` calls `cancelPendingFetches(newInvariantError(42))` (core.cjs:1554), and `getCurrentResult()` is a pure read of `queryInfo.networkStatus` so the 100ms poll generates no load. **The fix is correct as written, including a placement that looks like a mistake**: `resetQueued = false` sits BEFORE `await client.resetStore()` on purpose — moving it after would coalesce every event arriving during a reset, which is the race being fixed. Upstream's comment justified the coalescing for the wrong reason; rewritten to state the load-bearing invariant so nobody “tidies up” the flag. **16-check probe against a real ApolloClient** (a fake store proves nothing about cancellation), including the reported bug observed: resetting with a query in flight REJECTS it. **Kept rather than declined** despite being draft — the #6824 precedent was 40 files, conflicting, and a schema rewrite, every disqualifier a merit; this is one mergeable file. Four fixture bugs of my own, each reading like a finding about the code. |
 | — | **#6917 — DONE** | `8c1601ecf`. Persists DisplayMode per view to IndexedDB. **The Go file is a drift fix, not a change**: `//go:generate` has said `FolderRelatedFolderIDsLoader` for a while and the checked-in file still carried `FolderParentFolderIDs` — the PR is byte-identical to regenerated output, verified. **Regenerating ALL loaders is not safe**: it rewrites three unrelated ones with a duplicate `"time"` import (`time redeclared in this block`) — reverted. **The frontend guard could not latch**: `location.search.includes("disp=")` is unsound because `filter.ts:382` emits `disp` only when the mode differs from the default Grid, so for a default-mode user the guard never latches and the effect re-runs on every filter change. Underneath that the restore and useFilterURL's empty-search branch are **two writers to one state**, and the winner was decided by effect declaration order. Now a ref keyed by view: restore once per view per mount. **19-check harness that asserts its own premise first** — the guard's soundness is a fact about another file. Verified it fails on revert. |
@@ -1003,6 +1004,69 @@ column — `not planned` is `not-planned` **+** `deferred` (129 + 93 = 222), whi
 parses as zero and writes a total that does not add up. Now **430 planned, 222 not planned, 23
 closed, 675 total.**
 
+## #7245 — merged: closes stash#7236, and the fix was half the surface
+
+`374a9e7cf`, **closes stash#7236**. 29+6 in one file. 1000 scene cards took **215s** on
+Safari against Chrome's 2s.
+
+### Two layers, both measured rather than assumed
+
+1. **`IntersectionObserver` delivers an INITIAL callback when `observe()` is called** —
+   specified, not incidental. So 1000 cards produce 1000 initial entries, each reporting
+   `intersectionRatio === 0` for every card below the fold, and the old
+   `if (ratio > 0) play() else pause()` called `pause()` once per offscreen card. In WebKit
+   `pause()` on a media element that **has a src** begins media player setup.
+2. Every `<video>` carrying a src costs player and compositing work, regardless of
+   `preload="none"`.
+
+Fixed by `else if (!el.paused) el.pause()` — a never-played video reports `paused === true`
+— and deferring the `src`, so offscreen cards carry no source at all. React *removes* the
+attribute for `undefined` rather than writing the string; that is the behaviour the fix
+relies on, and it is verified rather than remembered.
+
+### A real browser, because jsdom could not measure any of it
+
+`probe-video-dom.mjs` drives headless Chromium over CDP and measures the three DOM facts.
+
+**My first version of that probe measured the wrong quantity, and the real browser caught
+it.** It asserted *"N `observe()` calls produce N callbacks"* and got **calls=1 for 200
+videos**: IntersectionObserver batches changed targets into one callback, so callbacks are
+not what `entries.forEach` multiplies. **ENTRIES are**, and they are not deduplicated. It
+also reported `ratio=1` for every video, because a `<video>` with no src has **no intrinsic
+size** — all 200 collapsed to zero height, stacked at the top of the viewport, and
+intersected.
+
+Both are the same lesson as the fixture notes above: *a probe that measures the wrong
+quantity reports a confident wrong answer.* Chromium lives at
+`~/.cache/ms-playwright/chromium-<build>/chrome-linux64/chrome` here, with no system
+Chromium.
+
+### The fix was half the surface
+
+`SceneList.tsx:222` branches to `SceneWallPanel` for `DisplayMode.Wall`, and `WallItem` had
+the identical defect — unconditional `src`, and a `pause()` in an effect that runs **on
+mount** with `active` false for every unhovered tile, with no `IntersectionObserver`
+deferring it. And wall mode is **not smaller**: `SceneWallPanel` maps `scenes` straight into
+`react-photo-gallery` with **no virtualisation**, one item per scene. Fixing only `SceneCard`
+would have left half the reported surface hanging.
+
+### A regression I shipped in that fix, which the harness caught
+
+Setting `loadVideo` only inside the `active` branch left `autoPlay={previewType === "video"}`
+with a **permanent `undefined` src** — so wall "video" mode would render no video at all,
+which is worse than the bug being fixed. A source is needed when the wall is configured for
+video *or* the tile is hovered, so it is derived as a value:
+
+```ts
+const needsVideo = previewType === "video" || active;
+const [loadVideo, setLoadVideo] = useState(needsVideo);
+```
+
+The 23-check harness models the decision both components make and asserts the bound that
+matters — sources and `pause()` calls scale with what is **visible**, not with N — and pins
+the cost the fix deliberately leaves (visible cards still get a player; that is the preview),
+so nobody optimises it back to zero. Verified it fails on both reverts.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -1014,9 +1078,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  17
+merged + committed ...................................  18
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  3
+deferred, mergeable, Group C candidate ...............  2
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
