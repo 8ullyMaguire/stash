@@ -43,6 +43,24 @@ const Preview: React.FC<{
   const previewType = config?.interface?.wallPlayback;
   const soundOnPreview = config?.interface?.soundOnPreview ?? false;
 
+  // A source is needed in two cases: the wall is configured to always show
+  // video (autoplay), or this tile is being hovered/previewed.
+  //
+  // WebKit sets up a media player for every <video> that has a src, and pause()
+  // on one starts that setup even if it never played. The effect below runs on
+  // MOUNT with `active` false for every tile the user is not hovering, so
+  // without the `!video.paused` guard below, a wall of 1000 items started 1000
+  // media players on page load -- the same cost #7245 fixed in SceneCard, in
+  // the other display mode. Wall mode renders one item per scene
+  // (SceneWallPanel maps `scenes` straight into react-photo-gallery, with no
+  // virtualisation), so the two lists need the same treatment.
+  //
+  // needsVideo is a VALUE rather than something only set inside the effect,
+  // because an effect that sets it solely on `active` leaves wall "video" mode
+  // with a permanent undefined src and autoplay has nothing to play.
+  const needsVideo = previewType === "video" || active;
+  const [loadVideo, setLoadVideo] = useState(needsVideo);
+
   useEffect(() => {
     const video = videoEl.current;
     if (!video) return;
@@ -51,11 +69,18 @@ const Preview: React.FC<{
     if (previewType !== "video") {
       if (active) {
         video.play();
-      } else {
+      } else if (!video.paused) {
+        // pausing a video that never played also starts the media player
         video.pause();
       }
     }
   }, [previewType, soundOnPreview, active]);
+
+  // Attach the source once the tile needs one. Kept in its own effect so the
+  // mount-time case (wall configured for video) is covered as well as hover.
+  useEffect(() => {
+    if (needsVideo) setLoadVideo(true);
+  }, [needsVideo]);
 
   const image = (
     <img
@@ -71,7 +96,7 @@ const Preview: React.FC<{
     <video
       disableRemotePlayback
       playsInline
-      src={previews.video}
+      src={loadVideo ? previews.video : undefined}
       poster={previews.image}
       autoPlay={previewType === "video"}
       loop
