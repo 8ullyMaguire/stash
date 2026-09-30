@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 437 planned, 225 not planned, 13 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 436 planned, 225 not planned, 14 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**437 planned, 225 not planned, 13 closed, 675 total.**
+**436 planned, 225 not planned, 14 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -87,7 +87,7 @@ These carry a label the maintainers themselves applied.
 | 6452 | Tagger View Jumps Position | upstream-marked (bug report) | planned |
 | 6246 | Scene Tagger Navbar floats out of position | upstream-marked (bug report) | planned |
 | 5987 | Upgrade React + Dependencies | upstream-marked (help wanted) | planned |
-| 5850 | Thumbnails generated as JPEG drop transparency resulting in black thum | upstream-marked (bug report) | planned |
+| 5850 | Thumbnails generated as JPEG drop transparency resulting in black thum | upstream-marked (bug report) | closed |
 | 5709 | Zombie process left (Python defunct) | upstream-marked (bug report) | planned |
 | 5681 | Support Hardware Acceleration (Intel Integrated Graphics) When Buildin | upstream-marked (help wanted) | planned |
 | 5178 | A>B Loop Controls do not work on Apple Touch Devices | upstream-marked (bug report) | planned |
