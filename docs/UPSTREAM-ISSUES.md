@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 425 planned, 221 not planned, 29 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 424 planned, 221 not planned, 30 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**425 planned, 221 not planned, 29 closed, 675 total.**
+**424 planned, 221 not planned, 30 closed, 675 total.**
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
 93 marked `deferred`. The table has four status values but the tally has three, so
@@ -108,7 +108,7 @@ These carry a label the maintainers themselves applied.
 | 3496 | Adding Hashes to Galleries for Potential Stash-Box Integration | upstream-marked (help wanted) | planned |
 | 3426 | Anamorphic videos previews are not normalized | upstream-marked (bug report) | planned |
 | 3159 | Improve filtering in presence of NULL values | upstream-marked (help wanted) | planned |
-| 2773 | Stash is unaware when an image has been replaced if the name is the sa | upstream-marked (bug report) | planned |
+| 2773 | Unaware a file changed if the replacing file has the same name | upstream bug report, **FIXED (partially, and the boundary is deliberate)**. Cause is not the name, it is the **mtime**: a scanned file is keyed on PATH and treated as unchanged when basename and ModTime both match (`updated := !fileModTime.Equal(base.ModTime) || base.Basename != f.Basename`, added for #6326). The reporter renames `image00001 -> image00003` then `image00002 -> image00001`; `mv` **preserves mtime**, so the file at `image00001` has the same path, same basename and same mtime but different bytes, and keeps the old row's fingerprints. The “MD5 … is the same as that of …” error is a **symptom** of that, surfacing later once two paths hold the same bytes — not the bug. `Size` now joins the comparison: already stored on every scanned file, so it is free, and it is the only cheap signal that catches a modtime-preserving replacement. **Not solved, deliberately:** a same-size same-mtime overwrite at the same path is indistinguishable from no change without reading the bytes, which would defeat the modtime fast path — and the reporter's literal repro is exactly that case, since both their images are the same size. A test pins the boundary so it stays visible. | closed |
 | 2765 | Lightbox image changes on rating/o-counter value change | upstream-marked (bug report) | planned |
 | 2464 | Change default setting of PHash generation to ON for Scans | upstream-marked (help wanted) | planned |
 | 7263 | Mapped scrapers assign wrong attributes to sub-objects when values rep | upstream-marked (bug report) | closed |
