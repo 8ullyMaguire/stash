@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            b14aef421  [origin/main: ahead 19]     clean
-merged          8 PRs -> 7 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197)
-issue ledgers   19 closed · 93 deferred · 131 not-planned · 432 planned · 675 total
-next PR         #7166
+main            c71899e7f  [origin/main: ahead 21]     clean
+merged          9 PRs -> 8 issues closed (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165)
+issue ledgers   21 closed · 93 deferred · 129 not-planned · 432 planned · 675 total
+next PR         #7159
 ```
 
 ## The first action
@@ -42,12 +42,53 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7166** is next. One commit, one
+it: **#7159** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 9 — #7166 merged, `stash#7165` closed, a CSP hole, and a sweep that found a third
+
+One commit, `c71899e7f`. A plugin with a user-configurable backend endpoint had no
+way to allow it — `connect-src` is assembled per plugin, so a host the admin chose
+was silently blocked. With `csp-settings: true`, any `csp_`-prefixed setting holding
+a valid `http`/`https` URL joins that plugin's `connect-src`.
+
+Applied with `--3way`: #7196 had already turned `media-src` into a slice at the
+same lines, so the patch context had moved. `server.go` merged cleanly; both
+`Plugins.md` conflicts were **additive** (each side documenting its own field in the
+same `ui:` block) and both were kept.
+
+**A real hole.** Upstream's wildcard check tested `u.Host` only, so
+`https://cdn.example.com/*` **passed** — and a path wildcard is a legal CSP source
+expression matching every request under that host. The asterisk one character right
+of the host bought the whole subtree. The lesson is the property: **a CSP source
+expression is a prefix match, so "the host is exact" was never the property that
+mattered — "the value is exact" is.** Upstream's own docs already said "a valid,
+**concrete** URL", so the fix restores intent rather than narrowing it.
+
+Also: a bare `csp_` key was read as a source (an opt-in that reads as *off* to
+anyone inspecting the key), and `http://.` / `https://..` passed the host checks.
+
+Two tests assert properties rather than examples — the separator character *set*
+(with a control value so the test cannot measure nothing), and byte-identical
+output across 200 runs to catch map-iteration order leaking into the header. 3
+mutations, **each killed by exactly the test written for it**, which is the check
+that they aren't passing for a shared reason.
+
+**The sweep.** `stash#7165` was the second wrong *not-planned* verdict, so instead
+of fixing them one at a time I checked all **131** R10 not-planned issues against
+every open PR in the queue, batched — 6.5 seconds. **One more hit:** upstream PR
+**#7048** closes `stash#7071`, also ticketed *not-planned*. Third instance, found by
+the sweep rather than by luck. Recorded as closed but **deliberately not merged** —
+VR metadata is a schema change with no local verification path.
+
+**Ledger mechanics learned the hard way:** the header tallies must be derived from
+the table with a `Counter`, not by arithmetic — hand-subtracting twice produced
+674/675 totals and a 20-vs-21 mismatch that only the checker caught. And the verdict
+column must be exactly `closed`; `closed (merged)` is not recognised.
 
 ## Session 8 — #7196 merged, `stash#7197` closed (which was ticketed *not-planned*)
 
@@ -276,10 +317,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **8** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`) |
+| Merged and committed | **9** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 19, from `02d0d0476` to `b14aef421` |
+| Commits on `main` | 21, from `02d0d0476` to `c71899e7f` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
@@ -424,11 +465,11 @@ roles.** Neither is an ancestor of the other. `docs/UPSTREAM-ISSUES.md` and
 
 432 planned issues, none started. The ledger is in agreement (17 closed as of
 that gate; 18 after session 7, 93
-deferred, 131 not-planned, 432 planned, 675 total). Work them in the
+deferred, 129 not-planned, 432 planned, 675 total). Work them in the
 dependency order `docs/UPSTREAM-ISSUES.md` states — **the scanner and job-queue
 capabilities unblock the most downstream fixes** — not by issue number.
 
-**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179`, `stash#7197` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
+**`stash#3722`, `stash#5944`, `stash#7136`, `stash#7179`, `stash#7197`, `stash#7165`, `stash#7071` and `stash#5850` are now closed** (it is in `closed-issues.md` with named
 tests, commit `6d392659b`), so the collision the goal document warned about is
 resolved. Check `docs/closed-issues.md` before picking anything up: the roster
 is the filter, the closed log is the truth.

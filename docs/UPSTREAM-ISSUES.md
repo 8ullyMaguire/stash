@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 432 planned, 224 not planned, 19 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 432 planned, 222 not planned, 21 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**432 planned, 224 not planned, 19 closed, 675 total.**
+**432 planned, 222 not planned, 21 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -610,7 +610,7 @@ than silent.
 | 7175 | Ability to attach performer to a group | R10 | not-planned |
 | 7134 | Watch Later | R10 | not-planned |
 | 7132 | Performer evolution | R10 | not-planned |
-| 7071 | Add VR specific fields to `VideoFile` | R10 | not-planned |
+| 7071 | Add VR specific fields to `VideoFile` | **CLOSED** upstream by PR #7048 (open) — see closed-issues.md (was mis-ticketed *not-planned*) | closed |
 | 7058 | Do not pre-select scene match when multiple scenes are found in scene  | R10 | not-planned |
 | 7020 | Image view counter | R10 | not-planned |
 | 7258 | Improve scraper discoverability | R10 | not-planned |
@@ -620,7 +620,7 @@ than silent.
 | 7197 | Add plugin media-src CSP support | **CLOSED** `b14aef421` — see closed-issues.md (was mis-ticketed *not-planned*) | closed |
 | 7194 | Show free/available disk space on the Statistics page | R10 | not-planned |
 | 7192 | Option to disable automatic file hash merging for Images/Galleries and | R10 | not-planned |
-| 7165 | Plugin settings should be able to add connect-src CSP sources | R10 | not-planned |
+| 7165 | Plugin settings should be able to add connect-src CSP sources | **CLOSED** `c71899e7f` via PR #7166 — see closed-issues.md (was mis-ticketed *not-planned*) | closed |
 | 7160 | [UI/UX] Organized icon state is hard to distinguish on scene detail pa | R10 | not-planned |
 | 7157 | Option to play next scene after deleting | R10 | not-planned |
 | 7118 | Duration filtering for scene identification | R10 | not-planned |

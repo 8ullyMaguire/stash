@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-``````````````````
+`````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (12).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (11).** Listed in Group C.
 
 ```
-#6917 #7093 #7159 #7166 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
-``````````````````
+#6917 #7093 #7159 #7181 #7199 #7235 #7245 #7249 #7252 #7254 #7261
+`````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-``````````````````
+`````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -99,7 +99,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7225 — DONE** | `63635bcc0`. Merged as written; threshold made a contract with migration 87, 10 mutations. Closes `stash#3722`. |
 | — | **#7257 — DONE** | `6d5a8131c`. Merged as written except settings snapshot made a DEEP clone, not `maps.Clone`. Closes `stash#5944`. |
 | — | **#7196 — DONE** | `b14aef421`. Merged as written; media-src made a slice like its siblings; 8 tests for a header builder that had none. Closes `stash#7197`. |
-| 3 | #7159 #7166 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| 3 | #7159 | Docker non-root. **Overlaps our stash#684**, already fixed here: take the idea, diff against ours. |
+| — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | 4 | #7199 #7261 #7181 #7252 #6917 #7093 #7235 #7245 #7249 #7254 | Small, 1–4 files each. |
 
 ## The migration collision — the one finding here worth acting on
@@ -372,6 +373,81 @@ Also fixed in the ledger while here: #7265 was still listed as a pending Group C
 row long after it merged, and a renumbering had duplicated #7159. The table now
 asserts no merged PR appears as pending and carries no duplicate rows.
 
+## #7166 — merged, closing `stash#7165`: the SECOND mis-ticketed issue, and a real hole
+
+`c71899e7f`. A plugin with a user-configurable backend endpoint had no way to
+allow it — `connect-src` is assembled per plugin, so a host the admin chose was
+silently blocked. With `csp-settings: true`, any `csp_`-prefixed setting holding a
+valid `http`/`https` URL joins that plugin's `connect-src`.
+
+Applied with `--3way`, because #7196 had already turned `media-src` into a slice at
+the same lines and the patch context had moved. `server.go` merged cleanly; the two
+`Plugins.md` conflicts were both **additive** — each side documenting its own field
+in the same `ui:` block and the same paragraph — so both were kept. Upstream's
+`server_test.go` and my `server_csp_test.go` do not collide, by filename.
+
+### The hole
+
+Upstream's wildcard check tested **`u.Host` only**:
+
+    !strings.Contains(u.Host, "*")
+
+so `https://cdn.example.com/*` **passed** — and a path wildcard is a legal CSP
+source expression that matches *every request under that host*. The asterisk one
+character to the right of the host bought the whole subtree.
+
+The lesson is the property, not the case: **a CSP source expression is a prefix
+match, so "the host is exact" was never the property that mattered. "The value is
+exact" is.** A check placed on a *parsed component* while the *emitted text* is the
+original string is only as good as the assumption that the two agree — and here
+they disagreed across the component boundary.
+
+Upstream's own docs already said "a valid, **concrete** `http` or `https` URL", so
+this restores the stated intent rather than narrowing it.
+
+Two smaller fixes: a bare `csp_` key was read as a source (a prefix match with
+nothing behind it — an opt-in that reads as *off* to anyone inspecting the key),
+and `http://.` / `https://..` passed the host checks since `Hostname()` is
+non-empty for both.
+
+### Two tests that assert properties, not examples
+
+A table of example strings is only as complete as whoever wrote it. So:
+
+- the validator refuses **every** character in `" ,	
+;"'"` anywhere in an
+  accepted value — asserted as a *character set*, with a control value asserted
+  accepted first, so the test cannot silently measure nothing
+- the emitted `connect-src` is byte-identical across **200 runs** — an unsorted map
+  iteration would make the header differ per request and bust any proxy or cache
+  that compares it
+
+Mutation-checked, 3 mutations, **each killed by exactly the test written for it**:
+reverting the path-wildcard fix kills `TestWildcardIsRefusedWhereverItAppears`,
+reverting the bare-`csp_` fix kills `TestOnlyTheExactCspPrefixIsRead`, reverting
+the all-dot fix kills `TestConnectSrcValidatorRequiresARealHost`. That one-to-one
+correspondence is the check that the tests are not passing for a shared reason.
+
+## The not-planned audit
+
+`stash#7197` was the first wrong *not-planned* verdict; `stash#7165` is the second.
+So rather than fix them one at a time, the whole R10 not-planned set was swept:
+**131 issues** checked against every open PR in the queue, batched through the
+GitHub API in 6.5s.
+
+**One more hit.** Upstream PR **#7048** (`feat: VR metadata support for VideoFile`,
+17 files, OPEN + MERGEABLE) closes `stash#7071`, also ticketed *not-planned*. That
+is the third instance of the same error, found by the sweep rather than by luck.
+
+`stash#7071` is recorded as closed but **deliberately not merged here**: VR
+metadata is a schema change with no local verification path, so merging it blind
+would be exactly the claim-without-evidence this project exists to prevent.
+
+The sweep is the durable part. A triage verdict is a snapshot of what you knew, and
+the queue is the thing that changes — so **check whether an open PR already closes
+an issue before honouring a not-planned verdict**, and batch the check rather than
+running it per issue.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -383,9 +459,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  8
+merged + committed ...................................  9
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  12
+deferred, mergeable, Group C candidate ...............  11
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
