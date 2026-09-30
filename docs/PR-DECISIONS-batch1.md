@@ -1203,3 +1203,20 @@ declined regardless.
 is a queue, not progress. What makes it more than deferral is that every
 deferral names why it is *safe* to defer and every decline names *which rule* it
 breaks — so the next session re-checks rather than re-derives.
+
+### PR #7267 — MERGED as `aa24b9123` (stash#7266)
+
+"Show a green checkmark when the duration matches", by `smith113-p`. 1 file,
++8/-2, `MERGEABLE`. Found by the completion predicate: the queue had grown to 71
+open PRs and this was the only one with no recorded decision.
+
+**The bug is present in our tree unchanged** — `StashSearchResult.tsx:80` divides
+by `durations.length` with a guard that only bails when the local duration is
+*also* missing, so a duration match with no server fingerprints is `0/0 = NaN` and
+every threshold comparison is false. The red cross is shown for an exact match.
+
+No non-negotiable at risk: it is a one-file display fix that breaks no API, moves
+no data, and adds nothing. The upstream author's diagnosis and fix shape were
+checked against our source before merging, and ours additionally pins the guarded
+half — a mismatch must not be promoted to success, which the upstream change does
+not test for.
