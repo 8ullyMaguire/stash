@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 429 planned, 221 not planned, 25 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 428 planned, 221 not planned, 26 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**429 planned, 221 not planned, 25 closed, 675 total.**
+**428 planned, 221 not planned, 26 closed, 675 total.**
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
 93 marked `deferred`. The table has four status values but the tally has three, so
