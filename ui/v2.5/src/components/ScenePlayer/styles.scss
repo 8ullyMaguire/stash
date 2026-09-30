@@ -18,8 +18,15 @@ $sceneTabWidth: 450px;
     height: 100vh;
   }
 
+  // 177.78vw is 100vw * 16/9, sized from viewport WIDTH with no upper bound, so
+  // on a wide screen the wrapper's box extends far below the visible video (the
+  // video itself is clipped by overflow:hidden, the wrapper is not) and covers
+  // the scene tabs and rating buttons. Cap it at the same bound the container
+  // uses, so the wrapper can never be taller than the player. max-height only
+  // clamps down, so this cannot grow the box or regress a correctly sized video.
   &.portrait .video-wrapper {
     height: 177.78vw;
+    max-height: calc(100vh - #{$menuHeight});
   }
 }
 
