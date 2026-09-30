@@ -26,10 +26,10 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            69e4c171b  [origin/main: ahead 10]     clean
-merged          4 PRs -> 4 issues closed (#7241, #7255, #7180/#7179, #7137/#7136)
+main            5ca4c5806  [origin/main: ahead 12]     clean
+merged          5 PRs -> 4 issues closed (#7241, #7255, #7180/#7179, #7137/#7136, #7265/no issue)
 issue ledgers   16 closed · 93 deferred · 132 not-planned · 434 planned · 675 total
-next PR         #7265
+next PR         #7225
 ```
 
 ## The first action
@@ -41,12 +41,58 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7265** is next (8 files, 4 of them tests; date parsing is pure). One commit, one
+it: **#7225** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 434
 issues, which is weeks.
+
+## Session 5 — #7265 merged (no issue), and a race nobody was looking for
+
+Two commits: `037c9d6d1` (the race) and `5ca4c5806` (the PR). The first is the
+one that matters.
+
+**#7265 closed no issue** — it has no linked one. The first merge this session
+where that is true, so it is said plainly rather than implied as progress.
+
+**The frontend had no test and that is where the work is.** `normalizeDateString`
+is 66 lines in `src/utils/yup.ts`; the UI has no runner at all (no `test`
+script, no jest, no vitest). The backend half arrived tested, the half that
+decides what the user sees arrived untested. Added
+`scripts/test-date-normalisation.mjs` on the `check-country-names.mjs` precedent:
+**107 checks**, including a cross-language one that feeds every accepted string
+to a Go probe — a front end that normalises to something the API rejects has
+*moved* the error, not fixed it.
+
+It cannot import `yup.ts` at all: line 1 imports `FormikErrors`, a type formik
+exports only from its `.d.ts`. `tsc` and `vite build` are clean, so this is node
+being stricter than the project — **not a defect in the file**, and the tempting
+"fix" would address a non-problem. The function is lifted from source text and
+the copy is checked against the original every run.
+
+**The race.** The full suite failed 2 in 18 runs on two `pkg/ffmpeg` tests —
+*"want 12 bytes, got 1"*. Not flaky: `getTranscodeStream`'s stderr goroutine
+called `cmd.Wait()`, which closes the child's pipes, and the handler reads
+stdout as one peeked byte then `io.Copy`. `Wait` landing between them truncated
+every stream to one byte — for MP4, a cut `ftyp` box that downloads fine and will
+not play. Replayed 3000 times: **426 truncated (14%)** with `Wait()` there,
+**0 of 3000** without.
+
+The instructive failure was my own first fix: a `defer` in `getTranscodeStream`
+is scoped to a function that **returns the handler**, so it fired at
+`return handler, nil` and closed stdout before a byte was read — a hard
+`500, body empty` on every run, strictly worse than the race. A defer belongs to
+the function it is written in, not to the work that function sets up.
+
+**Not fully fixed, and the commit says so:** ~0.3% of serves still truncate under
+a 12-worker hammer, where the original failed 5/5 runs. The remaining reaper is
+`LockContext.Cancel` at `pkg/fsutil/lock_manager.go:33` — a second `Wait()` on
+the cancel path, out of scope here. Bisected: 0/1000 at 2 workers, ~0.3% at 12,
+0/1000 with per-serve subtest cleanup.
+
+Gates: suite **6/6 clean**, 35 ok, 0 FAIL (baseline 2-in-18); `-race` on
+`pkg/ffmpeg` ×20 clean; `tsc` clean; 107/107 frontend.
 
 ## Session 4 — #7137 merged, `stash#7136` closed
 
@@ -131,10 +177,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **4** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`) |
+| Merged and committed | **5** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 10, from `02d0d0476` to `69e4c171b` |
+| Commits on `main` | 12, from `02d0d0476` to `5ca4c5806` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
