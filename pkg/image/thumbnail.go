@@ -145,7 +145,7 @@ func (e *ThumbnailEncoder) GetPreview(inPath string, outPath string, maxSize int
 
 func (e *ThumbnailEncoder) ffmpegImageThumbnail(image *bytes.Buffer, maxSize int) ([]byte, error) {
 	options := transcoder.ImageThumbnailOptions{
-		OutputFormat:  ffmpeg.ImageFormatJpeg,
+		OutputFormat:  ffmpeg.ImageFormatWebp,
 		OutputPath:    "-",
 		MaxDimensions: maxSize,
 		Quality:       ffmpegImageQuality,
@@ -159,7 +159,7 @@ func (e *ThumbnailEncoder) ffmpegImageThumbnail(image *bytes.Buffer, maxSize int
 // ffmpegImageThumbnailPath generates a thumbnail from a file path (used for AVIF which can't be piped)
 func (e *ThumbnailEncoder) ffmpegImageThumbnailPath(inputPath string, maxSize int) ([]byte, error) {
 	options := transcoder.ImageThumbnailOptions{
-		OutputFormat:  ffmpeg.ImageFormatJpeg,
+		OutputFormat:  ffmpeg.ImageFormatWebp,
 		OutputPath:    "-",
 		MaxDimensions: maxSize,
 		Quality:       ffmpegImageQuality,

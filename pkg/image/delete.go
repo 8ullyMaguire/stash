@@ -27,6 +27,16 @@ func (d *FileDeleter) MarkGeneratedFiles(image *models.Image) error {
 	if exists {
 		files = append(files, thumbPath)
 	}
+	// The pre-#5850 .jpg thumbnail, if this image was thumbnailed before the
+	// upgrade. Without this it is orphaned on disk when the image is deleted --
+	// a thumbnail that outlives the row describing it and is never reaped.
+	legacyThumb := d.Paths.Generated.GetLegacyThumbnailPath(image.Checksum, models.DefaultGthumbWidth)
+	if legacyThumb != thumbPath {
+		exists, _ = fsutil.FileExists(legacyThumb)
+		if exists {
+			files = append(files, legacyThumb)
+		}
+	}
 	prevPath := d.Paths.Generated.GetClipPreviewPath(image.Checksum, models.DefaultGthumbWidth)
 	exists, _ = fsutil.FileExists(prevPath)
 	if exists {

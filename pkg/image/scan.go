@@ -87,6 +87,37 @@ func (h *ScanHandler) validate() error {
 	return nil
 }
 
+// removeStaleThumbnails deletes the thumbnails belonging to a checksum that is
+// no longer current, so a changed file does not leave its old thumbnail behind.
+//
+// It is a method taking two strings rather than inline in Handle because the
+// decision -- which of two hashes is stale, and whether that is decidable at
+// all -- is the part that can silently regress, and inside Handle it required
+// the whole collaborator set (CreatorUpdater, ScanGenerator, GalleryFinder,
+// PluginCache and a transaction) to reach. A mutation that removed the legacy
+// call here survived every test in the package for exactly that reason: nothing
+// could construct a ScanHandler cheaply enough to drive it.
+//
+// Both the current and the pre-#5850 path are removed. The rename means
+// GetThumbnailPath no longer resolves the old file, so cleaning up only the
+// current path orphans every JPEG written before the upgrade -- which is the
+// same bug one rename ago, and the reason both calls are here rather than one.
+//
+// Removal failures are ignored deliberately: a stale thumbnail is wasted disk,
+// not a correctness problem, and failing the whole scan over it would be worse
+// than the leak it prevents.
+func (h *ScanHandler) removeStaleThumbnails(oldHash, newHash string) {
+	// An empty hash means the fingerprint is missing or unparsed, and two
+	// empties are not evidence that anything changed. Guessing here would
+	// delete a live thumbnail on a file whose hash merely failed to compute.
+	if oldHash == "" || newHash == "" || oldHash == newHash {
+		return
+	}
+
+	_ = os.Remove(h.Paths.Generated.GetThumbnailPath(oldHash, models.DefaultGthumbWidth))
+	_ = os.Remove(h.Paths.Generated.GetLegacyThumbnailPath(oldHash, models.DefaultGthumbWidth))
+}
+
 func (h *ScanHandler) Handle(ctx context.Context, f models.File, oldFile models.File) error {
 	if err := h.validate(); err != nil {
 		return err
@@ -155,13 +186,10 @@ func (h *ScanHandler) Handle(ctx context.Context, f models.File, oldFile models.
 
 	// remove the old thumbnail if the checksum changed - we'll regenerate it
 	if oldFile != nil {
-		oldHash := oldFile.Base().Fingerprints.GetString(models.FingerprintTypeMD5)
-		newHash := f.Base().Fingerprints.GetString(models.FingerprintTypeMD5)
-
-		if oldHash != "" && newHash != "" && oldHash != newHash {
-			// remove cache dir of gallery
-			_ = os.Remove(h.Paths.Generated.GetThumbnailPath(oldHash, models.DefaultGthumbWidth))
-		}
+		h.removeStaleThumbnails(
+			oldFile.Base().Fingerprints.GetString(models.FingerprintTypeMD5),
+			f.Base().Fingerprints.GetString(models.FingerprintTypeMD5),
+		)
 	}
 
 	// do this after the commit so that generation doesn't hold up the transaction

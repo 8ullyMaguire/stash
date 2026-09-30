@@ -68,6 +68,12 @@ func (t *GenerateImageThumbnailTask) Start(ctx context.Context) {
 		logger.Errorf("[generator] writing thumbnail for image %s: %s", path, err.Error())
 		return
 	}
+
+	// Remove the pre-#5850 JPEG thumbnail now that the WebP one exists. Left
+	// alone it would sit in the same sharded directory under a different
+	// extension forever: the task's existence check only looks for the new
+	// name, so nothing would ever revisit it.
+	mgr.Paths.Generated.RemoveLegacyThumbnail(t.Image.Checksum, models.DefaultGthumbWidth)
 }
 
 func (t *GenerateImageThumbnailTask) required() bool {
