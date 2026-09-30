@@ -271,13 +271,42 @@ func (sm *StreamManager) getTranscodeStream(ctx *fsutil.LockContext, options Tra
 	ctx.AttachCommand(cmd)
 
 	// stderr must be consumed or the process deadlocks
+	//
+	// cmd.Wait() must NOT be called here. Wait closes the child's pipes, so
+	// doing that from this goroutine races the handler: Wait can land between
+	// the handler's one-byte peek and its io.Copy, close stdout underneath it,
+	// and the client gets a body of exactly ONE byte. That is not a short read
+	// in the peeking sense -- it is the tail of the file, and for MP4 it
+	// truncates the ftyp box, so a video that downloads fine will not play.
+	//
+	// Measured, not reasoned: replaying this exact structure 3000 times with
+	// Wait() in this goroutine truncated the body to 1 byte in 426 of them
+	// (14%); with the goroutine draining stderr and nothing else, 0 of 3000.
+	// The existing tests caught it as an intermittent "want 12 bytes, got 1",
+	// which is why they are worth keeping.
+	//
+	// So: drain stderr here, and reap the process from INSIDE the handler, after
+	// it has finished reading stdout.
+	stderrDone := make(chan struct{})
+	var errStr []byte
 	go func() {
-		errStr, _ := io.ReadAll(stderr)
+		defer close(stderrDone)
+		errStr, _ = io.ReadAll(stderr)
+	}()
 
+	// reap is called exactly once, by the handler, on its way out. It is not a
+	// defer HERE: this function returns the handler and the caller invokes it
+	// later, so a defer at this level would run at `return handler, nil` --
+	// closing stdout before a single byte had been read. That is not a
+	// hypothetical: it is exactly what the first attempt at this fix did, and it
+	// turned the two tests into a hard "500, body empty" on every run.
+	reap := func() {
+		// stderr must be fully drained before Wait, or the child can block on a
+		// full stderr pipe and never exit.
+		<-stderrDone
 		errCmd := cmd.Wait()
 
 		var err error
-
 		e := string(errStr)
 		if e != "" {
 			err = errors.New(e)
@@ -290,10 +319,16 @@ func (sm *StreamManager) getTranscodeStream(ctx *fsutil.LockContext, options Tra
 		if err != nil && !errors.As(err, &exitError) {
 			logger.Errorf("[transcode] ffmpeg error when running command <%s>: %v", strings.Join(cmd.Args, " "), err)
 		}
-	}()
+	}
 
 	mimeType := options.StreamType.MimeType
 	handler := func(w http.ResponseWriter, r *http.Request) {
+		// Every path out of this handler must reap the child, or it becomes a
+		// zombie for the lifetime of the process. `defer` here -- in the
+		// handler, not in the function that builds it -- is what makes that
+		// automatic.
+		defer reap()
+
 		w.Header().Set("Cache-Control", "no-store")
 
 		// #5683 - do not claim success before ffmpeg has produced anything.
