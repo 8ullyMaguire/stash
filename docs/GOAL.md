@@ -407,6 +407,7 @@ the worst failure a job can have.
 | M5 | P2P downloader **as an installable plugin** (BitTorrent + ed2k + Kademlia) |
 | M6 | The 850 upstream issues, capability by capability |
 | M7 | **The mesh** — federation, discovery, preservation, trust levels, curation, ranking (§6a). Led by `docs/requirements.csv`. |
+| M8 | **The node's content plane** — automatic scan/curate, taste-ranked acquisition with opt-out, content replication at ≥N without leaking an address, and P2P promoted into core. §6b, led by `docs/requirements.csv` R074–R086. |
 
 ## Non-negotiables
 
@@ -437,17 +438,66 @@ the worst failure a job can have.
 10. **Mutation-check the security guards.** Delete the quorum threshold, make
     the opt-out a no-op, remove the traversal guard — each must fail a named
     test. A guard that kills no mutant is not a guard.
-11. **The P2P downloader is a PLUGIN, not core code.** It must install into a
-    stock StashForge the same way any other plugin does — drop a directory
-    containing `source.json` into the configured plugins path, or point the UI
-    at a release URL — with **no rebuild of the main binary and no import from
-    the core tree**. Concretely, which means all of it lives under
-    `pkg/p2pdownloader/` in its own Go module (`go.mod` of its own), the core
-    tree does not import it, and `go build ./...` in the core must still succeed
-    with the plugin directory deleted. If the downloader cannot be removed by
-    deleting a directory, it is core code wearing a plugin's name, and M5 is not
-    done. See the check in non-negotiable #11's test,
-    `TestP2PDownloaderIsNotImportedByCore`.
+11. ~~**The P2P downloader is a PLUGIN, not core code.**~~ **RETRACTED
+    2026-09-30 by owner directive**; the replacement is #11a below. The rule as
+    written was: all of it lives in its own Go module, the core tree does not
+    import it, `go build ./...` in the core succeeds with the plugin directory
+    deleted, and `TestP2PDownloaderIsNotImportedByCore` enforces it. The reason
+    for the retraction, so it is not re-derived: a capability the product is
+    *about* — acquiring content automatically, at the mesh's recommendation —
+    cannot be something a user has to discover, install and trust separately,
+    and a plugin that is merely *configured off* and a feature that is *not
+    there* are different products. The cost is stated in the spec's §6b.8
+    rather than argued around: the downloader is no longer removable by
+    deleting a directory, the binary grows by its size, and a defect in it is
+    now a defect in the product.
+
+    The rule is struck rather than deleted so the retraction is visible in the
+    same place as the rule, and so `TestP2PDownloaderIsNotImportedByCore` reads
+    as a test of a retracted claim rather than a failing build.
+
+11a. **The P2P downloader ships IN CORE, keeping the module boundary and every
+    guard.** "Part of core" means *in the binary and configured in-repo* — NOT
+    merged into the core's import graph. Concretely, all of it still lives under
+    `plugins/p2pdownloader/` in its own Go module; the core tree still does not
+    import its packages; and the core still does not shell out to it as a
+    separate process. The last of those three is the one that matters and it is
+    the one `TestP2PDownloaderIsNotImportedByCore` already checks — a grep for
+    imports alone would pass on a core that bundled the binary, which is the
+    failure mode actually worth excluding. Every guard in the downloader's path
+    (consent gate, storage gate, path sanitiser, upload control, and the
+    `ErrRefusedUpFront` / `ErrRefused` distinction) is retained unchanged and
+    stays mutation-checked under #10 — a guard in core cannot be removed by
+    deleting a directory, so it is permanent, and a permanent guard has to be
+    right. Sharing is opt-out, three states not two: `off` / `fetch_only` /
+    `full`.
+
+12. **Nothing crosses a node boundary that identifies a person or a host.** No
+    path, filename, directory structure, hostname, IP address, username, or
+    session token, in either direction, ever. Enforced on the node by the
+    exporter's path guard *with its positive control*, and on the commons by the
+    receiving-end guard that does not exist yet (`stash-box` R074,
+    `docs/ALIGNMENT.md` §9). A one-sided guard is half a guard.
+
+13. **A replica counts only when its content hash verifies.** Not when a peer
+    says it stored the bytes. Unverified replicas are `pending` and do not count
+    toward N, which is what makes the "at least N nodes" promise true by
+    construction rather than by a peer's honesty.
+
+14. **The content plane never requires two instances to exchange routable
+    addresses.** Stated as a property and tested by probe, not satisfied by
+    naming a technology in the spec.
+
+15. **Opt-out is a hard stop in THREE paths, not one.** The metadata exporter
+    (the original #7), the acquisition queue, and the replication scheduler — in
+    and out. A `denied` object and a consented-out object are never replication
+    subjects, and no preservation bounty overrides a denial.
+
+16. **Automatic curation writes PROPOSALS, never direct writes.** An automatic
+    tag/performer/studio suggestion goes through `collab.Proposer` so it lands
+    in the same audit trail a human's does. An automatic *direct* write is a
+    machine laundering a claim past governance (#5), and it is the reason
+    automatic curation is safe to enable by default.
 
 ## Facts that must not be re-derived (already verified against source)
 
