@@ -54,10 +54,10 @@ re-listing it adds nothing.
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
 ````````````````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (2).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (1).** Listed in Group C.
 
 ```
-#7249 #7254
+#7254
 ````````````````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #7249 #7254 | Next. |
+| 4 | #7254 | Next. |
+| — | **#7249 — DONE** | `57bc44f3c`. 1+0 in one file. `.VideoPlayer.portrait .video-wrapper` was `height: 177.78vw` (100vw×16/9, sized from WIDTH, unbounded) — 3413px on a 1920px screen — and the wrapper's box extended below the visible video, covering the scene tabs and rating buttons; `overflow:hidden` is on the wrapper, so it clips its own video, not itself. Capped at the container's own bound. **I could NOT reproduce the reported overflow from the SCSS as written, and the probe says so rather than implying otherwise**: at ≥1200px the container has a definite `height:100vh` so flex-shrink pulls the item in; below 1200px the height is auto so shrink does not apply, but `overflow:hidden` makes the item's automatic minimum size resolve to ZERO, so it still shrinks. The 3413px figure needs `flex-shrink:0`, which the SCSS does not set — it is 1.7778×1920, arithmetic on the declared value, which is what a fixed multiplier makes easy to produce. The fix rests on what IS established: `max-height` only ever clamps DOWN, so it cannot grow the box or regress a correctly sized video, and it binds as soon as anything prevents the shrink. **Two claims I started with were wrong and measurement killed both**: (1) "`56.25vw` in the base rule has the same defect" — no, it shrinks identically (462 in a 536 container at 1920×600); unbounded-vw is not a bug, the missing shrink is. (2) "`overflow:hidden` proves the click blocker" — the first check reported overflow=0 with the wrapper at 3413px because it measured a FLOW SIBLING, which stacks below and can never overlap. Measuring fixed chrome showed 48px of real overlap; whether a click is eaten then depends on paint order, settled by reading the tree — `SceneLoader` renders `<ScenePage>` first and the player container LAST (Scene.tsx:1045-1079), and the tabs are inside `ScenePage`, so the wrapper is the later sibling and paints over them. `Wall/styles.scss:6` has the same shape and is already capped at 253px — the pattern exists, `ScenePlayer` just lacked it. Landscape left uncapped: measured inert, so the cap would be dead code. |
 | — | **#7245 — DONE** | `374a9e7cf`. **Closes stash#7236** — 1000 scene cards took 215s on Safari vs 2s on Chrome. Two layers: `IntersectionObserver` delivers an INITIAL callback on `observe()` (specified, not incidental), so 1000 cards produce 1000 initial entries and the old `else pause()` called `pause()` once per offscreen card — in WebKit that begins media player setup; and every `<video>` with a src costs player work regardless of `preload=none`. Fixed by `else if (!el.paused) el.pause()` and deferring the src. **Verified in a real browser** (jsdom has no IntersectionObserver and no media stack, so it could not measure any of it) — and **my first probe measured the wrong quantity**: it asserted N callbacks for N observe() calls and got 1, because entries are batched into one callback; ENTRIES are what `entries.forEach` multiplies. Also `ratio=1` for every video, because a src-less `<video>` has no intrinsic size so all 200 collapsed to zero height and intersected. **The fix was half the surface** — `SceneList.tsx:222` branches to `SceneWallPanel` for wall mode and `WallItem` had the identical defect with no virtualisation, so it got the same treatment. **And I shipped a regression first**: setting the src only on hover left `autoPlay={previewType === "video"}` with a permanent undefined src, so wall video mode would render nothing. The harness caught it. |
 | — | **#7235 — DONE** | `3de3de80c`. **Closes stash#7234** — Safari rendered performer details BELOW the picture. A dependency rename the string match never followed: ua-parser-js v2 reports `macOS`, the old code matched `"Mac OS"`, so the substring never occurred and every desktop Safari user got `false`. Verified against the installed package, not the changelog. **Why a util file is a layout bug**: the one call site sets the `apple` class, and index.scss gates the whole layout on `.apple .detail-container { display: flex }`. Also one parse instead of two, and a real `boolean` return instead of `boolean | undefined`. **9 checks driving the real parser**, asserting the premise (the parser says `macOS`, `"Mac OS"` does not match it) and restating the defect independently of the source's shape. **Three fixture bugs produced a FALSE PASS** — ua-parser-js captures `window.navigator` at import time, so rebinding `globalThis.navigator` cannot work and three of six checks failed, which is what a harness measuring nothing looks like. |
 | — | **#7093 — DONE** | `cd19a72ea`. Waits for in-flight queries before `resetStore()`, which cancels them. **Premise confirmed from Apollo's own source**: `QueryManager.clearStore` calls `cancelPendingFetches(newInvariantError(42))` (core.cjs:1554), and `getCurrentResult()` is a pure read of `queryInfo.networkStatus` so the 100ms poll generates no load. **The fix is correct as written, including a placement that looks like a mistake**: `resetQueued = false` sits BEFORE `await client.resetStore()` on purpose — moving it after would coalesce every event arriving during a reset, which is the race being fixed. Upstream's comment justified the coalescing for the wrong reason; rewritten to state the load-bearing invariant so nobody “tidies up” the flag. **16-check probe against a real ApolloClient** (a fake store proves nothing about cancellation), including the reported bug observed: resetting with a query in flight REJECTS it. **Kept rather than declined** despite being draft — the #6824 precedent was 40 files, conflicting, and a schema rewrite, every disqualifier a merit; this is one mergeable file. Four fixture bugs of my own, each reading like a finding about the code. |
@@ -1067,6 +1068,60 @@ matters — sources and `pause()` calls scale with what is **visible**, not with
 the cost the fix deliberately leaves (visible cards still get a player; that is the preview),
 so nobody optimises it back to zero. Verified it fails on both reverts.
 
+## #7249 — merged: a fix I could not reproduce, and the doc says so
+
+`57bc44f3c`, 1+0 in one file. `.VideoPlayer.portrait .video-wrapper` was
+`height: 177.78vw` — 100vw × 16/9, sized from WIDTH with no upper bound — and the
+wrapper's box extended far below the visible video, covering the scene tabs and
+rating buttons. `overflow: hidden` is on the wrapper, so it clips its own video,
+**not itself**.
+
+**The reported overflow does not reproduce from the SCSS as written.** Measured in
+headless Chromium over CDP (jsdom implements neither the cascade, viewport units,
+nor flex overflow), with a faithful transcription of the stylesheet:
+
+- `>= 1200px`: the container gets a *definite* `height: 100vh` from its media
+  query, so `flex-shrink` (default 1) pulls the item back inside — 989 in a 1016
+  container at 1920×1080.
+- `< 1200px`: the container's height is `auto`, so shrink does not apply — but
+  `overflow: hidden` on the wrapper makes the flex item's automatic minimum size
+  (`min-height: auto`) resolve to **zero**, so it still shrinks.
+
+No overflow at 800×600, 900×700, 1100×800, 1440×800 or 1920×1080. The **3413px**
+figure appears only with `flex-shrink: 0`, which the SCSS does not set — and
+`1.7778 × 1920` is arithmetic on the declared value, exactly what a fixed
+multiplier makes easy to produce.
+
+**The fix still rests on what IS established**, which is enough: `max-height` only
+ever **clamps down**, so it cannot grow the box and cannot regress a correctly
+sized video (verified: capped ≤ uncapped in every state; inert wherever flexbox
+already fits), and it binds as soon as anything prevents the shrink.
+
+### Two claims I started with were wrong, and measurement killed both
+
+1. *"`56.25vw` in the base rule has the same defect, smaller multiplier."* No — it
+   is a flex item too and shrinks identically (462 in a 536 container at
+   1920×600). **Unbounded-vw-from-width is not by itself a bug**; the missing
+   ingredient is the missing shrink.
+2. *"`overflow: hidden` on the wrapper proves the click blocker."* The first
+   overlap check reported `overflow=0` **with the wrapper at 3413px**, because it
+   measured a **flow sibling** — which stacks below the wrapper and can never
+   overlap it. The elements the report names are *fixed page chrome*. Measuring
+   the right thing showed 48px of genuine overlap; whether a **click** is eaten
+   then depends on paint order, settled by reading the tree rather than guessing:
+   `SceneLoader` renders `<ScenePage>` first and the `scene-player-container`
+   **last** (`Scene.tsx:1045-1079`), and the tabs (`Scene.tsx:699`, with
+   `RatingSystem` at 724) live inside `ScenePage` — so the wrapper is the later
+   sibling and paints over them.
+
+`Wall/styles.scss:6` uses the same `height: 11.25vw` shape and is already capped at
+`max-height: 253px`: **the pattern exists in this codebase**, `ScenePlayer` just
+lacked it. Landscape stays uncapped on purpose — measured inert, so a cap there
+would be dead code.
+
+Kept `ui/v2.5/scripts/probe-portrait-cap.mjs` (19 checks) in the repo alongside the
+#7245 DOM probe.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -1078,9 +1133,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  18
+merged + committed ...................................  19
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  2
+deferred, mergeable, Group C candidate ...............  1
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70

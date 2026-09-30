@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            374a9e7cf  [origin/main: ahead 39]     clean
-merged          18 PRs -> 11 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+main            57bc44f3c  [origin/main: ahead 45]     clean
+merged          19 PRs -> 11 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
                 #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue, #7235/stash#7234, #7245/stash#7236)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7249
+next PR         #7254
 ```
 
 ## The first action
@@ -42,12 +42,48 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7249** is next. One commit, one
+it: **#7254** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 19 — #7249 merged: a fix I could not reproduce, and said so
+
+`57bc44f3c`, 1+0 in one file. `.VideoPlayer.portrait .video-wrapper` was
+`height: 177.78vw` (100vw × 16/9, sized from WIDTH, unbounded) — 3413px on a
+1920px screen — covering the scene tabs and rating buttons. Capped at the
+container's own bound.
+
+**The reported overflow does not reproduce from the SCSS as written.** Headless
+Chromium over CDP with a faithful transcription: at ≥1200px the container has a
+definite `height:100vh` so flex-shrink pulls the item in (989 in a 1016 container
+at 1920×1080); below 1200px the height is auto so shrink does not apply, but
+`overflow:hidden` makes the item's automatic minimum size resolve to **zero**, so
+it still shrinks. No overflow at any of five viewports. The 3413px needs
+`flex-shrink:0`, which the SCSS does not set — and 1.7778 × 1920 is arithmetic on
+the declared value, which is what a fixed multiplier makes easy to produce.
+
+**The fix is still sound, on what is established:** `max-height` only ever clamps
+DOWN, so it cannot grow the box or regress a correctly sized video, and it binds
+as soon as anything prevents the shrink — the reporter's environment, and the case
+I cannot reproduce here.
+
+**Two claims I started with were wrong and measurement killed both.** (1) "`56.25vw`
+in the base rule has the same defect" — no, it shrinks identically (462 in a 536
+container at 1920×600); unbounded-vw is not the bug, the missing shrink is. (2)
+"`overflow:hidden` proves the click blocker" — the first check reported overflow=0
+with the wrapper at 3413px, because it measured a **flow sibling**, which stacks
+below and can never overlap. Measuring fixed chrome showed 48px of real overlap;
+whether a *click* is eaten then depends on paint order, settled by reading the
+tree: `SceneLoader` renders `<ScenePage>` first and the player container **last**
+(`Scene.tsx:1045-1079`), and the tabs live inside `ScenePage`, so the wrapper is
+the later sibling and paints over them.
+
+`Wall/styles.scss:6` has the same `height: 11.25vw` shape and is already capped at
+253px — the pattern exists in this codebase, `ScenePlayer` just lacked it. Landscape
+left uncapped: measured inert, so a cap there would be dead code.
 
 ## Session 18 — #7245 merged: closes stash#7236, and the fix was half the surface
 
@@ -638,10 +674,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **18** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`, `#7245` → `stash#7236`) |
+| Merged and committed | **19** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`, `#7245` → `stash#7236`; `#7249` no linked issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 39, from `02d0d0476` to `374a9e7cf` |
+| Commits on `main` | 40, from `02d0d0476` to `57bc44f3c` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that
