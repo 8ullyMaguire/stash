@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            5d699a4b4  [origin/main: ahead 27]     clean
-merged          12 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue)
+main            921edd649  [origin/main: ahead 29]     clean
+merged          13 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7181
+next PR         #7252
 ```
 
 ## The first action
@@ -42,12 +42,48 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7181** is next. One commit, one
+it: **#7252** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 13 — #7181 merged: a bump that was not a no-op, and vacuous tests
+
+`921edd649`, no linked issue. gorilla/websocket 1.5.0 → 1.5.3.
+
+**`go mod verify` is the wrong check** — it only validates the local cache, proving
+internal consistency and nothing about provenance. Both hashes were verified against
+sum.golang.org instead. The `/go.mod` hash is *identical* across the two versions
+(correct for a patch bump) while the `h1:` zip hash differs, which is what confirms a
+genuine content change rather than a relabel.
+
+Also worth knowing: v1.5.3's changelog is **identical** to v1.5.2's and opens with a
+revert notice — 1.5.2 shipped and was withdrawn two days earlier.
+
+**It changes behaviour on our one line.** Three of the four changed files are
+additive; the fourth is ours: `challengeKey == ""` becomes
+`!isValidChallengeKey(...)`, so 1.5.0 accepted **any non-empty** key and 1.5.3
+requires base64 decoding to 16 bytes. "It compiles" says nothing about that.
+
+**8 tests added, and the first draft was vacuous.** The `Dialer` **generates its own**
+`Sec-WebSocket-Key`, so passing one in a header map creates a **duplicate** and the
+dial fails *before the server's validation is reached* — every rejection test passed
+for the wrong reason. It surfaced only because `TestAValidChallengeKeyIsAccepted`
+also failed: a valid key cannot be refused by a server that is genuinely validating.
+**That is what a control test is for.** The key is now injected on a raw socket by
+writing the RFC 6455 handshake by hand, which is the only way to reach the check.
+
+**Verified the suite detects the old dependency:** `go get @v1.5.0` fails all five
+invalid-key cases with `status = 101, want 400`. The tests pin the version's
+behaviour, not the shape of our code.
+
+One detail recorded rather than stumbled on: on the rejection path the client's
+`resp` is nil, because gorilla writes the 400 from inside `Upgrade` after the dial has
+given up — so `resp.StatusCode` reads 0. Wrapping the ResponseWriter to capture
+`WriteHeader` is worse: the handler is on another goroutine, so reading its variable
+after the dial returns is a data race.
 
 ## Session 12 — #7261 merged: three Makefile lines, and the check that mattered
 
@@ -437,10 +473,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **12** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue) |
+| Merged and committed | **13** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 27, from `02d0d0476` to `5d699a4b4` |
+| Commits on `main` | 29, from `02d0d0476` to `921edd649` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

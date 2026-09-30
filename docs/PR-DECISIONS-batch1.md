@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-``````````````````````````````
+`````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (8).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (7).** Listed in Group C.
 
 ```
-#6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254
-``````````````````````````````
+#6917 #7093 #7235 #7245 #7249 #7252 #7254
+`````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-``````````````````````````````
+`````````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #6917 #7093 #7181 #7235 #7245 #7249 #7252 #7254 | Next. |
+| 4 | #6917 #7093 #7235 #7245 #7249 #7252 #7254 | Next. |
+| — | **#7181 — DONE** | `921edd649`. gorilla/websocket 1.5.0 -> 1.5.3, go.mod/go.sum exactly as upstream sent them (`go mod tidy` leaves both untouched) and both hashes checked against sum.golang.org. **Not a no-op**: server.go changes `challengeKey == ""` to `!isValidChallengeKey(...)`, so 1.5.0 accepted any non-empty key and 1.5.3 requires base64 decoding to 16 bytes. **8 tests added** — the transport had zero coverage. The first draft was **vacuous**: the Dialer generates its own Sec-WebSocket-Key, so passing one in a header map made a *duplicate* and every rejection test passed for the wrong reason — caught only because the valid-key control failed too. Key now injected on a raw socket. Verified against the old dep: `go get @v1.5.0` fails all five with `status = 101, want 400`. |
 | — | **#7261 — DONE** | `5d699a4b4`. Merged with the two eval'd names changed to `BUILD_HOST_OS`/`BUILD_HOST_ARCH` — upstream assigns `GOOS`/`GOARCH`, which every `build-cc-*` target exports target-locally, so it is harmless today but a global `GOOS :=` would be silently overwritten and the build would target the host while reporting success. Verified end to end: the stamp `linux amd64 2026-09-30 20:35:52` is in the linked binary. Closes nothing — no linked issue. |
 
 ## The migration collision — the one finding here worth acting on
@@ -621,6 +622,65 @@ Nothing in the Go suite would catch that, so it was checked directly:
 at parse time only when the target is invoked — so a probe that does not depend on
 it sees an **empty** `BUILD_DATE` and looks like the stamp is broken. It is not.
 
+## #7181 — merged: a dependency bump that was not a no-op, and tests that were vacuous
+
+`921edd649`. gorilla/websocket 1.5.0 → 1.5.3, `go.mod`/`go.sum` exactly as upstream
+sent them, `go mod tidy` leaving both untouched.
+
+**Supply chain first, and the obvious check is the wrong one.** `go mod verify`
+only validates the local cache — internal consistency, nothing about provenance.
+The hashes were checked against sum.golang.org instead, and both match. The
+`/go.mod` hash is *identical* between the two versions (correct for a patch bump)
+while the `h1:` zip hash differs, which is what confirms this is a real content
+change rather than a relabel.
+
+Worth recording about the release: v1.5.3's changelog is **identical** to v1.5.2's
+and opens with "This reverts the websockets package back to 931041c5" — 1.5.2
+shipped two days earlier and was withdrawn. 1.5.3 is the good one.
+
+### It does change behaviour on our one line of usage
+
+Our whole surface is `Upgrader{CheckOrigin: func(*http.Request) bool { return true }}`
+with no subprotocols. Of the four files that differ, three are additive (a new
+`isValidChallengeKey`, `NetConn()`, a client-side TLS error message). The fourth is
+ours:
+
+    -if challengeKey == "" { ...400... }
+    +if !isValidChallengeKey(challengeKey) { ...400... }
+
+1.5.0 accepted **any non-empty** `Sec-WebSocket-Key`; 1.5.3 requires base64 decoding
+to 16 bytes. So "it compiles" says nothing about whether the bump is safe here.
+
+### The first draft of the tests was vacuous, and the control caught it
+
+The transport had **zero** coverage, so 8 tests were added. They were wrong at
+first: the websocket `Dialer` **generates its own** `Sec-WebSocket-Key`, so passing
+one in a header map creates a **duplicate header**, and the dial fails *before the
+server's validation is reached*. Every rejection test was passing because of the
+duplicate, not because of the check.
+
+It surfaced through `TestAValidChallengeKeyIsAccepted` also failing — a valid key
+cannot be refused by a server that is genuinely validating. **That is what a control
+test is for**, and it is the reason it was written rather than assumed.
+
+The fix is to inject the key at the socket: write the RFC 6455 opening handshake on
+a raw `net.Conn` with exactly one key of the chosen value. The Dialer will not let
+you supply the header, so this is the only way to reach the server's check.
+
+### The check that matters for a version bump
+
+**Does the suite detect the OLD dependency?** `go get ...@v1.5.0` makes all five
+invalid-key cases fail with `status = 101, want 400` — 1.5.0 genuinely accepts
+every one of them. The tests pin the version's behaviour rather than the shape of
+our code, which is the only thing that makes a bump verifiable.
+
+One detail recorded rather than discovered by accident: on the rejection path the
+client's `resp` is **nil**, because gorilla writes the 400 from inside `Upgrade`
+after the dial has given up, so `resp.StatusCode` reads 0. Capturing `WriteHeader`
+on a wrapped `ResponseWriter` does not fix it — the handler is on another
+goroutine, so reading its variable after the dial returns is a data race. The raw
+handshake path returns the status directly, which is why it is the one used.
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -632,9 +692,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  12
+merged + committed ...................................  13
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  8
+deferred, mergeable, Group C candidate ...............  7
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
