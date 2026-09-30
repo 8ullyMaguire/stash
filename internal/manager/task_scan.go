@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,10 +50,20 @@ func (j *ScanJob) Execute(ctx context.Context, progress *job.Progress) error {
 		return nil
 	}
 
-	sp := getScanPaths(input.Paths)
+	sp, skipped := getScanPaths(input.Paths)
 	paths := make([]string, len(sp))
 	for i, p := range sp {
 		paths[i] = p.Path
+	}
+
+	// A requested path that matched no configured library is skipped rather than
+	// rejected (see getScanPaths), but it is NOT dropped in silence: a scan of a
+	// superset of paths would otherwise report success while quietly ignoring the
+	// entries it could not honour, and nothing in the job or the response would
+	// say so. Report it here, where the request is still identifiable.
+	if len(skipped) > 0 {
+		logger.Warnf("Skipping %d requested path(s) not in any configured library: %s",
+			len(skipped), strings.Join(skipped, ", "))
 	}
 
 	mgr := GetInstance()

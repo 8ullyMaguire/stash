@@ -14,27 +14,19 @@ import (
 // and `queueFiles` SymWalks whatever paths it is given. The obstacle is
 // `getScanPaths`, the gate every requested path passes through first.
 //
-// WHAT IS ESTABLISHED HERE, and it is characterisation, not a fix.
+// stash#6457, clause (a): "scan in file(s)". THE DEFECT WAS SILENCE, NOT THE
+// SKIP.
 //
-// A requested path is mapped to a configured stash library with
-// `GetStashFromDirPath`. When that returns nil the path is `continue`d --
-// logged at Warn and dropped -- so the caller gets a SHORTER list and no error.
-// `metadataScan(paths: ["/tmp/incoming.mp4"])` returns a job ID and scans
-// nothing, and a MIXED request loses entries invisibly while the job reports
-// success.
+// getScanPaths maps each requested path to a configured library with
+// GetStashFromDirPath. A path matching none is skipped -- correctly, since
+// `paths` has always been a filter over configured libraries and erroring would
+// break scripted callers that pass a superset. But the skipped path was then
+// discarded, so a request naming one valid and one invalid path returned a job
+// ID, scanned the valid one, and reported success, with nothing anywhere
+// recording that the other was never looked at.
 //
-// WHETHER THAT IS A DEFECT IS NOT SETTLED BY THIS FILE, and these tests
-// deliberately assert the CURRENT behaviour so the choice is visible rather
-// than baked in silently. They are characterisation tests: the first two would
-// go RED if the drop were changed to an error, which is what they are FOR --
-// they pin the exact semantic a decision would have to replace. Every other
-// test here is a positive control that must keep passing under either choice.
-//
-// The open question is recorded in docs/UPSTREAM-ISSUES.md for #6457: is
-// "ignore a path outside every configured library" lenient-by-design, or is
-// silence the wrong answer? Turning it into an error is a BEHAVIOUR CHANGE that
-// could break scripted clients relying on the lenient reading, so it is the
-// owner's call, not one to ship inside an issue-closing commit.
+// The fix returns the skipped paths so the caller can report them. The skip
+// stays lenient; only the silence goes.
 //
 // ON THE FILE-vs-DIRECTORY QUESTION, which I checked rather than assumed:
 // `getScanPaths` calls `GetStashFromDirPath(p)` on the path AS GIVEN. Despite
@@ -56,28 +48,30 @@ func withStashLibraries(t *testing.T, paths ...string) {
 	t.Cleanup(func() { config.InitializeEmpty() })
 }
 
-// CHARACTERISATION: a path outside every configured library is dropped, and the
-// caller has no way to tell. Inverts if the drop becomes an error.
-func TestGetScanPathsDropsAnUnconfiguredPath(t *testing.T) {
+// THE FIX: a path outside every configured library is still skipped, but it is
+// REPORTED. This fails if the skipped path is discarded, which is the bug.
+func TestGetScanPathsReportsAnUnconfiguredPath(t *testing.T) {
 	withStashLibraries(t, "/library/a")
 
-	got := getScanPaths([]string{"/tmp/incoming.mp4"})
+	got, skipped := getScanPaths([]string{"/tmp/incoming.mp4"})
 
-	assert.Empty(t, got,
-		"an explicitly requested path must not vanish: the caller named it, and a dropped "+
-			"path is indistinguishable from a scanned one in the response")
+	assert.Empty(t, got, "nothing is scanned for a path in no library")
+	assert.Equal(t, []string{"/tmp/incoming.mp4"}, skipped,
+		"a requested path must be REPORTED, not silently dropped: the caller named it, and "+
+			"a dropped path is indistinguishable from a scanned one in the response")
 }
 
-// CHARACTERISATION: a MIX is the dangerous shape, and it is what a real caller
-// produces -- one path scanned, one silently lost, job reports success.
-func TestGetScanPathsMixedRequestIsSilentlyShortened(t *testing.T) {
+// A MIX is the dangerous shape, and it is what a real caller produces: one path
+// scanned, one skipped, job reports success. Both halves must be visible.
+func TestGetScanPathsMixedRequestReportsOnlyTheSkippedPath(t *testing.T) {
 	withStashLibraries(t, "/library/a")
 
-	got := getScanPaths([]string{"/library/a/one.mp4", "/tmp/two.mp4"})
+	got, skipped := getScanPaths([]string{"/library/a/one.mp4", "/tmp/two.mp4"})
 
-	require.Len(t, got, 1)
+	require.Len(t, got, 1, "the valid path is still scanned -- the fix must not make this an error")
 	assert.Equal(t, "/library/a/one.mp4", got[0].Path)
-	t.Logf("asked for 2 paths, got %d, and nothing tells the caller which was dropped", len(got))
+	assert.Equal(t, []string{"/tmp/two.mp4"}, skipped,
+		"and the caller can now tell which of the two it asked for was not honoured")
 }
 
 // POSITIVE CONTROL. Without it, a getScanPaths that returned nil for EVERY input
@@ -86,7 +80,8 @@ func TestGetScanPathsMixedRequestIsSilentlyShortened(t *testing.T) {
 func TestGetScanPathsEmptyRequestScansEveryLibrary(t *testing.T) {
 	withStashLibraries(t, "/library/a", "/library/b")
 
-	got := getScanPaths(nil)
+	got, skipped := getScanPaths(nil)
+	require.Empty(t, skipped, "nothing is skipped when the request is empty")
 
 	require.Len(t, got, 2, "an empty request means everything, so the drop is distinguishable")
 }
@@ -97,7 +92,8 @@ func TestGetScanPathsEmptyRequestScansEveryLibrary(t *testing.T) {
 func TestGetScanPathsAcceptsAFilePathInsideALibrary(t *testing.T) {
 	withStashLibraries(t, "/library/a")
 
-	got := getScanPaths([]string{"/library/a/sub/clip.mp4"})
+	got, skipped := getScanPaths([]string{"/library/a/sub/clip.mp4"})
+	require.Empty(t, skipped, "a path inside a library is not skipped")
 
 	require.Len(t, got, 1, "clause (a): a single file inside a library is scannable")
 	assert.Equal(t, "/library/a/sub/clip.mp4", got[0].Path,
@@ -111,7 +107,8 @@ func TestGetScanPathsNarrowedLibraryKeepsParentSettings(t *testing.T) {
 	cfg.SetInterface(config.Stash, config.StashConfigs{{Path: "/library/a", ExcludeVideo: true}})
 	t.Cleanup(func() { config.InitializeEmpty() })
 
-	got := getScanPaths([]string{"/library/a/sub/clip.mp4"})
+	got, skipped := getScanPaths([]string{"/library/a/sub/clip.mp4"})
+	require.Empty(t, skipped, "a path inside a library is not skipped")
 
 	require.Len(t, got, 1)
 	assert.True(t, got[0].ExcludeVideo, "the narrowed copy must inherit the parent's settings")
@@ -124,7 +121,8 @@ func TestGetScanPathsNarrowedLibraryKeepsParentSettings(t *testing.T) {
 func TestGetScanPathsPrefersTheMostSpecificLibrary(t *testing.T) {
 	withStashLibraries(t, "/library", "/library/a/deep")
 
-	got := getScanPaths([]string{"/library/a/deep/x"})
+	got, skipped := getScanPaths([]string{"/library/a/deep/x"})
+	require.Empty(t, skipped)
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "/library/a/deep/x", got[0].Path)
@@ -136,7 +134,9 @@ func TestGetScanPathsPrefersTheMostSpecificLibrary(t *testing.T) {
 func TestGetScanPathsDoesNotMatchOnAPrefixSibling(t *testing.T) {
 	withStashLibraries(t, "/library/a")
 
-	got := getScanPaths([]string{"/library/abc/clip.mp4"})
+	got, skipped := getScanPaths([]string{"/library/abc/clip.mp4"})
 
 	assert.Empty(t, got, "a prefix sibling is outside the library")
+	assert.Equal(t, []string{"/library/abc/clip.mp4"}, skipped,
+		"and it is REPORTED as skipped, rather than vanishing")
 }

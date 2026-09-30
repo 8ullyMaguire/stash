@@ -50,18 +50,41 @@ func isImage(pathname string) bool {
 	return fsutil.MatchExtension(pathname, imgExt)
 }
 
-func getScanPaths(inputPaths []string) []*config.StashConfig {
+// getScanPaths maps the requested scan paths onto the configured stash
+// libraries, narrowing each to the path that was actually asked for.
+//
+// A requested path that is not inside any configured library is SKIPPED, not an
+// error. That is deliberate: `metadataScan`'s `paths` has always been a filter
+// over configured libraries, and turning the skip into an error would break
+// scripted callers that pass a superset and rely on the lenient reading.
+// stash#6457 asked to "scan in file(s), add metadata on scan" and did not ask
+// for a new error.
+//
+// But silent was wrong, and it was wrong in a way a caller cannot detect: a
+// request naming one valid and one invalid path returned a job ID, scanned the
+// valid one, and reported success -- with nothing anywhere recording that the
+// other was never looked at. So the skipped paths are RETURNED rather than
+// discarded. The caller (ScanJob.Execute) reports them; this function stays
+// lenient and testable, and the log line is no longer the only record.
+//
+// On the file-vs-directory question, which the name gets wrong: the path is
+// passed to GetStashFromDirPath AS GIVEN. IsPathInDir is a filepath.Rel test,
+// not a prefix test, so a FILE inside a library matches and a prefix sibling
+// such as /library/abc does not.
+func getScanPaths(inputPaths []string) (config.StashConfigs, []string) {
 	stashPaths := config.GetInstance().GetStashPaths()
 
 	if len(inputPaths) == 0 {
-		return stashPaths
+		return stashPaths, nil
 	}
 
 	var ret config.StashConfigs
+	var skipped []string
 	for _, p := range inputPaths {
 		s := stashPaths.GetStashFromDirPath(p)
 		if s == nil {
 			logger.Warnf("%s is not in the configured stash paths", p)
+			skipped = append(skipped, p)
 			continue
 		}
 
@@ -71,7 +94,7 @@ func getScanPaths(inputPaths []string) []*config.StashConfig {
 		ret = append(ret, &ss)
 	}
 
-	return ret
+	return ret, skipped
 }
 
 // Filters the input array for paths that are within the paths managed by stash
