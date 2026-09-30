@@ -100,6 +100,9 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 		// a list of tmp files used during the preview generation
 		var tmpFiles []string
 
+		// segments that are actually usable; tmpFiles becomes this (stash#7229)
+		var usableFiles []string
+
 		// remove tmpFiles when done
 		defer func() { removeFiles(tmpFiles) }()
 
@@ -134,6 +137,25 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 			if err := g.previewVideoChunk(lockCtx, input, chunkOptions, fallback, useVsync2); err != nil {
 				return err
 			}
+
+			// stash#7229. ffmpeg exits 0 for a range that contains no video frames
+			// and still leaves a file behind, so a chunk that cannot go into the
+			// concat is dropped here rather than being allowed to poison it.
+			// Dropping it from BOTH lists matters: the concat list must not name a
+			// file the reader will not find, and tmpFiles is what gets cleaned up.
+			if g.segmentIsUsable(chunkFile.Name()) {
+				usableFiles = append(usableFiles, chunkFile.Name())
+			} else {
+				logger.Warnf("[generator] Preview segment %d (%s) has no video stream, skipping it.", i, filepath.Base(chunkFile.Name()))
+			}
+		}
+		tmpFiles = usableFiles
+
+		// A file whose video stream starts after the container claims can have EVERY
+		// segment unusable -- there are no frames at all in the requested range.
+		// Producing an empty preview would look like success, so this is an error.
+		if len(usableFiles) == 0 {
+			return fmt.Errorf("no preview segment contained a video stream; the video stream may start after the container start time")
 		}
 
 		// generate concat file based on generated video chunks
@@ -219,6 +241,44 @@ func (g Generator) previewVideoChunk(lockCtx *fsutil.LockContext, fn string, opt
 	args := transcoder.Transcode(fn, trimOptions)
 
 	return g.generate(lockCtx, args)
+}
+
+// segmentIsUsable reports whether a generated preview chunk can go into the concat
+// list.
+//
+// stash#7229. A file whose container reports start_time 0 while its video stream
+// starts later -- HandBrake preserving an offset from the original recording, where
+// audio began first -- has no frames before the offset. Segment positions come from
+// the CONTAINER duration, so the first segment is cut at t=0 and the last overruns
+// the real end of the video.
+//
+// ffmpeg treats seeking into a frameless range as a clean no-op: it exits 0 and
+// writes a small file. Measured against ffmpeg 9.0.1, the segment at t=0 came out
+// as 261 bytes containing NO streams -- and it did so identically with -xerror, so
+// the XError option cannot catch it, because there is no warning to escalate. That
+// is also why the fallback path failed the same way: fallback only changes SlowSeek
+// and drops XError.
+//
+// The file then poisons the concat. The demuxer takes the stream layout from the
+// FIRST entry of the list, so one stream-less segment aborts the whole preview with
+// "Output file does not contain any stream" even though every other segment encoded
+// correctly.
+//
+// A size check is not sufficient -- 261 bytes is not 0 -- so the file is probed and
+// required to have a video stream.
+func (g Generator) segmentIsUsable(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil || fi.Size() == 0 {
+		return false
+	}
+
+	vf, err := g.FFProbe.NewVideoFile(path)
+	if err != nil {
+		logger.Warnf("[generator] Probing preview segment %q failed, skipping it: %v", filepath.Base(path), err)
+		return false
+	}
+
+	return vf.VideoCodec != ""
 }
 
 func (g Generator) generateConcatFile(chunkFiles []string) (fn string, err error) {

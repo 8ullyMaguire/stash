@@ -58,6 +58,7 @@ func (t *GenerateCoverTask) Start(ctx context.Context) {
 
 	g := generate.Generator{
 		Encoder:      instance.FFMpeg,
+		FFProbe:      instance.FFProbe,
 		FFMpegConfig: instance.Config,
 		LockManager:  instance.ReadLockManager,
 		ScenePaths:   instance.Paths.Scene,

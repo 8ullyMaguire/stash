@@ -125,6 +125,7 @@ func (j *GenerateJob) Execute(ctx context.Context, progress *job.Progress) error
 
 		g := &generate.Generator{
 			Encoder:      instance.FFMpeg,
+			FFProbe:      instance.FFProbe,
 			FFMpegConfig: instance.Config,
 			LockManager:  instance.ReadLockManager,
 			MarkerPaths:  instance.Paths.SceneMarkers,

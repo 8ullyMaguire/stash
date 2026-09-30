@@ -51,7 +51,10 @@ type FFMpegConfig interface {
 }
 
 type Generator struct {
-	Encoder      *ffmpeg.FFMpeg
+	Encoder *ffmpeg.FFMpeg
+	// FFProbe is used to reject generated preview segments that contain no video
+	// stream, which would otherwise poison the concat list (stash#7229).
+	FFProbe      *ffmpeg.FFProbe
 	FFMpegConfig FFMpegConfig
 	LockManager  *fsutil.ReadLockManager
 	MarkerPaths  MarkerPaths

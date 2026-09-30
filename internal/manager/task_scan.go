@@ -876,6 +876,7 @@ func (g *sceneGenerators) Generate(ctx context.Context, s *models.Scene, f *mode
 
 			generator := &generate.Generator{
 				Encoder:      mgr.FFMpeg,
+				FFProbe:      mgr.FFProbe,
 				FFMpegConfig: mgr.Config,
 				LockManager:  mgr.ReadLockManager,
 				MarkerPaths:  g.paths.SceneMarkers,
