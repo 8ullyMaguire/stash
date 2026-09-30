@@ -232,6 +232,7 @@ export const SettingsInterfacePanel: React.FC = PatchComponent(
             <option value="es-ES">Español (España)</option>
             <option value="sk-SK">Slovenčina (Preview)</option>
             <option value="sv-SE">Svenska</option>
+            <option value="sw-KE">Kiswahili (Kenya)</option>
             <option value="tr-TR">Türkçe (Türkiye)</option>
             <option value="th-TH">ภาษาไทย (ไทย)</option>
             <option value="uk-UA">Ukrainian (Україна)</option>

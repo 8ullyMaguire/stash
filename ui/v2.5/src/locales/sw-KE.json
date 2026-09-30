@@ -1,0 +1,1758 @@
+{
+  "actions": {
+    "add": "Ongeza",
+    "add_directory": "Ongeza saraka",
+    "add_entity": "Ongeza {entityType}",
+    "add_manual_date": "Ongeza tarehe ya kawaida",
+    "add_sub_groups": "Ongeza Sub-Groups",
+    "add_o": "Ongeza O",
+    "add_play": "Ongeza kucheza",
+    "add_stash_id": "Ongeza Stash ID",
+    "add_to_entity": "Ongeza kwenye {entityType}",
+    "allow": "Ruhusu",
+    "allow_temporarily": "Ruhusu kwa muda",
+    "anonymise": "Ficha utambulisho",
+    "apply": "Tumia",
+    "assign_stashid_to_parent_studio": "Penia Stash ID kwa studio kuu iliyopo na sasisha metadata",
+    "auto_tag": "Auto tag",
+    "backup": "Hifadhi nakala",
+    "browse_for_image": "Tafuta picha…",
+    "cancel": "Ghairi",
+    "choose_date": "Chagua tarehe",
+    "clean": "Safisha",
+    "clean_generated": "Safisha faili zilizotengenezwa",
+    "clear": "Futa",
+    "clear_back_image": "Futa picha ya nyuma",
+    "clear_date_data": "Futa data ya tarehe",
+    "clear_front_image": "Futa picha ya mbele",
+    "clear_image": "Futa picha",
+    "close": "Funga",
+    "confirm": "Thibitisha",
+    "continue": "Endelea",
+    "copy_to_clipboard": "Nakili kwenye clipboard",
+    "create": "Tengeneza",
+    "create_chapters": "Tengeneza Sura",
+    "create_entity": "Tengeneza {entityType}",
+    "create_marker": "Tengeneza Marker",
+    "create_new": "Tengeneza mpya",
+    "create_parent_studio": "Tengeneza studio kuu",
+    "create_parent_tag": "Tengeneza tag kuu",
+    "created_entity": "Imetengenezwa {entity_type}: {entity_name}",
+    "customise": "Badilisha kwa kawaida",
+    "delete": "Futa",
+    "delete_entity": "Futa {entityType}",
+    "delete_file": "Futa faili",
+    "delete_file_and_funscript": "Futa faili (na funscript)",
+    "delete_generated_supporting_files": "Futa faili za msaidizi zilizotengenezwa",
+    "disable": "Lemaza",
+    "disallow": "Marufuku",
+    "download": "Pakua",
+    "download_anonymised": "Pakua bila utambulisho",
+    "download_backup": "Pakua nakala ya dhibiti",
+    "edit": "Hariri",
+    "edit_entity": "Hariri {entityType}",
+    "enable": "Wezesha",
+    "encoding_image": "Inakubisha picha…",
+    "exclude_lowercase": "ondoa",
+    "export": "Hamisha nje",
+    "export_all": "Hamisha nje yote…",
+    "find": "Pata",
+    "finish": "Maliza",
+    "from_clipboard": "Kutoka clipboard",
+    "from_file": "Kutoka faili…",
+    "from_url": "Kutoka URL…",
+    "full_export": "Hamisha nje yote",
+    "full_import": "Hamisha ndani yote",
+    "generate": "Tengeneza",
+    "generate_thumb_default": "Tengeneza thumbnail ya kawaida",
+    "generate_thumb_from_current": "Tengeneza thumbnail kutoka ya sasa",
+    "hash_migration": "uhamishaji wa hash",
+    "hide": "Ficha",
+    "hide_configuration": "Ficha Mipangilio",
+    "identify": "Tambua",
+    "ignore": "Puuza",
+    "import": "Hamisha ndani…",
+    "import_from_file": "Hamisha ndani kutoka faili",
+    "load": "Pakia",
+    "load_filter": "Pakia filter",
+    "logout": "Toka",
+    "make_primary": "Fanya kuu",
+    "merge": "Unganisha",
+    "migrate_blobs": "Hamisha blobs",
+    "migrate_scene_screenshots": "Hamisha screenshots za scene",
+    "next_action": "Inayofuata",
+    "not_running": "haifanyi kazi",
+    "open_in_external_player": "Fungua kwenye player ya nje",
+    "open_random": "Fungua ya nasibu",
+    "optimise_database": "Boresha database",
+    "overwrite": "Andika juu",
+    "play": "Cheza",
+    "play_random": "Cheza ya nasibu",
+    "play_selected": "Cheza iliyochaguliwa",
+    "preview": "Hakikisho",
+    "previous_action": "Nyuma",
+    "reassign": "Kabidhi upya",
+    "refresh": "Onyesha upya",
+    "reload": "Pakia upya",
+    "reload_plugins": "Pakia upya plugins",
+    "reload_scrapers": "Pakia upya scrapers",
+    "remove": "Ondoa",
+    "remove_date": "Ondoa tarehe",
+    "remove_from_containing_group": "Ondoa kutoka Group",
+    "remove_from_gallery": "Ondoa kutoka Gallery",
+    "rename_gen_files": "Badilisha jina la faili zilizotengenezwa",
+    "reveal_in_file_manager": "Onesha kwenye File Manager",
+    "rescan": "Skanishi upya",
+    "reset_play_duration": "Weka upya muda wa kucheza",
+    "reset_resume_time": "Weka upya muda wa kuendelea",
+    "reset_cover": "Rejesha Cover ya kawaida",
+    "reshuffle": "Panga upya nasibu",
+    "running": "inafanya kazi",
+    "save": "Hifadhi",
+    "save_and_new": "Hifadhi & Mpya",
+    "save_delete_settings": "Tumia chaguo hizi kwa kawaida wakati wa kufuta",
+    "save_filter": "Hifadhi filter",
+    "scan": "Skanishi",
+    "scrape": "Scrape",
+    "scrape_query": "Scrape swali",
+    "scrape_scene_fragment": "Scrape kwa sehemu",
+    "scrape_with": "Scrape kwa…",
+    "search": "Tafuta",
+    "select_all": "Chagua zote",
+    "select_directory": "Chagua saraka",
+    "select_entity": "Chagua {entityType}",
+    "select_folders": "Chagua saraka",
+    "select_none": "Chagua Hakuna",
+    "invert_selection": "Geuza Uteuzi",
+    "selective_auto_tag": "Auto tag ya kuchaguliwa",
+    "selective_clean": "Safisha ya kuchaguliwa",
+    "selective_generate": "Tengeneza ya kuchaguliwa",
+    "selective_scan": "Skanishi ya kuchaguliwa",
+    "set_as_default": "Weka kama kawaida",
+    "set_as_performer_image": "Weka kama picha ya performer",
+    "set_back_image": "Picha ya nyuma…",
+    "set_cover": "Weka kama Cover",
+    "set_front_image": "Picha ya mbele…",
+    "set_image": "Weka picha…",
+    "show": "Onesha",
+    "show_configuration": "Onesha Mipangilio",
+    "show_results": "Onesha matokeo",
+    "show_count_results": "Onesha matokeo {count}",
+    "sidebar": {
+      "close": "Funga upau wa kando",
+      "open": "Fungua upau wa kando",
+      "toggle": "Geuza upau wa kando"
+    },
+    "skip": "Ruka",
+    "split": "Gawanya",
+    "stop": "Simamisha",
+    "submit": "Wasilisha",
+    "submit_stash_box": "Wasilisha kwa Stash-Box",
+    "submit_update": "Wasilisha sasisho",
+    "swap": "Badilisha",
+    "tasks": {
+      "clean_confirm_message": "Una uhakika unataka kusafisha? HiiOne itafuta taarifa za database na maudhui yaliyotengenezwa kwa scenes zote na galleries ambazo hazipatikani tena kwenye filesystem.",
+      "dry_mode_selected": "Hali ya Dry imewashwa. Hakuna kufuta kweli kitatokea, ni kumbukumbu tu.",
+      "import_warning": "Una uhakika unataka kuhama ndani? Hii itafuta database na kuhama ndani kutoka metadata yako iliyohamishwa nje."
+    },
+    "temp_disable": "Lemaza kwa muda…",
+    "temp_enable": "Wezesha kwa muda…",
+    "unset": "Haijawekwa",
+    "use_default": "Tumia ya kawaida",
+    "view_history": "Tazama historia",
+    "view_random": "Tazama ya nasibu"
+  },
+  "actions_name": "Vitendo",
+  "age": "Umri",
+  "age_on_date": "{age} wakati wa uzalishaji",
+  "aliases": "Majina mengine",
+  "all": "yote",
+  "also_known_as": "Pia anajulikana kama",
+  "appears_with": "Anaonekana na",
+  "ascending": "Kupanda",
+  "audio_codec": "Codec ya Sauti",
+  "average_resolution": "Resolution ya Wastani",
+  "between_and": "na",
+  "birth_year": "Mwaka wa Kuzaliwa",
+  "birthdate": "Tarehe ya kuzaliwa",
+  "bitrate": "Kasi ya bit",
+  "blobs_storage_type": {
+    "database": "Database",
+    "filesystem": "Filesystem"
+  },
+  "captions": "Manukuu",
+  "career_end": "Mwisho wa Kazi",
+  "career_length": "Muda wa Kazi",
+  "career_start": "Mwanzo wa Kazi",
+  "chapters": "Sura",
+  "circumcised": "Aliyekatwa",
+  "circumcised_types": {
+    "CUT": "Aliyekatwa",
+    "UNCUT": "Asiyekatwa"
+  },
+  "component_tagger": {
+    "config": {
+      "active_instance": "Kifupio cha stash-box cha sasa:",
+      "blacklist_desc": "Vitu vya blacklist vimeondolewa kwenye maswali. Kumbuka kwamba ni regular expressions na pia ni case-insensitive. Herufi fulani lazima zitorolewe kwa backslash: {chars_require_escape}",
+      "blacklist_label": "Blacklist",
+      "errors": {
+        "blacklist_duplicate": "Kitu kilichoondolewa cha blacklist"
+      },
+      "mark_organized_desc": "Alama scene mara moja kama Imepangwa baada ya kitufe cha Hifadhi kubofywa.",
+      "mark_organized_label": "Tia alama ya Imepangwa wakati wa kuhifadhi",
+      "performer_genders": {
+        "heading": "Jinsia za performers",
+        "description": "Performers wa jinsia hizi wataonyeshwa wakati wa kutaga scenes."
+      },
+      "query_mode_auto": "Otomatiki",
+      "query_mode_auto_desc": "Inatumia metadata kama ipo, au jina la faili",
+      "query_mode_dir": "Saraka",
+      "query_mode_dir_desc": "Inatumia tu saraka ya juu ya faili ya video",
+      "query_mode_filename": "Jina la faili",
+      "query_mode_filename_desc": "Inatumia tu jina la faili",
+      "query_mode_label": "Hali ya Swali",
+      "query_mode_metadata": "Metadata",
+      "query_mode_metadata_desc": "Inatumia tu metadata",
+      "query_mode_path": "Njia",
+      "query_mode_path_desc": "Inatumia njia yote ya faili",
+      "set_cover_desc": "Badilisha cover ya scene kama moja imepatikana.",
+      "set_cover_label": "Weka picha ya cover ya scene",
+      "set_tag_desc": "Ambatisha tags kwenye scene, aidha kwa kuandika juu au kuunganisha na tags zilizopo kwenye scene.",
+      "set_tag_label": "Weka tags",
+      "source": "Chanzo"
+    },
+    "noun_query": "Swali",
+    "results": {
+      "duration_off": "Muda umetofautiana kwa angalau sekunde {number}",
+      "duration_unknown": "Muda haijulikani",
+      "fp_found": "{fpCount, plural, =0 {Hakuna alama za vidole jipya zilizopatikana} other {# alama za vidole jipya zimepatikana}}",
+      "fp_matches": "Muda unalingana",
+      "fp_matches_multi": "Muda unalingana na alama za vidole {matchCount}/{durationsLength}",
+      "hash_matches": "{count, plural, one {# ulizio wa {hash_type}} other {# ulizio za {hash_type}}}",
+      "hash_submissions": "{count} wasilisho",
+      "match_failed_already_tagged": "Scene imeshatagiwa",
+      "match_failed_no_result": "Hakuna matokeo yaliyopatikana",
+      "match_success": "Scene imetagiwa kwa mafanikio",
+      "unnamed": "Bila jina"
+    },
+    "verb_add_as_alias": "Ongeza jina lililotolewa kama alias",
+    "verb_link_existing": "Unganisha na iliyopo",
+    "verb_match_fp": "Linganisha Alama za Vidole",
+    "verb_match_tag": "Linganisha Tag",
+    "verb_matched": "Imelinganishwa",
+    "verb_scrape_all": "Scrape Zote",
+    "verb_scrape_selected": "Scape Zilizochaguliwa",
+    "verb_submit_fp": "Wasilisha {fpCount, plural, one{# Alama ya Vidole} other{# Alama za Vidole}}",
+    "verb_toggle_config": "{toggle} {configuration}",
+    "verb_toggle_unmatched": "{toggle} scenes zisizolinganishwa"
+  },
+  "config": {
+    "about": {
+      "build_hash": "Hash ya build:",
+      "build_time": "Muda wa build:",
+      "check_for_new_version": "Kagua toleo jipya",
+      "latest_version": "Toleo la Karibuni",
+      "latest_version_build_hash": "Hash ya build ya toleo la karibuni:",
+      "new_version_notice": "[MPYA]",
+      "release_date": "Tarehe ya toleo:",
+      "stash_home": "Tembelea Stash kwenye {url}.",
+      "stash_wiki": "Angalia tovuti ya Stash {url}.",
+      "stash_community": "Jiunge na {forumUrl} yetu au server ya jamii ya {discordUrl}.",
+      "support_us": "Tungeunga mkono kupitia {openCollectiveUrl} au {githubSponsorsUrl}.",
+      "version": "Toleo"
+    },
+    "advanced_mode": "Hali ya kiwango cha juu",
+    "application_paths": {
+      "heading": "Njia za Programu"
+    },
+    "categories": {
+      "about": "Kuhusu",
+      "changelog": "Changelog",
+      "interface": "Interface",
+      "logs": "Kumbukumbu",
+      "metadata_providers": "Watoaji wa Metadata",
+      "plugins": "Plugins",
+      "scraping": "Scraping",
+      "security": "Usalama",
+      "services": "Huduma",
+      "system": "System",
+      "tasks": "Kazi",
+      "tools": "Zana"
+    },
+    "changelog": {
+      "header": "Changelog"
+    },
+    "dlna": {
+      "allow_temp_ip": "Ruhusu {tempIP}",
+      "allowed_ip_addresses": "Anuani za IP zilizoruhusiwa",
+      "allowed_ip_temporarily": "IP iliruhusiwa kwa muda",
+      "default_ip_whitelist": "Orodha ya IP za kawaida zenye ruhusa",
+      "default_ip_whitelist_desc": "Anuani za IP za kawaida zenye ruhusa ya kufikia DLNA. Tumia {wildcard} kuruhusu anuani zote za IP.",
+      "disabled_dlna_temporarily": "DLNA imelemazwa kwa muda",
+      "disallowed_ip": "IP haijaruhusiwa",
+      "enabled_by_default": "Imewashwa kwa kawaida",
+      "enabled_dlna_temporarily": "DLNA imewashwa kwa muda",
+      "network_interfaces": "Interfaces",
+      "network_interfaces_desc": "Interfaces za kufichua server ya DLNA. Orodha wazi inasababisha kuendesha kwenye interfaces zote. Inahitaji kuanzisha upya DLNA baada ya kubadilisha.",
+      "recent_ip_addresses": "Anuani za IP za hivi karibuni",
+      "server_display_name": "Jina la kuonyesha la server",
+      "server_display_name_desc": "Jina la kuonyesha kwa server ya DLNA. Kwa kawaida ni {server_name} kama wazi.",
+      "server_port": "Port ya server",
+      "server_port_desc": "Port ya kuendesha server ya DLNA. Inahitaji kuanzisha upya DLNA baada ya kubadilisha.",
+      "successfully_cancelled_temporary_behaviour": "Imefuta kwa mafanikio tabia ya muda",
+      "until_restart": "hadi kuanzisha upya",
+      "video_sort_order": "Mpangilio wa kawaida wa video",
+      "video_sort_order_desc": "Mpangilio wa kupanga video kwa kawaida."
+    },
+    "general": {
+      "auth": {
+        "api_key": "API key",
+        "api_key_desc": "API key kwa mifumo ya nje. Inahitajika tu wakati jina la mtumiaji/nenosiri kimewekwa. Jina la mtumiaji lazima lihifadhiwe kabla ya kutengeneza API key.",
+        "authentication": "Uthibitisho",
+        "clear_api_key": "Futa API key",
+        "credentials": {
+          "description": "Vitambulisho vya kuzuia ufikiaji wa Stash.",
+          "heading": "Vitambulisho"
+        },
+        "generate_api_key": "Tengeneza API key",
+        "log_file": "Faili ya kumbukumbu",
+        "log_file_desc": "Njia ya faili ya kutoa kumbukumbu. Wazi kulemaza kumbukumbu ya faili. Inahitaji kuanzisha upya.",
+        "log_http": "Kumbuka ufikiaji wa HTTP",
+        "log_http_desc": "Kumbuka ufikiaji wa HTTP kwenye terminal. Inahitaji kuanzisha upya.",
+        "log_to_terminal": "Kumbuka kwenye terminal",
+        "log_to_terminal_desc": "Kumbuka kwenye terminal pamoja na faili. Daima kweli kama kumbukumbu ya faili imelemazwa. Inahitaji kuanzisha upya.",
+        "log_file_max_size": "Ukubwa wa juu wa kumbukumbu",
+        "log_file_max_size_desc": "Ukubwa wa juu kwa megabaiti wa faili ya kumbukumbu kabla ya kubanwa. 0MB inalemaza. Inahitaji kuanzisha upya.",
+        "maximum_session_age": "Muda wa juu wa session",
+        "maximum_session_age_desc": "Muda wa juu wa kutopumba kabla ya session ya kuingia kumalizika, katika sekunde. Inahitaji kuanzisha upya.",
+        "password": "Nenosiri",
+        "password_desc": "Nenosiri kwa kufikia Stash. Acha wazi kulemaza uthibitisho wa mtumiaji",
+        "stash-box_integration": "Ujumuishaji wa Stash-box",
+        "username": "Jina la mtumiaji",
+        "username_desc": "Jina la mtumiaji kwa kufikia Stash. Acha wazi kulemaza uthibitisho wa mtumiaji"
+      },
+      "backup_directory_path": {
+        "description": "Eneo la saraka ya hifadhi nakala za faili ya database ya SQLite.",
+        "heading": "Njia ya saraka ya hifadhi nakala"
+      },
+      "delete_trash_path": {
+        "description": "Njia ambapo faili zilizofutwa zitahamishiwa badala ya kufutwa kabisa. Acha wazi kufuta faili kabisa.",
+        "heading": "Njia ya takataka"
+      },
+      "blobs_path": {
+        "description": "Wapi kwenye filesystem kuhifadhi data ya binary. Inatumika tu wakati unatumia aina ya hifadhi ya Filesystem blob. ONYO: kubadilisha hii kunahitaji kuhamisha kwa kawaida data iliyopo.",
+        "heading": "Njia ya filesystem ya data ya binary"
+      },
+      "blobs_storage": {
+        "description": "Wapi kuhifadhi data ya binary kama vile cover za scene, picha za performer, studio na tag. Baada ya kubadilisha thamani hii, data iliyopo lazima ihamishiwe kwa kutumia kazi za Migrate blobs. Angalia ukurasa wa Tasks kwa uhamishaji.",
+        "heading": "Aina ya hifadhi ya data ya binary"
+      },
+      "cache_location": "Eneo la saraka ya cache. Inahitajika kama unatumia HLS (kama kwenye vifaa vya Apple) au DASH.",
+      "cache_path_head": "Njia ya cache",
+      "calculate_md5_and_ohash_desc": "Hesabu ukandishi wa MD5 pamoja na oshash. Kuwashesha kutasababisha skanishi za mwanzo kuwa polepole. Hash ya kuunda faili lazima iwekwe kuwa oshash kulemaza hesabu ya MD5.",
+      "calculate_md5_and_ohash_label": "Hesabu MD5 kwa videos",
+      "check_for_insecure_certificates": "Kagua vyeti visivyo salama",
+      "check_for_insecure_certificates_desc": "Baadhi ya tovuti zinatumia vyeti vya SSL visivyo salama. Ukitotia alama scraper inapuuza ukaguzi wa vyeti visivyo salama na inaruhusu scraping ya tovuti hizi. Kama unapata hitilafu ya cheti wakati wa scraping ondoa alama hii.",
+      "chrome_cdp_path": "Njia ya Chrome CDP",
+      "chrome_cdp_path_desc": "Njia ya faili ya kutekeleza Chrome, au anuani ya mbali (ikianza na http:// au https://, kwa mfano http://localhost:9222/json/version) kwa kifupio cha Chrome.",
+      "create_galleries_from_folders_desc": "Kama kweli, huunda galleries kutoka saraka zenye picha kwa kawaida. Tengeneza faili iitwayo .forcegallery au .nogallery kwenye saraka ili kubadilisha mpangilio huu.",
+      "create_galleries_from_folders_label": "Tengeneza galleries kutoka saraka zenye picha",
+      "database": "Database",
+      "db_path_head": "Njia ya database",
+      "directory_locations_to_your_content": "Eneo la saraka kwa maudhui yako",
+      "excluded_image_gallery_patterns_desc": "Regexps za faili/njia za picha na gallery za kuondoa kutoka Scan na kuongeza kwa kazi za Clean.",
+      "excluded_image_gallery_patterns_head": "Mirubo ya picha/gallery iliyoondolewa",
+      "excluded_video_patterns_desc": "Regexps za faili/njia za video za kuondoa kutoka Scan na kuongeza kwa kazi za Clean.",
+      "excluded_video_patterns_head": "Mirubo ya video iliyoondolewa",
+      "ffmpeg": {
+        "download_ffmpeg": {
+          "description": "Inapakua FFmpeg kwenye saraka ya usanidi nainafuta njia za ffmpeg na ffprobe ili kupata kutoka saraka ya usanidi.",
+          "heading": "Pakua FFmpeg"
+        },
+        "ffmpeg_path": {
+          "description": "Njia ya kutekeleza ffmpeg (sio saraka tu). Kama wazi, ffmpeg itapatikana kutoka mazingira kupitia $PATH, saraka ya usanidi, au kutoka $HOME/.stash.",
+          "heading": "Njia ya kutekeleza FFmpeg"
+        },
+        "ffprobe_path": {
+          "description": "Njia ya kutekeleza ffprobe (sio saraka tu). Kama wazi, ffprobe itapatikana kutoka mazingira kupitia $PATH, saraka ya usanidi, au kutoka $HOME/.stash.",
+          "heading": "Njia ya kutekeleza FFprobe"
+        },
+        "hardware_acceleration": {
+          "desc": "Inatumia hardware inayopatikana kuencode video kwa transcode ya live.",
+          "heading": "FFmpeg hardware encoding"
+        },
+        "live_transcode": {
+          "input_args": {
+            "desc": "Juu: Hoja za ziada za kumpa ffmpeg kabla ya sehemu ya ingizo wakati wa kutengeneza transcode ya live ya video.",
+            "heading": "Hoja za ingizo za FFmpeg live transcode"
+          },
+          "output_args": {
+            "desc": "Juu: Hoja za ziada za kumpa ffmpeg kabla ya sehemu ya matokeo wakati wa kutengeneza transcode ya live ya video.",
+            "heading": "Hoja za matokeo ya FFmpeg live transcode"
+          }
+        },
+        "transcode": {
+          "input_args": {
+            "desc": "Juu: Hoja za ziada za kumpa ffmpeg kabla ya sehemu ya ingizo wakati wa kutengeneza video.",
+            "heading": "Hoja za ingizo za FFmpeg transcode"
+          },
+          "output_args": {
+            "desc": "Juu: Hoja za ziada za kumpa ffmpeg kabla ya sehemu ya matokeo wakati wa kutengeneza video.",
+            "heading": "Hoja za matokeo ya FFmpeg transcode"
+          }
+        }
+      },
+      "default_marker_preview_duration_desc": "Muda (sekunde) kwa hakikisho za marker bila muda wa mwisho. Lazima uwe mkubwa kuliko 0.",
+      "default_marker_preview_duration_head": "Muda wa kawaida wa hakikisho ya marker",
+      "funscript_heatmap_draw_range": "Jumuisha kiasi kwenye heatmaps zilizotengenezwa",
+      "funscript_heatmap_draw_range_desc": "Chora kiasi cha mwendo kwenye mhimili wa y ya heatmap iliyotengenezwa. Heatmaps zilizopo zitahitaji kutengenezwa upya baada ya kubadilisha.",
+      "gallery_cover_regex_desc": "Regexps zinazotumika kutambua picha kama cover ya gallery.",
+      "gallery_cover_regex_label": "Mfumo wa cover ya gallery",
+      "gallery_ext_desc": "Orodha iliyotenganishwa kwa koma ya nyongeza za faili zitakazotambuliwa kama faili za ZIP za gallery.",
+      "gallery_ext_head": "Nyongeza za ZIP za gallery",
+      "generated_file_naming_hash_desc": "Tumia MD5 au oshash kwa kuunda majina ya faili zilizotengenezwa. Kubadilisha hii kunahitaji kila scene kuwa na thamani ya MD5/oshash inayofaa. Baada ya kubadilisha thamani hii, faili zilizotengenezwa zilizopo zitahitaji kuhamishiwa au kutengenezwa upya. Angalia ukurasa wa Tasks kwa uhamishaji.",
+      "generated_file_naming_hash_head": "Hash ya kuunda faili zilizotengenezwa",
+      "generated_files_location": "Eneo la saraka kwa faili zilizotengenezwa (scene markers, scene previews, sprites, n.k.).",
+      "generated_path_head": "Njia iliyotengenezwa",
+      "hashing": "Hashing",
+      "heatmap_generation": "Utengenezzi wa Funscript Heatmap",
+      "image_ext_desc": "Orodha iliyotenganishwa kwa koma ya nyongeza za faili zitakazotambuliwa kama picha.",
+      "image_ext_head": "Nyongeza za picha",
+      "include_audio_desc": "Inajumuisha stream ya sauti wakati wa kutengeneza hakikisho.",
+      "include_audio_head": "Jumuisha sauti",
+      "logging": "Kumbukumbu",
+      "max_marker_preview_duration_desc": "Muda wa juu zaidi (sekunde) kwa hakikisho za marker. 0 inalemaza kikomo.",
+      "max_marker_preview_duration_head": "Muda wa juu zaidi wa hakikisho ya marker",
+      "maximum_streaming_transcode_size_desc": "Ukubwa wa juu zaidi kwa streams zilizotranscode.",
+      "maximum_streaming_transcode_size_head": "Ukubwa wa juu zaidi wa transcode ya streaming",
+      "maximum_transcode_size_desc": "Ukubwa wa juu zaidi kwa transcodes zilizotengenezwa.",
+      "maximum_transcode_size_head": "Ukubwa wa juu zaidi wa transcode",
+      "metadata_path": {
+        "description": "Eneo la saraka litumikalo wakati wa kufanya uhamishaji nje au ndani yote.",
+        "heading": "Njia ya metadata"
+      },
+      "number_of_parallel_task_for_scan_generation_desc": "Weka 0 kwa auto-detection. Onyo: kuendesha kazi nyingi zaidi kuliko inavyohitajika kufikia 100% ya matumizi ya CPU kutasawiriisha utendaji na huenda ikasababisha changamoto zingine.",
+      "number_of_parallel_task_for_scan_generation_head": "Idadi ya kazi sambamba kwa scan/tengeneza",
+      "parallel_scan_head": "Scan/Tengeneza Sambamba",
+      "plugins_path": {
+        "description": "Eneo la saraka ya faili za usanidi za plugin.",
+        "heading": "Njia ya plugins"
+      },
+      "preview_generation": "Tengeneza Hakikisho",
+      "python_path": {
+        "description": "Njia ya kutekeleza python (sio saraka tu). Inatumika kwa script scrapers na plugins. Kama wazi, Python itapatikana kutoka mazingira.",
+        "heading": "Njia ya kutekeleza Python"
+      },
+      "scraper_user_agent": "User-Agent ya Scraper",
+      "scraper_user_agent_desc": "Tungo ya User-Agent inayotumika wakati wa maombi ya HTTP ya scrape.",
+      "scrapers_path": {
+        "description": "Eneo la saraka ya faili za usanidi za scraper.",
+        "heading": "Njia ya scrapers"
+      },
+      "scraping": "Scraping",
+      "sprite_generation_head": "Tengeneza Sprite",
+      "sprite_interval_desc": "Muda kati ya kila sprite iliyotengenezwa katika sekunde.",
+      "sprite_interval_head": "Muda wa sprite",
+      "sprite_maximum_desc": "Idadi ya juu ya sprites zitakazotengenezwa kwa scene. Weka 0 kulemaza kikomo.",
+      "sprite_maximum_head": "Sprites za juu zaidi",
+      "sprite_minimum_desc": "Idadi ya chini ya sprites zitakazotengenezwa kwa scene",
+      "sprite_minimum_head": "Sprites za chini zaidi",
+      "sprite_screenshot_size_desc": "Ukubwa unaotakikana wa kila sprite katika pixels.",
+      "sprite_screenshot_size_head": "Ukubwa wa sprite",
+      "sqlite_location": "Eneo la faili ya database ya SQLite (inahitaji kuanzisha upya). ONYO: kuhifadhi database kwenye mfumo tofauti na wako Stash server inaendeshwa (mfano: kupitia mtandao) haijatibishwa!",
+      "use_custom_sprite_interval_head": "Tumia muda wa kawaida wa sprite",
+      "use_custom_sprite_interval_desc": "Wezesha muda wa kawaida wa sprite kulingana na mipangilio hapa chini.",
+      "video_ext_desc": "Orodha iliyotenganishwa kwa koma ya nyongeza za faili zitakazotambuliwa kama videos.",
+      "video_ext_head": "Nyongeza za video",
+      "video_head": "Video"
+    },
+    "library": {
+      "exclusions": "Utoleaji",
+      "gallery_and_image_options": "Chaguo za Gallery na Picha",
+      "media_content_extensions": "Nyongeza za Maudhui ya Midia"
+    },
+    "logs": {
+      "log_level": "Kiwango cha kumbukumbu"
+    },
+    "plugins": {
+      "available_plugins": "Plugins Zinazopatikana",
+      "hooks": "Hooks",
+      "installed_plugins": "Plugins Zilizosakishwa",
+      "triggers_on": "Husisimua kwenye"
+    },
+    "scraping": {
+      "available_scrapers": "Scrapers Zinazopatikana",
+      "entity_metadata": "Metadata ya {entityType}",
+      "entity_scrapers": "scrapers za {entityType}",
+      "excluded_tag_patterns_desc": "Regexps za majina ya tag za kuondoa kutoka matokeo ya scraping.",
+      "excluded_tag_patterns_head": "Mirubo ya tag iliyoondolewa",
+      "installed_scrapers": "Scrapers Zilizosakishwa",
+      "scraper": "Scraper",
+      "scrapers": "Scrapers",
+      "search_by_name": "Tafuta kwa jina",
+      "supported_types": "Aina zilizotibishwa",
+      "supported_urls": "URLs"
+    },
+    "stashbox": {
+      "add_instance": "Ongeza kifupio cha stash-box",
+      "api_key": "API key",
+      "description": "Stash-box inarahisisha kutagia otomatiki kwa scenes na performers kulingana na alama za vidole na majina ya faili.\nEndpoint na API key yanaweza kupatikana kwenye ukurasa wa akaunti yako kwenye kifupio cha stash-box. Majina yanahitajika wakati kifupio zaidi ya kimoja kimeongezwa.",
+      "endpoint": "Endpoint",
+      "graphql_endpoint": "GraphQL endpoint",
+      "max_requests_per_minute": "Maombi ya juu kwa dakika",
+      "max_requests_per_minute_description": "Inatumia thamani ya kawaida ya {defaultValue} kama imewekwa 0",
+      "name": "Jina",
+      "title": "Endpoints za Stash-box"
+    },
+    "system": {
+      "transcoding": "Transcoding"
+    },
+    "tasks": {
+      "added_job_to_queue": "Imeongeza {operation_name} kwenye foleni ya kazi",
+      "anonymise_and_download": "Inatengeneza nakala isiyo na utambulisho wa database na kupakua faili inayofuata.",
+      "anonymise_database": "Inatengeneza nakala ya database kwenye saraka ya hifadhi nakala, ikificha data nyeti yote. Hii inaweza kutolewa kwa wengine kwa ajili ya kutatua changamoto na kufuatilia makosa. Database ya asili haijabadilishwa. Database isiyo na utambulisho inatumia umbizo la jina la faili {filename_format}.",
+      "anonymising_database": "Inaficha utambulisho wa database",
+      "auto_tag": {
+        "auto_tagging_all_paths": "Auto tag njia zote",
+        "auto_tagging_paths": "Auto tag njia zifuatazo",
+        "disable_warning": {
+          "description": "Lemaza onyo la uthibitisho linaloonyeshwa kabla ya kuendesha auto tag.",
+          "heading": "Lemaza onyo la auto tag"
+        }
+      },
+      "auto_tag_based_on_filenames": "Auto tag maudhui kulingana na njia za faili.",
+      "auto_tag_confirm": "Hii itajaribu kulinganisha maudhui yako na metadata iliyopo.",
+      "auto_tag_warning": "Mchakato huu hauwezi kurudishwa na unaweza kutoa ulizio zisizo sahihi.",
+      "auto_tagging": "Auto tagging",
+      "backing_up_database": "Kuhifadhi nakala ya database",
+      "backup_and_download": "Inafanya hifadhi nakala ya database na kupakua faili inayofuata.",
+      "backup_database": {
+        "description": "Inafanya hifadhi nakala ya database na faili za blob.",
+        "destination": "Lengo",
+        "download": "Pakua hifadhi nakala",
+        "include_blobs": "Jumuisha blobs kwenye hifadhi nakala",
+        "include_blobs_desc": "Lemaza kuhifadhi nakala faili ya database ya SQLite tu.",
+        "sqlite": "Faili ya hifadhi nakala itakuwa nakala ya faili ya database ya SQLite, ikiwa na jina la faili {filename_format}",
+        "to_directory": "Kwenye {directory}",
+        "warning_blobs": "Faili za blob hazitajumuishwa kwenye hifadhi nakala. Hii inamaanisha kwamba kurejesha kwa mafanikio kutoka hifadhi nakala, faili za blob lazima ziwepo kwenye eneo la hifadhi ya blob.",
+        "zip": "Faili ya database ya SQLite na faili za blob zitazipwa kwenye faili moja, ikiwa na jina la faili {filename_format}"
+      },
+      "cleanup_desc": "Kagua faili zisizopo na kuziondoa kutoka database. Hii ni kitendo cha kuharibu.",
+      "clean_ignore_zip_contents": "Puuza maudhui ya faili ya zip",
+      "clean_ignore_zip_contents_desc": "Haraka zaidi lakini itakosa faili zilizoondolewa ndani ya faili za zip. Salama kuwashesha kama hufuti faili ndani ya zip.",
+      "clean_generated": {
+        "blob_files": "Faili za blob",
+        "description": "Inaondoa faili zilizotengenezwa bila ingizo la database linalofaa.",
+        "image_thumbnails": "Thumbnails za picha",
+        "image_thumbnails_desc": "Thumbnails na klipu za picha",
+        "markers": "Hakikisho za marker",
+        "previews": "Hakikisho za scene",
+        "previews_desc": "Hakikisho na thumbnails za scene",
+        "sprites": "Sprites za scene",
+        "transcodes": "Transcodes za scene"
+      },
+      "data_management": "Usimamizi wa data",
+      "defaults_set": "Chaguo za kawaida zimewekwa na zitatumika wakati wa kubofya kitufe cha {action} kwenye ukurasa wa Tasks.",
+      "dont_include_file_extension_as_part_of_the_title": "Usijumuishe nyongeza ya faili kama sehemu ya jina",
+      "empty_queue": "Hakuna kazi zinazoendelea kwa sasa.",
+      "export_to_json": "Inahamisha nje maudhui ya database kwenye umbizo la JSON kwenye saraka ya metadata.",
+      "generate": {
+        "generating_from_paths": "Inatengeneza kwa scenes kutoka njia zifuatazo",
+        "generating_scenes": "Inatengeneza kwa {num} {scene}"
+      },
+      "generate_clip_previews_during_scan": "Tengeneza hakikisho kwa klipu za picha",
+      "generate_desc": "Tengeneza faili za picha, sprite, video, vtt na zingine za msaidizi.",
+      "generate_image_phashes_during_scan": "Tengeneza hash za utambuzi wa picha",
+      "generate_image_phashes_during_scan_tooltip": "Kwa ajili ya kuondoa nakala na kutambua.",
+      "generate_phashes_during_scan": "Tengeneza hash za utambuzi wa video",
+      "generate_phashes_during_scan_tooltip": "Kwa ajili ya kuondoa nakala na kutambua scene.",
+      "generate_previews_during_scan": "Tengeneza hakikisho za picha zilizohuishwa",
+      "generate_previews_during_scan_tooltip": "Pia tengeneza hakikisho (webp) zilizohuishwa, zinahitajika tu wakati aina ya Scene/Marker Wall Preview imewekwa kuwa Animated image. Zinatumia CPU kidogo kuliko hakikisho za video wakati wa kuvinjari, lakini hutengenezwa pamoja nazo na ni faili kubwa zaidi.",
+      "generate_sprites_during_scan": "Tengeneza sprites za kusokwa",
+      "generate_sprites_during_scan_tooltip": "Seti ya picha inayoonyeshwa chini ya player ya video kwa urambazaji rahisi.",
+      "generate_thumbnails_during_scan": "Tengeneza thumbnails kwa picha",
+      "generate_video_covers_during_scan": "Tengeneza cover za scene",
+      "generate_video_previews_during_scan": "Tengeneza hakikisho",
+      "generate_video_previews_during_scan_tooltip": "Tengeneza hakikisho za video zinazochezwa wakati wa kuelea juu ya scene",
+      "generated_content": "Maudhui Yaliyotengenezwa",
+      "identify": {
+        "and_create_missing": "na tengeneza yaliyokosekana",
+        "create_missing": "Tengeneza yaliyokosekana",
+        "default_options": "Chaguo za Kawaida",
+        "description": "Weka otomatiki metadata ya scene ukitumia vyanzo vya stash-box na scraper.",
+        "explicit_set_description": "Chaguo zifuatazo zitatumika popote hazijabatilishwa kwenye chaguo za kipekee za chanzo.",
+        "field": "Sehemu",
+        "field_behaviour": "{strategy} {field}",
+        "field_options": "Chaguo za Sehemu",
+        "heading": "Tambua",
+        "identifying_from_paths": "Inatambua scenes kutoka njia zifuatazo",
+        "identifying_scenes": "Inatambua {num} {scene}",
+        "include_male_performers": "Jumuisha performers wa kiume",
+        "performer_genders": "Jinsia za performers",
+        "performer_genders_desc": "Performers wa jinsia zilizochaguliwa zitajumuishwa wakati wa kutambua.",
+        "set_cover_images": "Weka picha za cover",
+        "set_organized": "Weka alama ya Imepangwa",
+        "skip_multiple_matches": "Ruka ulizio zenye matokeo zaidi ya moja",
+        "skip_multiple_matches_tooltip": "Kama hii haujawashwa na matokeo zaidi ya moja yamerudishwa, moja itachaguliwa kwa nasibu kulinganisha",
+        "skip_single_name_performers": "Ruka performers wenye jina moja bila utofautisho",
+        "skip_single_name_performers_tooltip": "Kama hii haujawashwa, performers ambao ni wa kawaida kama Samantha au Olga watalinganishwa",
+        "source": "Chanzo",
+        "source_options": "Chaguo za {source}",
+        "sources": "Vyanzo",
+        "strategy": "Mkakati",
+        "tag_skipped_matches": "Tia tag ya ulizio zilizorukwa na",
+        "tag_skipped_matches_tooltip": "Tengeneza tag kama 'Identify: Multiple Matches' ambayo unaweza kuchuja kwa kwenye mwonekano wa Scene Tagger na kuchagua ulizio sahihi kwa mkono",
+        "tag_skipped_performer_tooltip": "Tengeneza tag kama 'Identify: Single Name Performer' ambayo unaweza kuchuja kwa kwenye mwonekano wa Scene Tagger na kuchagua jinsi unavyotaka kushughulikia performers hawa",
+        "tag_skipped_performers": "Tia tag ya performers walioporukwa na"
+      },
+      "import_from_exported_json": "Hamisha ndani kutoka JSON iliyohamishiwa nje kwenye saraka ya metadata. Inafuta database iliyopo.",
+      "incremental_import": "Uhamishaji ndani wa hatua kutoka faili ya zip ya uhamishaji iliyotolewa.",
+      "job_queue": "Foleni ya Kazi",
+      "maintenance": "Matengenezo",
+      "migrate_blobs": {
+        "delete_old": "Futa data ya zamani",
+        "description": "Hamisha blobs kwenye mfumo wa sasa wa hifadhi ya blob. Uhamishaji huu unapaswa kuendeshwa baada ya kubadilisha mfumo wa hifadhi ya blob. Inaweza kufuta data ya zamani baada ya uhamishaji kwa hiari."
+      },
+      "migrate_hash_files": "Inatumika baada ya kubadilisha hash ya kuunda faili ya Generated kubadilisha jina la faili zilizotengenezwa zilizopo kwa umbizo jipya la hash.",
+      "migrate_scene_screenshots": {
+        "delete_files": "Futa faili za screenshot",
+        "description": "Hamisha screenshots za scene kwenye mfumo mpya wa hifadhi ya blob. Uhamishaji huu unapaswa kuendeshwa baada ya kuhamisha mfumo uliopo kwa 0.20. Inaweza kufuta screenshots za zamani baada ya uhamishaji kwa hiari.",
+        "overwrite_existing": "Andika juu ya blobs zilizopo na data ya screenshot"
+      },
+      "migrations": "Uhamishaji",
+      "only_dry_run": "Fanya dry run tu. Usiondoe chochote",
+      "optimise_database": "Jaribu kuboresha utendaji kwa kuchambua na halafu kutengeneza upya faili yote ya database.",
+      "optimise_database_warning": "Onyo: wakati kazi hii inaendelea, operesheni zozote zinazobadilisha database zitashindikana, na kulingana na ukubwa wa database yako, inaweza kuchukua dakika kadhaa kukamilisha. Pia inahitaji angalau nafasi ya diski kubwa kiasi sawa na database yako, lakini 1.5x inapendekezwa.",
+      "plugin_tasks": "Kazi za Plugin",
+      "rescan": "Skanishi upya faili",
+      "rescan_tooltip": "Skanishi upya kila faili kwenye njia. Inatumika kulazimisha kusasisha metadata ya faili na skanishi upya faili za zip.",
+      "scan": {
+        "scanning_all_paths": "Inascanishi njia zote",
+        "scanning_paths": "Inascanishi njia zifuatazo"
+      },
+      "scan_for_content_desc": "Skanishi kwa maudhui mapya na kuyaongeza kwenye database.",
+      "set_name_date_details_from_metadata_if_present": "Weka jina, tarehe, maelezo kutoka metadata iliyomo kwenye faili"
+    },
+    "tools": {
+      "graphql_playground": "GraphQL playground",
+      "heading": "Zana",
+      "scene_duplicate_checker": "Kagua nakala za scene",
+      "scene_filename_parser": {
+        "add_field": "Ongeza Sehemu",
+        "capitalize_title": "Tumia herufi kubwa kwa jina",
+        "display_fields": "Onesha sehemu",
+        "escape_chars": "Tumia \\ kutoroa herufi za kawaida",
+        "filename": "Jina la faili",
+        "filename_pattern": "Mfumo wa Jina la Faili",
+        "ignore_organized": "Puuza scenes zilizopangwa",
+        "ignored_words": "Maneno yaliyoondolewa",
+        "matches_with": "Inalingana na {i}",
+        "select_parser_recipe": "Chagua Mapishi ya Parser",
+        "title": "Parser ya jina la faili la scene",
+        "whitespace_chars": "Herufi za nafasi",
+        "whitespace_chars_desc": "Herufi hizi zitabadilishwa na nafasi kwenye jina"
+      },
+      "scene_tools": "Zana za Scene"
+    },
+    "ui": {
+      "abbreviate_counters": {
+        "description": "Fupisha counters kwenye kadi na kurasa za maelezo ya kina, kwa mfano \"1831\" itabadilishwa kuwa \"1.8K\".",
+        "heading": "Fupisha counters"
+      },
+      "autostart_gallery_slideshow": {
+        "description": "Anzisha otomatiki slideshow wakati wa kufungua lightbox ya gallery kutoka kwenye ukurasa wa galleries.",
+        "heading": "Auto-anzisha slideshow ya gallery"
+      },
+      "basic_settings": "Mipangilio ya Msingi",
+      "custom_css": {
+        "description": "Ukurasa lazima upakiwe upya kwa mabadiliko kufanyika. Hakuna uhakika wa ulinganifu kati ya CSS ya kawaida na toleo zijazi za Stash.",
+        "heading": "CSS ya Kawaida",
+        "option_label": "CSS ya kawaida imewashwa"
+      },
+      "troubleshooting_mode": {
+        "button": "Hali ya utatuzi wa changamoto",
+        "dialog_title": "Wezesha hali ya utatuzi wa changamoto",
+        "dialog_description": "Hii italemaza kwa muda mabadiliko yote kusaidia kutambua changamoto:",
+        "dialog_item_plugins": "Plugins zote",
+        "dialog_item_css": "CSS ya kawaida",
+        "dialog_item_js": "JavaScript ya kawaida",
+        "dialog_item_locales": "Locales za kawaida",
+        "dialog_log_level": "Kiwango cha kumbukumbu kitawekwa kuwa Debug kwa utambuzi wa kina.",
+        "dialog_reload_note": "Ukurasa utapakiwa upya otomatiki.",
+        "enable": "Wezesha & Pakia upya",
+        "overlay_message": "Hali ya utatuzi wa changamoto inafanya kazi - mabadiliko yote yamelemazwa",
+        "exit": "Toka"
+      },
+      "custom_javascript": {
+        "description": "Ukurasa lazima upakiwe upya kwa mabadiliko kufanyika. Hakuna uhakika wa ulinganifu kati ya JavaScript ya kawaida na toleo zijazi za Stash.",
+        "heading": "JavaScript ya Kawaida",
+        "option_label": "JavaScript ya kawaida imewashwa"
+      },
+      "custom_locales": {
+        "description": "Batilisha tungo za kawaida za locale. Angalia https://github.com/stashapp/stash/blob/develop/ui/v2.5/src/locales/en-GB.json kwa orodha kuu. Ukurasa lazima upakiwe upya kwa mabadiliko kufanyika.",
+        "heading": "Localisation ya kawaida",
+        "option_label": "Localisation ya kawaida imewashwa"
+      },
+      "custom_title": {
+        "description": "Maandishi ya kawaida ya kuongeza kwenye jina la ukurasa. Kama wazi, kwa kawaida ni 'Stash'.",
+        "heading": "Jina la kawaida"
+      },
+      "delete_options": {
+        "description": "Mipangilio ya kawaida wakati wa kufuta picha, galleries, na scenes.",
+        "heading": "Chaguo za Kufuta",
+        "options": {
+          "delete_file": "Futa faili kwa kawaida",
+          "delete_generated_supporting_files": "Futa faili za msaidizi zilizotengenezwa kwa kawaida"
+        }
+      },
+      "desktop_integration": {
+        "desktop_integration": "Ujumuishaji wa Desktop",
+        "notifications_enabled": "Wezesha arifa",
+        "send_desktop_notifications_for_events": "Tuma arifa za desktop kwa matukio.",
+        "skip_opening_browser": "Ruka kufungua browser",
+        "skip_opening_browser_on_startup": "Ruka kufungua browser otomatiki wakati wa kuanzia."
+      },
+      "detail": {
+        "compact_expanded_details": {
+          "description": "Wakati imewashwa, chaguo hili litatoa maelezo yaliyopanuliwa huku ikihudumia uwasilishaji wa kifupi.",
+          "heading": "Maelezo yaliyopanuliwa yaliyofupishwa"
+        },
+        "enable_background_image": {
+          "description": "Onesha picha ya usuli kwenye ukurasa wa maelezo.",
+          "heading": "Wezesha picha ya usuli"
+        },
+        "heading": "Ukurasa wa Maelezo",
+        "show_all_details": {
+          "description": "Wakati imewashwa, maelezo yote ya maudhui yataonyeshwa kwa kawaida na kila kitu cha maelezo kitaenda chini ya safu moja.",
+          "heading": "Onesha maelezo yote"
+        },
+        "show_studio_text": {
+          "description": "Daima onesha jina la studio kama maandishi kwenye mionekano ya maelezo badala ya icon.",
+          "heading": "Onesha studio kama maandishi"
+        }
+      },
+      "editing": {
+        "disable_dropdown_create": {
+          "description": "Ondoa uwezo wa kutengeneza vitu vipya kutoka kwa selectors za dropdown.",
+          "heading": "Lemaza kutengeneza kwa dropdown"
+        },
+        "heading": "Uhariri",
+        "max_options_shown": {
+          "label": "Idadi ya juu zaidi ya vitu kuonyesha kwenye dropdown za uteuzi"
+        },
+        "rating_system": {
+          "star_precision": {
+            "label": "Usahihi wa Star ya Alama",
+            "options": {
+              "full": "Kamili",
+              "half": "Nusu",
+              "quarter": "Robo",
+              "tenth": "Kumi"
+            }
+          },
+          "type": {
+            "label": "Aina ya mfumo wa alama",
+            "options": {
+              "decimal": "Desimali",
+              "stars": "Stars"
+            }
+          }
+        }
+      },
+      "funscript_offset": {
+        "description": "Tofauti ya muda katika milisekunde kwa uchezaji wa skripti interactive.",
+        "heading": "Tofauti ya funscript (ms)"
+      },
+      "handy_connection": {
+        "connect": "Unganisha",
+        "server_offset": {
+          "heading": "Tofauti ya Server"
+        },
+        "status": {
+          "heading": "Hali ya Uunganisho wa Handy"
+        },
+        "sync": "Sawazisha"
+      },
+      "handy_connection_key": {
+        "description": "Ufunguo wa uunganisho wa Handy kwa ajili ya scenes interactive. Kuweka ufunguo huu kutaruhusu Stash kushiriki maelezo ya sasa ya scene na handyfeeling.com.",
+        "heading": "Ufunguo wa uunganisho wa Handy"
+      },
+      "image_lightbox": {
+        "heading": "Lightbox ya Picha"
+      },
+      "image_wall": {
+        "direction": "Mwelekeo",
+        "heading": "Ukuta wa Picha",
+        "margin": "Ukingo (pixels)"
+      },
+      "images": {
+        "heading": "Picha",
+        "options": {
+          "create_image_clips_from_videos": {
+            "description": "Wakati maktaba ina Videos zilizolemazwa, faili za video (angalia Nyongeza za Video) zitaskanishwa kama klipu za picha.",
+            "heading": "Skanisha nyongeza za video kama klipu za picha"
+          },
+          "write_image_thumbnails": {
+            "description": "Andika thumbnails za picha kwenye diski wakati zimeundwa kwa on-the-fly.",
+            "heading": "Andika thumbnails za picha"
+          }
+        }
+      },
+      "interactive_options": "Chaguo za Interactive",
+      "language": {
+        "heading": "Lugha"
+      },
+      "max_loop_duration": {
+        "description": "Muda wa juu zaidi wa scene ambapo player ya scene itazungusha video. Weka 0 kulemaza.",
+        "heading": "Muda wa juu zaidi wa kuzungusha"
+      },
+      "menu_items": {
+        "description": "Onesha au ficha aina tofauti za maudhui kwenye upau wa urambazaji.",
+        "heading": "Vipengee vya menu"
+      },
+      "minimum_play_percent": {
+        "description": "Asilimia ya muda ambayo scene lazima ichezwe kabla ya idadi yake ya kucheza kuongezwa.",
+        "heading": "Asilimia ya chini ya kucheza"
+      },
+      "performers": {
+        "options": {
+          "image_location": {
+            "description": "Njia ya kawaida kwa picha za kawaida za performer. Acha wazi kutumia kawaida zilizojengwa ndani.",
+            "heading": "Njia ya kawaida ya picha ya performer"
+          }
+        }
+      },
+      "preview_type": {
+        "description": "Chaguo la kawaida ni hakikisho za video (mp4). Kwa matumizi ya chini ya CPU wakati wa kuvinjari, unaweza kutumia hakikisho za picha zilizohuishwa (webp). Hata hivyo zinahitaji kutengenezwa pamoja na hakikisho za video na ni faili kubwa zaidi.",
+        "heading": "Aina ya hakikisho",
+        "options": {
+          "animated": "Picha iliyohuishwa",
+          "static": "Picha ya kielelezo",
+          "video": "Video"
+        }
+      },
+      "scene_list": {
+        "heading": "Mwonekano wa Gridi",
+        "options": {
+          "show_studio_as_text": "Onesha studio overlay kama maandishi",
+          "show_studio_as_text_desc": "Kwa kawaida, nembo ya studio inaonyeshwa kwenye kadi kwenye gridi. Washesha chaguo hili daima kuonesha jina la studio kama maandishi badala yake."
+        }
+      },
+      "scene_player": {
+        "heading": "Player ya Scene",
+        "options": {
+          "always_start_from_beginning": "Daima anza video kutoka mwanzo",
+          "auto_start_video": "Auto-anza video",
+          "auto_start_video_on_play_selected": {
+            "description": "Auto-anza videos za scene wakati wa kucheza kutoka foleni, au kucheza iliyochaguliwa au ya nasibu kutoka ukurasa wa Scenes.",
+            "heading": "Auto-anza video wakati wa kucheza iliyochaguliwa"
+          },
+          "continue_playlist_default": {
+            "description": "Cheza scene inayofuata kwenye foleni wakati video inamaliza.",
+            "heading": "Endelea playlist kwa kawaida"
+          },
+          "disable_mobile_media_auto_rotate": "Lemaza kuzungusha otomatiki kwa media ya fullscreen kwenye simu",
+          "enable_chromecast": "Wezesha Chromecast",
+          "show_ab_loop_controls": "Onesha udhibiti wa AB loop",
+          "show_scrubber": "Onesha scrubber",
+          "show_range_markers": "Onesha markers ya kiasi",
+          "track_activity": "Wezesha historia ya kucheza kwa scene",
+          "vr_tag": {
+            "description": "Kitufe cha VR kitaonyeshwa tu kwa scenes zenye tag hii.",
+            "heading": "Tag ya VR"
+          }
+        }
+      },
+      "scene_view": {
+        "heading": "Mwonekano wa Scene",
+        "options": {
+          "preview_volume": {
+            "description": "Sauti ya hakikisho wakati wa kuelea juu ya scene. Weka 0 kuzima sauti.",
+            "heading": "Sauti ya hakikisho"
+          }
+        }
+      },
+      "scene_wall": {
+        "heading": "Ukuta wa Scene / Marker",
+        "options": {
+          "display_title": "Onesha jina na tags",
+          "toggle_sound": "Wezesha sauti kwenye kuelea juu ya hakikisho"
+        }
+      },
+      "scroll_attempts_before_change": {
+        "description": "Idadi ya mara ya kujaribu kusokwa kabla ya kuhamia kipengee kinachofuata/kilichotangulia. Inatumika tu kwa hali ya skroll ya Pan Y.",
+        "heading": "Majaribio ya skroll kabla ya mpito"
+      },
+      "sfw_mode": {
+        "description": "Wezesha kama unatumia stash kuhifadhi maudhui ya SFW. Inaficha au hubadilisha baadhi ya vipengele vya UI vinavyohusiana na maudhui ya watu wazima.",
+        "heading": "Hali ya maudhui ya SFW"
+      },
+      "show_tag_card_on_hover": {
+        "description": "Onesha kadi ya tag wakati wa kuelea juu ya badges za tag.",
+        "heading": "Vidokezo vya kadi ya tag"
+      },
+      "slideshow_delay": {
+        "description": "Slideshow inapatikana kwenye galleries wakati unatumia hali ya mwonekano wa ukuta.",
+        "heading": "Kuchelewesha kwa slideshow (sekunde)"
+      },
+      "studio_panel": {
+        "heading": "Mwonekano wa Studio",
+        "options": {
+          "show_child_studio_content": {
+            "description": "Kwenye mwonekano wa studio, onesha maudhui kutoka sub-studios pia.",
+            "heading": "Onesha maudhui ya sub-studios"
+          }
+        }
+      },
+      "performer_list": {
+        "heading": "Orodha ya Performer",
+        "options": {
+          "show_links_on_grid_card": {
+            "heading": "Onesha viungo kwenye kadi za gridi za performer"
+          }
+        }
+      },
+      "tag_panel": {
+        "heading": "Mwonekano wa Tag",
+        "options": {
+          "show_child_tagged_content": {
+            "description": "Kwenye mwonekano wa tag, onesha maudhui kutoka sub-tags pia.",
+            "heading": "Onesha maudhui ya sub-tag"
+          }
+        }
+      },
+      "title": "Interface ya Mtumiaji",
+      "use_stash_hosted_funscript": {
+        "description": "Wakati imewashwa, funscripts zitatumwa moja kwa moja kutoka Stash kwa kifaa chako cha Handy bila kutumia server ya Handy ya mwanachama. Inahitaji kwa Stash kuwezekana kufikia kutoka kifaa chako cha Handy, na kwamba API key imetengenezwa kama Stash ina vitambulisho vilivyowekwa.",
+        "heading": "Tuma funscripts moja kwa moja"
+      }
+    }
+  },
+  "configuration": "Usanidi",
+  "connection_monitor": {
+    "websocket_connection_failed": "Imeshindwa kuunganisha websocket: angalia console ya browser kwa maelezo",
+    "websocket_connection_reestablished": "Uunganisho wa websocket umerejeshwa"
+  },
+  "containing_group": "Group Inayojumuisha",
+  "containing_group_count": "Idadi ya Group Inayojumuisha",
+  "containing_groups": "Groups Inayojumuisha",
+  "countables": {
+    "files": "{count, plural, one {Faili} other {Faili}}",
+    "galleries": "{count, plural, one {Gallery} other {Galleries}}",
+    "groups": "{count, plural, one {Group} other {Groups}}",
+    "images": "{count, plural, one {Picha} other {Picha}}",
+    "markers": "{count, plural, one {Marker} other {Markers}}",
+    "performers": "{count, plural, one {Performer} other {Performers}}",
+    "scenes": "{count, plural, one {Scene} other {Scenes}}",
+    "studios": "{count, plural, one {Studio} other {Studios}}",
+    "tags": "{count, plural, one {Tag} other {Tags}}"
+  },
+  "country": "Nchi",
+  "cover_image": "Picha ya Cover",
+  "created_at": "Imetengenezwa",
+  "criterion": {
+    "greater_than": "Kubwa kuliko",
+    "less_than": "Ndogo kuliko",
+    "unsupported": "{type} (haijatibishwa)",
+    "value": "Thamani"
+  },
+  "criterion_modifier": {
+    "between": "kati ya",
+    "equals": "ni",
+    "excludes": "huondoa",
+    "format_string": "{criterion} {modifierString} {valueString}",
+    "format_string_depth": "{criterion} {modifierString} {valueString} (+{depth, plural, =-1 {yote} other {{depth}}})",
+    "format_string_excludes": "{criterion} {modifierString} {valueString} (huondoa {excludedString})",
+    "format_string_excludes_depth": "{criterion} {modifierString} {valueString} (huondoa {excludedString}) (+{depth, plural, =-1 {yote} other {{depth}}})",
+    "greater_than": "ni kubwa kuliko",
+    "includes": "inajumuisha",
+    "includes_all": "inajumuisha yote",
+    "is_null": "ni null",
+    "less_than": "ni ndogo kuliko",
+    "matches_regex": "inalingana na regex",
+    "not_between": "si kati ya",
+    "not_equals": "si",
+    "not_matches_regex": "hailingani na regex",
+    "not_null": "si null"
+  },
+  "criterion_modifier_values": {
+    "any": "Yoyote",
+    "any_of": "Yoyote ya",
+    "none": "Hakuna",
+    "only": "Tu"
+  },
+  "custom": "Kawaida",
+  "custom_fields": {
+    "criteria_format_string": "{criterion} (sehemu ya kawaida) {modifierString} {valueString}",
+    "criteria_format_string_others": "{criterion} (sehemu ya kawaida) {modifierString} {valueString} (+{others} wengine)",
+    "field": "Sehemu",
+    "title": "Sehemu za Kawaida",
+    "value": "Thamani"
+  },
+  "date": "Tarehe",
+  "date_format": "YYYY-MM-DD",
+  "datetime_format": "YYYY-MM-DD HH:MM",
+  "death_date": "Tarehe ya kufa",
+  "death_year": "Mwaka wa kufa",
+  "descending": "Kushuka",
+  "description": "Maelezo",
+  "detail": "Kina",
+  "details": "Maelezo ya kina",
+  "developmentVersion": "Toleo la Maendeleo",
+  "dialogs": {
+    "clear_o_history_confirm": "Una uhakika unataka kufuta historia ya O?",
+    "clear_o_history_confirm_sfw": "Una uhakika unataka kufuta historia ya k kupendwa?",
+    "clear_play_history_confirm": "Una uhakika unataka kufuta historia ya kucheza?",
+    "create_new_entity": "Tengeneza {entity} mpya",
+    "delete_alert": "Yafuatayo {count, plural, one {{singularEntity}} other {{pluralEntity}}} yatafutwa kabisa:",
+    "delete_alert_to_trash": "Yafuatayo {count, plural, one {{singularEntity}} other {{pluralEntity}}} yatahamishiwa kwenye takataka:",
+    "delete_confirm": "Una uhakika unataka kufuta {entityName}?",
+    "delete_entity_desc": "{count, plural, one {Una uhakika unataka kufuta {singularEntity} hii? Isipokuwa faili pia ifutwe, {singularEntity} hii itaongezwa tena wakati wa skanishi.} other {Una uhakika unataka kufuta {pluralEntity} hizi? Isipokuwa faili pia zifutwe, {pluralEntity} hizi zitaongezwa tena wakati wa skanishi.}}",
+    "delete_entity_simple_desc": "{count, plural, one {Una uhakika unataka kufuta {singularEntity} hii?} other {Una uhakika unataka kufuta {pluralEntity} hizi?}}",
+    "delete_entity_title": "{count, plural, one {Futa {singularEntity}} other {Futa {pluralEntity}}}",
+    "delete_galleries_extra": "…pamoja na faili zozote za picha ambazo hazimegwagwa na gallery nyingine yoyote.",
+    "delete_gallery_files": "Futa saraka/zip ya gallery na picha zozote zisizomegwagwa na gallery nyingine yoyote.",
+    "delete_object_desc": "Una uhakika unataka kufuta {count, plural, one {{singularEntity} hii} other {{pluralEntity} hizi}}?",
+    "delete_object_overflow": "…na {count} nyingine {count, plural, one {{singularEntity}} other {{pluralEntity}}}.",
+    "delete_object_title": "Futa {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "dont_show_again": "Usionyeshe onyo hii tena",
+    "dont_show_until_updated": "Usionyeshe hadi sasisho linalofuata",
+    "edit_entity_title": "Hariri {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "edit_entity_count_title": "Hariri {count} {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "export_include_related_objects": "Jumuisha vitu vinvyohusiana kwenye uhamishaji wa nje",
+    "export_title": "Hamisha nje",
+    "imagewall": {
+      "direction": {
+        "column": "Safu",
+        "description": "Mpangilio wa kulingana na safu au mstari.",
+        "row": "Mstari"
+      },
+      "margin_desc": "Idadi ya pixels za ukingo kuzunguka picha yote nzima."
+    },
+    "lightbox": {
+      "delay": "Kuchelewesha (Sekunde)",
+      "disable_animation": "Lemaza uhuishaji wa mpito kati ya picha",
+      "display_mode": {
+        "fit_horizontally": "Kubali kwa mlalo",
+        "fit_to_screen": "Kubali kwenye screen",
+        "label": "Hali ya kuonyesha",
+        "original": "Asili"
+      },
+      "options": "Chaguo",
+      "reset_zoom_on_nav": "Weka upya kiwango cha zoom wakati wa kubadilisha picha",
+      "scale_up": {
+        "description": "Kuza picha ndogo ili kujaza screen.",
+        "label": "Kuza ili kubali"
+      },
+      "scroll_mode": {
+        "description": "Shikilia shift ili kutumia hali nyingine kwa muda.",
+        "label": "Hali ya kusokwa",
+        "pan_y": "Pan Y",
+        "zoom": "Zoom"
+      }
+    },
+    "merge": {
+      "combined": "Yaliyounganishwa",
+      "destination": "Lengo",
+      "empty_results": "Thamani za sehemu ya lengezo hazitabadilika.",
+      "source": "Chanzo"
+    },
+    "overwrite_filter_warning": "Filter iliyohifadhiwa \"{entityName}\" itafutiliwa.",
+    "performers_found": "Performers {count} wamepatikana",
+    "reassign_entity_title": "{count, plural, one {Kabidhi upya {singularEntity}} other {Kabidhi upya {pluralEntity}}}",
+    "stashid_exists_warning": "Stash ID iliyopo kwa stash-box hii itabadilishwa.",
+    "reassign_files": {
+      "destination": "Kabidhi upya kwa"
+    },
+    "scene_gen": {
+      "clip_previews": "Hakikisho ya klipu za picha",
+      "covers": "Cover za scene",
+      "force_transcodes": "Lazimisha utengenezaji wa transcode",
+      "force_transcodes_tooltip": "Kwa kawaida, transcodes hutengenezwa tu wakati faili ya video haisapotiwi kwenye browser. Ukiwasha, transcodes zitatengenezwa hata kama faili ya video inaonekana kusapotiwa kwenye browser.",
+      "image_phash": "Hash za utambuzi wa picha",
+      "image_phash_tooltip": "Kwa ajili ya kuondoa nakala na kutambua",
+      "image_previews": "Hakikisho za picha zilizohuishwa",
+      "image_previews_tooltip": "Pia tengeneza hakikisho (webp) zilizohuishwa, zinahitajika tu wakati aina ya Scene/Marker Wall Preview imewekwa kuwa Animated image. Zinatumia CPU kidogo kuliko hakikisho za video wakati wa kuvinjari, lakini hutengenezwa pamoja nazo na ni faili kubwa zaidi.",
+      "image_thumbnails": "Thumbnails za picha",
+      "interactive_heatmap_speed": "Tengeneza heatmaps na speeds kwa scenes za interactive",
+      "marker_image_previews": "Hakikisho za picha zilizohuishwa za marker",
+      "marker_image_previews_tooltip": "Pia tengeneza hakikisho (webp) zilizohuishwa, zinahitajika tu wakati aina ya Scene/Marker Wall Preview imewekwa kuwa Animated image. Zinatumia CPU kidogo kuliko hakikisho za video wakati wa kuvinjari, lakini hutengenezwa pamoja nazo na ni faili kubwa zaidi.",
+      "marker_screenshots": "Screenshots za marker",
+      "marker_screenshots_tooltip": "Picha za kielelezo cha kawaida za JPG za marker",
+      "markers": "Hakikisho za marker",
+      "markers_tooltip": "Hakikisho za video ambazo huanzia kwenye timecode iliyoletwa.",
+      "override_preview_generation_options": "Batilisha chaguo za kutengeneza hakikisho",
+      "override_preview_generation_options_desc": "Batilisha chaguo za kutengeneza hakikisho kwa operesheni hii. Chaguo za kawaida zimewekwa kwenye System -> Preview Generation.",
+      "overwrite": "Andika juu ya faili zilizopo",
+      "phash": "Hash za utambuzi wa video",
+      "phash_tooltip": "Kwa ajili ya kuondoa nakala na kutambua scene",
+      "preview_exclude_end_time_desc": "Ondoa sekunde za mwisho x kutoka kwa hakikisho za scene. Hii inaweza kuwa thamani katika sekunde, au asilimia (mfano 2%) ya muda wote wa scene.",
+      "preview_exclude_end_time_head": "Ondoa muda wa mwisho",
+      "preview_exclude_start_time_desc": "Ondoa sekunde za kwanza x kutoka kwa hakikisho za scene. Hii inaweza kuwa thamani katika sekunde, au asilimia (mfano 2%) ya muda wote wa scene.",
+      "preview_exclude_start_time_head": "Ondoa muda wa kuanzia",
+      "preview_generation_options": "Chaguo za kutengeneza hakikisho",
+      "preview_options": "Chaguo za Hakikisho",
+      "preview_preset_desc": "Preset inadhibiti ukubwa, ubora na muda wa kutengeneza hakikisho. Presets zaidi ya “slow” zina faida ndogo na hazipendekezwi.",
+      "preview_preset_head": "Preset ya kuencode hakikisho",
+      "preview_seg_count_desc": "Idadi ya sehemu kwenye faili za hakikisho.",
+      "preview_seg_count_head": "Idadi ya sehemu kwenye hakikisho",
+      "preview_seg_duration_desc": "Muda wa kila sehemu ya hakikisho, katika sekunde.",
+      "preview_seg_duration_head": "Muda wa sehemu ya hakikisho",
+      "sprites": "Sprites za kusokwa scene",
+      "sprites_tooltip": "Seti ya picha inayoonyeshwa chini ya player ya video kwa urambazaji rahisi.",
+      "transcodes": "Transcodes",
+      "transcodes_tooltip": "MP4 transcodes zitengenezwa mapema kwa maudhui yote; manufaa kwa CPUs za polepole lakini inahitaji nafasi kubwa ya diski",
+      "video_previews": "Hakikisho",
+      "video_previews_tooltip": "Hakikisho za video zinazochezwa wakati wa kuelea juu ya scene"
+    },
+    "scenes_found": "Scenes {count} zimepatikana",
+    "studios_found": "Studios {count} zimepatikana",
+    "tags_found": "Tags {count} zimepatikana",
+    "scrape_entity_query": "Swali la Scrape la {entity_type}",
+    "scrape_entity_title": "Matokeo ya Scrape ya {entity_type}",
+    "scrape_results_existing": "Iliyopo",
+    "scrape_results_missing": "Inakosekana",
+    "scrape_results_scraped": "Imescrapwa",
+    "set_default_filter_confirm": "Una uhakika unataka kuweka filter hii kama kawaida?",
+    "set_image_url_title": "URL ya picha",
+    "unsaved_changes": "Mabadiliko yasiyohifadhiwa. Una uhakika unataka kuondoka?"
+  },
+  "dimensions": "Vipimo",
+  "director": "Muongozaji",
+  "disambiguation": "Tofautisha",
+  "display_mode": {
+    "grid": "Gridi",
+    "label_current": "Hali ya Kuonyesha: {current}",
+    "list": "Orodha",
+    "tagger": "Tagger",
+    "unknown": "Haijulikani",
+    "wall": "Ukuta"
+  },
+  "distance": "Mbali",
+  "donate": "Toa mchango",
+  "dupe_check": {
+    "description": "Ngazi chini ya 'Sahihi' zinaweza kuchukua muda mrefu kuhesabu. Matokeo ya uwongo yanaweza pia kurudishwa kwa ngazi za usahihi wa chini.",
+    "duration_diff": "Tope la Juu la Muda",
+    "duration_options": {
+      "any": "Yoyote",
+      "equal": "Sawa"
+    },
+    "found_sets": "{setCount, plural, one{# set ya nakala imepatikana.} other {# set za nakala zimepatikana.}}",
+    "only_select_matching_codecs": "Chagua tu kama codecs zote zinalingana kwenye kundi la nakala",
+    "options": {
+      "exact": "Sahihi",
+      "high": "Juu",
+      "low": "Chini",
+      "medium": "Wastani"
+    },
+    "preferred_codec_label": "Codec ya Video Inayopendelewa",
+    "search_accuracy_label": "Usahihi wa Utafutaji",
+    "select_all_but_largest_file": "Chagua faili yoyote kwenye kundi linalojirudia, isipokuwa faili kubwa zaidi",
+    "select_all_but_largest_resolution": "Chagua faili yoyote kwenye kundi linalojirudia, isipokuwa faili yenye resolution ya juu zaidi",
+    "select_all_but_preferred_codec": "Chagua faili yoyote kwenye kundi linalojirudia, isipokuwa faili yenye codec inayopendelewa",
+    "select_none": "Chagua Hakuna",
+    "select_oldest": "Chagua faili ya kale zaidi kwenye kundi la nakala",
+    "select_options": "Chagua Chaguo…",
+    "select_youngest": "Chagua faili ya jipya zaidi kwenye kundi la nakala",
+    "title": "Scenes Nakala"
+  },
+  "duplicated": "Imejirudia",
+  "duplicated_phash": "Imejirudia (pHash)",
+  "duplicated_stash_id": "Imejirudia (Stash ID)",
+  "duplicated_title": "Imejirudia (Jina)",
+  "duration": "Muda",
+  "effect_filters": {
+    "aspect": "Aspekti",
+    "blue": "Samawati",
+    "blur": "Ukungu",
+    "brightness": "Mwanga",
+    "contrast": "Tofauti",
+    "gamma": "Gamma",
+    "green": "Kijani",
+    "hue": "Hue",
+    "name": "Filters",
+    "name_transforms": "Mabadiliko",
+    "red": "Nyekundu",
+    "reset_filters": "Weka upya Filters",
+    "reset_transforms": "Weka upya Mabadiliko",
+    "rotate": "Zungusha",
+    "rotate_left_and_scale": "Zungusha Kushoto & Skeli",
+    "rotate_right_and_scale": "Zungusha Kulia & Skeli",
+    "saturation": "Mimevu",
+    "scale": "Skeli",
+    "warmth": "Joto"
+  },
+  "empty_server": "Ongeza scenes kwenye server yako ili kuona mapendekezo kwenye ukurasa huu.",
+  "empty_value": "wazi",
+  "errors": {
+    "custom_fields": {
+      "duplicate_field": "Jina la sehemu lazima liwe la kipekee",
+      "field_name_length": "Jina la sehemu lazima liwe na chini ya herufi 65",
+      "field_name_required": "Jina la sehemu linahitajika",
+      "field_name_whitespace": "Jina la sehemu haliwezi kuwa na nafasi mwanzoni au mwishoni"
+    },
+    "header": "Hitilafu",
+    "image_index_greater_than_zero": "Nambari ya picha lazima iwe kubwa kuliko 0",
+    "invalid_javascript_string": "Msimbo wa javascript batili: {error}",
+    "invalid_json_string": "Tungo ya JSON batili: {error}",
+    "lazy_component_error_help": "Kama umesasisha Stash hivi karibuni, tafadhali pakia upya ukurasa au futa cache ya browser yako.",
+    "loading_type": "Hitilafu wakati wa kupakia {type}",
+    "something_went_wrong": "Hitilafu fulani imetokea."
+  },
+  "eta": "ETA",
+  "ethnicity": "Kabila",
+  "existing_value": "thamani iliyopo",
+  "eye_color": "Rangi ya jicho",
+  "fake_tits": "Matiti ya kawaida",
+  "false": "Sivyo",
+  "favourite": "Kipendwa",
+  "file": "faili",
+  "file_count": "Idadi ya Faili",
+  "file_info": "Taarifa ya Faili",
+  "file_mod_time": "Muda wa Kubadilisha Faili",
+  "files": "faili",
+  "files_amount": "faili {value}",
+  "filesize": "Ukubwa wa Faili",
+  "filter": "Filter",
+  "filter_name": "Jina la filter",
+  "filters": "Filters",
+  "folder": "Saraka",
+  "framerate": "Kasi ya frame",
+  "frames_per_second": "fps {value}",
+  "front_page": {
+    "types": {
+      "premade_filter": "Filter Iliyotengenezwa",
+      "saved_filter": "Filter Iliyohifadhiwa"
+    }
+  },
+  "galleries": "Galleries",
+  "gallery": "Gallery",
+  "gallery_count": "Idadi ya Gallery",
+  "gender": "Jinsia",
+  "gender_types": {
+    "FEMALE": "Mwanamke",
+    "INTERSEX": "Intersex",
+    "MALE": "Mwanaume",
+    "NON_BINARY": "Non-Binary",
+    "TRANSGENDER_FEMALE": "Transgender Mwanamke",
+    "TRANSGENDER_MALE": "Transgender Mwanaume"
+  },
+  "group": "Group",
+  "group_count": "Idadi ya Group",
+  "group_scene_number": "Nambari ya Scene",
+  "groups": "Groups",
+  "hair_color": "Rangi ya Nywele",
+  "handy_connection_status": {
+    "connecting": "Inaunganisha",
+    "disconnected": "Imetenganishwa",
+    "error": "Hitilafu wakati wa kuunganisha kwa Handy",
+    "missing": "Haipo",
+    "ready": "Tayari",
+    "syncing": "Inaunganishwa na server",
+    "uploading": "Inapakia skripti"
+  },
+  "hasChapters": "Sura",
+  "hasMarkers": "Markers",
+  "height": "Urefu",
+  "height_cm": "Urefu (cm)",
+  "help": "Msaada",
+  "history": "Historia",
+  "ignore_auto_tag": "Puuza auto tag",
+  "image": "Picha",
+  "image_count": "Idadi ya Picha",
+  "image_index": "Picha #",
+  "images": "Picha",
+  "include_parent_tags": "Jumuisha tags kuu",
+  "include_sub_folders": "Jumuisha sub-saraka",
+  "include_sub_group_content": "Jumuisha maudhui ya sub-group",
+  "include_sub_groups": "Jumuisha sub-groups",
+  "include_sub_studio_content": "Jumuisha maudhui ya sub-studio",
+  "include_sub_studios": "Jumuisha subsidiary studios",
+  "include_sub_tag_content": "Jumuisha maudhui ya sub-tag",
+  "include_sub_tags": "Jumuisha sub-tags",
+  "index_of_total": "{index} ya {total}",
+  "instagram": "Instagram",
+  "interactive": "Interactive",
+  "interactive_speed": "Speed ya Interactive",
+  "isMissing": "Inakosekana",
+  "last_o_at": "O ya Mwisho kwenye",
+  "last_o_at_sfw": "Kupendwa kwa Mwisho kwenye",
+  "last_played_at": "Ilichezwa kwa Mwisho kwenye",
+  "latest_scene": "Scene ya Karibuni",
+  "library": "Maktaba",
+  "loading": {
+    "generic": "Inapakia…",
+    "plugins": "Inapakia plugins…"
+  },
+  "login": {
+    "login": "Ingia",
+    "username": "Jina la mtumiaji",
+    "password": "Nenosiri",
+    "invalid_credentials": "Jina la mtumiaji au nenosiri si sahihi",
+    "internal_error": "Hitilafu ya ndani isiyotarajiwa. Tazama kumbukumbu kwa maelezo zaidi"
+  },
+  "marker_count": "Idadi ya Marker",
+  "markers": "Markers",
+  "measurements": "Vipimo",
+  "media_info": {
+    "audio_codec": "Codec ya Sauti",
+    "downloaded_from": "Imepakuliwa Kutoka",
+    "interactive_speed": "Speed ya Interactive",
+    "md5": "Ukandishi wa MD5",
+    "o_count": "Idadi ya O",
+    "oshash": "OSHash",
+    "oshash_meaning": "Hash ya OpenSubtitles",
+    "performer_card": {
+      "age": "{age} {years_old}",
+      "age_context": "{age} {years_old} wakati wa uzalishaji"
+    },
+    "phash": "PHash",
+    "phash_meaning": "Hash ya Utambuzi",
+    "play_count": "Idadi ya kucheza",
+    "play_duration": "Muda wa kucheza",
+    "stream": "Stream",
+    "video_codec": "Codec ya Video"
+  },
+  "megabits_per_second": "mbps {value}",
+  "metadata": "Metadata",
+  "name": "Jina",
+  "sort_name": "Panga kwa jina",
+  "new": "Mpya",
+  "none": "Hakuna",
+  "o_count": "Idadi ya O",
+  "o_count_all": "Idadi ya O (Yote)",
+  "o_count_sfw": "Upendaji",
+  "o_history": "Historia ya O",
+  "o_history_sfw": "Historia ya Kupendwa",
+  "odate_recorded_no": "Hakuna Tarehe ya O Iliyorekodiwa",
+  "odate_recorded_no_sfw": "Hakuna Tarehe ya Kupendwa Iliyorekodiwa",
+  "operations": "Operesheni",
+  "organized": "Imepangwa",
+  "orientation": "Mwelekeo",
+  "package_manager": {
+    "add_source": "Ongeza chanzo",
+    "check_for_updates": "Kagua for sasisho",
+    "confirm_delete_source": "Una uhakika unataka kufuta chanzo {name} ({url})?",
+    "confirm_uninstall": "Una uhakika unataka kuondoa vifurushi {number}?",
+    "description": "Maelezo",
+    "edit_source": "Hariri chanzo",
+    "hide_unselected": "Ficha isilizochaguliwa",
+    "install": "Sakisha",
+    "installed_version": "Toleo lililosakishwa",
+    "latest_version": "Toleo la karibuni",
+    "no_packages": "Hakuna vifurishi vilivyopatikana",
+    "no_sources": "Hakuna vyanzo vilivyowekwa",
+    "no_upgradable": "Hakuna vifurishi vinavyoweza kusasishwa",
+    "package": "Kifurushi",
+    "required_by": "Kinahitajika na {packages}",
+    "selected_only": "Iliyochaguliwa tu",
+    "show_all": "Onesha zote",
+    "source": {
+      "local_path": {
+        "description": "Njia ya relative kuhifadhi vifurushi kwa chanzo hiki. Kumbuka kwamba kubadilisha hii kunahitaji vifurushi kuhamishwa kwa kawaida.",
+        "heading": "Njia ya ndani"
+      },
+      "name": "Jina",
+      "url": "URL ya chanzo"
+    },
+    "uninstall": "Ondoa",
+    "unknown": "<haijulikani>",
+    "update": "Sasisha",
+    "version": "Toleo"
+  },
+  "pagination": {
+    "current_total": "{current} ya {total}",
+    "first": "Kwanza",
+    "last": "Mwisho",
+    "next": "Inayofuata",
+    "previous": "Iliyotangulia"
+  },
+  "parent_folder": "Saraka ya kuu",
+  "parent_of": "Mkuu wa {children}",
+  "parent_studio": "Studio Kuu",
+  "parent_studios": "Studios Kuu",
+  "parent_tag_count": "Idadi ya Tag Kuu",
+  "parent_tags": "Tags Kuu",
+  "part_of": "Sehemu ya {parent}",
+  "path": "Njia",
+  "penis": "Ndoo",
+  "penis_length": "Urefu wa Ndoo",
+  "penis_length_cm": "Urefu wa Ndoo (cm)",
+  "perceptual_similarity": "Ulinganifu wa Utambuzi (pHash)",
+  "performer": "Performer",
+  "performer_age": "Umri wa Performer",
+  "performer_count": "Idadi ya Performer",
+  "performer_count_all": "Idadi ya Performer (Yote)",
+  "performer_favorite": "Performer Kipendwa",
+  "performer_image": "Picha ya Performer",
+  "performer_tagger": {
+    "add_new_performers": "Ongeza Performers Wapya",
+    "any_names_entered_will_be_queried": "Majina yoyote yaliyoingizwa yataulizwa kutoka kifupio cha remote Stash-Box na yataongezwa yakipatikana. Ulizio sahihi tu yatachukuliwa kama ulizio.",
+    "batch_add_performers": "Ongeza Performers kwa Wingi",
+    "batch_update_performers": "Sasisha Performers kwa Wingi",
+    "configure_fields": "Andaka Sehemu",
+    "current_page": "Ukurasa wa sasa",
+    "failed_to_save_performer": "Imeshindwa kuhifadhi performer \"{performer}\"",
+    "field_options": "Chaguo za Sehemu",
+    "field_options_description": "Chagua jinsi kila sehemu inasasishwa: andika juu hubadilisha data iliyopo, unganisha huongeza, ruka inaiacha isiyobadilishwa.",
+    "name_already_exists": "Jina tayari lipo",
+    "network_error": "Hitilafu ya Mtandao",
+    "no_results_found": "Hakuna matokeo yaliyopatikana.",
+    "number_of_performers_will_be_processed": "Performers {performer_count} watachakatwa",
+    "performer_already_tagged": "Performer ameshatagiwa",
+    "performer_names_or_stashids_separated_by_comma": "Majina ya performers au StashIDs yametenganishwa kwa koma",
+    "performer_selection": "Uteuzi wa performer",
+    "performer_successfully_tagged": "Performer ametagiwa kwa mafanikio:",
+    "query_all_performers_in_the_database": "Performers wote kwenye database",
+    "refresh_tagged_performers": "Onyesha upya performers waliotagiwa",
+    "refreshing_will_update_the_data": "Kuonyesha upya kutasasisha data ya performers wowote waliotagiwa kutoka kifupio cha stash-box.",
+    "status_tagging_job_queued": "Hali: Kazi ya kutaga imepangwa kwenye foleni",
+    "status_tagging_performers": "Hali: Kutaga performers",
+    "tag_status": "Hali ya Tag",
+    "to_use_the_performer_tagger": "Ili kutumia performer tagger, kifupio cha stash-box kinahitaji kuwa kimewekwa.",
+    "untagged_performers": "Performers wasiotagwa",
+    "update_performer": "Sasisha Performer",
+    "update_performers": "Sasisha Performers",
+    "updating_untagged_performers_description": "Kusasisha performers wasiotagwa kitaajaribu kulinganisha performers wowote wasio na stashid na kusasisha metadata."
+  },
+  "performer_tags": "Tags za Performer",
+  "performers": "Performers",
+  "photographer": "Mpasaji wa picha",
+  "piercings": "Vipodozi",
+  "play_count": "Idadi ya kucheza",
+  "play_duration": "Muda wa kucheza",
+  "play_history": "Historia ya kucheza",
+  "playdate_recorded_no": "Hakuna Tarehe ya Kucheza Iliyorekodiwa",
+  "plays": "ucheza {value}",
+  "primary_file": "Faili kuu",
+  "primary_tag": "Tag Kuu",
+  "production_date": "Tarehe ya Uzalishaji",
+  "queue": "Foleni",
+  "random": "Nasibu",
+  "rating": "Alama",
+  "recently_added_objects": "{objects} Zilizoongezwa hivi karibuni",
+  "recently_released_objects": "{objects} Zilizotolewa hivi karibuni",
+  "refer_to": "Tafadhali angalia {link}.",
+  "related_studios": "Inahusiana",
+  "release_notes": "Vidokezo vya Toleo",
+  "resolution": "Resolution",
+  "resume_time": "Muda wa kuendelea",
+  "scene": "Scene",
+  "sceneTagger": "Scene Tagger",
+  "scene_code": "Code ya Studio",
+  "scene_marker_count": "Idadi ya Scene Marker",
+  "scene_count": "Idadi ya Scene",
+  "scenes_duration": "Muda wa Scene",
+  "scenes_size": "Ukubwa wa Scene",
+  "scene_created_at": "Scene Imetengenezwa",
+  "scene_date": "Tarehe ya Scene",
+  "scene_id": "ID ya Scene",
+  "scene_tags": "Tags za Scene",
+  "scene_updated_at": "Scene Imesasishwa",
+  "scenes": "Scenes",
+  "scenes_updated_at": "Scene Imesasishwa",
+  "search_filter": {
+    "edit_filter": "Hariri Filter",
+    "name": "Filter",
+    "saved_filters": "Filters zilizohifadhiwa",
+    "search_term": "Neno la kutafuta",
+    "update_filter": "Sasisha Filter",
+    "more_filter_criteria": "+{count} zaidi"
+  },
+  "second": "Sekunde",
+  "seconds": "Sekunde",
+  "settings": "Mipangilio",
+  "setup": {
+    "credentials": {
+      "description": "Ingiza jina la mtumiaji na nenosiri unayotaka kutumia kuingia kwenye mfumo wa Stash. Hizi zinaweza kuachwa wazi kama hutaki kuandika jina la mtumiaji/nenosiri kufikia mfumo. Vitambulisho vinahitajika kama unafikia mfumo kutoka intaneti ya umma.",
+      "heading": "Andika vitambulisho vyako",
+      "password_invalid": "Nenosiri lazima si wazi kama jina la mtumiaji limewekwa.",
+      "username_invalid": "Jina la mtumiaji lisitumiwe nafasi mwanzoni au mwishoni."
+    },
+    "confirm": {
+      "almost_ready": "Tuko karibu tayari kukamilisha usanidi. Tafadhali thibitisha mipangilio ifuatayo. Unaweza kubonyeza nyuma kubadilisha chochote kisicho sahihi. Kama kila kitu kinafaa, bofya Thibitisha kutengeneza mfumo wako.",
+      "blobs_directory": "Saraka ya data ya binary",
+      "blobs_use_database": "<ikitumia database>",
+      "cache_directory": "Saraka ya cache",
+      "configuration_file_location": "Eneo la faili ya usanidi:",
+      "database_file_path": "Njia ya faili ya database",
+      "generated_directory": "Saraka iliyotengenezwa",
+      "nearly_there": "Karibu tuko!",
+      "password_set_warning": "Kumbuka: utaulizwa kuingiza vitambulisho vyako baada ya mfumo kutengenezwa.",
+      "stash_library_directories": "Saraka za maktaba ya Stash"
+    },
+    "creating": {
+      "creating_your_system": "Inatengeneza mfumo wako"
+    },
+    "errors": {
+      "something_went_wrong": "Lo! Hitilafu fulani imetokea!",
+      "something_went_wrong_description": "Kama inaonekana ni tatizo na ingizo lako, endelea na kubofya nyuma kuzirekebisha. Vinginevyo, ripoti hitilafu kwenye {githubLink} au tafuta msaada kwenye {discordLink}.",
+      "something_went_wrong_while_setting_up_your_system": "Hitilafu fulani imetokea wakati wa kuandaa mfumo wako. Hii ndiyo hitilafu tuliyopokea: {error}",
+      "unable_to_retrieve_system_status": "Imeshindwa kupata hali ya mfumo: {error}",
+      "unexpected_error": "Hitilafu isiyotarajiwa imetokea: {error}"
+    },
+    "folder": {
+      "file_path": "Njia ya faili",
+      "up_dir": "Saraka ya juu"
+    },
+    "github_repository": "Hifadhi ya Github",
+    "migrate": {
+      "backup_database_path_leave_empty_to_disable_backup": "Njia ya hifadhi nakala ya database (acha wazi kulemaza hifadhi nakala):",
+      "backup_recommended": "Inapendekezwa uhifadhi nakala ya database yako iliyopo kabla ya uhamishaji. Tunaweza kufanya hili kwa ajili yako, kwa kutengeneza nakala ya database yako kwenye <code>{defaultBackupPath}</code>.",
+      "migrating_database": "Inahamisha database",
+      "migration_failed": "Uhamishaji umeshindikana",
+      "migration_failed_error": "Hitilafu ifuatayo imetokea wakati wa kuhamisha database:",
+      "migration_failed_help": "Tafadhali fanya marekebisho yoyote muhimu na ujaribu tena. Vinginevyo, ripoti hitilafu kwenye {githubLink} au tafuta msaada kwenye {discordLink}.",
+      "migration_irreversible_warning": "Mchakato wa uhamishaji wa schema hauwezi kurudishwa. Mara uhamishaji unapofanyika, database yako itakuwa haipatani na toleo zilizopita za stash.",
+      "migration_notes": "Vidokezo vya Uhamishaji",
+      "migration_required": "Uhamishaji unahitajika",
+      "perform_schema_migration": "Fanya uhamishaji wa schema",
+      "schema_too_old": "Database yako ya sasa ya stash ni schema toleo <strong>{databaseSchema}</strong> na inahitaji kuhamishiwa kwa toleo <strong>{appSchema}</strong>. Toleo hili la Stash halitafanya kazi bila kuhamisha database. Kama hutaki kuhamisha, utahitaji kushuka kwa toleo linalofanana na schema ya database yako."
+    },
+    "paths": {
+      "database_filename_empty_for_default": "jina la faili ya database (wazi kwa kawaida)",
+      "description": "Kufuata, tunahitaji kubainisha wapi kupata maudhui yako, na wapa kuhifadhi database ya Stash, faili zilizotengenezwa na faili za cache. Mipangilio hii inaweza kubadilishwa baadaye kama inahitajika.",
+      "path_to_blobs_directory_empty_for_default": "njia ya saraka ya blobs (wazi kwa kawaida)",
+      "path_to_cache_directory_empty_for_default": "njia ya saraka ya cache (wazi kwa kawaida)",
+      "path_to_generated_directory_empty_for_default": "njia ya saraka iliyotengenezwa (wazi kwa kawaida)",
+      "set_up_your_paths": "Andika njia zako",
+      "sfw_content_settings": "Unatumia stash kwa maudhui ya SFW?",
+      "sfw_content_settings_description": "stash inaweza kutumika kudhibiti maudhui ya SFW kama vile picha, sanaa, comics, na mengine. Kuwashesha chaguo hili itabadilisha baadhi ya tabia ya UI ili kuwa sahihi zaidi kwa maudhui ya SFW.",
+      "stash_alert": "Hakuna njia za maktaba zilizochaguliwa. Hakuna midia itakayoweza kuskanishwa kwenye Stash. Una uhakika?",
+      "store_blobs_in_database": "Hifadhi blobs kwenye database",
+      "use_sfw_content_mode": "Tumia hali ya maudhui ya SFW",
+      "where_can_stash_store_blobs": "Stash inaweza kuhifadhi data ya binary ya database wapi?",
+      "where_can_stash_store_blobs_description": "Stash inaweza kuhifadhi data ya binary kama vile cover za scene, picha za performer, studio na tag kwenye database au kwenye filesystem. Kwa kawaida, itahifadhi data hii kwenye filesystem katika saraka ndogo <code>blobs</code> ndani ya saraka iliyo na faili yako ya usanidi. Kama unataka kubadilisha hili, tafadhali ingiza njia kamili au relative (kwa saraka ya sasa ya kazi). Stash itatengeneza saraka hii kama haipo tayari.",
+      "where_can_stash_store_blobs_description_addendum": "Vinginevyo, unaweza kuhifadhi data hii kwenye database. <strong>Kumbuka:</strong> Hii itaongeza ukubwa wa faili yako ya database, na itaongeza muda wa uhamishaji wa database.",
+      "where_can_stash_store_cache_files": "Stash inaweza kuhifadhi faili za cache wapi?",
+      "where_can_stash_store_cache_files_description": "Ili baadhi ya utendakazi kama vile HLS/DASH live transcoding ifanye kazi, Stash inahitaji saraka ya cache kwa faili za muda. Kwa kawaida, Stash itatengeneza saraka ya <code>cache</code> ndani ya saraka iliyo na faili yako ya usanidi. Kama unataka kubadilisha hili, tafadhali ingiza njia kamili au relative (kwa saraka ya sasa ya kazi). Stash itatengeneza saraka hii kama haipo tayari.",
+      "where_can_stash_store_its_database": "Stash inaweza kuhifadhi database yake wapi?",
+      "where_can_stash_store_its_database_description": "Stash inatumia database ya SQLite kuhifadhi metadata ya maudhui yako. Kwa kawaida, hii itatengenezwa kama <code>stash-go.sqlite</code> kwenye saraka iliyo na faili yako ya usanidi. Kama unataka kubadilisha hili, tafadhali ingiza jina la faili la kamili au relative (kwa saraka ya sasa ya kazi).",
+      "where_can_stash_store_its_database_warning": "ONYO: kuhifadhi database kwenye mfumo tofauti na wako Stash inaendeshwa (mfano: kuhifadhi database kwenye NAS wakati Stash inaendeshwa kwenye kompyuta nyingine) ni <strong>haijatibishwa</strong>! SQLite haikusudiwa kutumika kupitia mtandao, na kujaribu kufanya hivyo kunaweza kusababisha database yako yote kuharibika.",
+      "where_can_stash_store_its_generated_content": "Stash inaweza kuhifadhi maudhui yaliyotengenezwa wapi?",
+      "where_can_stash_store_its_generated_content_description": "Ili kutoa thumbnails, hakikisho na sprites, Stash hutengeneza picha na video. Hii pia inajumuisha transcodes kwa faili za umbizo zisizosapotiwa. Kwa kawaida, Stash itatengeneza saraka ya <code>generated</code> ndani ya saraka iliyo na faili yako ya usanidi. Kama unataka kubadilisha wapi maudhui haya yaliyotengenezwa yatahifadhiwa, tafadhali ingiza njia kamili au relative (kwa saraka ya sasa ya kazi). Stash itatengeneza saraka hii kama haipo tayari.",
+      "where_is_your_porn_located": "Maudhui yako yapo wapi?",
+      "where_is_your_porn_located_description": "Ongeza saraka zenye video na picha zako. Stash itatumia saraka hizi kupata video na picha wakati wa skanishi."
+    },
+    "stash_setup_wizard": "Kituo cha Usanidi cha Stash",
+    "success": {
+      "download_ffmpeg": "Pakua ffmpeg",
+      "getting_help": "Kupata msaada",
+      "help_links": "Kama unakumbana na changamoto au una maswali au mapendekezo yoyote, jisikie huru kufungua issue kwenye {githubLink}, au uliza jamii kwenye {discordLink}.",
+      "in_app_manual_explained": "Unahimizwa kuangalia mwongozo wa ndani wa app ambao unaweza kufikiawa kutoka icon inayopo kwenye kona ya juu ya kulia ya screen ambayo inaonekana kama ifuatavyo: {icon}",
+      "missing_ffmpeg": "Inakosa faili ya <code>ffmpeg</code> inayohitajika. Unaweza kuipakua kiotomatiki kwenye saraka yako ya usanidi kwa kutia alama kwenye kisanduku hapa chini. Vinginevyo, unaweza kutoa njia za <code>ffmpeg</code> na <code>ffprobe</code> kwenye Mipangilio ya System. Faili hizi lazima zipatikane ili Stash ifanye kazi.",
+      "next_config_step_one": "Utaelekezwa kwenye ukurasa wa Configuration kifuatao. Ukurasa huu utakuruhusu kubadilisha faili za kujumuisha na kutoa, kuweka jina la mtumiaji na nenosiri kulinda mfumo wako, na chaguo nyingine nyingi.",
+      "next_config_step_two": "Ukiridhika na mipangilio hii, unaweza kuanza kuskanishi maudhui yako kwenye Stash kwa kubofya <code>{localized_task}</code>, halafu <code>{localized_scan}</code>.",
+      "open_collective": "Angalia {open_collective_link} yetu kuona jinsi unavyoweza kuchangia uendelezaji wa Stash.",
+      "support_us": "Tungeunga mkono",
+      "thanks_for_trying_stash": "Asante kwa kujaribu Stash!",
+      "welcome_contrib": "Pia tunakaribisha michango katika umbo la msimbo (marekebisho ya hitilafu, maboresho na vipengele vipya), majaribio, ripoti za hitilafu, mapendekezo ya maboresho na vipengele, na msaada kwa watumiaji. Maelezo yanaweza kupatikana kwenye sehemu ya Contribution ya mwongozo wa ndani wa app.",
+      "your_system_has_been_created": "Mafanikio! Mfumo wako umetengenezwa!"
+    },
+    "welcome": {
+      "config_path_logic_explained": "Stash inajaribu kupata faili yake ya usanidi (<code>config.yml</code>) kutoka saraka ya sasa ya kazi kwanza, na kama haipati, inarudi kwenye <code>{fallback_path}</code>. Unaweza pia kufanya Stash isome kutoka faili ya usanidi maalum kwa kuiendesha na chaguo la <code>-c '<njia ya faili ya usanidi>'</code> au <code>--config '<njia ya faili ya usanidi>'</code>.",
+      "in_current_stash_directory": "Katika saraka ya <code>{path}</code>:",
+      "in_the_current_working_directory": "Katika <code>{path}</code>, saraka ya sasa ya kazi, kwa sasa:",
+      "in_the_current_working_directory_disabled": "Katika <code>{path}</code>, saraka ya sasa ya kazi:",
+      "in_the_current_working_directory_disabled_macos": "Haijatibishwa wakati wa kuendesha <code>Stash.app</code>,<br></br>endesha <code>stash-macos</code> ili kuandaa kwenye saraka ya kazi",
+      "next_step": "Huku yote yakiwa yamepitishwa, kama uko tayari kuendelea na kuandaa mfumo mpya, tafadhali chagua wapi ungependa kuhifadhi faili yako ya usanidi.",
+      "store_stash_config": "Unataka kuhifadhi usanidi wa Stash wapi?",
+      "unable_to_locate_config": "Kama unasoma hili, basi Stash haikuweza kupata usanidi uliopo. Kituo hiki kitaongoza hatua zote za kuandaa usanidi mpya.",
+      "unexpected_explained": "Kama unapata screen hii bila kutaraji, tafadhali jaribu kuanzisha upya Stash kwenye saraka sahihi ya kazi au na bendera ya <code>-c</code>."
+    },
+    "welcome_specific_config": {
+      "config_path": "Stash itatumia njia ya faili ya usanidi ifuatayo: <code>{path}</code>",
+      "next_step": "Ukiwa tayari kuendelea na kuandaa mfumo mpya, bofya Inayofuata.",
+      "unable_to_locate_specified_config": "Kama unasoma hili, basi Stash haikuweza kupata faili ya usanidi iliyobainishwa kwenye command line au mazingira. Kituo hiki kitaongoza hatua zote za kuandaa usanidi mpya."
+    },
+    "welcome_to_stash": "Karibu kwenye Stash"
+  },
+  "stash_id": "Stash ID",
+  "stash_id_count": "Idadi ya Stash ID",
+  "stash_id_endpoint": "URL ya Stash ID Endpoint",
+  "stash_id_endpoint_any": "Endpoint yoyote",
+  "stash_ids": "Stash IDs",
+  "stashbox_search": {
+    "header": "Tafuta {entityType} kutoka StashBox",
+    "no_results": "Hakuna matokeo yaliyopatikana.",
+    "placeholder_name_or_id": "Jina la {entityType} au StashID...",
+    "select_stashbox": "Chagua StashBox..."
+  },
+  "stashbox": {
+    "go_review_draft": "Nenda kwa {endpoint_name} kukagua rasimu.",
+    "selected_stash_box": "Kifupio cha Stash-Boox kilichochaguliwa",
+    "source": "Chanzo cha Stash-Box",
+    "submission_failed": "Wasilisho limeshindikana",
+    "submission_successful": "Wasilisho limefanikiwa",
+    "submit_update": "Tayari lipo kwenye {endpoint_name}"
+  },
+  "statistics": "Takwimu",
+  "stats": {
+    "image_size": "Ukubwa wa picha",
+    "scenes_duration": "Muda wa scenes",
+    "scenes_played": "Scenes Zilizochezwa",
+    "scenes_size": "Ukubwa wa scenes",
+    "total_o_count": "Idadi ya Jumla ya O",
+    "total_o_count_sfw": "Upendaji wa Jumla",
+    "total_play_count": "Idadi ya Jumla ya kucheza",
+    "total_play_duration": "Muda wa Jumla wa kucheza"
+  },
+  "status": "Hali: {statusText}",
+  "studio": "Studio",
+  "studio_and_parent": "Studio & Kuu",
+  "studio_count": "Idadi ya Studio",
+  "studio_depth": "Ngazi (wazi kwa zote)",
+  "studio_tagger": {
+    "add_new_studios": "Ongeza Studios Mpya",
+    "any_names_entered_will_be_queried": "Majina yoyote yaliyoingizwa yataulizwa kutoka kifupio cha remote Stash-Box na yataongezwa yakipatikana. Ulizio sahihi tu yatachukuliwa kama ulizio.",
+    "batch_add_studios": "Ongeza Studios kwa Wingi",
+    "batch_update_studios": "Sasisha Studios kwa Wingi",
+    "config": {
+      "create_parent_desc": "Tengeneza studios kuu zinazokosekana, au tag na sasisha data/picha kwa studios kuu zilizopo zenye majina yaliyofanana",
+      "create_parent_label": "Tengeneza studios kuu"
+    },
+    "create_or_tag_parent_studios": "Tengeneza studios kuu zinazokosekana au tag zilizopo",
+    "current_page": "Ukurasa wa sasa",
+    "failed_to_save_studio": "Imeshindwa kuhifadhi studio \"{studio}\"",
+    "name_already_exists": "Jina tayari lipo",
+    "network_error": "Hitilafu ya Mtandao",
+    "no_results_found": "Hakuna matokeo yaliyopatikana.",
+    "number_of_studios_will_be_processed": "Studios {studio_count} zitachakatwa",
+    "query_all_studios_in_the_database": "Studios zote kwenye database",
+    "refresh_tagged_studios": "Onyesha upya studios zilizotagiwa",
+    "refreshing_will_update_the_data": "Kuonyesha upya kutasasisha data ya studios zozote zilizotagiwa kutoka kifupio cha stash-box.",
+    "status_tagging_job_queued": "Hali: Kazi ya kutaga imepangwa kwenye foleni",
+    "status_tagging_studios": "Hali: Kutaga studios",
+    "studio_already_tagged": "Studio imeshatagiwa",
+    "studio_names_or_stashids_separated_by_comma": "Majina ya studios au StashIDs yametenganishwa kwa koma",
+    "studio_selection": "Uteuzi wa studio",
+    "studio_successfully_tagged": "Studio imetagiwa kwa mafanikio",
+    "tag_status": "Hali ya Tag",
+    "to_use_the_studio_tagger": "Ili kutumia studio tagger, kifupio cha stash-box kinahitaji kuwa kimewekwa.",
+    "untagged_studios": "Studios zisizotagwa",
+    "update_studio": "Sasisha Studio",
+    "update_studios": "Sasisha Studios",
+    "updating_untagged_studios_description": "Kusasisha studios zisizotagwa kitaajaribu kulinganisha studios zozote zisizo na stashid na kusasisha metadata."
+  },
+  "studio_tags": "Tags za Studio",
+  "studios": "Studios",
+  "sub_folder_depth": "Kina cha sub folder (wazi kwa zote)",
+  "sub_folders": "Sub folders",
+  "sub_group": "Sub-Group",
+  "sub_group_count": "Idadi ya Sub-Group",
+  "sub_group_of": "Sub-group ya {parent}",
+  "sub_group_order": "Mpangilio wa Sub-Group",
+  "sub_group_description": "Maelezo ya Sub-Group",
+  "sub_groups": "Sub-Groups",
+  "sub_tag_count": "Idadi ya Sub-Tag",
+  "sub_tag_of": "Sub-tag ya {parent}",
+  "sub_tags": "Sub-Tags",
+  "subsidiary_studio_count": "Idadi ya Subsidiary Studio",
+  "subsidiary_studios": "Subsidiary Studios",
+  "synopsis": "Muhtasari",
+  "tag": "Tag",
+  "tag_count": "Idadi ya Tag",
+  "tag_parent_tooltip": "Ina tags kuu",
+  "tag_sub_tag_tooltip": "Ina sub-tags",
+  "tag_tagger": {
+    "add_new_tags": "Ongeza Tags Mpya",
+    "any_names_entered_will_be_queried": "Majina yoyote yaliyoingizwa yataulizwa kutoka kifupio cha remote Stash-Box na yataongezwa yakipatikana. Ulizio sahihi tu yatachukuliwa kama ulizio.",
+    "batch_add_tags": "Ongeza Tags kwa Wingi",
+    "batch_update_tags": "Sasisha Tags kwa Wingi",
+    "config": {
+      "create_parent_desc": "Tengeneza tags kuu zinazokosekana kutoka kategoria za stash-box, au tag tags kuu zilizopo zenye majina yaliyofanana",
+      "create_parent_label": "Tengeneza tags kuu"
+    },
+    "create_or_tag_parent_tags": "Tengeneza tags kuu zinazokosekana au tag zilizopo",
+    "current_page": "Ukurasa wa sasa",
+    "failed_to_save_tag": "Imeshindwa kuhifadhi tag \"{tag}\"",
+    "name_already_exists": "Jina tayari lipo",
+    "network_error": "Hitilafu ya Mtandao",
+    "no_results_found": "Hakuna matokeo yaliyopatikana.",
+    "number_of_tags_will_be_processed": "Tags {tag_count} zitachakatwa",
+    "parent_tag_no_remote_site_id_warning": "Tag kuu haina kitambulisho cha tovuti ya mbali, na haitaunganishwa na kifupio cha stash-box.",
+    "query_all_tags_in_the_database": "Tags zote kwenye database",
+    "refresh_tagged_tags": "Onyesha upya tags zilizotagiwa",
+    "refreshing_will_update_the_data": "Kuonyesha upya kutasasisha data ya tags zozote zilizotagiwa kutoka kifupio cha stash-box.",
+    "status_tagging_job_queued": "Hali: Kazi ya kutaga imepangwa kwenye foleni",
+    "status_tagging_tags": "Hali: Kutaga tags",
+    "tag_already_tagged": "Tag imeshatagiwa",
+    "tag_names_or_stashids_separated_by_comma": "Majina ya tags au StashIDs yametenganishwa kwa koma",
+    "tag_selection": "Uteuzi wa tag",
+    "tag_successfully_tagged": "Tag imetagiwa kwa mafanikio",
+    "tag_status": "Hali ya Tag",
+    "to_use_the_tag_tagger": "Ili kutumia tag tagger, kifupio cha stash-box kinahitaji kuwa kimewekwa.",
+    "untagged_tags": "Tags zisizotagwa",
+    "update_tags": "Sasisha Tags",
+    "updating_untagged_tags_description": "Kusasisha tags zisizotagwa kitaajaribu kulinganisha tags zozote zisizo na stashid na kusasisha metadata."
+  },
+  "tagger": {
+    "config": {
+      "active_stash-box_instance": "Kifupio cha stash-box cha sasa:",
+      "edit_excluded_fields": "Hariri Sehemu Zilizoondolewa",
+      "excluded_fields": "Sehemu zilizoondolewa:",
+      "fields_will_not_be_changed": "Sehemu hizi hazitabadilishwa wakati wa kusasisha {entity}.",
+      "no_fields_are_excluded": "Hakuna sehemu zilizoondolewa",
+      "no_instances_found": "Hakuna kifupio cha stash-box kilichopatikana"
+    },
+    "performers": {
+      "birthdate": "Performer anayelinganishwa ana tarehe ya kuzaliwa tofauti.",
+      "country": "Performer anayelinganishwa ni kutoka nchi tofauti.",
+      "ethnicity": "Performer anayelinganishwa ana kabila tofauti.",
+      "gender": "Performer anayelinganishwa ana jinsia tofauti.",
+      "stash_mismatch": "Performer anayelinganishwa tayari ana stash-id tofauti."
+    }
+  },
+  "tags": "Tags",
+  "tattoos": "Tatu",
+  "time": "Muda",
+  "time_end": "Muda wa Mwisho",
+  "title": "Jina",
+  "toast": {
+    "added_entity": "Imeongezwa {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "added_generation_job_to_queue": "Imeongeza kazi ya utengenezaji kwenye foleni",
+    "clipboard_access_denied": "Ufikiaji wa clipboard umekataliwa. Angalia ruhusa za browser yako",
+    "clipboard_image_pasted": "Picha imebandikwa kutoka clipboard",
+    "clipboard_no_image": "Hakuna picha iliyopatikana kwenye clipboard",
+    "created_entity": "Imetengenezwa {entity}",
+    "default_filter_set": "Filter ya kawaida imewekwa",
+    "delete_past_tense": "Imefutwa {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "generating_screenshot": "Inatengeneza screenshot…",
+    "screenshot_generated": "Screenshot imetengenezwa",
+    "image_index_too_large": "Hitilafu: Nambari ya picha ni kubwa kuliko idadi ya picha kwenye Gallery",
+    "merged_performers": "Performers wameunganishwa",
+    "merged_scenes": "Scenes zimeunganishwa",
+    "merged_tags": "Tags zimeunganishwa",
+    "reassign_past_tense": "Faili imekabidhiwa upya",
+    "removed_entity": "Imeondolewa {count, plural, one {{singularEntity}} other {{pluralEntity}}}",
+    "rescanning_entity": "Inascanishi upya {count, plural, one {{singularEntity}} other {{pluralEntity}}}…",
+    "saved_entity": "Imehifadhiwa {entity}",
+    "started_auto_tagging": "Auto tagging imeanzishwa",
+    "started_generating": "Utengenezaji umeanzishwa",
+    "started_importing": "Uhamishaji ndani umeanzishwa",
+    "updated_entity": "Imesasishwa {entity}"
+  },
+  "total": "Jumla",
+  "true": "Ndiyo",
+  "twitter": "Twitter",
+  "type": "Aina",
+  "unknown_date": "Tarehe haijulikani",
+  "unsupported_criteria": "Vigezo visivyojatibishwa: {criteria}",
+  "updated_at": "Imesasishwa",
+  "url": "URL",
+  "urls": "URLs",
+  "validation": {
+    "blank": "${path} lazima isiwe wazi",
+    "date_invalid_form": "${path} lazima iwe kwa umbizo la YYYY, YYYY-MM, au YYYY-MM-DD",
+    "end_time_before_start_time": "Muda wa mwisho lazima uwe mkubwa kuliko au sawa na muda wa kuanzia",
+    "required": "${path} ni sehemu inayohitajika",
+    "unique": "${path} lazima iwe ya kipekee"
+  },
+  "video_codec": "Codec ya Video",
+  "videos": "Videos",
+  "view_all": "Tazama zote",
+  "weight": "Uzito",
+  "weight_kg": "Uzito (kg)",
+  "years_old": "miaka",
+  "zip_file_count": "Idadi ya Faili ya Zip"
+}
