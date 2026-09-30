@@ -77,7 +77,17 @@ const getDurationStatus = (
   else if (scene.duration && Math.abs(scene.duration - stashDuration) < 5)
     match = <FormattedMessage id="component_tagger.results.fp_matches" />;
 
-  const matchPercentage = (matchCount / durations.length) * 100;
+  // #7266 - `durations` is empty when the server holds no fingerprints, but the
+  // guard above only bails when the LOCAL duration is missing too. So this
+  // division is 0/0 = NaN, every threshold comparison below is false, and a scene
+  // whose duration matches exactly gets the red cross. Score a duration-only match
+  // as 100 instead -- the thing being checked is the duration, and it matched.
+  const rawPercentage = (matchCount / durations.length) * 100;
+  const matchPercentage = Number.isNaN(rawPercentage)
+    ? scene.duration && Math.abs(scene.duration - stashDuration) < 5
+      ? 100
+      : 0
+    : rawPercentage;
 
   if (match)
     return (
