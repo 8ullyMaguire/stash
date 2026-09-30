@@ -233,12 +233,36 @@ the two tests into a hard `500, body empty` on every run. Strictly worse than
 the race. A defer belongs to the function it is written in, not to the work that
 function sets up.
 
-**Still not fully fixed, and stated in the commit rather than hidden:** a
-concurrent hammer (12 workers, 480 serves) sees a short body in ~0.3%, where the
-original code failed 5/5 runs. The remaining reaper is `LockContext.Cancel` at
-`pkg/fsutil/lock_manager.go:33` — a second `Wait()` on the cancel path, out of
-scope here. Bisected: 0/1000 at 2 workers, ~0.3% at 12, 0/1000 when each serve
-gets its own subtest cleanup.
+**The "still not fixed" caveat in the commit was WRONG, and here is the
+correction.** It claimed ~0.3% of serves still truncate, blamed
+`LockContext.Cancel` at `pkg/fsutil/lock_manager.go:33`, and shipped that
+attribution. Re-measured properly, it is not a bug at all:
+
+- Classifying by **status code** rather than body length: across **3840
+  concurrent serves, `truncated200=0`**. Every single "short body" was a **500**
+  carrying `fork/exec ...: text file busy` — **ETXTBSY**, the kernel refusing to
+  exec a file whose descriptor is still open for writing. That is a property of
+  the *hammer's own stub creation* (`os.WriteFile` racing its own `exec`), not of
+  the transcode path.
+- Replaying the handler's exact post-fix shape — both pipes, stderr drain
+  goroutine, `exec.CommandContext`, one-byte peek, `io.Copy` gated on
+  `readErr == nil` — 2000 times: **0 short bodies, and the peek returned
+  `(1, nil)` on all 2000**. The `readErr == nil` gate I had suspected is not
+  reachable.
+
+So the real result is **`037c9d6d1` fixed it completely**, and the commit
+message overstates the remainder. Two distinct mistakes, both mine:
+
+1. **A body-length check cannot tell a truncated stream from a failed start.**
+   `500` and a short `200` are different failures, and lumping them invented a
+   0.3% bug that did not exist. Classify by status code first.
+2. **I attributed the residue before measuring it.** `LockContext.Cancel` is a
+   real second `Wait()`, but it is not what the hammer was showing. Naming a
+   plausible-looking culprit I had not tested is worse than saying "unexplained".
+
+The harness is at `docs/mutate_ffmpeg_wait.py`; it asserts the classification
+itself, since a regression guard that cannot tell these two apart is what caused
+the whole misreading in the first place.
 
 Suite: **6/6 rounds clean**, 35 ok, 0 FAIL, against a 2-in-18 baseline.
 
