@@ -26,11 +26,11 @@ mechanism, not a queue of unmerged work.
 ## Where it stands now
 
 ```
-main            cd19a72ea  [origin/main: ahead 35]     clean
-merged          16 PRs -> 9 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
-                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue)
+main            3de3de80c  [origin/main: ahead 37]     clean
+merged          17 PRs -> 10 issues closed + 1 amended (#7241, #7255, #7180/#7179, #7137/#7136,
+                #7265/no issue, #7225/#3722, #7257/#5944, #7196/#7197, #7166/#7165, #7159/#684-amended, #7199/#7198, #7261/no-issue, #7181/no-issue, #7252/no-issue, #6917/no-issue, #7093/no-issue, #7235/stash#7234)
 issue ledgers   22 closed · 93 deferred · 129 not-planned · 431 planned · 675 total
-next PR         #7235
+next PR         #7245
 ```
 
 ## The first action
@@ -42,12 +42,40 @@ python3 docs/pr_triage.py report        # the 70-PR queue, bucketed
 ```
 
 Then pick the next PR off **Group C** in `docs/PR-DECISIONS-batch1.md` and merge
-it: **#7235** is next. One commit, one
+it: **#7245** is next. One commit, one
 verification, then `python3 docs/check-issue-ledgers.py`.
 
 Do **not** start Phase 2 until the Group C merges are done or consciously
 deferred — the goal document's ordering is deliberate, and Phase 2 is 432
 issues, which is weeks.
+
+## Session 17 — #7235 merged: closes stash#7234, a dependency rename a string match never followed
+
+`3de3de80c`, **closes stash#7234**. Safari rendered performer details BELOW the picture.
+
+`isPlatformUniquelyRenderedByApple` matched `os.name.includes("Mac OS")`; **ua-parser-js v2
+reports `macOS`**, so the substring never occurred and every desktop Safari user got `false`.
+Verified against the installed package, not the changelog. iOS kept working, which is why the
+report is macOS-specific.
+
+**Why a util file is a layout bug:** the one call site sets the `apple` class, and index.scss
+gates the whole layout on `.apple .detail-container { display: flex }`.
+
+Also: one parse instead of two, and a real `boolean` return instead of `boolean | undefined`.
+Upstream's `mac os`/`macos` matching kept — only `macOS + Safari` flips, nothing regresses.
+
+**9 checks driving the real parser.** The finding worth keeping:
+**ua-parser-js captures `window.navigator` into a module-level NAVIGATOR constant at IMPORT time**
+(`ua-parser.js:119`), reading `NAVIGATOR.userAgent` later (`:1460`) — so rebinding
+`globalThis.navigator` after the import can never work, and in node there is no window at all.
+Every case returned false, and **three of the six failing checks were the very bug the file
+exists to catch**. A harness that fails everything is indistinguishable from one measuring
+nothing. Two more: `new Function` yields the body's *return value* (a boolean, not a callable),
+and lifted consts must be re-evaluated per call, not once at factory time.
+
+**Ledger:** `stash#7234` planned -> closed, plus a `closed-issues.md` row. Both count sites
+rewritten from a `Counter`; `not planned` is `not-planned` **+** `deferred` (129+93=222), which a
+naive regex parses as zero. Now 430 planned, 222 not planned, 23 closed, 675 total.
 
 ## Session 16 — #7093 merged: a draft kept on merit, and a flag that must not move
 
@@ -584,10 +612,10 @@ recorded decision.**
 | | |
 |---|---|
 | Open PRs, all dispositioned | **70 / 70** |
-| Merged and committed | **16** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue) |
+| Merged and committed | **17** (`#7241`, `#7255`, `#7180` → `stash#7179`, `#7137` → `stash#7136`, `#7265` → no issue, `#7225` → `stash#3722`, `#7257` → `stash#5944`, `#7196` → `stash#7197`, `#7166` → `stash#7165`, `#7159` → `stash#684` re-fixed, `#7199` → `stash#7198`, `#7261` → no issue, `#7181` → no issue, `#7252` → no issue, `#6917` → no issue, `#7093` → no issue, `#7235` → `stash#7234`) |
 | Declined on a named non-negotiable | **6** |
 | Deferred with the reason recorded | **62** |
-| Commits on `main` | 35, from `02d0d0476` to `cd19a72ea` |
+| Commits on `main` | 37, from `02d0d0476` to `3de3de80c` |
 
 The two merges are not "applied upstream's patch". Each is **the idea, not the
 patch**, and both are recorded in `docs/PR-TRIAGE.md` with the measurement that

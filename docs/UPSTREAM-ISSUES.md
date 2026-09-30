@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 431 planned, 222 not planned, 22 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 430 planned, 222 not planned, 23 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -21,7 +21,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
-**431 planned, 222 not planned, 22 closed, 675 total.**
+**430 planned, 222 not planned, 23 closed, 675 total.**
 
 ## How to read `planned`
 
@@ -110,7 +110,7 @@ These carry a label the maintainers themselves applied.
 | 7240 | [security] Zip-Slip arbitrary file write in import and package install | upstream-marked (bug report) | closed |
 | 7239 | Hardware transcode: [InitHWSupport] Supported HW codecs [0] gives no a | upstream-marked (bug report) | planned |
 | 7238 | paths.funscript should use signed URLs when authentication is enabled | upstream-marked (bug report) | planned |
-| 7234 | Details for Performers being shown below Picture on Safari | upstream-marked (bug report) | planned |
+| 7234 | Details for Performers being shown below Picture on Safari | upstream-marked (bug report) | closed |
 | 7231 | Can't scrape any male or trans performers using freeones and all other | upstream-marked (bug report) | planned |
 | 7229 | Preview generation fails when video stream has a non-zero start offset | upstream-marked (bug report) | planned |
 | 7222 | Studios page extremely slow on large image libraries | upstream-marked (bug report) | planned |

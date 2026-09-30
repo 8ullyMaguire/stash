@@ -52,13 +52,13 @@ re-listing it adds nothing.
 
 ```
 #4011 #4699 #4733 #4785 #5012 #5606 #6197 #6440 #6479 #6685 #6783 #7038
-``````````````````````````````````````````
+`````````````````````````````````````````````
 
-**B2 — mergeable, and a Group C candidate this batch (4).** Listed in Group C.
+**B2 — mergeable, and a Group C candidate this batch (3).** Listed in Group C.
 
 ```
-#7235 #7245 #7249 #7254
-``````````````````````````````````````````
+#7245 #7249 #7254
+`````````````````````````````````````````````
 
 **B3 — mergeable, sound, not a candidate in this batch (32).** Deferred on the
 same sequencing reason; they are simply not the ones I would take first. Each
@@ -69,7 +69,7 @@ is 32, which is why neither is a "quick merge" despite being mergeable.
 #6179 #6224 #6519 #6828 #6848 #6896 #6908 #6927 #6934 #6951 #6957 #7025
 #7030 #7048 #7061 #7088 #7097 #7126 #7143 #7158 #7172 #7195 #7203 #7214
 #7215 #7220 #7224 #7227 #7237 #7248 #7259 #7264
-``````````````````````````````````````````
+`````````````````````````````````````````````
 
 **Why a mergeable, pure-UI, one-file PR is still not a merge.** #7235, #7245 and
 #7249 are each a single CSS file, mergeable, with no backend surface. The
@@ -102,7 +102,8 @@ Each is still one commit and one verification. **The first two are already done.
 | — | **#7159 — DONE** | `352c7d105`. Merged as written for the Go fix — `GetHomeDirectory` called `user.Current()` and **panicked** on a uid with no passwd entry, which is exactly what a numeric uid gives you; now reads `$HOME` first via `os.UserHomeDir()`. Upstream's `user: "N:M"` mechanism **collided with ours**: Docker then starts the container already non-root, so `su-exec` cannot setuid and the container died with `setgroups(1000): Operation not permitted`, exit 1. **Two fixes to our entrypoint, neither sufficient alone** — verified by removing one at a time against a built image: both reverted → 5 of 6 new tests fail; only the first → 5 fail; only the second → 3 fail; both → 16/16 with all 10 pre-existing tests still green. |
 | — | **#7166 — DONE** | `c71899e7f`. Merged as written, applied with `--3way` (#7196 had moved the media-src lines). Closes `stash#7165` — mis-ticketed *not-planned*, **2nd instance**. **3 fixes, one a security hole**: the wildcard check tested `u.Host` only, so `https://cdn.example.com/*` passed, and a path wildcard is a legal CSP source expression matching every request under that host; a CSP source expression is a *prefix match*, so "the host is exact" was never the property that mattered. Also a bare `csp_` key read as a source, and `http://.` / `https://..` passed the host checks. |
 | — | **#7199 — DONE** | `c2bfd44ce`. Recursive requirement installation; the cycle guard and the manifest `Requires` line kept as upstream wrote them. **One fix, a crash**: `packageByID` returns `(nil, nil)` for an ID not in the index and `install` dereferenced it at `remote.GetPackageZip(ctx, *pkg)`, so a requirement the source does not publish panicked with a nil dereference. Pre-existing, but this PR is what makes a bad requirement name an ordinary input. Closes `stash#7198` — correctly ticketed *planned*, not mis-ticketed. |
-| 4 | #7235 #7245 #7249 #7254 | Next. |
+| 4 | #7245 #7249 #7254 | Next. |
+| — | **#7235 — DONE** | `3de3de80c`. **Closes stash#7234** — Safari rendered performer details BELOW the picture. A dependency rename the string match never followed: ua-parser-js v2 reports `macOS`, the old code matched `"Mac OS"`, so the substring never occurred and every desktop Safari user got `false`. Verified against the installed package, not the changelog. **Why a util file is a layout bug**: the one call site sets the `apple` class, and index.scss gates the whole layout on `.apple .detail-container { display: flex }`. Also one parse instead of two, and a real `boolean` return instead of `boolean | undefined`. **9 checks driving the real parser**, asserting the premise (the parser says `macOS`, `"Mac OS"` does not match it) and restating the defect independently of the source's shape. **Three fixture bugs produced a FALSE PASS** — ua-parser-js captures `window.navigator` at import time, so rebinding `globalThis.navigator` cannot work and three of six checks failed, which is what a harness measuring nothing looks like. |
 | — | **#7093 — DONE** | `cd19a72ea`. Waits for in-flight queries before `resetStore()`, which cancels them. **Premise confirmed from Apollo's own source**: `QueryManager.clearStore` calls `cancelPendingFetches(newInvariantError(42))` (core.cjs:1554), and `getCurrentResult()` is a pure read of `queryInfo.networkStatus` so the 100ms poll generates no load. **The fix is correct as written, including a placement that looks like a mistake**: `resetQueued = false` sits BEFORE `await client.resetStore()` on purpose — moving it after would coalesce every event arriving during a reset, which is the race being fixed. Upstream's comment justified the coalescing for the wrong reason; rewritten to state the load-bearing invariant so nobody “tidies up” the flag. **16-check probe against a real ApolloClient** (a fake store proves nothing about cancellation), including the reported bug observed: resetting with a query in flight REJECTS it. **Kept rather than declined** despite being draft — the #6824 precedent was 40 files, conflicting, and a schema rewrite, every disqualifier a merit; this is one mergeable file. Four fixture bugs of my own, each reading like a finding about the code. |
 | — | **#6917 — DONE** | `8c1601ecf`. Persists DisplayMode per view to IndexedDB. **The Go file is a drift fix, not a change**: `//go:generate` has said `FolderRelatedFolderIDsLoader` for a while and the checked-in file still carried `FolderParentFolderIDs` — the PR is byte-identical to regenerated output, verified. **Regenerating ALL loaders is not safe**: it rewrites three unrelated ones with a duplicate `"time"` import (`time redeclared in this block`) — reverted. **The frontend guard could not latch**: `location.search.includes("disp=")` is unsound because `filter.ts:382` emits `disp` only when the mode differs from the default Grid, so for a default-mode user the guard never latches and the effect re-runs on every filter change. Underneath that the restore and useFilterURL's empty-search branch are **two writers to one state**, and the winner was decided by effect declaration order. Now a ref keyed by view: restore once per view per mount. **19-check harness that asserts its own premise first** — the guard's soundness is a fact about another file. Verified it fails on revert. |
 | — | **#7252 — DONE** | `799ac6f70`. Swahili (Kenya), 1384 keys, exact structural match against en-GB (0 missing, 0 unknown); registered in all three places. **Removed the “(Preview)” suffix** — the tree's convention is ≥80% complete goes unlabelled, and sw-KE is 100%. **Found and fixed a pre-existing bug: 14 locales were sorting with English collation rules** (af-ZA, ar, ja-JP, hi-IN, vi-VN, …) because locale.go never registered them; af-ZA and nb-NO were worse, resolving to nl-NL and da-DK. **8 tests over the 3-point registration invariant** — after five broken revisions, the worst being an empty parse that made the assertion pass trivially. Verified end to end: the locale lands in its own code-split chunk and the main bundle references it. |
@@ -923,6 +924,85 @@ inside its poll loop when the second event arrives — so it is coalesced, which
 documented intent. The case was rewritten to exercise the window that actually exists: an
 event arriving after the flag clears but while the reset is refetching.
 
+## #7235 — merged: a dependency rename a string match never followed, closing stash#7234
+
+`3de3de80c`, **closes stash#7234**. On Safari the performer details rendered below the
+picture, and the collapse arrow hid them entirely. 5+3 in one file.
+
+### The bug
+
+`isPlatformUniquelyRenderedByApple` gated on `os.name.includes("Mac OS")`. **ua-parser-js v2
+renamed the OS to `macOS`** — no space — so the substring never occurred. Verified against the
+installed package, not the changelog:
+
+| user agent | os | browser |
+|---|---|---|
+| Safari 18 on macOS | `macOS` | `Safari` |
+| iPad in desktop mode | `macOS` | `Safari` |
+| iPhone Safari | `iOS` | `Mobile Safari` |
+| Chrome on macOS | `macOS` | `Chrome` |
+
+Every desktop Safari user got `false`. iOS kept working, which is why the report is
+macOS-specific.
+
+### Why a util file is a layout bug
+
+The function's one call site (`App.tsx:87`, module scope) sets the `apple` class, and
+`index.scss` gates the whole performer-details layout on it:
+
+```scss
+.apple { @media (min-width: 576px) { .detail-header .detail-container { display: flex; } } }
+```
+
+No `apple` class, no flex, details stack under the picture. Short chain, worth writing down.
+
+### Two changes beside the substring, both behaviour-preserving
+
+- **One parse instead of two.** The old code called `UAParser()` twice with no argument, each
+  reading `navigator.userAgent`. It *cannot* actually disagree — userAgent does not change
+  during a page's life — but one parse says plainly that `os` and `browser` describe the same
+  browser.
+- **A real `boolean` return.** Every `?.includes` yielded `boolean | undefined`, so the function
+  could return `undefined`. Falsy, so the call site behaved identically and the old code had the
+  same shape — but the declared type was a lie of omission.
+
+Upstream's `mac os`/`macos` matching is kept: the truth table over real parser output shows only
+`macOS + Safari` flips false → true, and nothing regresses. An `iPadOS` string would still be
+missed by `includes("ios")`, but this parser does not emit one and the old code shared the
+property — recorded, not changed.
+
+### The harness, and three fixture bugs that produced a FALSE PASS
+
+9 checks driving the **real** parser with real user-agent strings. Asserting the literals
+`"macOS"`/`"iOS"` as *inputs* would be asserting a copy of the dependency's data, and would keep
+passing if ua-parser-js renamed things again. The premise is asserted too, and **the defect is
+restated independently of the current source's shape** — because the behavioural checks lift the
+decision out of `apple.ts` by anchor, so reverting the fix made the lift throw *"could not locate
+the decision"*: a failure about the harness, not the code.
+
+The three fixture bugs are the part worth keeping:
+
+- **ua-parser-js captures `window.navigator` into a module-level `NAVIGATOR` constant at IMPORT
+  time** (`ua-parser.js:119`) and reads `NAVIGATOR.userAgent` later (`:1460`). So rebinding
+  `globalThis.navigator` after the import cannot work — the parser keeps the original reference,
+  and in node, with no window, it is `undefined`. Every case returned `false`, and **three of the
+  six failing checks were the very bug the file exists to catch**. A harness that fails everything
+  is indistinguishable from a harness measuring nothing.
+- `new Function("UAParser", body)(UAParser)` yields the body's *return value* — a boolean, not a
+  callable — so the first three attempts called a non-function.
+- the lifted `const`s were evaluated once when the factory ran, at module load; they must be
+  re-evaluated per call.
+
+Verified it fails on revert, with revert and restore in one process.
+
+### Ledger
+
+`stash#7234` moved `planned` → `closed` in `UPSTREAM-ISSUES.md` and gained a
+`closed-issues.md` row. Both count sites were rewritten from a `Counter` over the table's verdict
+column — `not planned` is `not-planned` **+** `deferred` (129 + 93 = 222), which a naive regex
+parses as zero and writes a total that does not add up. Now **430 planned, 222 not planned, 23
+closed, 675 total.**
+
 ## The count — verified, not eyeballed
 
 `docs/pr_triage.py report` is the check: it re-reads `pr-queue.json` and prints
@@ -934,9 +1014,9 @@ had been dropped from every table by hand-typing rather than by any rule.
 
 ```
 declined on a named rule .............................  6
-merged + committed ...................................  16
+merged + committed ...................................  17
 deferred, CONFLICTING by git .........................  12
-deferred, mergeable, Group C candidate ...............  4
+deferred, mergeable, Group C candidate ...............  3
 deferred, mergeable, not a candidate in this batch ...  32
                                                      --
 total ...............................................  70
