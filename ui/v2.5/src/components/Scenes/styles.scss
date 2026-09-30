@@ -607,8 +607,14 @@ input[type="range"].blue-slider {
     color: rgba(191, 204, 214, 0.5);
   }
 
+  // #ffffff, not the old #664c3f. That brown was 1.35:1 against the
+  // .btn-secondary background -- below the 3.0 WCAG 1.4.11 minimum for a
+  // graphical object, and only 2.10:1 against this button's own inactive state,
+  // which is why the flag was hard to read at a glance. White is 10.64:1 and
+  // holds on hover too, where the background darkens to #23272b. Closes
+  // https://github.com/stashapp/stash/issues/7160.
   &.organized {
-    color: #664c3f;
+    color: #ffffff;
   }
 }
 
