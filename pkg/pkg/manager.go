@@ -152,6 +152,26 @@ func (m *Manager) getStore(remoteURL string) *Store {
 }
 
 func (m *Manager) Install(ctx context.Context, spec models.PackageSpecInput) error {
+	return m.install(ctx, spec, make(map[string]struct{}))
+}
+
+// installs the package identified by spec, then recursively installs
+// or updates any of its requirements that are missing or outdated. installing
+// tracks package IDs currently being installed in this call tree to guard
+// against dependency cycles
+func (m *Manager) install(ctx context.Context, spec models.PackageSpecInput, installing map[string]struct{}) error {
+	if _, inProgress := installing[spec.ID]; inProgress {
+		return nil
+	}
+	installing[spec.ID] = struct{}{}
+
+	// Undo on the way out, or this is a "seen in this call tree" set rather than
+	// a cycle guard, and the second legitimate visit to a package -- a diamond,
+	// or a dependency already pulled in by an earlier branch -- is silently
+	// skipped, leaving it outdated or missing. A cycle guard has to be scoped to
+	// the path, not to the whole traversal.
+	defer delete(installing, spec.ID)
+
 	remote, err := m.remoteFromURL(spec.SourceURL)
 	if err != nil {
 		return fmt.Errorf("creating remote repository: %w", err)
@@ -160,6 +180,15 @@ func (m *Manager) Install(ctx context.Context, spec models.PackageSpecInput) err
 	pkg, err := m.packageByID(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("getting remote package: %w", err)
+	}
+
+	// packageByID returns (nil, nil) when the ID is not in the index, so this
+	// used to dereference nil and crash the process rather than report a missing
+	// package. Reachable from Install directly, and from a REQUIREMENT since
+	// #7199 -- where a plugin naming a dependency the source does not publish is
+	// an ordinary, reportable condition, not a crash.
+	if pkg == nil {
+		return fmt.Errorf("package %s is not available from %s", spec.ID, spec.SourceURL)
 	}
 
 	fromRemote, err := remote.GetPackageZip(ctx, *pkg)
@@ -197,6 +226,44 @@ func (m *Manager) Install(ctx context.Context, spec models.PackageSpecInput) err
 		return fmt.Errorf("installing package: %w", err)
 	}
 
+	if err := m.installRequirements(ctx, *pkg, spec.SourceURL, store, installing); err != nil {
+		return fmt.Errorf("installing required packages: %w", err)
+	}
+
+	return nil
+}
+
+// installRequirements installs any packages listed in pkg.Requires that are
+// not already present in store, and updates any that are already installed
+// but older than the version available from the source
+//
+// requirements are resolved against the same source as pkg itself.
+func (m *Manager) installRequirements(ctx context.Context, pkg RemotePackage, sourceURL string, store *Store, installing map[string]struct{}) error {
+	for _, reqID := range pkg.Requires {
+		reqSpec := models.PackageSpecInput{ID: reqID, SourceURL: sourceURL}
+
+		local, err := store.getManifest(ctx, reqID)
+		if err == nil {
+			// already installed - only reinstall if the source has a newer version
+			remotePkg, err := m.packageByID(ctx, reqSpec)
+			if err != nil {
+				return fmt.Errorf("getting remote package %s, required by %s: %w", reqID, pkg.ID, err)
+			}
+
+			if remotePkg == nil || !local.Upgradable(remotePkg.PackageVersion) {
+				continue
+			}
+
+			logger.Infof("Updating package %s, required by %s", reqID, pkg.ID)
+		} else {
+			logger.Infof("Installing package %s, required by %s", reqID, pkg.ID)
+		}
+
+		if err := m.install(ctx, reqSpec, installing); err != nil {
+			return fmt.Errorf("installing package %s, required by %s: %w", reqID, pkg.ID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -207,6 +274,7 @@ func (m *Manager) installPackage(pkg RemotePackage, store *Store, zr *zip.Reader
 		Metadata:       pkg.Metadata,
 		PackageVersion: pkg.PackageVersion,
 		RepositoryURL:  pkg.Repository.Path(),
+		Requires:       pkg.Requires,
 	}
 
 	for _, f := range zr.File {
