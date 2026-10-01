@@ -760,6 +760,12 @@ Each is independently shippable and each ends with tests green and a tag.
 | M4 | **Public hosting** | TLS enforcement, 2FA, access grants, first-run wizard |
 | M5 | **P2P downloader** | plugin: BitTorrent + ed2k + Kademlia, library integration, as a static binary over `interface: rpc` |
 | M6 | **Upstream issues** | the 850-row matrix, worked capability by capability |
+| M7 | **The mesh** | §6a: federation protocol, trust levels, recommendations, preservation, identification, curation, ranking, ecosystem. R010–R073 in `docs/requirements.csv`. |
+
+**M7 added 2026-09-28 by owner directive.** It sits after M6 and is built on
+their machinery; nothing in M0–M6 is removed or reordered. The ledger
+`docs/requirements.csv` is its record of record, and its `status` column is
+updated as work lands — `shipped` / `tested` / `specified`.
 
 M0 is a prerequisite for everything and is where the work starts.
 
@@ -827,6 +833,383 @@ consent tiers (§6) and clusters have to exist before material can be linked
 across sources. Consent and identity are the same problem here — a cluster
 merge that crosses a consent boundary is a moderation event, not a background
 job.
+
+---
+
+---
+
+# 6a. The mesh: discovery, preservation, trust, curation and ranking
+
+**Added 2026-09-28 by owner directive.** Steers the fork from "a private library
+with a governance kernel" toward **a federated, discovery-first, preservation-
+first community archive**. Nothing in §§1–13 is removed, reordered or
+weakened; this section extends them. Where a mechanism already exists (§4's
+proposals, §5's reputation, §6.5's federation, the directory entities) it is
+reused by reference and named, never restated.
+
+**Status vocabulary note.** `docs/requirements.csv` carries one row per
+requirement, R001–R073, and is the ledger of record. The status column uses
+`shipped`, `tested` and `specified`; `specified` is a value this pass
+introduced, because a requirement that exists only in this section is neither
+built nor unimplemented and had no honest label in the previous vocabulary.
+
+### 6a.1 The thesis, and what it does not change
+
+The mesh is not one database. **Each instance is its own portal, community and
+archive**; instances peer, share metadata and coordinate preservation, and each
+sees the mesh through its own taste. The existing non-negotiables survive
+unchanged and this section is written to respect them:
+
+- Proposals remain **the only write path to shared content** (non-negotiable
+  #5). Nothing here writes a shared field directly, including merges (§6a.14)
+  and identification results (§6a.13).
+- The owner is still **not an admin over content** (#6). Operator control in
+  §6a.12 is over gravity, thresholds, peer sets and budgets — never over an
+  accepted edit.
+- **No stored counters** (#4). Every score in this section — completion,
+  Elo, XP, reputation, replication count — is **computed from its underlying
+  records**, never maintained. This is why §6a.15's completion score is a view
+  and not a column, and it is the single most load-bearing constraint here.
+- **SQLite only** (#3). A mesh does not get its own database.
+- **Opt-out remains a hard stop in the publish path** (#7). §6a.21's SEO
+  surfaces are explicitly subordinated to it, and §6a.11 says so.
+
+**The one genuine tension** is §6a.11's opt-in content viewing against §6.4's
+"library access is not metadata access", and it is resolved in §6a.11 rather
+than left for a later session.
+
+### 6a.2 Instances, and the two profiles they publish
+
+An **instance** is a StashForge deployment acting as a mesh node. It publishes
+a **taste profile** and a **capability profile**:
+
+| Profile | Contents | Source |
+|---|---|---|
+| Taste | aggregate Elo, tag distribution, curation history, opt-in viewing signals | computed from local records (§6a.3, §6a.16) |
+| Capability | storage capacity, bandwidth, uptime, content policy, replication limits, supported features | operator config, self-reported |
+
+**Both are claims, and both are treated as claims.** A capability profile is
+what an instance *says* it can store; a preservation decision (§6a.9) that
+relies on it is relying on a stranger's statement, which is the same posture
+the P2P plugin takes toward a peer-supplied filename. The design consequence
+is in §6a.9: a replica counts as healthy only after a **manifest
+verification**, never after the peer says it accepted the bytes.
+
+Instances with similar taste profiles peer more closely. Similarity shapes
+recommendation blending (§6a.5), joint curation (§6a.15) and replication
+targeting (§6a.9) — **never access control.** Two instances liking the same
+things grants no user any additional permission on either.
+
+### 6a.3 Portable taste, and what it deliberately does not carry
+
+A user's **taste fingerprint** is a derived vector over their own votes, tags,
+reviews and curation. It is portable between instances they join.
+
+**The fingerprint carries no identity, no credentials and no consent state.**
+This is the same separation §6.2 already draws: consent is per-instance and
+re-prompted when the disclosure changes. A fingerprint that travelled with
+consent would make opting out on one instance a lie, because the next instance
+would already hold the decision.
+
+Accepting a fingerprint from a peer is therefore an **untrusted input of the
+same class as a peer-supplied name** (non-negotiable #9's `SanitizeJoin`
+rule): it is validated, bounded, and never allowed to widen what a user may
+see.
+
+### 6a.4 Discovery is the default surface
+
+Discovery is not a search box. Every entity — performer, scene, studio, site,
+tag, list, **and instance** — carries:
+
+- **similar to** (by tag, studio, cohort and rank correlation)
+- **users like you also liked** (by taste fingerprint, §6a.3)
+- **appears in**, **curated by**, **preservation status** (§6a.9)
+- **because you liked** (on the home feed, §6a.7)
+
+A **discovery board** is a community-made list or ranking. It is distinct from
+the **directory** (§6a.17), which is a structured, filterable catalogue of
+sites and studios: boards are editorial, the directory is enumerable.
+
+### 6a.5 Recommendation ranking, and why it is a view
+
+Results are ranked by a score composed of three terms:
+
+1. **personal taste match** — the user's own fingerprint (§6a.3)
+2. **instance gravity** — the operator's theme (§6a.8)
+3. **peer similarity** — how close the source instance's taste is (§6a.2)
+
+**Every term is computed at query time from records.** There is no
+`recommendation_score` column, for non-negotiable #4, and the practical
+consequence is that a term can be **replaced in the config and take effect
+immediately** — which is exactly the "gravity slider" the brief asks for, and
+it is a slider over a *view's* parameters rather than over stored state.
+
+**A user's explicit preference outranks all three terms.** Non-negotiable #6
+and §5.1: a request for a specific entity returns that entity, and no ranking
+score may bury it. Ranking shapes an unordered set; it never filters one.
+
+### 6a.6 Cross-instance discovery
+
+A query runs against the local instance and, for entities the local instance
+lacks, against peered instances — **the same GraphQL surface §6.5 already
+federates over**, extended with a ranking argument. An instance may consume a
+peer's commons for identification without publishing to it (§6.5, unchanged).
+
+Results carry their origin instance, and the origin **never** substitutes for
+the requested identity: an entity id is namespaced by endpoint, so a peer's
+`scene 412` is not this instance's `scene 412`. Without namespacing a
+federated result set is a merge bug waiting to happen, and it is the same
+class of error as the plugin's `UserID`/`Port` confusion (the §7 live-test
+finding: a handle that is right about one property and useless about another).
+
+### 6a.7 Home feed
+
+Personalized recommendations (§6a.5), mesh trending, instance spotlight, new
+curation quests (§6a.15), identification-board highlights (§6a.13) and awards
+(§6a.16). The feed is a **composition of those surfaces, not a new one**, so
+each item's source stays legible to the reader.
+
+### 6a.8 Instance operators control theme, not content
+
+Operators set **gravity** — the theme the instance bends toward — and never the
+rank of an individual entity. This preserves #6: gravity is a weight over a
+category, not an override of a decision. A high-trust subset may be delegated
+to tune it (§6a.12).
+
+### 6a.9 Preservation is a protocol, not a feature
+
+**Every content object carries a preservation policy, and the default is that a
+scene is hosted on at least three instances.** This is the brief's central new
+mechanism and the spec's most consequential addition.
+
+- **Default policy:** ≥3 replicas per scene; min/max per instance; opt-outs
+  per scene, studio, tag or performer; storage and bandwidth budgets;
+  retention rules; global defaults with per-scene overrides and emergency
+  rules.
+- **Scheduling is automatic**: the mesh places a replica on a peered instance
+  with capacity and a similar taste profile.
+- **Health checks, manifest verification and automatic repair** keep replicas
+  alive; a peer going offline is detected as a missing replica and repaired.
+- **Metadata is always replicated; content replication follows per-instance
+  policy.** Two policies for two object classes, deliberately.
+
+**The consent interaction, which is a hard constraint and not a default.**
+Replication places one instance's copy of a scene's bytes on another instance's
+disk. For a user who set `metadata_share = 'opted-out'` (§6.2), **their scene
+is never a replication subject**, and no amount of mesh popularity or a
+preservation bounty changes that. Non-negotiable #7 makes opt-out a hard stop
+in the publish path, and replication is a publish path.
+
+**A replica is not a copy the receiving instance gets to forget.** Where a
+replica is observable by a user of the receiving instance it is subject to that
+instance's own consent state; an instance that must not hold a replica refuses
+it, and refusing is not a partial success.
+
+**Preservation is never a reason to bypass a policy.** An emergency
+preservation rule is an operator widening *their own* retention, never an
+instruction to a peer.
+
+### 6a.10 Gamification, reputation, and the one line that must not be crossed
+
+XP, levels, badges, streaks, leaderboards, guilds, mentorship, awards.
+
+**Reward never grants access.** Reputation feeds *ballot weight* (§5.3) and
+*completion metrics*; it never grants a trust level (§6a.11), never unlocks
+content, and never lets a user approve their own edit past the verification
+requirement (§6a.14). A reputation that could buy access would make the entire
+governance model a pricing mechanism, which non-negotiable #5 and §5.1 exist
+to prevent. This sentence is the constraint the feature exists to be bounded
+by.
+
+**One reputation, or several?** The brief implies several (curator, reviewer,
+identifier, preservationist). Several is the design: each is a **separate
+derived view over the audit log** (§4.2), computed independently so a user
+excellent at identification does not thereby gain curation weight. A single
+unified number would let any one activity buy standing in the others, which is
+the same failure in miniature.
+
+**Delegation.** A high-trust subset may be granted authority over gravity
+(§6a.8) and policy input (§6a.12), never over content.
+
+### 6a.11 Trust levels: access, distinct from reputation
+
+**This is the one place where the brief and the existing spec use the same word
+for different things, and the distinction is load-bearing.** The existing
+mentions of "trust tier" are about **vote weighting in §5.3**. This section
+introduces **access levels**, governing what a user may *do to content*. They
+are separate and neither is derived from the other.
+
+| Level | Name | Adds |
+|---|---|---|
+| 0 | Public | browse directory, metadata, collages, reviews |
+| 1 | Registered | vote in matchups, submit edits, review, flag, post on the ident board |
+| 2 | Contributor | trusted edits auto-approve, expanded collages, XP |
+| 3 | Curator | merge duplicates, approve edits, manage tags, claim quests, full snapshot sets |
+| 4 | Archivist | **opt-in** content viewing, streaming, download, upload, host replicas |
+| 5 | Steward | governance, API keys, awards voting, gravity input, preservation policy input |
+
+Levels are **earned** through approved edits, verification consistency,
+identification solves, curation quests and preservation contributions — the
+governance actions already audited in §4.2, read as evidence.
+
+**Access is never granted by a reputation score and never by XP** (§6a.10).
+An access level is a separate, deliberately slower, human-verified track.
+
+**Viewing is opt-in even at level 4.** Reaching Archivist does not itself
+enable content: the user additionally consents, per instance, revocably. This
+is the resolution of the tension named in §6a.1 — a trust level is a ceiling
+on what may be offered, and consent is the separate switch that enables it.
+
+**Trust and reputation may be attested across instances** (§6a.6): an attested
+claim is a signed statement about a level already earned, never a shared
+account and never a portable credential.
+
+### 6a.12 Instance operators control policy, never content
+
+Operator-controlled: instance theme and gravity (§6a.8); trust thresholds for
+content access (§6a.11); replication policy, min/max replicas, opt-outs,
+preferred peers, budgets, retention (§6a.9); federation agreements and which
+peer taste profiles are trusted (§6a.6); local moderation and curation
+priorities; delegation to a high-trust subset for gravity and policy input
+(§6a.10).
+
+**An operator's ceiling is a ceiling.** Operator status is a management role
+(§5.1) and confers no content access it has not earned at the same level as
+any other user. A low threshold is a policy choice about what the instance
+*offers*; it never grants the operator anything the threshold excludes.
+
+### 6a.13 The identification board
+
+A community board for resolving "which was that" — performers, scenes,
+studios, sites or tags — from a description, collage, snapshot, frame or
+context. Users suggest candidates and vote; a solved query becomes a
+**canonical link** feeding the directory, search and recommendations (§6a.5).
+
+**A solved identification becomes a proposal, not a write.** Per #5, a solved
+query asserting a performer link produces a typed field proposal (§4, §5.3)
+with its evidence attached, accepted by the ordinary governance path. This is
+the difference between the board working and the board bypassing governance,
+and it is the most important constraint in this section.
+
+Bounties for hard cases, solve streaks and detective badges are gamification
+(§6a.10) and grant no access.
+
+### 6a.14 Duplicate detection and merge
+
+**Perceptual hashing** over snapshot frames, plus metadata similarity and
+community voting, surfaces duplicate candidates. This is a **new mechanism**
+here: the existing dedupe/merge machinery (§4's proposals, M2c's identity
+clustering) works on *metadata*, not image content, and the two are
+complementary — phash finds candidates that identical metadata hides, and
+metadata resolves candidates phash flags.
+
+**Merge is a governance action, not a button.** A merge is a set of typed
+field proposals plus a **redirect record**; it never deletes a row. Redirects
+are idempotent, and a merge may be reversed by a later proposal — the
+"rejected, not deleted" property the spec already relies on for edits.
+
+**Multi-user verification.** An edit flagged high-impact requires confirmations
+from more than one trusted user before it applies. The threshold is a policy
+value and the check is in the proposal path, not in the UI.
+
+### 6a.15 Completion and curation
+
+Every entity carries a **completion score**: the fraction of expected metadata
+present and verified. Expected fields are a per-entity-type list, and absent is
+distinct from empty (§4.1's vocabulary), so a field explicitly cleared does
+not count as missing.
+
+**A completion score is a view, never a column** — non-negotiable #4. This is
+load-bearing: a stored score rots the moment an edit lands, and the spec's
+central insight is that derived state is recomputed from records.
+
+- **Curation quests** target a measurable gap ("add birthdates for 5
+  performers", "link 10 unlinked scenes"). A quest is a *query* over
+  completion, not a stored list — a quest whose gap is closed is complete with
+  no write required.
+- **Bounties** attach bonus XP to high-impact gaps: rare performers, lost
+  studios, obscure scenes.
+- **Federated campaigns** run across instances with similar taste (§6a.2).
+- **"Adopt a performer/site"** is a long-lived claim making one user the
+  primary curator of an entity; it creates *preference* in the UI, never an
+  exclusive write right.
+- **Progress bars everywhere** — each entity page shows completion and which
+  fields are missing, because a progress bar is the completion view rendered.
+
+### 6a.16 Elo ranking
+
+**Pairwise Elo** over performers, scenes, studios, sites, tags, lists and
+instances. Glicko-2 or TrueSkill — named as candidates, not chosen here; the
+choice is a plan-level decision with one requirement: it must compute a rating
+from a **vote set** rather than maintain a counter (#4). Ratings are therefore
+derived from the vote rows, either recomputed or incrementally maintained from
+them; either way the votes are the truth.
+
+Leaderboards are scoped local / mesh / global and by genre, era, studio and
+country. **Time decay** reflects current relevance. Voting feeds the taste
+fingerprint (§6a.3), so Elo serves discovery rather than being an end.
+
+**Gamified voting** — streaks, daily matchups, bracket challenges — is a
+retention mechanic and grants nothing (§6a.10).
+
+**Awards** are a community-vote-plus-Elo annual event: attention, not
+governance. An award never grants a trust level or any access.
+
+### 6a.17 The directory, extended
+
+The directory already exists in the fork (site, studio, performer entities) and
+this section **extends rather than re-creates** it: network/site profiles with
+pricing and payment methods; studio profiles carrying roster and completion
+score (§6a.15); structured user reviews with a verified-usage flag;
+**claim-and-confirm verified badges** — a studio or performer claims, an
+existing trusted user confirms — rather than an operator granting a badge; user
+editorial lists (§6a.4).
+
+### 6a.18 Ecosystem
+
+Public API over GraphQL (existing §10) plus REST, SDKs and webhooks; a
+developer sandbox with sample data; a browser extension and a mobile app — **the
+last two are separate repositories and explicitly out of core scope** (§6a.22).
+
+### 6a.19 Stash app integration
+
+Two-way sync with the Stash app: pull metadata, push edits **through the
+proposal path** (§6a.13's rule applies to sync exactly as it does to the ident
+board), see rankings, contribute to preservation. The fork already speaks
+stash-box's GraphQL as a client (§3); this is the same client surface pointed
+at a StashForge instance, plus the write direction.
+
+### 6a.20 The federation protocol
+
+The open spec that §6a.2, §6a.6, §6a.9 and §6a.16 depend on: peering
+handshake, taste-profile exchange, capability advertisement, replication
+coordination, cross-instance discovery. **It is the highest-leverage piece of
+new work in this section**, because several requirements are blocked on its
+wire format.
+
+### 6a.21 SEO surfaces, and the line they may not cross
+
+Public indexable pages for entities, in the service of discovery from outside
+the mesh.
+
+**A page for an entity the owner has not published does not get created.**
+Public indexing is a *narrower* surface than the public read endpoint: it is
+governed by the same consent state (§6.2), and an `opted-out` entity is
+neither indexed nor reachable through a public page. The temptation to treat
+"it's metadata, not content" as a reason to index is exactly the reasoning
+non-negotiable #7 exists to stop, so the constraint is stated on the feature.
+
+### 6a.22 Explicitly out of scope
+
+- **Mobile app and browser extension** — separate repositories; core exposes
+  only the API they need (§6a.18).
+- **Media hosting or transcoding as a service** — the mesh moves *replicas*
+  (§6a.9), not a streaming platform.
+- **Payments for access or for rank** — non-negotiable #5 and §6a.10.
+- **Any ranking model that cannot be recomputed from records** — a model that
+  cannot be is a stored counter (#4).
+- **Client-side trust decisions** — a level that is not server-computed is not
+  a level (§6a.11).
 
 ---
 

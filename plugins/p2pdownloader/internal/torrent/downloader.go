@@ -131,6 +131,22 @@ type Downloader struct {
 	// decided. Exposed through `LastApplied` for tests, and it is the only
 	// place the difference between the two is observable.
 	lastSpec AppliedSpec
+
+	// lastMagnet is the same idea for the magnet path, kept separately so a
+	// read-back after a magnet add is not confused with one after a complete
+	// torrent. Two records rather than one tagged union, because the fields
+	// overlap and the union would be wrong for whichever the other was written
+	// for.
+	lastMagnet AppliedSpec
+
+	// tiers associates a torrent with the consent tier it was added under.
+	//
+	// A MAP and not a field, because the library owns the `*Torrent` and there
+	// is nowhere on it to record a tier — so the association has to live here.
+	// A torrent missing from it is treated as `""`, which the policy's table
+	// sends to `UploadForbidden`: a torrent whose tier this process has
+	// forgotten must not be permitted to upload because the lookup missed.
+	tiers map[metainfo.Hash]string
 }
 
 // AppliedSpec is what the library was actually handed for one torrent.
@@ -151,6 +167,14 @@ type AppliedSpec struct {
 
 	// InfoHash is the hash the library will use to identify this torrent.
 	InfoHash metainfo.Hash
+
+	// DisplayName is the name recorded for a magnet, verbatim. Present so a
+	// read-back of the magnet path can see what the client was given, for the
+	// same reason `AppliedSpec` exists at all: `Decision` reports intent.
+	DisplayName string
+
+	// GatedAfterMetadata is set once the arrival path has run the gate.
+	GatedAfterMetadata bool
 }
 
 // LastApplied returns what the client was last given.
@@ -183,6 +207,49 @@ type Decision struct {
 	// Added reports whether the client was told about the torrent. False with a
 	// nil `Err` means the torrent was known and needed no action.
 	Added bool
+
+	// Gated reports whether the STORAGE GATE has seen this torrent's file names.
+	//
+	// False for every magnet, without exception, because a magnet has no file
+	// names yet — they arrive by BEP 9 from whichever peer answers first. So
+	// `Added && !Gated` is a real state, not a gap in the reporting: the library
+	// is holding a torrent nobody has examined, and the only thing that makes
+	// that acceptable is that `OnMetadata` runs the gate on arrival.
+	//
+	// A caller that reads `Added` without reading this is trusting that a
+	// magnet's names were checked, and they were not.
+	Gated bool
+
+	// GatedAfterMetadata is `Gated`, stated as a separate flag so a report can
+	// distinguish "never gated" from "gated, and I have not looked since". It
+	// exists because the two look identical in a log line otherwise, and the
+	// operator's question is always which one this is.
+	GatedAfterMetadata bool
+
+	// InfoHash identifies the torrent, so a report can be correlated with the
+	// download it was for. For a magnet this is known BEFORE any file names
+	// are, which is what lets a later refusal name something the operator can
+	// look up.
+	InfoHash metainfo.Hash
+
+	// DisplayName is the name to show the operator, recorded exactly as the peer
+	// supplied it.
+	//
+	// Verbatim, not sanitised. For a magnet this is the ONLY attacker-chosen
+	// string available before the metadata lands, and `BestName()` falls back to
+	// it afterwards — so a sanitised copy would be a record that disagrees with
+	// what the peer actually said, which is worse than one containing something
+	// ugly. It is not a path this package writes to; the gate uses the
+	// metadata's file names.
+	DisplayName string
+
+	// Torrent is the library's handle, when one exists. Nil for a refusal, and
+	// for a spec with no metadata.
+	//
+	// Exposed so a caller can pass it back to `OnMetadata` when BEP 9 metadata
+	// arrives, rather than looking the torrent up by hash and risking a
+	// different one.
+	Torrent *libtorrent.Torrent
 
 	// Err is why not, if not. `storage.ErrRefused` for a torrent whose file
 	// names escape the download root.
@@ -324,14 +391,28 @@ func ConfigFor(cfg Config) (*libtorrent.ClientConfig, error) {
 	// operator's.
 	c.UploadRateLimiter = rate.NewLimiter(rate.Inf, c.MaxAllocPeerRequestDataPerConn)
 
-	// ---- transport: off until `Listen` -------------------------------------
+	// ---- transport: off, and there is NO separate "listen" step ------------
 	//
-	// A client that never listens cannot be reached and cannot be found. The
-	// DHT and both transports are enabled in `Listen`, not here, so constructing
-	// a downloader is not the same as announcing one. That ordering matters:
-	// M5's consent gate decides whether a locator may be acted on AT ALL, and
-	// being reachable on the network before that decision is made would be
-	// acting on it.
+	// There is no `Listen` method in this library. I documented one for two
+	// commits' worth of a milestone, and it does not exist -- the sockets are
+	// created inside `NewClient` (client.go:385-420) and the port forwarder is
+	// started there too, so reachability is decided ENTIRELY by this config and
+	// is not something a later call can change.
+	//
+	// That makes the default load-bearing rather than advisory. Measured, with
+	// this exact config:
+	//
+	//	DHT off, TCP off, UTP off   -> 0 listeners, no port
+	//	DHT ON,  TCP off, UTP off   -> 0 listeners, no port
+	//	DHT ON,  TCP ON,  UTP off   -> 2 listeners, 0.0.0.0:42069
+	//	DHT ON,  TCP ON,  UTP ON    -> 4 listeners
+	//
+	// The second row is the one worth knowing: a live DHT is not a listener.
+	// Turning the DHT on alone makes this box findable to peers while binding
+	// nothing to accept them, which is the worst of both -- announcing without
+	// being reachable, so the DHT's only effect is to be a worse leech than a
+	// box that never joined. So the DHT is off too, and `AddTorrent` is the
+	// point at which the operator's decision to transfer anything exists at all.
 	c.NoDHT = true
 	c.DisableTCP = true
 	c.DisableUTP = true
@@ -430,6 +511,29 @@ func (d *Downloader) AddTorrent(tier string, mi *metainfo.MetaInfo) Decision {
 	// torrent to every peer.
 	hash := mi.HashInfoBytes()
 
+	// THE METADATA CHECK, BEFORE THE GATE.
+	//
+	// The library validates piece length and piece-table length too, but inside
+	// `AddTorrentSpec` -- which is after this point. Measured: all three of a
+	// zero piece length, a negative one, and a short piece table parse cleanly
+	// and are accepted by the gate, and are only refused when the client is
+	// finally asked to add them.
+	//
+	// The outcome would be right and the report wrong. The decision would say
+	// the library declined the torrent "after the storage gate accepted it",
+	// which is true and useless: the operator needs to know the torrent is
+	// MALFORMED, because a malformed torrent is worth retrying against another
+	// source and a path refusal is not.
+	if err := checkMetainfo(&info); err != nil {
+		return Decision{
+			Tier:          tier,
+			Policy:        dec,
+			UploadAllowed: false,
+			Added:         false,
+			Err:           err,
+		}
+	}
+
 	// The spec, built BEFORE the gate runs, so the record of what the client
 	// would have been given is written whether or not the gate agrees.
 	//
@@ -440,6 +544,7 @@ func (d *Downloader) AddTorrent(tier string, mi *metainfo.MetaInfo) Decision {
 	// does not change what the spec contains.
 	spec := libtorrent.TorrentSpecFromMetaInfo(mi)
 	upload := dec.Upload.CanUpload()
+	d.remember(hash, tier)
 	spec.DisallowDataUpload = !upload
 	spec.Storage = d.gate
 	d.lastSpec = AppliedSpec{
@@ -572,6 +677,20 @@ func (d *Downloader) AddTorrentSpec(tier string, spec *libtorrent.TorrentSpec) D
 		}
 	}
 	//
+	// The metadata check, before the gate, for the same reason as in
+	// `AddTorrent`: a magnet's file names arrive by BEP 9 from peers, which is
+	// exactly where an attacker chooses them, and a torrent whose own fields
+	// disagree should not be name-checked at all.
+	if err := checkMetainfo(&info); err != nil {
+		return Decision{
+			Tier:          tier,
+			Policy:        dec,
+			UploadAllowed: false,
+			Added:         false,
+			Err:           err,
+		}
+	}
+
 	// Recorded BEFORE the gate, for the same reason as in `AddTorrent`: a
 	// refusal that leaves the previous torrent's hash behind is a report that
 	// names the wrong download.

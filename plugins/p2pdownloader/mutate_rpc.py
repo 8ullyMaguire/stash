@@ -140,6 +140,104 @@ MUTATIONS += [
         "consent",
     ),
     (
+        "the ed2k name is never parsed, so a link that escapes the download "
+        "root reaches the gate",
+        "\tif isED2KLocator(locator) {",
+        "\tif isED2KLocator(locator) && false {",
+        "TestThePluginRefusesAnEscapingED2KNameBeforeAskingCore",
+    ),
+    (
+        "the ed2k branch never runs, so a link that escapes the download root "
+        "reaches the gate (the if-false form, which also drops the scheme test "
+        "the branch was guarded by)",
+        "\tif isED2KLocator(locator) {",
+        "\tif false {",
+        "TestThePluginRefusesAnEscapingED2KNameBeforeAskingCore",
+    ),
+    (
+        "the ed2k parse is MOVED to after the gate: the refusal still happens, "
+        "but only once an operator's trust has already been spent on a proposal "
+        "about a hostile link",
+        [
+            # Cut the whole pre-gate block out...
+            (
+                "\tif isED2KLocator(locator) {\n"
+                "\t\tif _, err := ed2k.Parse(locator); err != nil {\n"
+                "\t\t\treturn nil, fmt.Errorf(\"the locator is an ed2k link "
+                "and it is \"+\n"
+                "\t\t\t\t\"not usable: %w. It is refused here rather than "
+                "proposed \"+\n"
+                "\t\t\t\t\"for, because an ed2k link's name is what will be "
+                "written to \"+\n"
+                "\t\t\t\t\"disk and a name that escapes the download root "
+                "should \"+\n"
+                "\t\t\t\t\"never reach a proposal\", err)\n"
+                "\t\t}\n"
+                "\t}\n",
+                "",
+            ),
+            # ...and paste it back in after the gate has already been asked.
+            (
+                "\tif err := gateDownload(ctx, gate, objectID, locator); err "
+                "!= nil {\n"
+                "\t\treturn nil, err\n"
+                "\t}\n",
+                "\tif err := gateDownload(ctx, gate, objectID, locator); err "
+                "!= nil {\n"
+                "\t\treturn nil, err\n"
+                "\t}\n"
+                "\n"
+                "\tif isED2KLocator(locator) {\n"
+                "\t\tif _, err := ed2k.Parse(locator); err != nil {\n"
+                "\t\t\treturn nil, fmt.Errorf(\"the locator is an ed2k link "
+                "and it is \"+\n"
+                "\t\t\t\t\"not usable: %w. It is refused here rather than "
+                "proposed \"+\n"
+                "\t\t\t\t\"for, because an ed2k link's name is what will be "
+                "written to \"+\n"
+                "\t\t\t\t\"disk and a name that escapes the download root "
+                "should \"+\n"
+                "\t\t\t\t\"never reach a proposal\", err)\n"
+                "\t\t}\n"
+                "\t}\n",
+            ),
+        ],
+        "TestThePluginRefusesAnEscapingED2KNameBeforeAskingCore",
+        # The unpacker reads the tag from entry[3] for the list form, so a
+        # list row without one raises IndexError on EVERY row after it. Both
+        # edits above are in rpc.go, so the tag is empty -- but it has to be
+        # there, and `None` says "not consent" rather than asserting a file
+        # that does not exist.
+        None,
+    ),
+    (
+        "isED2KLocator claims EVERY locator is ed2k, so an http URL is run "
+        "through the ed2k parser and refused",
+        "\treturn strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "
+        "\"ed2k://\")",
+        "\treturn true",
+        "TestTheED2KPrefixIsRecognisedTheSameWayTwice",
+        "consent",
+    ),
+    (
+        "isED2KLocator is case-sensitive, so an upper-case ed2k link is not "
+        "parsed before the gate",
+        "\treturn strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "
+        "\"ed2k://\")",
+        "\treturn strings.HasPrefix(strings.TrimSpace(raw), \"ed2k://\")",
+        "TestTheED2KPrefixIsRecognisedTheSameWayTwice",
+        "consent",
+    ),
+    (
+        "isED2KLocator matches a locator that merely CONTAINS the prefix, so a "
+        "http URL with ed2k in its path is refused as a bad link",
+        "\treturn strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "
+        "\"ed2k://\")",
+        "\treturn strings.Contains(strings.ToLower(raw), \"ed2k://\")",
+        "TestTheED2KPrefixIsRecognisedTheSameWayTwice",
+        "consent",
+    ),
+    (
         "a locator with no object is proposed anyway",
         "\tobjectID, err := ObjectIDFrom(input.Args)",
         "\tobjectID, err := int64(1), error(nil)\n\t_ = ObjectIDFrom",

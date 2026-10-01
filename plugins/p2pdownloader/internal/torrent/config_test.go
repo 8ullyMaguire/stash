@@ -243,30 +243,106 @@ func TestTheDownloadRateLimitHasADefaultAndHonoursAnExplicitOne(t *testing.T) {
 	}
 }
 
-// TestTheTransportIsOffUntilSomethingAsksToListen: a client that can be reached
-// is a client that has already published something. `ConfigFor` opens no
-// sockets, so constructing a downloader and announcing one are separate acts —
-// and the consent gate in M5 decides whether a locator may be acted on at all.
-func TestTheTransportIsOffUntilSomethingAsksToListen(t *testing.T) {
+// TestTheClientBindsNoSockets is the one that measures the actual property
+// rather than the config fields that are supposed to produce it.
+//
+// Every other reachability assertion in this file reads a boolean on the config.
+// A boolean is the INPUT, not the outcome, and I had already documented a
+// mechanism for it that does not exist: there is no `Client.Listen` in this
+// library, and I wrote two commits' worth of comments saying reachability was
+// deferred to a later `Listen` call. There is no later call — the sockets are
+// bound inside `NewClient` (client.go:385-420), which also starts the port
+// forwarder.
+//
+// So this builds the real client and asks it what it bound. `Listeners()` and
+// `ListenAddrs()` are the library's own report of its sockets, which is the only
+// thing that can be wrong here and still look right in the config.
+func TestTheClientBindsNoSockets(t *testing.T) {
+	d, err := New(Config{DownloadRoot: tmpRoot(t)})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Errorf("closing the downloader: %v", err)
+		}
+	}()
+
+	if got := len(d.client.Listeners()); got != 0 {
+		t.Errorf("the client bound %d listeners (%v). A downloader that has "+
+			"not been given anything to fetch must not be reachable, and a "+
+			"config field saying so is not evidence -- the sockets are bound "+
+			"inside NewClient, so this is the only place it is observable",
+			got, d.client.ListenAddrs())
+	}
+	if addrs := d.client.ListenAddrs(); len(addrs) != 0 {
+		t.Errorf("the client is listening on %v", addrs)
+	}
+}
+
+// TestTheDhtIsOffWithTheTransports is a plain field assertion, and it exists
+// because the first version of this test was a tautology.
+//
+// What I wrote: build a DHT-only client, assert it binds 0 listeners. That
+// passes — but it passes because of how the LIBRARY behaves, not because of
+// anything this package does. Turning the DHT on in `ConfigFor` left it green,
+// which is the "a test that measures a layer you did not name" trap one level
+// up: asserting a property of the dependency and calling it a test of the wiring.
+//
+// The measurement is kept because it is the reason the field matters, and the
+// assertion is on the field this package sets.
+func TestTheDhtIsOffWithTheTransports(t *testing.T) {
 	cfg, err := ConfigFor(Config{DownloadRoot: tmpRoot(t)})
 	if err != nil {
 		t.Fatalf("ConfigFor: %v", err)
 	}
 
-	if !cfg.NoDHT || !cfg.DisableTCP || !cfg.DisableUTP {
-		t.Errorf("the client is reachable before anything asked it to be: "+
-			"NoDHT=%v DisableTCP=%v DisableUTP=%v. Being findable on the network "+
-			"before the consent decision is made is acting on the locator",
-			cfg.NoDHT, cfg.DisableTCP, cfg.DisableUTP)
+	// Why this one, when a DHT-only client binds nothing at all. Measured with
+	// this library, same config otherwise:
+	//
+	//	DHT off, TCP off, UTP off   -> 0 listeners
+	//	DHT ON,  TCP off, UTP off   -> 0 listeners
+	//	DHT ON,  TCP ON,  UTP off   -> 2 listeners
+	//
+	// The middle row is the reason the DHT is off rather than merely unused. A
+	// live DHT with nothing to accept connections is a box peers can find and
+	// that cannot serve them: it advertises interest, earns leech credit it
+	// cannot return, and disappoints every peer it attracts. Strictly worse than
+	// never having joined, and it is the state a "DHT is harmless" reading of
+	// the config produces.
+	//
+	// `TestTheClientBindsNoSockets` is the test that the transports stay off.
+	// This one is that the DHT does not come on alone.
+	if !cfg.NoDHT {
+		t.Error("the DHT is enabled with both transports disabled. That " +
+			"configuration binds no sockets and serves no peers, so it is a " +
+			"pure cost: findable, unable to answer, and earning leech credit it " +
+			"cannot return")
 	}
-	// UPnP is OFF here rather than left to `Listen`, and the reason is that
-	// `NewClient` starts a port-forwarding manager when it is false: a request
-	// goes to the operator's router during CONSTRUCTION. Construction is not
-	// consent to be reachable, so the default is off.
+}
+
+// TestThePortForwarderIsNotStartedAtConstruction is the one that caused a real
+// request to leave the operator's machine, and it is a `go` statement inside
+// `NewClient`:
+//
+//	if !cfg.NoDefaultPortForwarding {
+//	    go cl.forwardPort()
+//	}
+//
+// There is no later call that can turn this off. A UPnP or NAT-PMP request to the
+// operator's router happens during CONSTRUCTION, and construction is not consent
+// to be reachable — so the default is off in the config, and this asserts the
+// field the library actually reads.
+func TestThePortForwarderIsNotStartedAtConstruction(t *testing.T) {
+	cfg, err := ConfigFor(Config{DownloadRoot: tmpRoot(t)})
+	if err != nil {
+		t.Fatalf("ConfigFor: %v", err)
+	}
 	if !cfg.NoDefaultPortForwarding {
-		t.Error("port forwarding is enabled in the config, so NewClient asks " +
-			"the operator's router to open a port before anything has decided " +
-			"this box should be reachable")
+		t.Error("NoDefaultPortForwarding is false, so NewClient starts a port " +
+			"forwarder that asks the operator's router to open a port — during " +
+			"construction, before anything has decided this box should be " +
+			"reachable at all")
 	}
 }
 

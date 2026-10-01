@@ -42,6 +42,12 @@ import (
 	"net/rpc"
 	"net/rpc/jsonrpc"
 	"sync"
+
+	// The ed2k locator parser, used to REFUSE an unusable ed2k link before
+	// the consent gate is asked about it. It is imported here so the plugin
+	// does not advertise a scheme whose links nothing validates — see the
+	// comment on the ed2k branch in downloadWithGate.
+	"github.com/stashapp/stash-plugin-p2pdownloader/internal/ed2k"
 )
 
 // serviceName is what the host dials: `t.client.Call("RPCRunner.Run", ...)`.
@@ -320,6 +326,40 @@ func downloadWithGate(ctx context.Context, input PluginInput, override Proposer)
 		return nil, err
 	}
 
+	// ed2k's NAME is validated here, before the gate, and this is the only
+	// place that can do it. A magnet carries an infohash and nothing else; an
+	// ed2k link carries a NAME, and the name is what will be written to disk.
+	// `ed2k://|file|../../etc/passwd|1|<hash>|` is a well-formed locator by
+	// every test the consent gate could apply — core decides whether a locator
+	// may be stored against an object and has no opinion about filenames — so
+	// asking core about it spends an operator's trust on a question with an
+	// obvious answer.
+	//
+	// It is also what makes the plugin's advertisement honest. The scheme is in
+	// knownSchemes and named in the error message, and without this call a user
+	// could hand the plugin an ed2k link, be granted a proposal for it, and
+	// arrive at the transfer stub with nothing having checked the name at all.
+	//
+	// NO scheme check here: `gateDownload` already calls LocatorSchemeOf, and a
+	// second call is redundancy that reads like two independent defences when
+	// it is one. Duplicating it made the mutation that disables the check in
+	// consent.go survive as a false hole — a `file://` locator was still
+	// refused, just by the copy here instead. See the ed2k rows in
+	// mutate_rpc.py, which is why this branch is asserted to be the ONLY
+	// scheme check on the pre-gate path.
+	//
+	// The scheme is read from the locator's own prefix rather than by calling
+	// LocatorSchemeOf, so this block cannot be reached for a non-ed2k locator.
+	if isED2KLocator(locator) {
+		if _, err := ed2k.Parse(locator); err != nil {
+			return nil, fmt.Errorf("the locator is an ed2k link and it is "+
+				"not usable: %w. It is refused here rather than proposed "+
+				"for, because an ed2k link's name is what will be written to "+
+				"disk and a name that escapes the download root should "+
+				"never reach a proposal", err)
+		}
+	}
+
 	// Core decides. See consent.go for why a refusal here has to end the run
 	// even though core's own gate already refused to store anything: the plugin
 	// holds the magnet either way, and a refused proposal followed by a transfer
@@ -337,9 +377,23 @@ func downloadWithGate(ctx context.Context, input PluginInput, override Proposer)
 		return nil, err
 	}
 
-	// Stand-in for the transfer. See the comment above on why it waits on the
-	// context rather than a timer.
+	// The transfer itself is not run here. The gate has granted the
+	// proposal, and what is missing is not consent but a SOURCE: nothing
+	// has found a peer holding this file, because Kad source lookup is not
+	// implemented. internal/ed2ktransfer can fetch a one-part ed2k file and
+	// will not write a byte it has not proven, but it needs a source to ask.
+	//
+	// So the refusal names the missing half rather than a transfer path that
+	// now exists. Waiting on the context first is unchanged and is still the
+	// contract: the host closes the client when Run returns, so returning
+	// immediately would hand back a finished task that fetched nothing.
 	<-ctx.Done()
+
+	if isED2KLocator(locator) {
+		return nil, fmt.Errorf("%w: %s. The transfer itself is implemented "+
+			"and verifies what it writes -- what is missing is the step "+
+			"that finds a source to ask", ErrNoED2KSource, locator)
+	}
 	return nil, fmt.Errorf("%w: %s", ErrTransferNotImplemented, locator)
 }
 
@@ -405,11 +459,40 @@ func proposerFor(input PluginInput) Proposer {
 	return newHTTPProposer(input.ServerConnection)
 }
 
-// ErrTransferNotImplemented is what the unimplemented transfer path returns.
+// ErrNoED2KSource means this plugin cannot obtain the file, and says which
+// of the two reasons applies.
 //
-// Named so a caller can tell "the plugin is a stub" from "the download failed",
-// and so the next milestone has something to replace rather than a string to
-// grep for in a log.
+// # IT REPLACES ErrTransferNotImplemented, AND NAMES MORE
+//
+// The blanket "the transfer path is not implemented yet" was true and
+// useless: it applies equally to a magnet this plugin could fetch tomorrow
+// and to an ed2k link that needs Kad source lookup, which is a different
+// piece of work entirely. One error for both means a caller cannot tell
+// which problem it has, and the plugin's own advertisement stops matching
+// what it can do.
+//
+// The transfer path now EXISTS -- internal/ed2ktransfer fetches a one-part
+// ed2k file, verifies it against the link's hash, and writes nothing that
+// has not been proven. What is missing is the half before it: finding a
+// source. So the refusal is now about THAT, by name, rather than about a
+// transfer path that exists.
+//
+// # AND ErrTransferNotImplemented IS KEPT, FOR THE OTHER PROTOCOLS
+//
+// A magnet still cannot be transferred from here, and saying so is the
+// honest answer for it. Deleting the sentinel would leave that path with a
+// lie in place of a truth.
+var ErrNoED2KSource = errors.New("no ed2k source for this file: the transfer " +
+	"works but nothing has found a source to fetch from, because Kad " +
+	"source lookup is not implemented")
+
+// ErrTransferNotImplemented is what a protocol this plugin cannot fetch with
+// returns -- a magnet, as of this writing.
+//
+// A magnet is not a refusal of the transfer PATH, which exists for ed2k. It
+// is a refusal of this one protocol, and the two are named apart so that
+// "ed2k cannot find a source" and "magnet is not implemented" do not read
+// as the same limitation.
 var ErrTransferNotImplemented = errors.New("the transfer path is not implemented yet")
 
 // LocatorFrom reads the locator out of the host's argument map.

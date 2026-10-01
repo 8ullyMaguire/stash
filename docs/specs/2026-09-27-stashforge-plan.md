@@ -2120,6 +2120,83 @@ from success to everything downstream, so a task report has to be able to say
 `OpenTorrent` is called again on every retry and a report listing one refusal
 forty times is a report nobody reads.
 
+**DONE 2026-09-28 (wiring and validation).** `internal/torrent/` — the client
+config, the consent/policy binding, the reachability defaults, and
+`metainfo_check.go`. 45 mutations across THREE files, 33 killed, 12 covered by a lower
+layer, 0 survivors, 0 skipped, by `internal/torrent/mutate_gate.py`.
+
+**Four library facts found by reading the source rather than the docs, each of
+which contradicted something I had written:**
+
+1. **There is no `Client.Listen`.** Sockets are bound inside `NewClient`
+   (`client.go:385-420`) and `if !cfg.NoDefaultPortForwarding { go cl.forwardPort() }`
+   is there too. I had documented reachability as "deferred to `Listen`" for two
+   commits. The design was right; the mechanism was invented.
+2. **A DHT with both transports off binds nothing** — measured. So it is a box
+   peers can find and that cannot serve them, which is worse than never joining.
+   The DHT is off with the transports.
+3. **`UploadRateLimiter = nil` panics** (`config.go:278` calls `.Burst()`
+   unguarded on every `NewClient`), while the download side handles nil
+   explicitly. `NewDefaultClientConfig` sets it to an *unlimited* limiter, so
+   `rate.Inf` is the value and nil was never available.
+4. **`TorrentSpec.InfoBytes` is the INNER info dict**, not a metainfo
+   (`spec.go:81`). `metainfo.Load` on it fails with EOF on a good torrent.
+
+**The library validates the same metainfo fields, LATER than the gate.** Zero
+piece length, negative piece length and a short piece table all parse cleanly and
+are only refused by `AddTorrentSpec`. So a nonsense torrent was being gated —
+paths built, nothing reserved, accepted — and then declined by the client, with a
+report saying "the library declined the torrent after the storage gate accepted
+it". True, and useless: the operator needs to know it is MALFORMED, because
+malformed is worth retrying against another source and a path refusal is not.
+Hence `ErrMalformed`, distinct from `storage.ErrRefused`, checked before the
+gate. The one check the library does not make is piece coverage — a torrent
+declaring 1 GiB with one 20-byte hash parses, is added, and then the swarm stalls
+with no error anywhere.
+
+**A surviving mutation that meant the CODE was wrong.** `if info.HasV1() &&
+info.HasV2() { refuse }` refused every legitimate BEP 52 hybrid, because
+`HasV1()` (info.go:212) is true for any torrent with a `length` or a `pieces`
+field. The mutation disabling it survived *because removing it made the code
+correct*. Replaced with a `switch info.MetaVersion`.
+
+**DONE 2026-09-28 (BEP 9 arrival).** `internal/torrent/magnet.go` — the magnet
+path and the arrival path. `Client.AddMagnet` is four lines that bypass this
+package entirely, so the path lives here and a grep test keeps it that way.
+
+A magnet carries an infohash, a display name and trackers — no `files`, no
+`length`. So it **cannot be gated at add time**, and the code says so rather than
+running a check on an empty input. The window is acceptable for one reason:
+`OnMetadata` re-runs the full sequence on arrival and **DROPS** the torrent if the
+names escape the root. `Decision.Gated` is false for every magnet, and
+`GatedAfterMetadata` distinguishes "the gate ran" from "never checked".
+
+**Six of thirteen magnet mutations survived the first run**, and the causes are
+the two most reusable findings in this project:
+
+- The `AppliedSpec` record was written `DisallowDataUpload: !upload` —
+  *recomputed from the policy variable* rather than read back off the spec. The
+  identical tautology `AppliedSpec` was invented to end, written one file over.
+- The drop assertion used `client.Torrent(hash)`, and the fixture gave the magnet
+  and its metadata different hashes — so the lookup missed and "not found" was
+  indistinguishable from "dropped". It passed with `d.drop` deleted. Asserted on
+  `len(client.Torrents())` instead: 1 before, 0 after.
+- Every URI in the zero-infohash test was rejected by `ParseMagnetUri` ITSELF, so
+  the `IsZero` branch was never reached. The case that reaches it is
+  `magnet:?xt=urn:btih:0000…0000` — a well-formed all-zero hash, which the parser
+  accepts and `AddTorrentSpec` does not object to.
+
+**A real bug the tier test found:** `AddMagnet` never recorded the consent tier,
+so `tierOf` returned `""` and the arrival path decided every torrent as an
+unrecognised tier. Restrictive — so nothing was ever published, no error was
+logged, and **the downloader was inert rather than broken.**
+
+**And a harness bug that reported its own defect as a hole:** a mutation that
+produced `err redeclared in this block` was scored `SURVIVED`, because
+`redeclared` was missing from `BUILD_ERRORS`. A build-error list has to be
+complete; a missing entry produces a false hole that sends the next person into
+the tests.
+
 Remaining for this step: the transfer surface itself — metainfo parsing, magnet
 + BEP 9 metadata fetch, Kademlia DHT (BEP 5) discovery, peer wire protocol,
 multi-connection, piece verification, resume, rate limits — with
@@ -2129,8 +2206,43 @@ multi-connection, piece verification, resume, rate limits — with
 ### Step 5.4 — ed2k
 
 eMule protocol: eDonkey2000 server + Kademlia (Kad) node list, eHash (MD4)
-chunk hashes, the eMule extended handshake. No Go library provides this, so it
-is written against the protocol description.
+chunk hashes, the eMule extended handshake.
+
+**The "no Go library provides this" claim in this step was WRONG and is
+corrected here.** The eDonkey ecosystem in Go is sparse but not empty. The
+user found it, the plan's author had not looked. Evaluated 2026-09-28:
+
+| Package | Verdict |
+|---|---|
+| `github.com/monkeyWie/goed2k` (MIT) | **Adopted as the wire reference.** Real `protocol`, `protocol/client` and `protocol/kad` subpackages; the opcode set, `nodes.dat` loading, the Kad message set (`BootstrapReq`, `Hello`, `PublishSourcesReq`, …) and the extended handshake. Fetches and builds. **Its hashing is wrong — see below — so it is not the source of truth for the eHash.** |
+| `GopeedLab/gopeed` `internal/protocol/ed2k` (Apache-2.0) | Not adopted. `internal/`, so it is not importable; useful for reading `fetcher.go` if the wire work stalls. |
+| `eyedeekay/gomule` (GPL-3.0) | Not adopted. A **server**, not a client, and GPL-3.0 is incompatible with this fork's licensing. |
+| `libp2p/go-libp2p-kad-dht` | Not applicable. Generic Kademlia with a different node-ID format and message set; eDonkey's Kad would need an adapter that is larger than the protocol itself. |
+
+**`goed2k`'s tree hash is wrong, and this is measured, not suspected.** It MD4s
+the concatenated FULL 16-byte part hashes; the protocol requires each part hash
+TRUNCATED TO ITS FIRST 8 BYTES. There is no 8-byte truncation anywhere in the
+library. On a 19,456,000-byte input (two exact parts):
+
+```
+goed2k.HashFromHashSet([]Hash{p0, p1}) -> 90955B3AFD7D14B68B672C584F88DD93
+the ed2k-correct value                 -> 735E6A43667B72334F8E27F9C46D263B
+internal/ed2k.HashFile                 -> 735E6A43667B72334F8E27F9C46D263B
+```
+
+**Consequence, and it is the reason this table exists:** adopting the library
+wholesale gives every multi-part file a hash that matches nothing on the real
+network, while its own unit tests pass — because its tree hash agrees with
+itself. The split is therefore: **our `internal/ed2k` owns the eHash, and
+`goed2k` is the reference for the wire.** That asymmetry is deliberate and is
+recorded in `ehash.go` next to the arithmetic.
+
+**Network access for verification: permitted.** The user approved live
+connections to public ed2k servers for interop checks, so a wrong opcode is
+found against a real daemon rather than by reading a spec. Unit tests stay
+hermetic — a live suite that depends on a third party's uptime is not a test —
+and live interop is behind an explicit build tag or env var so it cannot
+silently skip into a green run.
 
 ### Step 5.5 — Library integration, through the plugin API only
 
@@ -2157,9 +2269,72 @@ capability from the host, that is a real finding about the host — it means M5
 needs a host change, and the goal prompt's "the plugin needs no new host
 capability" is what is under test.
 
-**Verify:** `TestLibrary_CompletedFileIsScannedAndLinked`,
-`TestLibrary_UnmatchedFileDoesNotAttachToNearestScene`,
-`TestResume_SurvivesProcessRestart`.
+**DONE 2026-09-28, and moved AHEAD of 5.4.** The order was changed on evidence,
+not preference: **zero of the 850 issues in `docs/research/matrix.md` mention
+ed2k, eMule, Kademlia or eDonkey** (0 hits across `open_issues.json` too), while
+this step is the half of M5's exit criterion the plan itself names — "get it
+scanned and linked". ed2k is hand-rolled and is the largest single piece of work
+left in M5, so building it before the end-to-end path existed meant proving the
+boundary against nothing.
+
+Three packages, deliberately separated:
+
+| Package | Knows about | Does NOT know about |
+|---|---|---|
+| `internal/library` | the host's GraphQL | torrents, magnets, anything protocol |
+| `internal/handoff` | the ORDER: validate → gate → transfer → scan | both protocols |
+| `internal/torrent` | BitTorrent | the host, the library, scanning |
+
+`internal/library` does three verbs and nothing else, because each one that
+existed was a capability the plugin was not supposed to ask for:
+
+```graphql
+mutation  { metadataScan(input: { paths: $paths, scanGeneratePhashes: true }) }
+query     { findScenesByPathRegex(filter: { path: { regex: $path_regex } }) { findScene { id path } } }
+query     { findJob(input: { id: $id }) { id status error } }
+```
+
+**The host's scanner, not one of ours.** A downloader that maintains its own
+`files` rows is a plugin writing the core's database, and everything step 5.0 was
+built to prevent comes back through the front door. So: write a file, ask the
+host to look, then ask whether it did. Three findings make that safe and all
+three are the kind that are expensive in production:
+
+- **An empty `paths` is a FULL LIBRARY SCAN.** `getScanPaths` returns every
+  configured stash path for an empty list. `Scan` refuses to send one.
+- **A path outside the library scans nothing and still returns success.** Only
+  the job's own status says why — which is why `Host` has `JobStatus` and not
+  just `SceneForPath`.
+- **"No scene appeared" is ambiguous**: a subtitle, or a misconfigured download
+  path. `findJob` resolves it, and the wait now ends on a *terminal job* rather
+  than on the deadline — so a subtitle costs milliseconds instead of 90 seconds.
+
+**Linking is the host's fingerprint matcher**, so the mutation asks for
+`scanGeneratePhashes: true` and computes nothing itself.
+`TestTheHandOffUsesTheHostsOwnScanAndNotAFingerprintOfItsOwn` asserts the absence
+of any hashing in this package, because a second divergent implementation of
+matching is exactly what the separation is for. The plan's alternative — link by
+phasher/osher through the host's query surface — would need a host capability
+this package should not assume exists, and inventing one is a real M5 finding
+rather than a convenience.
+
+**Three endings, not two.** `linked` / `scanned_no_scene` / `failed`, because a
+release directory holds a video, three subtitles and a cover, and the host
+correctly declines four of the five. A single boolean loses either the link or
+the refusals.
+
+**Verify:** `TestACompletedDownloadIsScannedAndLinked`,
+`TestACompletedTransferIsScannedAndLinked`,
+`TestTheScanIsAlwaysAskedForByPath`, `TestAPathWithRegexCharactersMatchesOnlyItself`,
+`TestAFailedScanIsAFailureAndNotANoScene`, `TestACleanFinishWithNoSceneDoesNot-
+CostTheTimeout`, `TestP2PDownloaderLibraryIntegrationUsesNoCoreImports`,
+`TestTheLibraryIntegrationReachesTheHostOnlyOverHTTP`.
+
+160 tests green across seven packages. 34 mutations across four files, 0
+survived, 0 malformed, by `internal/library/mutate_library.py`.
+
+`TestResume_SurvivesProcessRestart` is still open — it needs a transfer that can
+actually be resumed, which is the remaining part of 5.3.
 
 ---
 
@@ -2194,6 +2369,350 @@ Work M6 by dependency, not by issue count: the scanner and job-queue
 capabilities (C15, C17, C20) unblock the most downstream fixes.
 
 ---
+
+---
+
+## M7 — The mesh: discovery, preservation, trust, curation, ranking
+
+**Spec:** §6a.1–§6a.22 · **Ledger:** `docs/requirements.csv` R010–R073
+**Added 2026-09-28 by owner directive.** This phase does not replace M0–M6; it
+sits after them and is built on their machinery. Each step below names its
+requirements, and the ledger's `status` column is the record of what is built.
+
+**Read §6a before starting.** Three constraints shape every step and each has
+a test named in the step that touches it:
+
+1. **Computed, never stored** (plan ground rule 4, non-negotiable #4). A
+   completion score, an Elo rating and a replication count are all *views*.
+   Any step that adds such a column has failed the rule, not "optimized" it.
+2. **Proposals are the only write path to shared content** (#5). A merge, an
+   identification solve and a Stash-app sync write all become typed field
+   proposals. A step that adds a direct write path has failed the rule.
+3. **Reward never grants access** (§6a.10). Reputation feeds ballot weight;
+   it never grants a trust level or unlocks content.
+
+**Migration numbering continues from 106** (verified: highest applied is
+`106_libraries_owner_name_unique`, 108 files in the directory including `.down`
+pairs), so this phase starts at **107**. Never edit an applied migration.
+
+### The dependency order, and why it is this one
+
+**The federation protocol (§6a.20, R059) is first**, and that is the one
+ordering decision worth arguing. Taste-based peering, cross-instance
+discovery and replication scheduling all need the wire format; building any of
+them first means inventing a private protocol three times. What the protocol
+*needs from* the rest is only schema, so the first step publishes schemas and
+the wire format together, before any algorithm that depends on them.
+
+Then: **federation protocol → trust levels → recommendations → preservation
+→ curation/identification → ranking → ecosystem.** Preservation sits after
+recommendations because a replica target is chosen by taste similarity
+(§6a.9), and choosing where to place bytes before there is a taste to match
+is how you end up storing everything on whoever answers first.
+
+### Step 7.1 — Schemas and the federation protocol's wire format (R059)
+
+**New migrations** `107_mesh_instance_profile`, `108_mesh_peer`,
+`109_mesh_replication`, in `pkg/sqlite/migrations/`.
+
+```sql
+-- 107_mesh_instance_profile.sql
+-- The instance's own identity in the mesh, and the gravity it publishes.
+CREATE TABLE mesh_instance_profile (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),  -- exactly one row
+  instance_id     TEXT NOT NULL UNIQUE,                -- stable public id
+  display_name    TEXT NOT NULL,
+  taste_profile   BLOB,                                -- derived, published
+  gravity         BLOB,                                -- operator-set axes
+  updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+-- taste_profile is a PUBLISHED view, not a stored score: see step 7.4 for
+-- what publishes it. The column holds the last published DERIVATION of local
+-- records and is rebuilt from them; it is not a counter that is incremented.
+
+-- 108_mesh_peer.sql
+-- A peered instance. The capability columns are that peer's CLAIMS about
+-- itself and are never used to size an allocation or skip a verification.
+CREATE TABLE mesh_peer (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  instance_id    TEXT NOT NULL UNIQUE,
+  endpoint       TEXT NOT NULL,
+  public_key     BLOB NOT NULL,                       -- signing key
+  claimed_store_bytes   INTEGER,                       -- a claim
+  claimed_bandwidth_bps INTEGER,                       -- a claim
+  trust_profile  BLOB,                                 -- a claim
+  agreed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at     TIMESTAMP
+);
+CREATE INDEX idx_mesh_peer_active ON mesh_peer(revoked_at, endpoint);
+
+-- 109_mesh_replication.sql
+-- A replica of a scene on this instance. health is a CHECK, not a counter.
+CREATE TABLE mesh_replica (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  scene_id     INTEGER NOT NULL,
+  source_endpoint TEXT NOT NULL,       -- who supplied it
+  replica_path TEXT NOT NULL,          -- under the storage root, sanitized
+  manifest_hash BLOB NOT NULL,         -- what we must still verify
+  health       TEXT NOT NULL DEFAULT 'pending'
+    CHECK (health IN ('pending','verified','corrupt','missing')),
+  verified_at  TIMESTAMP,
+  UNIQUE (scene_id, source_endpoint)
+);
+CREATE INDEX idx_mesh_replica_health ON mesh_replica(health);
+```
+
+**`scene_id` is namespaced by `source_endpoint`** (§6a.6): a peer's
+`scene 412` is not this instance's `scene 412`, and a replica row that does
+not carry its origin is a merge bug waiting to happen.
+
+**The wire format** is a document, not code: `docs/FEDERATION.md`, specifying
+the peering handshake, the taste-profile exchange, capability advertisement,
+replication coordination and the cross-instance query. It cites §6a.2, §6a.6,
+§6a.9, §6a.16 and names every opcode's source, the way `part.go` does.
+
+**New package** `internal/mesh/` — the protocol types, the framing, and
+**nothing else**. No storage policy, no scheduling, no ranking; those are
+later steps and putting them here is what makes the wire format reusable.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go build ./... && echo CLEAN
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestAProfileClaimIsLabelledAClaim' -v
+```
+
+Expected: `CLEAN` and one `--- PASS`. The test asserts that
+`mesh_peer.claimed_store_bytes` **cannot** be reached by any sizing code path —
+a grep-level guard, because the first version of a mesh node sizes a buffer
+from a stranger's number and nothing notices for a week.
+
+### Step 7.2 — Trust levels, and the opt-in that separates them (R025–R028, R062, R066)
+
+**New migration** `110_access_levels`.
+
+The distinction that must not be blurred: §5.3's trust tier is **vote
+weighting**; this is **access**. A column for the latter must not be readable
+by the former's code, or reputation starts buying access.
+
+Access levels are **earned from the audit log** (§4.2), not stored as a mutable
+number: a view over approved edits, verification consistency, ident solves,
+quests and preservation contributions. A user at level 4 has *also* consented,
+per instance, revocably (§6a.11) — and that consent is the one stored thing
+here, because a consent cannot be recomputed from a vote.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestReputationNeverGrantsAnAccessLevel' -v
+GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestLevelFourDoesNotEnableViewingOnItsOwn' -v
+```
+
+Expected: both `--- PASS`. The first is the §6a.10 firewall as a test: a user
+with maximal reputation and no verification record stays at level 0. The
+second is the §6a.11 resolution as a test: level 4 with no consent gets
+`ErrConsentRequired`, not content.
+
+### Step 7.3 — Recommendations as a view (R010–R013, R014, R015, R061, R064, R065, R071, R073)
+
+**No migration.** A completion column or a `recommendation_score` would fail
+ground rule 4, and the absence is asserted.
+
+`internal/discovery/` builds the ranking from records: the taste fingerprint
+(§6a.3), gravity (§6a.8), peer similarity (§6a.2). Gravity is a **config
+value over a view's parameters** — replacing it takes effect immediately,
+which is the gravity slider.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestNoRecommendationScoreColumnExists' -v
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestGravityChangesTheRankingWithoutAWrite' -v
+```
+
+Expected: both pass. The second is the load-bearing one: two instances with
+different gravity, same records, different order, **and no row changed** — the
+only way to prove §6a.5 is a view rather than a cache.
+
+### Step 7.4 — Preservation: the default of three (R018–R024, R072, R063)
+
+The brief's central mechanism, and the one with a hard consent interaction.
+
+`internal/preservation/` schedules a replica onto a peered instance with
+capacity and similar taste, health-checks it, and repairs it. **A replica
+counts as healthy only after manifest verification**, never after the peer
+says it accepted the bytes (§6a.2) — the capability profile is a claim, and
+this is the same posture §7's transfer layer takes toward a peer-supplied
+name.
+
+**The opt-out test is the step's reason to exist.** Non-negotiable #7 makes
+opt-out a hard stop in the publish path, and replication is a publish path:
+a user's `opted-out` scene is never a replication subject, and no popularity
+or bounty overrides it.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/preservation/ -run 'TestAnOptedOutSceneIsNeverAReplicationSubject' -v
+GOFLAGS=-mod=mod go test ./internal/preservation/ -run 'TestAReplicaIsHealthyOnlyAfterManifestVerification' -v
+```
+
+Expected: both pass. The first asserts the refusal **at the scheduling
+boundary**, so a bug in a later step cannot reintroduce it.
+
+### Step 7.5 — Identification board and duplicates (R029–R033, R031, R032)
+
+Snapshot collages (R029) are generated over keyframes, 12–24 evenly spaced,
+and are **replicated even when the content is not** (§6a.9) so identification
+works on an instance that may not hold the file.
+
+A solved identification **writes a typed field proposal** (§6a.13), not a row.
+This is the constraint that makes the board work inside the governance model
+rather than beside it, and it is the step's reason to exist.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/ident/ -run 'TestASolvedIdentificationWritesAProposalNotAField' -v
+```
+
+Expected: `--- PASS`, and the test asserts the audit log gained a proposal row
+and the target field is **unchanged** until the ordinary governance path
+accepts it.
+
+### Step 7.6 — Completion, quests, ranking (R034–R044, R039)
+
+Completion score as a view (§6a.15); quests as a **query over completion**, so
+a quest whose gap is closed is complete with no write. Elo per §6a.16, with
+the plan-level choice of Glicko-2 or TrueSkill made here and recorded, on the
+single requirement that it compute from a vote set.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/rank/ -run 'TestARatingIsRecomputableFromItsVotes' -v
+```
+
+Expected: `--- PASS` — delete every vote, and the rating view returns zero
+rather than a stale number. That is the difference between a rating and a
+counter.
+
+### Step 7.6a — Gamification, as a view over the audit log (R023, R033, R050–R053)
+
+XP, levels, badges and streaks are **derived from the audit log** (§4.2), not
+a counter column. Streaks in particular are the trap: a streak is a count, and
+a stored streak is the counter rule with a holiday hat on it. It is a view
+whose first column is `date(decided_at)`.
+
+Guilds (R052) and mentorship (R053) are **low priority and deliberately so**:
+both are human-coordination features that generate moderation load without
+feeding any mechanism above. They are in the ledger and in the spec, and they
+earn their implementation when the rest of the phase is proven.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/gamify/ -run 'TestAStreakIsRecomputedFromTheAuditLog' -v
+GOFLAGS=-mod=mod go test ./internal/gamify/ -run 'TestNoBadgeGrantsAnAccessLevel' -v
+```
+
+Expected: both pass. The second is §6a.10's firewall for this step: with the
+maximum badge set, a user's access level is unchanged.
+
+### Step 7.3b — Home feed, entity surfaces and boards (R014, R015, R016, R017, R049, R067, R068)
+
+The **home feed** (R014) is a composition of the surfaces already built, not a
+new one (§6a.7): personalized recommendations from 7.3, mesh trending
+aggregated across peers (R068), new quests from 7.6, ident-board highlights
+from 7.5. **Entity pages** (R015) render the §6a.4 surfaces — similar-to,
+users-like-you-also-liked, appears-in, curated-by, preservation status.
+
+Community-made **boards and lists** (R016, R049) and the **recommendation
+API** (R017) complete the surface. A board is an editorial ordering over
+entities — **an ordering, not a score**: if a board ever grows a `rank` column
+that an author edits, it has become a stored counter and left the model
+(ground rule 4).
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestABoardIsAnOrderingWithNoStoredRank' -v
+GOFLAGS=-mod=mod go test ./internal/discovery/ -run 'TestTheFeedComposesExistingSurfaces' -v
+```
+
+Expected: both pass. The second asserts every feed item names the surface it
+came from, so a new feed source cannot appear unlabelled.
+
+### Step 7.6c — Completion inputs, named (R069, R070)
+
+Snapshot coverage (R069) and performer/source links (R070) are **inputs to the
+completion view**, not columns on it (§6a.15). They are listed separately
+because they are the two inputs most likely to be implemented as counters —
+"how many snapshots does this scene have" is a number someone will put in a
+column, and it must be a `COUNT` in the view.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/curate/ -run 'TestCompletionInputsAreCountsInTheView' -v
+```
+
+
+### Step 7.7 — Ecosystem surfaces (R054–R058, R060)
+
+REST alongside the existing GraphQL (§10), webhooks, SDKs, a developer sandbox,
+Stash-app two-way sync (R057) — where **sync writes through the proposal
+path**, exactly as §6a.13 requires of the ident board.
+
+SEO pages (R060) are gated on the same consent state as the public read
+endpoint (§6a.21): an `opted-out` entity is neither indexed nor reachable.
+
+**Mobile app and browser extension are NOT in this plan** (§6a.22) — separate
+repositories, and core exposes only the API they need.
+
+### Step 7.7a — The directory, extended rather than rebuilt (R045–R048, R046, R047)
+
+The directory **already exists** in the fork (site, studio, performer
+entities) and this step extends it: site/network profiles with pricing and
+payment methods (R045), studio profiles carrying roster and completion score
+(R046), structured reviews with a verified-usage flag (R047), and
+**claim-and-confirm verified badges** (R048) — a studio or performer claims,
+an existing trusted user confirms, and *no operator grants a badge*, because
+an operator-granted badge is the owner being an admin over content (#6).
+
+**This step is placed after 7.7 rather than folded into it because it is
+already half-built.** The work is extending existing entities, not creating a
+new subsystem, and the honest scope is the fields above — not a directory
+engineered from nothing, which is what the brief's §10 would have implied.
+
+**Verify:**
+
+```bash
+GOFLAGS=-mod=mod go test ./internal/directory/ -run 'TestAVerifiedBadgeIsConfirmedNotGranted' -v
+```
+
+Expected: `--- PASS` — a badge proposed by the instance owner is
+`pending_confirmation` and confers nothing until a non-owner trusted user
+confirms it.
+
+### Step 7.8 — The gate
+
+```
+go build ./...                                  clean
+go vet ./...                                    clean
+gofmt -l internal/                             clean
+go test ./... -count=1                          green, pass count may only rise
+python3 internal/mesh/mutate_mesh.py            0 survived, PYEXIT=0
+```
+
+Plus the three firewall tests, run by name because they are the phase's
+substance rather than its coverage:
+
+```
+go test ./internal/mesh/     -run 'TestReputationNeverGrantsAnAccessLevel'
+go test ./internal/preservation/ -run 'TestAnOptedOutSceneIsNeverAReplicationSubject'
+go test ./internal/ident/    -run 'TestASolvedIdentificationWritesAProposalNotAField'
+```
 
 ## Verification, per milestone
 
@@ -2232,4 +2751,7 @@ worked.
 - Any change to upstream's scanner, ffmpeg pipeline, or player beyond what a
   milestone explicitly names. Those are the parts that work; M6 touches them
   only where a mapped issue requires it.
-- Mobile clients. The GraphQL surface is enough.
+- **Mobile clients and the browser extension.** Spec §6a.22: separate
+  repositories. Core exposes only the API they need (M7 step 7.7). The M5-era
+  line "Mobile clients. The GraphQL surface is enough" is superseded — the
+  surface is the deliverable, not the client.
