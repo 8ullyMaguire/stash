@@ -278,6 +278,11 @@ func (s *Manager) initStashForgeCollab() {
 	s.CollabProposals = sqlite.NewEditProposalStore()
 	s.CollabVotes = sqlite.NewProposalVoteStore()
 	s.CollabTargets = sqlite.NewCollabTargetStore()
+	// The shadow governance log. Recorded on every proposal settle, and applied
+	// on none: see collab.EvaluateShadow. §5.3 leaves the weight table open, and
+	// this is how an instance finds out what the answer would cost before it
+	// chooses one.
+	s.CollabShadow = sqlite.NewShadowLogStore()
 
 	// The identity-cluster store. Registered here rather than in the resolvers
 	// so that the cluster surface and the job that writes clusters share one

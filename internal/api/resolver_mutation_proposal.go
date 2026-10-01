@@ -8,6 +8,7 @@ import (
 
 	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/manager"
+	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
 )
 
@@ -366,21 +367,55 @@ func (r *mutationResolver) Vote(ctx context.Context, proposalID string, value in
 func (r *mutationResolver) settle(ctx context.Context, p *models.EditProposal, decider *models.User) (*models.EditProposal, error) {
 	inst := manager.GetInstance()
 
-	score, err := inst.CollabProposals.Score(ctx, p.ID)
-	if err != nil {
-		return nil, err
-	}
-
 	var deciderID int
 	if decider != nil {
 		deciderID = decider.ID
 	}
 
-	decision := collab.Evaluate(collab.DefaultPolicy(), collab.VoteCount{
-		Net:      score.Net,
-		Voters:   score.Voters,
-		SelfVote: score.AuthorVoted,
-	})
+	// The ballots themselves, for the shadow comparison. The flat decision below
+	// uses the aggregated Score; the weighted path needs each vote separately
+	// because it weights per voter.
+	//
+	// Two reads of the same votes in one settle. They are not equivalent -- Score
+	// is a COUNT(DISTINCT) aggregate and List returns rows -- so they could in
+	// principle disagree if a vote landed between the two queries. That is
+	// acceptable here precisely because the shadow record is observational: the
+	// applied decision still comes from the aggregate, and a comparison computed
+	// against a marginally different snapshot is a slightly stale log row, not a
+	// governance change. Documented rather than papered over, because it becomes
+	// a real bug the moment shadow mode is allowed to decide.
+	voteRows, err := inst.CollabVotes.List(ctx, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	ballots := make([]collab.Ballot, 0, len(voteRows))
+	for _, v := range voteRows {
+		ballots = append(ballots, collab.Ballot{UserID: v.UserID, Value: v.Value})
+	}
+
+	flat, _, shadow := collab.EvaluateShadow(ctx, collab.DefaultPolicy(),
+		collab.ShadowInput{
+			ProposalID: p.ID,
+			TargetType: p.TargetType,
+			Field:      p.Field,
+			AuthorID:   p.AuthorID,
+			Ballots:    ballots,
+		}, inst.CollabReputation)
+
+	// The shadow log is written BEFORE the outcome is applied, and a failure to
+	// write it must not stop the vote being counted: a governance log that can
+	// break governance is worse than a gap in the log.
+	//
+	// Swallowed deliberately, and the reason is worth stating. This is an
+	// observation about a decision that has already been made by flat quorum;
+	// failing the request would mean the shadow facility could deny service. The
+	// cost of a lost log row is one missing data point in a comparison nobody is
+	// yet relying on.
+	if err := inst.CollabShadow.Record(ctx, shadow); err != nil {
+		logger.Errorf("[shadow] could not record the governance comparison for proposal %d: %v", p.ID, err)
+	}
+
+	decision := flat
 
 	switch decision {
 	case collab.DecisionAccepted:

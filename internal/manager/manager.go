@@ -140,6 +140,9 @@ type Manager struct {
 	CollabProposals *sqlite.EditProposalStore
 	CollabVotes     *sqlite.ProposalVoteStore
 	CollabTargets   *sqlite.CollabTargetStore
+	// CollabShadow records what the weighted rule WOULD have decided beside what
+	// flat quorum actually decided. Purely observational for now.
+	CollabShadow *sqlite.ShadowLogStore
 	// CollabStore is the adapter from the row stores to collab.ProposalStore.
 	// It is a separate field from CollabProposals because they are different
 	// interfaces over the same table, and reaching for the wrong one is a

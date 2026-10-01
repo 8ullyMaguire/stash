@@ -41,6 +41,34 @@ func (d Decision) String() string {
 	}
 }
 
+// ParseDecision is the inverse of Decision.String.
+//
+// It exists because the decision has to round-trip through a database column
+// and a GraphQL enum, and the mapping belongs here beside String() where it can
+// be tested against it, rather than in each caller.
+//
+// An unrecognised string decodes to DecisionPending and false rather than
+// erroring. Two reasons. First, the value may come from an older instance or a
+// hand-edited row, and a shadow record is observational data: refusing to read
+// it because a string is unrecognised would let a typo make the whole
+// governance log unreadable. Second, and more importantly, DecisionPending is
+// the safe direction. A record read as pending understates the weight of a
+// decision; a record read as ACCEPTED would understate a rejection, which is the
+// direction that matters — a tombstone or a removal must never look like a
+// pending item. So the default is chosen to be the conservative one.
+func ParseDecision(s string) (Decision, bool) {
+	switch s {
+	case "accepted":
+		return DecisionAccepted, true
+	case "rejected":
+		return DecisionRejected, true
+	case "pending":
+		return DecisionPending, true
+	default:
+		return DecisionPending, false
+	}
+}
+
 // Terminal reports whether a decision is final, i.e. whether re-evaluating with
 // more votes could change it.
 //

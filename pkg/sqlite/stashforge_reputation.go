@@ -22,7 +22,12 @@ const fieldReputationTable = "field_reputation"
 
 // Compile-time proof the adapter satisfies collab's interface. A signature drift
 // should fail at build time, not at the first call from a resolver.
-var _ collab.ReputationStore = (*CollabReputationStore)(nil)
+var (
+	_ collab.ReputationStore = (*CollabReputationStore)(nil)
+	// The shadow evaluation needs the same standings under a name that says what
+	// it is for. One implementation, so the two callers cannot drift.
+	_ collab.ShadowSources = (*CollabReputationStore)(nil)
+)
 
 type FieldReputationStore struct {
 	repository
@@ -294,4 +299,14 @@ func (s *CollabReputationStore) RecordOutcome(ctx context.Context, standing coll
 		return nil, fmt.Errorf("recording field reputation outcome: %w", err)
 	}
 	return out, nil
+}
+
+// ReputationFor satisfies collab.ShadowSources.
+//
+// A thin adapter over StandingsForMany rather than a new query, because the whole
+// point of the batched method is that the two callers see the same snapshot: a
+// shadow tally computed from a different read than the flat one would be
+// comparing two different states and calling the difference a governance finding.
+func (s *CollabReputationStore) ReputationFor(ctx context.Context, userIDs []int, targetType, field string) (map[int]collab.FieldStanding, error) {
+	return s.StandingsForMany(ctx, userIDs, targetType, field)
 }
