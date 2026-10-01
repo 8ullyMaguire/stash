@@ -124,15 +124,24 @@ Two unrelated threads, both in `~/code-local/go/stash-box` on `master`:
 #### The one thing the stash side should know about D2
 
 D2's first three pieces are a **peer registry, taste-based peer selection, and a
-broadcast that carries questions and candidate evidence only**. Three
-properties were decided and are worth stating early, because the node side will
-meet all three:
+broadcast that carries questions and candidate evidence only**. Steps 1–4 of 6
+are committed (`c4f8fcdc`, `1d64e70a`, `f5601107`, `7704600c`).
 
-- **No content crosses the boundary.** The broadcast payload is a closed struct
-  with no field a media reference can be put into, and a test reflects over it to
-  prove the field-type set is closed. This is the same boundary as R074, from
-  the other direction: R074 stops the commons *storing* a path, and this stops
-  the commons *sending* one.
+**As of `7704600c`, F1 is enforced on both halves — and the second half was the
+one that was missing.** The node side should assume the following are true and
+should not re-derive them:
+
+- **No content crosses the boundary, structurally.** The broadcast payload's
+  field types are checked by reflection against a *closed* set — string, `[]string`,
+  `uuid.UUID`, `int`, and one named struct. `[]byte`, `any`, and any array other
+  than `uuid.UUID` fail the test by name. Closed rather than a denylist, because
+  a denylist has to be updated when someone adds a type and forgetting is the
+  failure mode.
+- **…and also by value, which the structural half cannot do.** Every field is a
+  `string`, and a string holds `/etc/passwd`. So `Question.Validate` rejects
+  paths, URLs, UNC paths, traversal, literal internal IPs, and cloud metadata
+  hostnames **before the question is sent**. It rejects rather than truncates:
+  a silently shortened description returns answers to a different question.
 - **A peer's answer is evidence, never a vote, and never a local row.** It lands
   in `identification_foreign_candidates`, not `identification_candidates`, so it
   cannot be voted on locally and cannot become a canonical link. The
@@ -141,6 +150,15 @@ meet all three:
 - **A peer's answer is scoped to one query and expires.** There is no
   `entity_id` column on the foreign-candidate table, so there is nowhere for a
   peer's opinion to attach to an entity and outlive the question.
+
+**One asymmetry worth stating plainly, because a node will hit it.** The
+value-level guard runs on the **sending** side. `Answer` has no equivalent
+`Validate`, so a peer that sends back `Name: "/etc/passwd"` produces a *legal*
+Answer on our side and the value is stored verbatim in the foreign-candidate
+table. It is display-only and cannot reach the vote path (F2), so this is not a
+hole — but it means **the guard protects this instance's users, not a peer's.**
+Step 5 stores those answers and Step 6 surfaces them, and if either of them
+renders a foreign candidate name anywhere it must escape it.
 
 **What this means for the node side: a node that does not implement D2 receives
 nothing.** There is no discovery protocol, so an unconfigured peer is simply
@@ -338,3 +356,15 @@ deleting it as redundant — which is how it looks from the outside.
    positive control, and every source-scanning test needs a control for the
    scanner as well as for the rule.
 5. **Update this file at the end of every turn.** It is the only channel.
+6. **A test derived from the code under test is self-defeating.** Added
+   2026-09-30 after `TestUrlSchemesIsReachable` iterated the live list of URL
+   schemes: deleting a scheme from the source deleted the case that would have
+   noticed, and the suite stayed green. The same shape as rule 4, reached from
+   the other direction — a test built out of the thing it is testing shrinks
+   when the thing shrinks. **Spell the expected values out in the test.**
+7. **A mutation that did not apply is not a surviving mutation.** Two mutations
+   in this session reported SURVIVED when the edit had silently not matched the
+   gofmt-aligned source, and two apparent survivors turned out to be killed.
+   Confirm the file actually changed, or a green result means nothing in either
+   direction. One apparent 60s hang was the full suite and the mutation run
+   competing for the build cache.

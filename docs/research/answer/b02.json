@@ -1,0 +1,202 @@
+{
+  "stash#1446": {
+    "cap": "C67",
+    "quote": "As you start adding more and more scrapers, it becomes very difficult remembering which scrapers focus on what",
+    "why": "Request for scraper renaming functionality matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#1459": {
+    "cap": "C67",
+    "quote": "Think we need the ability to quickly add multiple movies just from urls",
+    "why": "Request for bulk URL importing matches C67's intent for stable extension API for scrapers, plugins, hooks (bulk import via scrapers)"
+  },
+  "stash#1460": {
+    "cap": "C33",
+    "quote": "Right now all tags added to a scene or image universally apply to that media. If two Performers are in the scene / image though, both shouldn’t be getting the same tags",
+    "why": "Request for per-performer tagging matches C33's intent for per-field proposals with weights, history, and merge"
+  },
+  "stash#1463": {
+    "cap": "C34",
+    "quote": "It would be useful in some cases for tags to share an alias, When scraping tags you can run into the case where a foreign might represent multiple local tags in stash",
+    "why": "Request for tag mapping/alias functionality matches C34's intent for auto-propose titles, descriptions, tags, studios from signals"
+  },
+  "stash#1464": {
+    "cap": "C50",
+    "quote": "Right now we have a few different views for collections: **Grid** - Good for an overview of content but not very useful for editing and metadata is ambiguous",
+    "why": "Request for unified collection editing view matches C50's intent for virtual folders over query results, breadcrumbs (organization/view mode)"
+  },
+  "stash#1495": {
+    "cap": "C27",
+    "quote": "Currently a performer's _measurement_ value is contained within a single string variable. This makes specific filtering of a performer's measurements (bust, hip, or waist) v",
+    "why": "Request to split measurements into distinct fields matches C27's intent for multi-select for breast type, ethnicity, nationality, genitalia (similar concept of splitting combined values)"
+  },
+  "stash#1508": {
+    "cap": "C12",
+    "quote": "The addition of saved filters is gamechanging. Now that it’s really quick to pull up a predefined setup, the missing piece of the puzzle is sorting",
+    "why": "Request for multiple consecutive sorts matches C12's intent for saved, dynamic, auto-updating queries as a first-class object"
+  },
+  "stash#1545": {
+    "cap": "C46",
+    "quote": "Refactoring the dropdown list for the scene filter",
+    "why": "Request to organize filter dropdown matches C46's intent for one coherent filter model: facets, saved filters, URL state"
+  },
+  "stash#1580": {
+    "cap": "C65",
+    "quote": "Would like to see more DLNA folders added. Namely Recently added, Recently viewed and Unplayed",
+    "why": "Request for DLNA folder organization matches C65's intent for cast to local network displays and receivers"
+  },
+  "stash#1585": {
+    "cap": "C54",
+    "quote": "When Stash is opened, and the images haven't been cached, pages containing multiple images load images piece by piece",
+    "why": "Request for progressive/lazy loading thumbnails matches C54's intent for scrubber sprites, posters, responsive thumbnails, cache"
+  },
+  "stash#1586": {
+    "cap": "C50",
+    "quote": "I was wondering if there was a folder view feature in stash? I have downloads in folders that are already organized. Can I view the scenes by foler saved on the hard drive?",
+    "why": "Request for folder view browsing matches C50's intent for virtual folders over query results, breadcrumbs"
+  },
+  "stash#1599": {
+    "cap": "C33",
+    "quote": "When scraping scenes with existing tags if the user wants to incorporate any existing tags into the scraped scene tag results their only option is to manually input each of",
+    "why": "Request for tag merging in scrape results matches C33's intent for per-field proposals with weights, history, and merge"
+  },
+  "stash#1624": {
+    "cap": "C13",
+    "quote": "Would be neat to have a completed movie flag the user can manually check and filter for. Allowing the user to see what movies is missing scenes and so on",
+    "why": "Request for organized flag on movies/groups matches C13's intent for mark items organised/favourite; bulk-operate large sets"
+  },
+  "stash#1652": {
+    "cap": "C62",
+    "quote": "The cosmetic formatting of the details lacks consistency: The date section is larger than the other values and is the only value that lacks a heading; the headings that do e",
+    "why": "Request for consistent formatting in scene detail matches C62's intent for performer/studio cards, direct profile links, sorting (UI consistency)"
+  },
+  "stash#1656": {
+    "cap": "C38",
+    "quote": "In the duplicate checker, let me mark two scenes as not duplicate, and do not show them again",
+    "why": "Request to mark scenes as not duplicate matches C38's intent for per-field history, revert, blame (ability to override automatic decisions)"
+  },
+  "stash#1659": {
+    "cap": "C05",
+    "quote": "I would like to see a dedicated manga section. Currently it is not convenient to view manga using the gallery section, as my image galleries and manga galleries mix together a",
+    "why": "Request for dedicated manga/doujin section matches C05's intent for CBZ/CBR/PDF page-based items, right-to-left reading, page ordering"
+  },
+  "stash#1680": {
+    "cap": "C40",
+    "quote": "I would like to see more DLNA folders added. Namely Recently added, Recently viewed and Unplayed, sorted accordingly",
+    "why": "Request for DLNA folder organization matches C65's intent for cast to local network displays and receivers"
+  },
+  "stash#1695": {
+    "cap": "C67",
+    "quote": "Display plugin errors as toasts",
+    "why": "Request for better plugin error handling matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#1723": {
+    "cap": "C50",
+    "quote": "Show Breadcrumb for Nested Tags",
+    "why": "Request for breadcrumb navigation matches C50's intent for virtual folders over query results, breadcrumbs"
+  },
+  "stash#1732": {
+    "cap": "C50",
+    "quote": "Tag tree view mode for Nested Tags",
+    "why": "Request for tree view navigation matches C50's intent for virtual folders over query results, breadcrumbs"
+  },
+  "stash#1790": {
+    "cap": "C73",
+    "quote": "Stash currently only supports the",
+    "why": "Request for external ID support matches C73's intent for documented public API, client libraries, import/export"
+  },
+  "stash#1811": {
+    "cap": "C62",
+    "quote": "When comparing Stash to other tub",
+    "why": "Request for improved gallery UI matches C62's intent for performer/studio cards, direct profile links, sorting"
+  },
+  "stash#1828": {
+    "cap": "C67",
+    "quote": "Getting Phash with a hook plugin",
+    "why": "Request for phash in hook plugins matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#185": {
+    "cap": "C48",
+    "quote": "Feature enhancement request to add basic query syntax to searches",
+    "why": "Request for query syntax enhancement matches C48's intent for fuzzy, phonetic, synonym and alias-aware matching"
+  },
+  "stash#1863": {
+    "cap": "C03",
+    "quote": "Child studios should automatically inherit the poster from its parent studio",
+    "why": "Request for automatic poster inheritance matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1867": {
+    "cap": "C52",
+    "quote": "There doesn't seem to be any kind of duplicate checker for images",
+    "why": "Request for image duplicate checker matches C52's intent for near-duplicate items, re-encodes, same scene different file"
+  },
+  "stash#1896": {
+    "cap": "C12",
+    "quote": "Every time you enter a particular section (scenes, images, movies, etc...) the sort and filter criteria are reset",
+    "why": "Request to remember sort/filter settings matches C12's intent for saved, dynamic, auto-updating queries as a first-class object"
+  },
+  "stash#1914": {
+    "cap": "C03",
+    "quote": "my gallery names are very generic and do not correlate with the scenes that are linked to them",
+    "why": "Request to display scene title in gallery matches C03's intent for images, zips, folder galleries as first-class items"
+  },
+  "stash#1924": {
+    "cap": "C82",
+    "quote": "Streamline Singular/Plural Nouns",
+    "why": "Request for i18n noun streamlining matches C82's intent for maintained locale list, correct names, i18n coverage"
+  },
+  "stash#1939": {
+    "cap": "C74",
+    "quote": "It would be nice to have the option to export selected or currently filtered scenes (or movies) to an .m3u playlist file",
+    "why": "Request for playlist export matches C74's intent for full-fidelity export, scheduled backup, restore drill"
+  },
+  "stash#1961": {
+    "cap": "C62",
+    "quote": "The \"performers\" subtab of a Studio page currently considers ALL media from a performer, even from other studios. The Performer preview cards should display only media from the current studio",
+    "why": "Request for studio-specific performer filtering matches C62's intent for performer/studio cards, direct profile links, sorting"
+  },
+  "stash#1981": {
+    "cap": "C67",
+    "quote": "There is currently a divide between the interface used for scene scraping and performer scraping, scene `search` scrapers will show a preview of the scrape data",
+    "why": "Request to update performer scraper interface matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#2032": {
+    "cap": "C49",
+    "quote": "It will be nice If I was able to set the tag image based on a marker image or scene image",
+    "why": "Request for tag image from marker/scene matches C49's intent for tag namespaces, tag groups, per-tag attributes and colors"
+  },
+  "stash#2045": {
+    "cap": "C67",
+    "quote": "I want to made a performer scraper for `seesaawiki.jp`. When using `performerByName`, stash will use the wrong encoding so the search don't work",
+    "why": "Request for scraper encoding option matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#2048": {
+    "cap": "C67",
+    "quote": "I'm working on adding support for deovr (a vr video player) in a python based plugin that generates some json files",
+    "why": "Request for custom URL mapping in plugin matches C67's intent for stable extension API for scrapers, plugins, hooks"
+  },
+  "stash#2049": {
+    "cap": "C85",
+    "quote": "I would like to request candidates for a replacement Stash logo",
+    "why": "Request for logo submission matches C85's intent for docs site, first-run tour, sample library"
+  },
+  "stash#2055": {
+    "cap": "C34",
+    "quote": "I would love to have the option to extend the auto tagging source by title and description",
+    "why": "Request to extend auto-tagging sources matches C34's intent for auto-propose titles, descriptions, tags, studios from signals"
+  },
+  "stash#2067": {
+    "cap": "C17",
+    "quote": "There seems to be contention about the Task's scan subsection, so I'm not sure what the future operation of the Scan button will be",
+    "why": "Request for scan button label change matches C17's intent for durable queue: identify, generate, match, cluster, transcode (UI aspect of task system)"
+  },
+  "stash#2078": {
+    "cap": "C61",
+    "quote": "Custom CSS styling could be made easier if more elements had class names",
+    "why": "Request for more CSS class names matches C61's intent for theming & accessibility (UI customization/theming)"
+  },
+  "stash#2080": {
+    "cap": "C74",
+    "quote": "The backup functionality should lock / close the database before starting, and should not be allowed to execute if there are any tasks on the queue",
+    "why": "Request for backup concurrency control matches C74's intent for full-fidelity export, scheduled backup, restore drill"
+  }
+}
