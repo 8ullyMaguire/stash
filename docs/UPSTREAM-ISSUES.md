@@ -741,52 +741,63 @@ than silent.
 | 3366 | Add metadata in multiple languages | R10 | not-planned |
 | 3361 | Add POST support to scraper queries | R10 | not-planned |
 
-## Repo-level finding — `go test ./...` was never running the integration suite
+## RESOLVED — the integration suite is no longer invisible, and the random-sort bug is fixed
 
-Found by a background verification run on 2026-09-30, **pre-existing and not caused
-by any Phase 2 work** (verified by extracting the tree at `bde5006f5` — a docs-only
-commit — and reproducing the identical failure there; `git log bde5006f5..HEAD --
-pkg/sqlite/` is empty).
+**This section was written on 2026-09-30 and was wrong at the moment it was
+written.** Both of its claims are now false at HEAD, verified rather than
+assumed. It is kept, and marked resolved, because a note that describes a fixed
+bug as unfixed is worse than no note: the next reader trusts it and either
+re-diagnoses fixed code or skips a gate that is now real.
 
-`go test ./...` reports **38 packages, 0 failures, green** — and silently runs
-**none** of the `pkg/sqlite` integration tests, because every one of them is behind
-`//go:build integration`. Running them explicitly:
+### Claim 1: "`go test ./...` silently runs none of the integration tests"
 
-    go test -tags integration ./pkg/sqlite/ -count=1
-    --- FAIL: TestStudioQueryFast (0.01s)
-    ... no such function: mod
+**Still true about the tags, no longer true as a defect.** Every
+`pkg/sqlite` integration test is behind `//go:build integration`, so the default
+gate cannot see them — that part was accurate and remains accurate. But the
+gate is now run both ways, and both are green:
 
-**Root cause, traced:** `pkg/sqlite/sql.go:144` builds the random sort as
-`ORDER BY mod((id + seed) * (id + seed) * 52959209 + (id + seed) * 1047483763, 2147483647)`.
-`mod` is a SQLite **built-in** math function, present only in an amalgamation built
-with `SQLITE_ENABLE_MATH_FUNCTIONS`. `pkg/sqlite/driver.go` registers four custom
-functions (`regexp`, `durationToTinyInt`, `basename`, `phash_distance`) and the
-`NATURAL_CI` collation in its `ConnectHook` — and correctly does **not** register
-`mod`, because it should be built in. So this is a **build-configuration property of
-the go-sqlite3 CGO build**, not an application defect.
+    go test ./...                             -> 44 packages green
+    go test -tags integration -count=1 ./...  -> 44 packages green
 
-**It is user-facing, not just a test problem:** a user who sorts any list by random
-gets this error, in production, from the same driver. It has survived because the
-default gate cannot see it.
+and `go test -tags integration ./pkg/sqlite/ -count=1` is run explicitly too.
 
-**The other three failures in that run were cascade, not bugs.**
-`TestPerformerQuerySortScenesCount`, `TestPerformerCount` and `TestPerformerAll` fail
-only when run after the random-sort test — the package-level test DB is shared, so
-one aborted setup poisons the fixture for everything after it. Run alone at HEAD,
-only `TestStudioQueryFast` fails. This is the order-dependence the goal file warns
-about, confirmed rather than assumed.
+### Claim 2: random sort is a user-facing failure, "not fixed here, deliberately"
 
-**Not fixed here, deliberately.** The fix is a build flag (`-tags sqlite_math_functions`)
-that must be set in **every** build path — Makefile, CI, cross-compile, release — or
-a switch to a pure-Go driver, which would change driver behaviour wholesale and
-likely affect the four custom functions and the collation. That is a build-config
-decision, not an issue fix, and doing it silently would change how every binary here
-is compiled.
+**False. It was fixed on 2026-09-27, three days BEFORE this note was written**
+(`025bc5936 fix(sqlite): random sort was not random, and never had been`), so the
+"not fixed here, deliberately" paragraph was describing code that no longer
+existed.
 
-**What this changes about the goal's own exit condition:** “the full suite is green”
-has been reading as green while a whole build-tagged suite fails. The gate needs to
-be `go test ./... && go test -tags integration ./...`, and until that is agreed, a
-green suite here means less than it appears to.
+Both of the note's diagnoses were real at the time and both are gone:
+
+1. **The unknown function.** `ORDER BY mod(...)` depended on SQLite's `mod`
+   built-in, which exists only under `SQLITE_ENABLE_MATH_FUNCTIONS`. The
+   expression now uses `%` only — `(id + seed) % 417314` — so it cannot depend
+   on how the CGO driver was compiled.
+2. **The int64 overflow, which the note did not mention.** The old
+   `%= 1e8` seed cap was there to keep the polynomial inside int64, and it did
+   not work: a seed of 1e8 put `x = id + seed` in the millions, every id
+   overflowed, SQLite degraded to float64, and the trailing `% 2147483647`
+   became a no-op. **Every row got the sort key 1, so "random" ordering silently
+   meant "by id".** That is the worse of the two bugs and it raised no error at
+   all. The fix reduces per-id against a derived bound (`randomSortPolyBound =
+   417314`) before the polynomial.
+
+Verified at HEAD: `TestStudioQueryFast` passes, and a temporary test asserting
+that `getRandomSort` references no `mod(`/`abs(`/`random(`/`round(` passed for
+seeds 1, 2, 1e8 and 1e9.
+
+### Claim 3: "three tests fail only when run after the random-sort test"
+
+**False at HEAD.** `TestPerformerQuerySortScenesCount`, `TestPerformerCount`
+and `TestPerformerAll` were said to fail only when run after
+`TestStudioQueryFast`, via the shared package-level test database. Run at HEAD
+in that order: green. Run in the reverse order: also green. The
+order-dependence this note reported is not reproducible.
+
+The underlying hazard is still real — the package-level `db` is shared, so a
+test that aborts its setup can still poison what runs after it. It is a hazard
+to keep in mind when a failure looks order-dependent, not a current failure.
 
 `not planned` is the **combined** bucket: the 128 rows marked `not-planned` plus the
 93 marked `deferred`. The table has four status values but the tally has three, so
