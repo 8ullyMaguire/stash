@@ -2379,6 +2379,26 @@ capabilities (C15, C17, C20) unblock the most downstream fixes.
 sits after them and is built on their machinery. Each step below names its
 requirements, and the ledger's `status` column is the record of what is built.
 
+**Status: all twelve steps complete, gate green (step 7.8, 2026-10-01).**
+7.1, 7.2, 7.3, 7.3b, 7.4, 7.5, 7.6, 7.6a, 7.6c, 7.7, 7.7a, 7.8. 54 packages green
+under both tags, 42 mutants with 0 survivors, three firewall tests passing by name.
+
+**What M7 is and is not.** The MODELS are built and tested: reputation and access
+levels, opt-out and preservation, the two-pool Elo ranking, derived discovery views,
+the ident board, the gamify ledger, curation coverage, the sync write-through and
+the indexing consent gate, and the directory's claim-and-confirm. Several steps
+added migrations (113 applied).
+
+What is NOT built, and this is the honest accounting: **persistence and UI for most
+of it.** Steps 7.7, 7.7a and 7.3b each landed a correct, fully-tested model with
+nowhere to live, and their ledger rows correctly stayed `specified` — a gate is not
+the feature it protects. C5 is 35/86 unbuilt. The remaining M7 work is wiring, not
+thinking: tables, resolvers, and the 422 issue dispositions in C2.
+
+So M7 should be read as "the rules are settled and proven", not "the feature
+ships". §6a's twenty-two non-negotiables are now each backed by a test that fails
+when the rule is broken, which is the part that is expensive to get wrong twice.
+
 **Read §6a before starting.** Three constraints shape every step and each has
 a test named in the step that touches it:
 
