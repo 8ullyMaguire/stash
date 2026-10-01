@@ -385,7 +385,6 @@ func insertCluster(t *testing.T, ctx context.Context, handle string) int64 {
 	return scalar(t, ctx, "SELECT id FROM person_clusters WHERE handle = ?", handle).(int64)
 }
 
-
 // TestClusterMember_UniquenessIsScopedToTheCluster is the test for migration
 // 100, and it exists because a schema VERSION does not check anything.
 //

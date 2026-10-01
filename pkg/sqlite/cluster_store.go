@@ -126,14 +126,14 @@ type NameRecord struct {
 
 // Member is one face belonging to a cluster.
 type Member struct {
-	ClusterID   int64     `db:"cluster_id"`
-	TargetType  string    `db:"target_type"`
-	TargetID    int64     `db:"target_id"`
-	FrameIndex  int       `db:"frame_index"`
-	FaceLeft    int       `db:"face_left"`
-	FaceTop     int       `db:"face_top"`
-	FaceWidth   int       `db:"face_width"`
-	FaceHeight  int       `db:"face_height"`
+	ClusterID   int64   `db:"cluster_id"`
+	TargetType  string  `db:"target_type"`
+	TargetID    int64   `db:"target_id"`
+	FrameIndex  int     `db:"frame_index"`
+	FaceLeft    int     `db:"face_left"`
+	FaceTop     int     `db:"face_top"`
+	FaceWidth   int     `db:"face_width"`
+	FaceHeight  int     `db:"face_height"`
 	DetectScore float64 `db:"detector_score"`
 	Distance    float64 `db:"distance"`
 	Embedding   []byte  `db:"embedding"`

@@ -50,9 +50,9 @@ var documentedNonGoals = map[string]string{
 }
 
 type recordedIssue struct {
-	Repo string   `json:"repo"`
-	Num  int      `json:"num"`
-	Title string  `json:"title"`
+	Repo    string `json:"repo"`
+	Num     int    `json:"num"`
+	Title   string `json:"title"`
 	Created string `json:"created"`
 }
 
@@ -201,8 +201,8 @@ func TestEveryMappedIssueHasAKnownCapability(t *testing.T) {
 // A single pattern matching the tuple form finds all 91 capabilities and zero
 // non-goals, which looks like a clean parse and is silently wrong.
 var (
-	pyTupleEntry  = regexp.MustCompile(`^\s*\("([CX]\d{2})",\s*"([^"]*)"`)
-	pyDictEntry   = regexp.MustCompile(`^\s*"(X\d{2})":\s*\(\s*"([^"]*)"`)
+	pyTupleEntry = regexp.MustCompile(`^\s*\("([CX]\d{2})",\s*"([^"]*)"`)
+	pyDictEntry  = regexp.MustCompile(`^\s*"(X\d{2})":\s*\(\s*"([^"]*)"`)
 )
 
 func taxonomyEntries(t *testing.T, re *regexp.Regexp) map[string]string {

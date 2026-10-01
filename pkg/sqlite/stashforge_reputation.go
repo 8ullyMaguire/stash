@@ -53,11 +53,11 @@ func (s *FieldReputationStore) selectDataset() *goqu.SelectDataset {
 // the package that was supposed to know nothing about it -- and the fix is to
 // edit the governance layer, which is the wrong place to be making the change.
 type fieldReputationRow struct {
-	UserID     int       `db:"user_id"`
-	TargetType string    `db:"target_type"`
-	Field      string    `db:"field"`
-	Reputation int       `db:"reputation"`
-	Rejections int       `db:"rejections"`
+	UserID     int    `db:"user_id"`
+	TargetType string `db:"target_type"`
+	Field      string `db:"field"`
+	Reputation int    `db:"reputation"`
+	Rejections int    `db:"rejections"`
 	// UpdatedAt is read but not carried into collab's view. It is here because
 	// the SELECT is table.All(): sqlx requires a destination for every returned
 	// column, so omitting it fails the scan at runtime rather than at compile

@@ -226,9 +226,9 @@ func TestOverMergeGuard_JoiningDoesNotStrandAnExistingMember(t *testing.T) {
 
 	err := g.addMember(cl, cand)
 	if err == nil {
-		t.Fatalf("a join that would leave the face at 0.0 outside the "+
-			"threshold of the new centroid was accepted; the member at 0.0 was "+
-			"well inside the threshold before the join and the cluster is a "+
+		t.Fatalf("a join that would leave the face at 0.0 outside the " +
+			"threshold of the new centroid was accepted; the member at 0.0 was " +
+			"well inside the threshold before the join and the cluster is a " +
 			"line from 0.0 to 1.0 after it")
 	}
 	if !errors.Is(err, ErrOverMerge) {

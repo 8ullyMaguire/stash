@@ -127,10 +127,10 @@ type Detector struct {
 //
 // The order is load-bearing and is the security property, so it is stated once:
 //
-//	1. the pin is well-formed
-//	2. the model file exists
-//	3. the digest matches
-//	4. a runtime is available
+//  1. the pin is well-formed
+//  2. the model file exists
+//  3. the digest matches
+//  4. a runtime is available
 //
 // (1) before (2) because a malformed pin is a fault in the configuration and
 // says nothing about the file; reporting "model missing" for a caller that

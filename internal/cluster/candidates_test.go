@@ -210,10 +210,10 @@ func TestCandidates_TheQueryItselfIsUnusableIsAFault(t *testing.T) {
 	}
 
 	for name, q := range map[string][]float32{
-		"nil":          nil,
-		"empty":        {},
-		"zero vector":  make([]float32, 4),
-		"wrong width":  make([]float32, 7),
+		"nil":            nil,
+		"empty":          {},
+		"zero vector":    make([]float32, 4),
+		"wrong width":    make([]float32, 7),
 		"containing NaN": {float32(math.NaN()), 1, 0, 0},
 	} {
 		got := nearest(vectors, q, 2)
@@ -358,7 +358,7 @@ func TestCandidates_ATieAtTheBoundaryKeepsTheEarlierRow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("row %d: %v", i, err)
 		}
-	if math.Abs(d-1) > 1e-9 {
+		if math.Abs(d-1) > 1e-9 {
 			t.Fatalf("row %d is at distance %v, not 1; the fixture needs all "+
 				"rows equidistant from the query", i, d)
 		}
@@ -395,7 +395,7 @@ func TestCandidates_CountsEveryRowItConsiders(t *testing.T) {
 
 	// Brute force, computed here, as ground truth.
 	type pair struct {
-		idx int
+		idx  int
 		dist float64
 	}
 	all := make([]pair, 0, n)

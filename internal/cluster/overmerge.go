@@ -100,7 +100,7 @@ type guard struct {
 	// keys maps a membership key to the cluster that already contains it, so a
 	// rescan is a no-op rather than a duplicate.
 	keys map[string]int
-	next  int
+	next int
 }
 
 func newGuard(threshold float64) *guard {

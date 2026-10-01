@@ -63,10 +63,10 @@ func TestSampleBudgetIsSpreadEndToEnd(t *testing.T) {
 // whose purpose is not missing the end of a file must include the endpoint.
 func TestSampleBudgetLastSampleLandsWhereEvenSpreadPutsIt(t *testing.T) {
 	tests := []struct {
-		name      string
-		duration  int
-		budget    int
-		want      []int
+		name     string
+		duration int
+		budget   int
+		want     []int
 	}{
 		// Spread over [0, 99] with 5 samples: 0, 24, 49, 74, 99.
 		{"exact division", 100, 5, []int{0, 24, 49, 74, 99}},

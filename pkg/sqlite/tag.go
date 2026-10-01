@@ -31,7 +31,7 @@ const (
 )
 
 type tagRow struct {
-	ID            int         `db:"id" goqu:"skipinsert"`
+	ID int `db:"id" goqu:"skipinsert"`
 	// LibraryID is the sharing scope this row belongs to. Migration 105.
 	//
 	// Scan-only, and deliberately not carried onto the models type: which
@@ -42,7 +42,7 @@ type tagRow struct {
 	// It must exist here because the SELECT is table.All() and sqlx fails at
 	// RUNTIME -- not compile time -- on a column with no destination. That is
 	// the failure this comment is standing next to.
-	LibraryID null.Int `db:"library_id,omitempty"`
+	LibraryID     null.Int    `db:"library_id,omitempty"`
 	Name          null.String `db:"name"` // TODO: make schema non-nullable
 	SortName      zero.String `db:"sort_name"`
 	Favorite      bool        `db:"favorite"`
