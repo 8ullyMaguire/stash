@@ -188,12 +188,30 @@ def c7_suite():
         add("C7 integration suite", "UNKNOWN", "integration suite timed out (rc=124)")
         return
     failed = [l.split(":", 1)[1].strip() for l in out.splitlines() if l.startswith("--- FAIL")]
-    if failed:
+    # A package that dies in TestMain -- a panic, a migration that will not
+    # load, a bad build tag -- emits "FAIL <pkg>" and NO "--- FAIL" line, because
+    # no individual test ever ran. Counting only "--- FAIL" reported that as a
+    # pass: the suite was panicking on a duplicate migration number for the
+    # whole consolidation while this clause said green. Any non-zero rc, or any
+    # FAIL package line, is a failure.
+    dead = [l.split("\t", 1)[1].strip() for l in out.splitlines()
+            if l.startswith("FAIL\t") and l.split("\t", 1)[1].strip()]
+    if rc != 0 and not failed and not dead:
+        first = next((l for l in (out + err).splitlines()
+                      if l.startswith("panic") or "Could not initialize" in l), "")
         add("C7 integration suite", "FAIL",
-            f"{len(failed)} failing: " + ", ".join(failed[:5])
-            + ("  [go test ./... does NOT run these]" if failed else ""))
+            "suite exited rc=%d with no test-level failure -- it did not start "
+            "(no test ever ran). %s" % (rc, first[:120]))
+        return
+    if failed or dead:
+        add("C7 integration suite", "FAIL",
+            f"{len(failed)} failing test(s), {len(dead)} dead package(s)"
+            + (": " + ", ".join(failed[:5]) if failed else "")
+            + (": " + ", ".join(dead[:3]) if dead else "")
+            + "  [go test ./... does NOT run these]")
     else:
-        add("C7 integration suite", "PASS", "integration suite green")
+        npkg = sum(1 for l in out.splitlines() if l.startswith("ok"))
+        add("C7 integration suite", "PASS", f"integration suite: {npkg} package(s) green")
 
 
 # C8 -- the 17-issue Backlog programme: every issue dispositioned, and every

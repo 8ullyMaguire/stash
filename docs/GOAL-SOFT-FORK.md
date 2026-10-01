@@ -84,11 +84,25 @@ regenerated `go.mod` from upstream.
 
 ```bash
 go generate ./cmd/stash
-go build ./...            # clean
-go vet ./...              # clean
-go test ./...             # 38 packages ok, 0 failures -- may only go UP
-gofmt -l internal/ pkg/   # empty
+go build ./...                  # clean
+go vet ./...                    # clean
+gofmt -l internal/ pkg/         # empty
+go test -count=1 ./...          # 44 packages ok, 0 failures
+go test -count=1 -tags integration ./...   # ALSO required -- see below
 ```
+
+**The integration suite is not optional.** 45 of the 47 files in `pkg/sqlite`
+are behind `//go:build integration`, so `go test ./...` alone skips almost the
+entire database layer and reports a comfortable pass over a suite that never
+started. It did exactly that: `go test -tags integration ./pkg/sqlite/` had been
+panicking since the branch consolidation, on a duplicate migration number, and
+the plain gate stayed green through it.
+
+A green `go test ./...` in this repo means *the unit tests passed and the
+database tests were not run*. Both lines above must pass.
+
+Baseline as of `e6d842b33`: 44 unit packages, 43 integration packages, 0
+failures in either.
 
 ## Ground rules
 
