@@ -126,7 +126,28 @@ func TestTheRuneThresholdIsCountedInRunesNotBytes(t *testing.T) {
 	// simply "non-ASCII words are kept".
 	assert.Contains(t, getPathWords("/media/abc/a.mp4", true), "ab")
 
-	// And the single CJK rune, at one rune / three bytes, is dropped -- which
-	// a byte-counting filter would have kept.
-	assert.NotContains(t, getPathWords("/media/伏/a.mp4", true), "伏")
+	// And the single CJK rune, at one rune / three bytes, is KEPT. It is a
+	// complete name, not a fragment: there is no such thing as a half of 伏.
+	// A byte-counting filter would have kept it for the wrong reason, and an
+	// ASCII-only one drops it, which is stash#2293.
+	assert.Contains(t, getPathWords("/media/伏/a.mp4", true), "伏")
+}
+
+// A single-rune word is dropped only when it is ASCII. That asymmetry is
+// deliberate and is the whole fix:
+//
+//   - "x" alone is true of an enormous number of unrelated words, so keeping it
+//     would make every scene a candidate for every single-letter performer.
+//   - "伏" alone is a whole name. CJK, Cyrillic and Devanagari are written
+//     without spaces between words, so a one-syllable name is common and
+//     dropping it makes the performer invisible to auto-tagging entirely.
+func TestASingleRuneWordIsDroppedOnlyWhenItIsASCII(t *testing.T) {
+	assert.NotContains(t, getPathWords("/media/ok/x.mp4", true), "x",
+		"a lone ASCII letter is noise and must stay filtered")
+
+	for _, r := range []string{"伏", "Ё", "あ", "ק"} {
+		assert.Contains(t, getPathWords("/media/"+r+"/a.mp4", true), r,
+			"%q is a one-rune name in a script that does not delimit words with "+
+				"spaces; dropping it hides the performer from auto-tagging", r)
+	}
 }

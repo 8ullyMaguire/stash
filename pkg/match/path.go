@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/stashapp/stash/pkg/gallery"
 	"github.com/stashapp/stash/pkg/image"
@@ -59,17 +58,38 @@ func getPathWords(path string, trimExt bool) []string {
 	// remove any single letter words
 	var ret []string
 	for _, w := range words {
-		if utf8.RuneCountInString(w) > 1 {
-			// #1450 - we need to open up the criteria for matching so that we
-			// can match where path has no space between subject names -
-			// ie name = "foo bar" - path = "foobar"
-			// we post-match afterwards, so we can afford to be a little loose
-			// with the query
-			// just use the first two characters
-			// #2293 - need to convert to unicode runes for the substring, otherwise
-			// the resulting string is corrupted.
-			ret = sliceutil.AppendUnique(ret, string([]rune(w)[0:2]))
+		r := []rune(w)
+		if len(r) == 0 {
+			continue
 		}
+		// #2293 - a one-rune word is noise only when it is ASCII. "x" on its
+		// own is true of an enormous number of unrelated words, so keeping it
+		// would make every scene a candidate for every single-letter
+		// performer. "伏" on its own is a whole NAME: CJK, Cyrillic and
+		// Devanagari are written without spaces between words, so short names
+		// are ordinary, and dropping it hides the performer from auto-tagging
+		// entirely. The same filter counted in bytes kept it for the wrong
+		// reason and counted in runes dropped it for no reason at all.
+		if len(r) == 1 && len(w) == 1 {
+			continue
+		}
+		// #1450 - we need to open up the criteria for matching so that we
+		// can match where path has no space between subject names -
+		// ie name = "foo bar" - path = "foobar"
+		// we post-match afterwards, so we can afford to be a little loose
+		// with the query
+		// just use the first two characters
+		// #2293 - need to convert to unicode runes for the substring, otherwise
+		// the resulting string is corrupted.
+		// A one-rune word is kept WHOLE. r[0:2] on a one-element slice yields
+		// that element plus a NUL byte past the end, and "ק\x00" matches
+		// nothing in the database -- the same invisibility the rune-counting
+		// filter caused, by a different route.
+		frag := string(r[0:2])
+		if len(r) == 1 {
+			frag = w
+		}
+		ret = sliceutil.AppendUnique(ret, frag)
 	}
 
 	return ret
