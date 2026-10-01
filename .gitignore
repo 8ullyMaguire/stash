@@ -77,3 +77,7 @@ plugins/
 # which is the same noise `internal/api/generated_*.go` is already ignored for,
 # and for the same reason.
 docs/pr-queue.json
+
+# Python bytecode from docs/ scripts (goal-check.py, issue ledgers)
+__pycache__/
+*.pyc
