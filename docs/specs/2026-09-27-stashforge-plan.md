@@ -2798,7 +2798,9 @@ gate — and splitting them would mean inventing a protocol twice. Capabilities 
 
 ### M8 at a glance (added 2026-10-02)
 
-**All thirteen M8 requirements are `tested`.** `docs/requirements.csv` is the authority
+**All thirteen M8 requirements are `tested`. Step 8.6 is `specified`** — created
+2026-10-02 out of `probe_relay`'s own list of what it did not measure, because a
+`VERDICT GO` reads as a closed question and the probe is explicit that it is not. `docs/requirements.csv` is the authority
 for per-requirement state; this table is for orientation.
 
 | Step | Requirements | State |
@@ -2809,6 +2811,7 @@ for per-requirement state; this table is for orientation.
 | 8.3 | R078, R079, R082 | done — manifest, alerts, replication gate |
 | 8.4 | R080 | done — allocation log |
 | 8.5 | R084 | done — the downloader's guards now live in core |
+| 8.6 | R087, R088, R089, R090 | **specified** — what the relay probe did not measure |
 
 **Nothing is open.** An earlier version of this table carried "one item is open, the
 transport" — that was wrong, and it was wrong because it read the absence of a decision
@@ -3143,6 +3146,53 @@ Asserting presence is not asserting correctness — the plugin's own tests do th
 this adds the layer the retraction removed and nothing else. **The stated cost is pinned
 rather than argued**: a user can no longer remove the feature, so a future change cannot
 quietly restore the plugin's removability and claim to have kept §6b.8's guarantees.
+
+### Step 8.6 — What the relay probe did not measure (R087, R088, R089, R090)
+
+**SPECIFIED, and created 2026-10-02 from a command's own stdout.** `cmd/probe_relay`
+is written to be able to fail, and when it passed it printed the list of what it had
+*not* measured:
+
+| | item | row |
+|---|---|---|
+| 1 | relay discovery and bootstrap — **the first node has no peer to ask** | R087 |
+| 2 | NAT traversal — a volunteer relay behind NAT is the common case | R088 |
+| 3 | the relay's own traffic cost and the consent model governing it | R089 |
+| 4 | transport encryption — a relay cannot read what it carries | R090 |
+
+**Why these are rows and not a footnote.** A probe's unmeasured list is the most
+honest text a tool produces, and it is also the easiest to lose: it scrolls past, it
+lives in a command rather than in the plan, and every later reader sees a `VERDICT GO`
+and infers the question is closed. The probe says `GO` about **the property it
+measured** — 4 GiB in 2.7 s, content hash matching, no address crossing — and says
+nothing about these four. Promoting them to the ledger is the only thing that makes
+"done" and "measured" different claims.
+
+**On item 4, because the wording is a trap and the trap is already in the transport's
+justification.** The probe forwards an **opaque payload**. That proves no *routable
+address* crosses — R077's property, and the reason the transport was chosen. It says
+**nothing about a relay reading the content**, and "no address crossing" is exactly the
+phrase that makes a relay mesh sound private. A relay mesh is private about **origin**,
+not about **content**. R090 is therefore required for a reason that is *not* the reason
+the transport was chosen, and it must not be recorded as already satisfied by R077 —
+that is the specific error to avoid, and it is one sentence away from looking correct.
+
+**On item 2, which may not be closable and should not be pretended otherwise.** Hole
+punching and relay discovery both want addresses exchanged, and that is the property
+R077 and R081 just established. §6b.4's property and a *usable* mesh may not be
+simultaneously satisfiable with off-the-shelf NAT traversal. If that turns out to be
+true, the honest outcome is a **documented limitation**, not a hole in the guarantee —
+a guard that quietly stops holding is worse than one that is visibly capped, and a
+cap at least tells the operator what they are getting.
+
+**On item 3, which is a consent gap rather than a feature.** Somebody pays for every
+byte a relay copies, and nobody has agreed to that. R080's allocation log records what
+*this* instance placed and why; it says nothing about what this instance forwarded on
+someone else's behalf, so an operator reading the log sees a clean sheet while their
+node carries other people's libraries. The consent belongs beside the budget in
+`pkg/sqlite/mesh_serve.go` and for the same reason the budget does: a cap stored as
+configuration is a promise by the operator, and a cap checked after the transfer has
+already happened is not a cap.
 
 ### Verification, per step
 
