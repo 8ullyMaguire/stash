@@ -1220,3 +1220,45 @@ no data, and adds nothing. The upstream author's diagnosis and fix shape were
 checked against our source before merging, and ours additionally pins the guarded
 half — a mismatch must not be promoted to success, which the upstream change does
 not test for.
+
+### PR #7268 — MERGED as `df015df18`
+
+"Chore(deps): Bump moment from 2.30.1 to 2.31.0 in /ui/v2.5", by
+`app/dependabot`. 2 files, +21/-14, `MERGEABLE` / `CLEAN`. Dependabot
+security bump citing CVE-2026-17495.
+
+**Applied as a patch, not as a merge.** `gh pr checkout` creates an
+upstream-based branch, and merging that would have pulled upstream history
+into the fork's single lineage — the exact error the two-branch convention
+existed to prevent. `git diff upstream/develop <pr> -- <two files>` applies
+cleanly to main.
+
+**What the CVE is worth here: nothing, and that is a measurement.** The
+vulnerable behaviour is object-prototype properties being usable as format
+tokens, so it needs an untrusted format string reaching `formatToken` or
+`advancedFormat`. Neither appears anywhere in this tree (0 hits), and moment
+is imported in exactly two files:
+
+- `App.tsx:55` — `moment.locale([language, defaultLocale])`
+- `JobTable.tsx:148` — `moment.duration(estimatedLength).humanize()`
+
+Neither takes a caller-supplied format. Probing both versions directly,
+2.30.1 and 2.31.0 return `null` for the `{__proto__}` token and neither
+pollutes `Object.prototype` — so the old version did not reproduce the
+exploit through the documented API either. **The bump is recorded as the
+dependency refresh it verifiably is, not as a security fix.**
+
+Verification, all measured rather than assumed: frozen-lockfile install
+clean before and after; vite build green both times with asset sizes equal
+within gzip noise (index 1233.86kb -> 1236.68kb gzipped); Go suite 44
+packages green. The lockfile also moves unrelated transitive versions
+(@types/node, sass, terser) because dependabot resolved them — accepted,
+since install and build are clean.
+
+**`pnpm run validate` is RED, and was red before this change.** 7 errors and
+6 warnings, every one in a `scripts/*.mjs` probe script. Worth recording as
+a trap: the first baseline capture came from `cmd > file 2>&1` immediately
+after a `tail`, and the file was truncated to 554 bytes, so the "before" set
+looked empty and the change looked like it introduced 14 findings. Re-run
+without the pipe, both sets are byte-identical. **A truncated baseline reads
+as a regression, and the truncation is invisible in the comparison.**
