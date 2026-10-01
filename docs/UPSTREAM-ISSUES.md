@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 423 planned, 221 not planned, 31 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 422 planned, 222 not planned, 31 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -17,12 +17,12 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R4 | 2 | R4 object sync: an architecture, not a fix |
 | R5 | 7 | R5 translating the UI, not fixing it |
 | R6 | 1 | R6 a product decision, not an issue |
-| R7 | 14 | R7 one issue implies a whole subsystem |
+| R7 | 15 | R7 one issue implies a whole subsystem |
 | R9 | 107 | the 107 upstream explicitly marked (bug report, help wanted, bounty) are **kept unconditionally** |
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
 
-**423 planned, 221 not planned, 31 closed, 675 total.**
+**422 planned, 222 not planned, 31 closed, 675 total.**
 
 
 ## How to read `planned`
@@ -82,7 +82,6 @@ These carry a label the maintainers themselves applied.
 | 6978 | HEVC Video in MKV playback freezes when skipped to another part of the | upstream-marked (bug report) | planned |
 | 6897 | Sub-Groups without scenes not displaying initial page-load properly | upstream-marked (bug report) | planned |
 | 6732 | HEIC/HEIF Image Format Support with Live Photo Pairing | upstream-marked (help wanted) | planned |
-| 6577 | No way to prevent .webm files from being categorized as "videos"/scene | upstream-marked (bug report) | planned |
 | 6526 | Player bottom controls are clipped (fullscreen missing) + menus overla | upstream-marked (bug report) | planned |
 | 6466 | Unsaved entries intermittently lost in Scene Edit Tags or Performers | upstream-marked (bug report). **FIXED.** The reporter's two clues — “more likely with a large maxOptionsShown” and “does not reproduce when the video is paused” — both point away from the select box and at the real trigger: a **10-second timer**. `track-activity.ts` runs a 1s interval and every `sendInterval = 10` calls `sendActivity()`, which awaits `sceneSaveActivity`/`sceneIncrementPlayCount`; Apollo normalises those mutation results back into the cache, so `data` changes identity and Scene.tsx's `useLayoutEffect(… setScene(data?.findScene) …, [data, loading])` sets a brand-new `scene` object. The editor’s DRAFTS were synced from it with `useEffect(() => setPerformers(scene.performers ?? []), [scene.performers])` and the same in `tagsEdit.tsx` — every `scene.performers`-shaped value is a fresh array on the new object, so the effect re-ran and **overwrote the unsaved draft with the saved values**. Both boxes, matching “both may be lost”. The large dropdown size is only an **amplifier**: a slower select query keeps the input focused with an unsaved entry for longer. **`useInitialState` already existed and already documented exactly this** (“only updated if the current state is unchanged from the initial state”) — these two call sites were not using it. All five drafts now use it; a pristine draft still syncs so a real server change lands, and the explicit post-save/cancel resets use the plain setter. **A hypothesis I had to discard:** a stale-response race in FilterSelect’s `debounceLoadOptions`. lodash debounce genuinely cancels no in-flight request, but react-select guards it — `if (request !== lastRequest.current) return;` (`useAsync-c64f5536.esm.js:119`) — so that path was a plausible fix in the wrong file. | closed |
 | 6456 | bfcache not used because WebSocket connection is not closed | upstream-marked (bug report) | planned |
@@ -502,7 +501,8 @@ Ranked by discussion volume and age, among issues with no maintainer label.
 | 1183 | Add `{studioName}` and `{studioURL}` placeholder fields for sceneByFra | R9/R10 lowest-signal feature request | planned |
 | 1165 | Filter the stash-box query based on existing metadata | R9/R10 lowest-signal feature request | planned |
 
-## Not planned — deferred by rule (93)
+| 6577 | 6577 | R7 one issue implies a whole subsystem | deferred |
+## Not planned — deferred by rule (94)
 
 | # | Title | Why | Verdict |
 |---|---|---|---|
@@ -599,6 +599,16 @@ Ranked by discussion volume and age, among issues with no maintainer label.
 | 7139 | Lack of right-click paste option in multi-edit boxes like Tags, Perfor | R5 translating the UI, not fixing it | deferred |
 | 7250 | Use AI technology to tag videos, marking different sexual positions an | R1 upstream labels it a plugin idea, not cor | deferred |
 | 7253 | Add Kiswahili (Swahili, sw-KE) language translation | R5 translating the UI, not fixing it | deferred |
+
+**#6577 is labelled a bug report upstream and is not one** — recorded here because the
+label is the interesting part. Measured with real encoded files: a `.webm` and a `.mkv` both
+report `matroska,webm` to ffprobe, so identification cannot come from the extension or the
+probe format — and does not. `magicContainer` separates them by magic bytes
+(`pkg/ffmpeg/media_detection.go`), returning `webm` and `matroska`, precisely because the
+two muxers share a format name. So the classification is already correct and a webm IS meant
+to be a scene; what the reporter wants is an EXCLUSION mechanism, and none exists — nothing
+in the scan path (`pkg/sqlite/file.go`) filters by container or extension. That is a missing
+feature, so R7, not a bug fix to behaviour that is already right.
 
 ## Not planned — cut by signal (132)
 
