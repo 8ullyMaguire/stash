@@ -29,7 +29,7 @@ import (
 // So: the shapes come from 32_files.up.sql verbatim, and the lesson is recorded
 // because it is general -- a test fixture that does not match the real schema
 // does not fail loudly, it fails as a FALSE ALARM about the code under test.
-func TestMigration87ActuallyDeletes(t *testing.T) {
+func TestPhashShortVideoMigrationActuallyDeletes(t *testing.T) {
 	dsn := "file:" + filepath.Join(t.TempDir(), "t.db") + "?_foreign_keys=on"
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {

@@ -25,7 +25,11 @@ import (
 // Both are silent, and a test that only exercised spriteColumns() would pass
 // happily through either. So this reads the migration file itself and compares
 // its literals against the algorithm.
-const migrationFile = "../../sqlite/migrations/87_phash_short_videos.up.sql"
+// The migration is numbered 107, not 87: number 87 is `87_users.up.sql`,
+// taken by the StashForge M1 work. Both branches independently allocated 87
+// and the consolidation merge produced a duplicate-file panic that made the
+// whole integration suite unrunnable. Content is unchanged.
+const migrationFile = "../../sqlite/migrations/107_phash_short_videos.up.sql"
 
 // The migration must select rows this package considers changed, and only
 // those. Read the actual predicates out of the file rather than trusting a
@@ -122,15 +126,23 @@ func TestPhashMigrationIsReachableFromTheSchemaVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The migration's own number comes from its filename.
-	base := regexp.MustCompile(`87_`).FindString(migrationFile)
-	if base == "" {
+	// The migration's own number comes from its filename -- not a literal. This
+	// migration has already been renumbered once (87 collided with 87_users
+	// when two branches were consolidated), and a hardcoded number here is how
+	// that collision stayed invisible: the test still passed while the file it
+	// read no longer existed.
+	mnum := regexp.MustCompile(`([0-9]+)_`).FindStringSubmatch(migrationFile)
+	if len(mnum) == 0 {
 		t.Fatal("could not read the migration number from " + migrationFile)
 	}
-	if version < 87 {
-		t.Errorf("appSchemaVersion is %d but migration 87 exists, so the chain stops "+
+	want, err := strconv.Atoi(mnum[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version < want {
+		t.Errorf("appSchemaVersion is %d but migration %d exists, so the chain stops "+
 			"at %d and the phashes are never deleted: every existing database keeps "+
-			"the incomparable hashes this change was made to remove", version, version)
+			"the incomparable hashes this change was made to remove", version, want, version)
 	}
 }
 
