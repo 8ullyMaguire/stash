@@ -2709,10 +2709,17 @@ Plus the three firewall tests, run by name because they are the phase's
 substance rather than its coverage:
 
 ```
-go test ./internal/mesh/     -run 'TestReputationNeverGrantsAnAccessLevel'
+go test ./internal/collab/  -run 'TestReputationNeverGrantsAnAccessLevel'
 go test ./internal/preservation/ -run 'TestAnOptedOutSceneIsNeverAReplicationSubject'
 go test ./internal/ident/    -run 'TestASolvedIdentificationWritesAProposalNotAField'
 ```
+
+Note on the firewall tests' locations: `TestReputationNeverGrantsAnAccessLevel`
+lives in `internal/collab`, not `internal/mesh`. It was named here from the start and
+run against the wrong package, where it reported FAIL as "no tests to run" — a
+failure that looks like a broken test rather than a wrong path. The access-level
+model is `collab`'s (§6a.10–§6a.12); `internal/mesh` carries the wire protocol and
+its claim guard, which is a different rule about a different thing.
 
 ## Verification, per milestone
 

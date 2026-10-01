@@ -378,6 +378,45 @@ func TestRatingsSeparatePredictionFromReceipt(t *testing.T) {
 		"a voter whose high scores were borne out is rated above one whose low "+
 			"scores were")
 
+	// THE TWO FORMS ARE DISTINGUISHABLE, and getting here took two wrong attempts.
+	//
+	// Above, every vote pairs a voter with a fresh target, so both ratings sit at
+	// DefaultRating when the update runs and Expected(target, rater) is arithmetically
+	// equal to Expected(rater, target). A symmetric fixture cannot tell the correct
+	// line from the wrong one: the mutation survived a fully green suite.
+	//
+	// Two things had to change, and both were found by measuring rather than
+	// reasoning. First the scores: a 50/50 DRAW scores exactly the expectation, so it
+	// moves nothing under either form. Then the NAMES: votes are replayed in sorted
+	// order, so a target called "fresh" is replayed FIRST, while the voter is still
+	// at 1500 -- which is the same coincidence by a different route. The target here
+	// sorts LAST on purpose.
+	//
+	// The assertion is a COMPARISON between two voters, not a threshold. With the
+	// arguments correct, a rater the system already rates above average gives a
+	// target a LARGER bump than a rater it rates below average: the update asks how
+	// well this entity is doing, and a good rater's approval is better evidence.
+	// Swap the arguments and the order REVERSES, because the update then asks how
+	// well the voter is doing and drags every target they rate well down with them.
+	praised := []Vote{
+		{VoterID: "a", Target: "x", Score: 100},
+		{VoterID: "a", Target: "y", Score: 100},
+		{VoterID: "a", Target: "zfresh", Score: 80},
+	}
+	alsoPraised := []Vote{
+		{VoterID: "b", Target: "p", Score: 0},
+		{VoterID: "b", Target: "q", Score: 0},
+		{VoterID: "b", Target: "zfresh", Score: 80},
+	}
+	byGoodRater := Ratings(praised)["zfresh"].Rating - DefaultRating
+	byPoorRater := Ratings(alsoPraised)["zfresh"].Rating - DefaultRating
+
+	assert.Greater(t, byGoodRater, byPoorRater,
+		"a target praised 80 by a voter the system rates ABOVE average must gain "+
+			"more than one praised 80 by a voter it rates BELOW. The received update "+
+			"uses the TARGET's own expectation. Swapping the arguments inverts this "+
+			"ordering, which is the bug the two pools exist to prevent")
+
 	// Neither pool is a superset of the other, which is the structural statement
 	// that the split is real rather than a rename.
 	assert.NotContains(t, received, "a", "a only voted; nothing is known about how "+
