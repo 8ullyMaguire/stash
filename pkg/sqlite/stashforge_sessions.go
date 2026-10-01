@@ -290,15 +290,10 @@ func NewAuditStore() *AuditStore {
 
 // Append writes one audit row.
 func (s *AuditStore) Append(ctx context.Context, actorID *int, action, targetType string, targetID *int, field string, detail map[string]interface{}) error {
-	query := fmt.Sprintf("INSERT INTO %s (%s, %s, %s, %s, %s, %s) VALUES (?, ?, ?, ?, ?, ?)",
-		collabAuditTable, collabAuditActorCol, collabAuditActionCol,
-		collabAuditTargetTypeCol, collabAuditTargetIDCol, collabAuditFieldCol,
-		collabAuditDetailCol)
-
-	_, err := dbWrapper.Exec(ctx, query,
-		intOrNull(actorID), action, null.StringFrom(targetType),
-		intOrNull(targetID), null.StringFrom(field), detailJSON(detail))
-	return err
+	// Routed through appendAuditChained rather than a bare INSERT, so the row
+	// gets a hash that commits it to every row after it. A direct insert here
+	// would be a row that breaks verification for the rest of the table.
+	return appendAuditChained(ctx, actorID, action, targetType, targetID, field, detailJSON(detail))
 }
 
 // RecordLoginFailure writes the row that shows a brute-force or a signup flood.
@@ -314,11 +309,12 @@ func (s *AuditStore) RecordLoginFailure(ctx context.Context, username, ip, reaso
 
 	// actor_id is NULL: nobody is authenticated yet, which is precisely the
 	// case worth recording.
-	query := fmt.Sprintf("INSERT INTO %s (%s, %s) VALUES (?, ?)",
-		collabAuditTable, collabAuditActionCol, collabAuditDetailCol)
-
-	_, err := dbWrapper.Exec(ctx, query, "login_failed", detailJSON(detail))
-	return err
+	//
+	// Note the chain: a login failure is exactly the row an attacker would want
+	// to delete, since a flood is only incriminating while it is on the record.
+	// It goes through the same chained path as everything else precisely for
+	// that reason, not as an afterthought.
+	return appendAuditChained(ctx, nil, "login_failed", "", nil, "", detailJSON(detail))
 }
 
 // Entry is one audit row, as a moderator sees it.
