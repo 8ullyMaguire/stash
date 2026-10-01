@@ -2966,6 +2966,31 @@ saying it changed, and no discrepancy ever reported.
 `TestTheProposeSideAndTheWriteSideAreTheSameSurface` now asserts the equality in both
 directions.
 
+**And a note on how this step's own test failed while it was being written, because
+the failure mode is worth more than the fix.** `TestParsePerformerScenes` reported
+that *every* expected match came back absent — one line per fixture, all identical
+shape. The tagger was not at fault: it matched every path correctly. The writes were
+being **discarded**, because the sink reaches repository writes that require an active
+transaction and the test was still calling the non-transactional helper.
+
+The reason this is worth writing down is that the evidence pointed somewhere else. A
+per-file loop that logs and continues swallowed the real error (`not in transaction`)
+into ordinary output, so the suite printed a tidy summary and a green-looking run
+whose only assertion was emptiness. The two helpers differ in one word —
+`withTxn` versus `withDB` — and have **identical signatures**, so the compiler accepts
+the wrong one. Reproduced deliberately by forcing the non-transactional helper back in
+on the current tree, which produced the identical fixture list and finally printed the
+error that had been hidden.
+
+Two rules came out of it. A test that asserts through a **recording stub cannot notice
+its own sink is inert** — a stub returns success for a write that would have been
+discarded — so the end-to-end tests were switched to a real `DirectSink` against a real
+database, and that switch is what found the two production gaps above. And a
+collaborator whose effect is advisory (a queue, a cache, an outbox) turns a wiring
+mistake into an empty result rather than an error, so when a test says "nothing was
+found" and the matching code is obviously right, the question is not *why did the match
+fail* but **where did the write go**.
+
 **One note on the detector, because it nearly shipped broken.** The guard does not
 enumerate method names — `internal/api`'s equivalent misses `UpdatePartial`, which
 is how every autotag match reaches the library. It matches the *shape* of a write:
