@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 424 planned, 221 not planned, 30 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 423 planned, 221 not planned, 31 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 675 or the generator fails.
 | R10 | 132 | lowest-signal feature requests, cut to reach two thirds |
 
 
-**424 planned, 221 not planned, 30 closed, 675 total.**
+**423 planned, 221 not planned, 31 closed, 675 total.**
 
 
 ## How to read `planned`
@@ -90,7 +90,7 @@ These carry a label the maintainers themselves applied.
 | 6246 | Scene Tagger Navbar floats out of position | upstream-marked (bug report) | planned |
 | 5987 | Upgrade React + Dependencies | upstream-marked (help wanted) | planned |
 | 5850 | Thumbnails generated as JPEG drop transparency resulting in black thum | upstream-marked (bug report) | closed |
-| 5709 | Zombie process left (Python defunct) | upstream-marked (bug report) | planned |
+| 5709 | Zombie process left (Python defunct) | **closed** — stopping a plugin killed only the direct child, orphaning the helpers it spawned (`Setpgid` + group kill; Windows a documented no-op). Mechanism, mutants and tests in `docs/closed-issues.md` | closed |
 | 5681 | Support Hardware Acceleration (Intel Integrated Graphics) When Buildin | upstream-marked (help wanted) | planned |
 | 5178 | A>B Loop Controls do not work on Apple Touch Devices | upstream-marked (bug report) | planned |
 | 5033 | Scene Tagger/Scrape with.../Scrape query for stash-box parses comma se | upstream-marked (bug report) | planned |
