@@ -37,12 +37,20 @@ import (
 
 // Sink is where an autotag match goes.
 //
-// ONE METHOD, and it is a link-add rather than a field write, because that is what
-// every one of the eighteen sites actually is: `AddPerformer`, `AddTag`, and the
-// studio assignment, which is a column but is filed the same way. The kind is passed
-// explicitly rather than inferred, because "which relationship" is the caller's
-// knowledge and inferring it from a name is how a scene's performer ends up in the
-// image table.
+// TWO METHODS, AND THE SPLIT IS NOT A MATTER OF TASTE. `AddMatch` files a
+// RELATIONSHIP -- a row in a join table, additively, and there is deliberately no way
+// to take one back. `SetStudio` files a FIELD -- a column, and `WriteFieldIfChanged`
+// writes only when the column is currently NULL, so autotag can fill in a studio it
+// has deduced and must never overwrite a studio a human chose.
+//
+// This comment previously said ONE METHOD and called the studio assignment "a column
+// but filed the same way". That was wrong, and the eighteen tests that failed on an
+// unmet `UpdatePartial` are what proved it: a sink that faithfully implements a
+// link-add CANNOT write a column, so routing a studio through it meant the studio
+// claim was accepted by the caller and then dropped on the floor. The kind is passed
+// explicitly rather than inferred for the same reason the two are separate -- "which
+// relationship" and "which column" are the caller's knowledge, and inferring either
+// from a name is how a scene's performer ends up in the image table.
 type Sink interface {
 	// AddMatch files or applies a LINK: a performer or a tag on a scene, image or
 	// gallery. `already` is true when the relationship was already present, so the
@@ -74,6 +82,15 @@ type Sink interface {
 }
 
 // DirectSink writes the match, which is what autotag did before this file existed.
+//
+// IT REQUIRES AN ACTIVE TRANSACTION, and the failure mode is a lie rather than an
+// error worth reading. `AddLink` reaches repository writes, which return
+// "not in transaction" -- but the surrounding scan loop LOGS that per-file and keeps
+// going, so the suite finishes with a tidy summary and an assertion that every
+// expected match came back empty. The tagger matched every path correctly and wrote
+// nothing, and the only clue is one log line per file buried under a green run. This
+// file's own test helper is `withTxn`; the non-transactional `withDB` is right next to
+// it in the test file and produces this exact symptom.
 //
 // IT EXISTS AND IT IS NOT THE DEFAULT, and that ordering is the point. §6b.2 says an
 // automatic direct write is a machine laundering a claim past governance, so the
@@ -113,10 +130,12 @@ func (d DirectSink) AddMatch(ctx context.Context, targetType string, targetID in
 
 	// ALREADY THERE, which AddLink reports as added=false. `already` means "nothing
 	// changed", so the caller skips its log line -- the same signal the pre-sink code
-	// produced by reading the existing ids first. A studio is a COLUMN rather than a
-	// join-table row, and it arrives here as kind "studio_id", which AddLink refuses
-	// because a column is not a link. So a studio on the direct path is a caller
-	// wiring mistake rather than something to paper over.
+	// produced by reading the existing ids first. A studio arriving here as kind
+	// "studio_id" is a CALLER WIRING MISTAKE and AddLink refuses it, because a column
+	// is not a link. That refusal is the point, and it is now a backstop rather than
+	// the mechanism: studios reach `SetStudio` instead, so a caller that routes one
+	// through `AddMatch` has made a mistake the compiler cannot catch and this error
+	// is what tells them so.
 	return !added, nil
 }
 
