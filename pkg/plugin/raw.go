@@ -64,6 +64,17 @@ func (t *rawPluginTask) Start() error {
 		cmd = stashExec.Command(command[0], command[1:]...)
 	}
 
+	// Put the plugin in its own process group BEFORE Start (stash#5709).
+	//
+	// A plugin is frequently a Python script that spawns helpers of its own.
+	// Without a distinct process group, Stop() can only kill the direct child,
+	// so every helper survives, gets reparented to init, and shows up in the
+	// process table as the "Python defunct" zombies the upstream report is about.
+	//
+	// Setpgid must be applied here, not after Start: it is what makes the child a
+	// group leader, and after Start there is nothing left to arrange.
+	stashExec.IsolateProcessGroup(cmd)
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("error getting plugin process stdin: %v", err)
@@ -147,5 +158,8 @@ func (t *rawPluginTask) Stop() error {
 		return nil
 	}
 
-	return t.cmd.Process.Kill()
+	// Kill the whole group, not just this process (stash#5709). The plugin's own
+	// helpers are the ones that would otherwise be orphaned -- the direct child is
+	// the easy half, and it was never the problem.
+	return stashExec.KillProcessGroup(t.cmd)
 }

@@ -19,3 +19,22 @@ func CommandContext(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	hideExecShell(ret)
 	return ret
 }
+
+// IsolateProcessGroup puts a command in its own process group so that every
+// process it spawns can be signalled together with it.
+//
+// It must be called before Start, and it composes with the wrappers above --
+// hideExecShell only touches CreationFlags on Windows, while this sets Setpgid
+// on unix, so applying both is safe. Plugins need it because a Python plugin
+// spawns helpers, and stopping the plugin has to take them with it (stash#5709).
+func IsolateProcessGroup(cmd *exec.Cmd) {
+	isolateProcessGroup(cmd)
+}
+
+// KillProcessGroup kills a command and everything it spawned.
+//
+// Pair it with IsolateProcessGroup: without the group, a negative-pid signal has
+// no group to reach and this degrades to killing the single process.
+func KillProcessGroup(cmd *exec.Cmd) error {
+	return killProcessGroup(cmd)
+}
