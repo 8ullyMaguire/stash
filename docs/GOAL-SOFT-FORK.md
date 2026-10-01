@@ -1,12 +1,47 @@
-# main — the soft fork
+# main — the feature fork
 
-**This branch is upstream `stashapp/stash` plus fixes for upstream issues, and
-nothing else.** Base: `b6b09dd5f` (upstream `develop`).
+**This branch is upstream `stashapp/stash` plus a large body of new
+functionality.** Base: `b6b09dd5f` (upstream `develop`).
+
+On 2026-10-01 the owner widened this from "upstream plus issue fixes, and
+nothing else" to what it is now. The old line was the correct constraint while
+the diff was a bugfix queue; it is the wrong one now, because the queue contains
+subsystems that do not exist upstream at all. Two of the 17 are the clearest
+case: #2337 (multiple users with configurable permissions) requires building an
+entire identity layer on a codebase that has **no `users` table** — verified,
+`grep 'CREATE TABLE users' pkg/sqlite/migrations/` returns nothing. #2359 is
+Stash-Box parity, which is this owner's other project.
+
+The new rule is the same discipline aimed at a bigger target:
+
+- **New functionality is welcome; upstream-mergeable is not the bar.** Commits
+  still state which issue they serve, so the diff against upstream stays
+  legible.
+- **Never remove functionality the spec claims.** The spec is cumulative.
+  Widening scope must not cost a single existing clause.
+- **A test that passes on unfixed code is not evidence.** Unchanged, and now
+  load-bearing for whole new subsystems rather than bugfixes.
+
+## The 17-issue programme
+
+`docs/plan/BACKLOG-17.md` is the plan: one section per issue, each with the
+verified current state, the work, and the command that proves it. `docs/ISSUES.md`
+is the ledger — one row per issue with its disposition, updated as work lands.
+`docs/plan-verify.py` and `docs/goal-check.py` are the predicates.
+
+Two issues are deliberately not built here, and both reasons are recorded:
+
+- **#2359 (Stash-Box parity)** is satisfied by *using* the owner's existing
+  Stash-Box instance as this app's StashDB endpoint. Building the parity locally
+  would duplicate an entire second codebase.
+- **#2149 (phash validation)** has a `bounty` label — someone is already being
+  paid for it. The audit found the mechanism, and `BACKLOG-17.md` records it, so
+  the finding survives even though the build does not.
 
 The StashForge product work — governance, face clustering, the P2P downloader
-plugin, and its spec — is on the `stashforge` branch, with its own
-`docs/GOAL.md`. Do not mix the two: a soft fork whose diff contains a
-governance kernel is a soft fork nobody can review.
+plugin, and its spec — is still on the `stashforge` branch, with its own
+`docs/GOAL.md`. Keep it there. A branch whose diff mixes a governance kernel with
+a feature programme is a branch nobody can review.
 
 ## Start here
 
@@ -51,7 +86,7 @@ regenerated `go.mod` from upstream.
 go generate ./cmd/stash
 go build ./...            # clean
 go vet ./...              # clean
-go test ./...             # 34 packages ok, 0 failures -- may only go UP
+go test ./...             # 38 packages ok, 0 failures -- may only go UP
 gofmt -l internal/ pkg/   # empty
 ```
 
