@@ -419,3 +419,73 @@ func TestTheDownloaderShipsAManifestTheHostCanRead(t *testing.T) {
 			filepath.Base(matches[0]), stem)
 	}
 }
+
+// The downloader's DEPENDENCIES must also stay out of the core's module graph.
+//
+// This closes a gap the module-path check above cannot see, and it was found by
+// walking into it rather than by reasoning: writing a `main.go` under
+// `plugins/p2pdownloader/cmd/` that imports `github.com/anacrolix/torrent` caused
+// the toolchain to resolve that import against the CORE module, which added
+// `github.com/anacrolix/torrent v1.61.0 // indirect` and 125 lines to the core's
+// `go.sum`.
+//
+// The damage is small and the reasoning is seductive — it is an INDIRECT require,
+// the core still compiles, and every test stays green — which is exactly why it
+// needs a guard rather than a habit. Two of this repo's stated invariants depend
+// on the core's module graph not containing the transfer protocols: the plugin's
+// go.mod exists so "the core does not know this exists" is a fact, and
+// `TestP2PDownloaderIsNotBundledByCore` proves the core binary does not link the
+// code. A dependency in the graph is a step towards linkability that no binary
+// check can see coming.
+//
+// So: no transfer protocol in the core's go.mod, at all, direct or indirect.
+// `anacrolix/dms` IS legitimately there — it is a core dependency of its own, used
+// by the download-metadata scan — so the check is on the transfer modules by name
+// rather than on the module prefix.
+func TestTheTransferProtocolsAreNotInTheCoreModuleGraph(t *testing.T) {
+	root := repoRoot(t)
+	gomod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		t.Fatalf("reading go.mod: %v", err)
+	}
+
+	// The transfer protocols, named. These are the modules a preservation plane
+	// would be built on and the ones whose presence in the core would mean the
+	// boundary has been crossed.
+	forbidden := []string{
+		"github.com/anacrolix/torrent",
+		"github.com/monkeyWie/goed2k",
+	}
+
+	got := 0
+	for _, mod := range forbidden {
+		if strings.Contains(string(gomod), mod) {
+			got++
+			t.Errorf("core go.mod requires %s\n\n"+
+				"The transfer protocols belong to the downloader's own module. A\n"+
+				"require here is how a file under plugins/p2pdownloader/ ends up\n"+
+				"resolved against the core module -- it happens the first time a cmd\n"+
+				"under the plugin imports one, and it is invisible: the core still\n"+
+				"builds and every test still passes.\n", mod)
+		}
+	}
+	if got == 0 {
+		t.Log("core go.mod carries no transfer protocol; the boundary holds")
+	}
+
+	// And the same for go.sum, which is where a resolved dependency leaves its
+	// hashes. A go.sum entry alone is harmless, but it is the first half of the
+	// same accident and is worth seeing.
+	gosum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil {
+		t.Fatalf("reading go.sum: %v", err)
+	}
+	for _, mod := range forbidden {
+		if strings.Contains(string(gosum), mod+" ") {
+			t.Errorf("core go.sum has hashes for %s\n\n"+
+				"go.sum entries are the other half of the same leak: the module was\n"+
+				"resolved against the core, so its hashes are cached there. Harmless on\n"+
+				"its own, and a reliable sign the require above is coming back.\n", mod)
+		}
+	}
+}
