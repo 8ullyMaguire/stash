@@ -264,6 +264,10 @@ func (s *Manager) postInit(ctx context.Context) error {
 	// target tables, which exist from migration 105.
 	s.initStashForgeMedia()
 
+	// And once more, for the mesh serve budget: mesh_replication_budget and
+	// mesh_replication_serve_log exist from migration 110.
+	s.initStashForgeMesh()
+
 	return nil
 }
 
@@ -317,6 +321,24 @@ func (s *Manager) initStashForgeCollab() {
 // the log says nothing about a missing table.
 func (s *Manager) initStashForgeMedia() {
 	s.MediaScopeStore = sqlite.NewMediaScopeStore()
+}
+
+// initStashForgeMesh builds the mesh's serve-side budget store (M8 step 0,
+// probe 3).
+//
+// Separate from the collab and auth stores for a reason that is about the
+// failure mode rather than the subject: this store's whole job is to REFUSE a
+// serve, so what matters about it is that it is reachable and that its
+// transaction is its own. Grouping it with the media store would suggest the two
+// are the same kind of thing, and they are opposites — the media gate decides
+// whether to hand bytes to one known user, this decides whether to hand bytes to
+// the mesh at all.
+//
+// After Database.Open for the same reason as every other store here: a budget
+// check against a table that does not exist yet is a refusal that looks exactly
+// like the feature working.
+func (s *Manager) initStashForgeMesh() {
+	s.MeshServeStore = sqlite.NewMeshServeStore(s.Database)
 }
 
 // initStashForgeAuth builds the StashForge auth layer and decides which session

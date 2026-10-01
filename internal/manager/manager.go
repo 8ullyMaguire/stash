@@ -105,6 +105,21 @@ type Manager struct {
 	// when it is nil rather than passing the request through.
 	MediaScopeStore *sqlite.MediaScopeStore
 
+	// MeshServeStore is the mesh's serve-side budget (M8 step 0, probe 3).
+	//
+	// It is the FIFTH time a store in this package was fully implemented, fully
+	// tested, and reachable from nothing — TestStashForgeStoreConstructorsAre
+	// ActuallyWired caught NewMeshServeStore with no non-test caller, the same
+	// defect as ProposalStore, ReputationStore, the media gate and ConsentStore.
+	// So it is built here even though no route consults it yet, because a store
+	// nothing can reach is a store whose tests are testing a function no product
+	// code calls.
+	//
+	// Note it takes the *Database, unlike the stores above: its budget check and
+	// its log write must be ONE transaction, so it opens its own rather than
+	// inheriting whatever the caller happens to be in.
+	MeshServeStore *sqlite.MeshServeStore
+
 	// InstanceModeStore holds the instance's private/contribute/public decision
 	// and whether the first-run wizard has been completed.
 	//
