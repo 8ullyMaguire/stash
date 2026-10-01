@@ -2862,6 +2862,57 @@ machine's claim lands in the same audit trail a human's does. This is why automa
 curation is safe to enable by default and why a direct write would be fatal: an
 automatic direct write is a machine laundering a claim past governance.
 
+**DONE (2026-10-02), commit `a3ae8a405`.** `internal/autoproposal` — the policy half,
+with the scanner untouched.
+
+The load-bearing part is not the matching, it is that **there is no path from a
+failed proposal to a write.** `Curate` returns an error on a filing failure; it does
+not fall back. Otherwise every outage of the proposal store would silently become a
+bypass of governance while *looking* like success, because the field would hold the
+right value. Relatedly the direct-write policy is consulted **before** filing, not
+after, so no recovery path runs from a failure to a write.
+
+An **attribution is structural, not a runtime check**: `NewCurator` requires an
+`Attribution{Author, Source}` and refuses user 0, so "automatic suggestions nobody
+owns" is unbuildable. §4.2's trail is the only way an operator later learns where a
+value came from, and "the scheduler did it" is not investigable. The rationale names
+the mechanism, the entity and the attributed user, and a test asserts an automatic
+proposal's rationale **differs** from a human's for the same field on the same
+target — a reviewer who cannot tell a machine's claim from a person's is not
+reviewing.
+
+`Policy`'s zero value writes nothing directly, so a config struct that forgot the
+field cannot start laundering claims. `AutoApply` is permission for **bulk
+application of descriptors** — a tag may be applied directly, and a performer or
+studio is refused whatever the switch says, because asserting a performer is a claim
+about a person.
+
+**What step 8.2 is NOT: done.** Two things remain, both recorded rather than glossed:
+
+- **The wiring.** `internal/autotag/studio.go` still writes directly (6 `UpdatePartial`
+  sites, measured). Routing it through `Curator` is the change that makes the
+  governance real rather than available.
+  `TestAutotagNeverBypassesTheProposalPathForASharedField` holds `studio.go` on an
+  **explicit allow-list**, and
+  `TestAutotagStillWritesDirectlyAndThatIsTheKnownGap` asserts the gap is still open
+  so it **fails the day the wiring lands**, naming the exact edit to make then. A
+  `TODO` comment is invisible to the next person; this stops the build.
+- **The vocabulary.** `internal/collab/vocabulary.go` declares no relationship
+  fields, so a link add cannot yet pass `ValidateValue` — a proposal whose field the
+  vocabulary does not know can never be applied. The test names this as the
+  remaining work rather than asserting it away.
+
+**One note on the detector, because it nearly shipped broken.** The guard does not
+enumerate method names — `internal/api`'s equivalent misses `UpdatePartial`, which
+is how every autotag match reaches the library. It matches the *shape* of a write:
+a receiver resolving to a **shared store type** plus a mutator method. Getting that
+right took three attempts (suffix match → false positive on `archive/zip`'s
+`NewWriter`/`Create`; a 13-name explicit list → stale on day one, `pkg/models`
+declares 80 mutator-bearing interfaces; then prefix **and** suffix). It also had to
+resolve **parameter** names to declared types, because autotag receives its writer
+as a parameter and all six real writes were invisible until it did. Three probes
+confirm it bites: two real violations caught, `archive/zip` correctly silent.
+
 ### Step 8.3 — The content plane (R077, R078, R082, R079)
 
 **BLOCKED ON A TRANSPORT DECISION, and that is the honest state.** Probe 1 measured
