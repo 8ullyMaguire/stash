@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stashapp/stash/internal/acquisition"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -137,6 +138,22 @@ type Manager struct {
 	// read, so it must be reachable from a Manager — a package-level global would be
 	// the alternative and it is the shape that makes a store untestable.
 	AutoAcquireStore *sqlite.AutoAcquireStore
+
+	// AcquisitionQueue builds capability 2's download queue for the candidates the mesh
+	// advertises, gated by AutoAcquireStore's switch.
+	//
+	// IT IS HERE, AND NOT IN internal/acquisition, BECAUSE THAT IS THE SIXTH TIME THIS
+	// SHAPE HAS COME UP. The queue is a pure function with no state, so the wiring test
+	// does not catch it -- and it would still have been fully implemented, fully tested
+	// and called by nothing, which is the same defect as an unwired store with a
+	// different shape. The switch and the queue it gates are one reachable unit, so
+	// they live together.
+	//
+	// The taste inputs are passed in rather than read here: a Fingerprint is derived
+	// from a USER's records (§6a.3) and this Manager knows no user, so a caller
+	// supplies them. That is a narrower seam than it looks -- §6b.3's queue is
+	// per-user taste over a per-instance switch.
+	AcquireQueue func(ctx context.Context, req acquisition.Request) (*acquisition.Queue, error)
 
 	// ConsentStore is where a user's metadata-sharing decision lives.
 	//

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stashapp/stash/internal/acquisition"
 	"os"
 	"path/filepath"
 	"strings"
@@ -360,6 +361,22 @@ func (s *Manager) initStashForgeAuth() error {
 	s.ConsentStore = sqlite.NewConsentStore()
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
 	s.AutoAcquireStore = sqlite.NewAutoAcquireStore()
+
+	// Capability 2's queue, wired to the switch. The closure reads the switch FRESH on
+	// every call rather than capturing it, which is what makes "the operator turned it
+	// off and acquisition stopped" true within one request instead of one session --
+	// and it is the same reason internal/collab has no WithAutoAcquire context escape.
+	//
+	// ctx IS A PARAMETER rather than something captured, because this init runs long
+	// before any request exists and a captured context would be a cancelled one by the
+	// time anything called it.
+	s.AcquireQueue = func(ctx context.Context, req acquisition.Request) (*acquisition.Queue, error) {
+		state, err := s.AutoAcquireStore.AutoAcquire(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("reading the auto_acquire switch: %w", err)
+		}
+		return acquisition.Build(ctx, state, req)
+	}
 
 	// The 2FA store is built HERE, not on demand, because the session store is
 	// handed a fixed verifier and re-reading the key per call would be a way for
