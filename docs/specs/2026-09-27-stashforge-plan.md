@@ -3003,12 +3003,26 @@ rhetorical.
 | 4 | R079's alerts, R080's audit log | **DONE** — R079 alerts, R080 allocation log (migration 114) |
 
 **On item 2, which this section called a wire-format commitment that cannot change.**
-It could and did: the decision is a **whole-file sha256 with no chunk list**, because a
-replica is all-or-nothing at the scene level — which is what the scanner and the file
-model already assume — so a chunk list buys nothing and costs wire forever once peers
-exist. This is the ed2k precedent applied: a wire format with a tree in it was measured
-and deliberately kept out of the hash path. The commitment is now made and it is the
-cheap one to hold.
+It could and did: the manifest is a **whole-file sha256 with no chunk list.**
+
+Two reasons, and the second is the one that decides it, so both are here because the
+first alone reads like cost-cutting:
+
+- **A replica is all-or-nothing at the scene level**, which is what the scanner and the
+  file model already assume, so a chunk list has nothing to select between.
+- **Width was never the problem, and probe 2 measured that.** Over a billion 1 MiB
+  chunks, birthday-bound P(collision) is 7.35 × 10⁻⁴⁰ even at 128 bits, and a 1 MiB
+  chunk list costs 0.0034 % of the content while saving a 4 GiB re-fetch. So a chunk
+  list is *cheap* — and it is still the wrong answer, because what a content hash has to
+  establish is **provenance** ("these are the same bytes"), not collision resistance. The
+  existing 20-byte hashes identify a *torrent*, not a content change, which is why they
+  could not be reused for this.
+
+This is the ed2k precedent applied: a wire format with a tree in it was measured and
+deliberately kept out of the hash path. The commitment is now made, and the cheap option
+is the one taken — so if a future requirement does need partial fetch, the decision is
+cheap to revisit. That reversibility is the real argument, and it is only true *because*
+the list was not bought.
 
 **On item 3, and the part that is a design constraint rather than a feature.** A peer
 saying it stored the bytes is a **claim** (non-negotiable #14), the same posture the
@@ -3024,7 +3038,12 @@ UNIQUE key per §6a.6, because a peer's "scene 412" is not this instance's "scen
 in spirit if wrong in framing: **the transport.** §6b.4's property — no peer needs a
 routable address, and no peer learns who fetched from whom — is not yet met by anything
 shipping. Probe 1 measured that the current transport does not meet it, and the
-transport discloses peer IPs, which is the R081 gap still open. R084's retraction
+failure is **both legs, not one**: a tracker sees the announcing peer's IP and
+port, and the DHT leg has both participants holding each other's routable
+address — peers were reached *without being given* an address, but not *without
+addresses being exchanged*. §6b.4's requirement is that the content plane must
+not require two instances to exchange routable addresses, and neither leg meets
+it. This is the R081 gap, and it is open. R084's retraction
 (bundling the P2P downloader into core) is what makes this closable without deleting a
 directory, and that is the most this plan can say about it: **naming the technology here
 would make it a dependency**, and §6b.7 refuses to name it for that reason.
