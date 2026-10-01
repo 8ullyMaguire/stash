@@ -1316,6 +1316,7 @@
     "megabits_per_second": "{value} mbps",
     "metadata": "Metadata",
     "name": "Name",
+    "scene_has_no_file": "This scene has no file.",
     "sort_name": "Sort Name",
     "new": "New",
     "none": "None",
