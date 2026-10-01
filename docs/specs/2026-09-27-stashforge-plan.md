@@ -3219,7 +3219,7 @@ measuring the **local ffmpeg** rather than the code under test. M720q has ffmpeg
 where cachyos-B450 has 9.0.1, and `GOTOOLCHAIN=auto` fetches the 1.25.0 that `go.mod`
 pins, so neither difference blocks a run.
 
-**Measured on 2026-10-02 at `f03021801`, both hosts:**
+**Measured on 2026-10-02 at `6e4606cb3`, both hosts:**
 
 | gate | cachyos-B450 | M720q |
 |---|---|---|
