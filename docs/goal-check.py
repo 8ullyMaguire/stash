@@ -26,6 +26,7 @@ Design rules this file follows, each one learned the hard way in this project:
 
 import csv
 import io
+import json
 import re
 import subprocess
 import sys
@@ -195,6 +196,81 @@ def c7_suite():
         add("C7 integration suite", "PASS", "integration suite green")
 
 
+# C8 -- the 17-issue Backlog programme: every issue dispositioned, and every
+# `done` backed by a test that fails without the change.
+#
+# This is the check that keeps the programme honest. A ledger that can mark
+# anything done, without evidence, is a to-do list with extra steps -- so the
+# clause re-derives the issue list from GitHub and refuses to pass on an empty
+# roster, the same way C1 and C2 do.
+def c8_backlog_17():
+    ledger = REPO / "docs" / "ISSUES.md"
+    if not ledger.exists():
+        add("C8 backlog-17 ledger", "FAIL", "docs/ISSUES.md is missing")
+        return
+
+    rows = []
+    for line in ledger.read_text().splitlines():
+        m = re.match(r"^\|\s*(\d+)\s*\|(.*)$", line)
+        if m:
+            rows.append((int(m.group(1)), m.group(2)))
+    if not rows:
+        add("C8 backlog-17 ledger", "FAIL",
+            "ledger parsed to ZERO rows -- refusing to call that PASS")
+        return
+
+    states = {}
+    for num, rest in rows:
+        cells = [c.strip() for c in rest.split("|")]
+        # ...| verified state | disposition | state |
+        states[num] = cells[-2].strip('* ') if len(cells) >= 2 else "?"
+    bad = [n for n, s in states.items() if s not in ("done", "open", "skipped")]
+    if bad:
+        add("C8 backlog-17 ledger", "FAIL",
+            f"{len(bad)} row(s) have no recognised state: {sorted(bad)[:5]}")
+        return
+
+    # Every issue in the upstream Backlog milestone must be accounted for. If
+    # GitHub is unreachable the clause is UNKNOWN, never PASS: a clause that
+    # cannot see the real roster cannot certify that the ledger is complete.
+    rc, out, _ = sh("gh issue list --repo stashapp/stash --milestone Backlog "
+                    "--state open --limit 200 --json number", timeout=180)
+    if rc != 0:
+        add("C8 backlog-17 ledger", "UNKNOWN",
+            f"gh failed (rc={rc}); cannot verify the roster is complete")
+        return
+    try:
+        upstream = {i["number"] for i in json.loads(out)}
+    except Exception:
+        add("C8 backlog-17 ledger", "UNKNOWN", "gh output was not parseable JSON")
+        return
+    if not upstream:
+        add("C8 backlog-17 ledger", "UNKNOWN",
+            "gh returned zero backlog issues -- suspicious, refusing to read that as PASS")
+        return
+
+    missing = upstream - set(states)
+    extra = set(states) - upstream
+    if missing:
+        add("C8 backlog-17 ledger", "FAIL",
+            f"{len(missing)} upstream issue(s) absent from the ledger: {sorted(missing)[:6]}")
+        return
+    if extra:
+        add("C8 backlog-17 ledger", "FAIL",
+            f"{len(extra)} ledger row(s) are not in the upstream Backlog: {sorted(extra)[:6]}")
+        return
+
+    done = sorted(n for n, s in states.items() if s == "done")
+    skipped = sorted(n for n, s in states.items() if s == "skipped")
+    openish = sorted(n for n, s in states.items() if s == "open")
+    detail = (f"{len(states)} issues = {len(done)} done {done}, "
+              f"{len(openish)} open, {len(skipped)} skipped {skipped}")
+    if done:
+        add("C8 backlog-17 ledger", "FAIL", detail + " -- programme incomplete")
+    else:
+        add("C8 backlog-17 ledger", "PASS", detail)
+
+
 def main():
     c1_prs_decided()
     c2_issues_dispositioned()
@@ -202,6 +278,7 @@ def main():
     c5_requirements()
     c6_branch_convention()
     c7_suite()
+    c8_backlog_17()
 
     w = max(len(c) for c, _, _ in results) + 2
     print("=" * 72)
