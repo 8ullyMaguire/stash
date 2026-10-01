@@ -359,6 +359,7 @@ func (s *Manager) initStashForgeAuth() error {
 	s.LibraryStore = sqlite.NewLibraryStore()
 	s.ConsentStore = sqlite.NewConsentStore()
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
+	s.AutoAcquireStore = sqlite.NewAutoAcquireStore()
 
 	// The 2FA store is built HERE, not on demand, because the session store is
 	// handed a fixed verifier and re-reading the key per call would be a way for

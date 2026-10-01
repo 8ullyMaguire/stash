@@ -1,0 +1,61 @@
+-- Migration 115: instance auto_acquire, the three-state sharing switch
+--
+-- M8 step 8.1, R083. Spec §6b.3: `off` / `fetch_only` / `full`.
+--
+-- WHY THIS IS A COLUMN ON instance_settings AND NOT A NEW TABLE
+--
+-- §6b.3 says "a per-instance switch", and the table this column joins has exactly one
+-- row (id CHECK (id) = 1) which is the same single source of truth the instance's mode
+-- already lives in. Migration 103's header gives the argument for that table over a
+-- config file, and it applies here unchanged: a switch read from a config file and a
+-- mode read from the database are two sources of truth, and the day they disagree the
+-- instance behaves according to whichever one the caller happened to read. The failure
+-- that matters is "this instance is seeding and no setting says so".
+--
+-- A new table would also have to answer "which instance is this?", and this schema has
+-- exactly one answer to that question, already stored.
+--
+-- WHY THREE STATES AND NOT A BOOLEAN
+--
+-- §6b.3 states the reason directly: "`fetch_only` is the state a privacy-conscious
+-- user actually wants and a boolean forces them to choose wrongly in one direction or
+-- the other." There is no pair of booleans that avoids the problem, because the middle
+-- state is not a negation of the outer two — it is a positive position (fetch, do not
+-- seed) that a user chooses deliberately and would have to re-choose if it were
+-- represented as "not full".
+--
+-- THE DEFAULT IS `fetch_only`, NOT `off`, and this is the load-bearing decision in
+-- the whole migration. The reasoning is in §6b.3: an instance that fetches but never
+-- seeds "leaks no data outward and cannot be made into a source for someone else", so
+-- opting a new install in to the harmless half of the capability is not a leak.
+-- Non-negotiable #7 is about the PUBLISH path, and fetch_only has no publish path.
+--
+-- The alternative default — `off` — makes preservation (capability 3, §6b.4)
+-- unreachable for every user who never found a setting, which is how a feature that
+-- exists to prevent loss becomes opt-in-to-the-point-of-absence. §6b.3 notes the
+-- per-schedule default for an EXISTING install is `off` rather than fetch_only; that
+-- distinction is about not surprising an instance that is already running, and it is
+-- a product decision about upgrades, not a schema fact, so the column default here is
+-- the new-install value and the upgrade path is handled in Go where the difference
+-- between "no row" and "a row that says fetch_only" is observable.
+--
+-- WHY THE THREE STATES ARE NAMED IN THE CHECK
+--
+-- So an unrecognised value fails at the WRITE. A fourth state added later needs a
+-- migration, and that is the point: §6b.3's states are a spec commitment, and a
+-- smuggled-in fourth state would be a behaviour nobody reviewed. The Go type keeps the
+-- same three visible, so the string and the type cannot drift.
+--
+-- `check`ed for non-blank the same way migration 114 does it, with every whitespace
+-- character rather than just the space: SQLite's bare trim(x) strips spaces only, and
+-- the IN list already refuses an empty string, so this CHECK is belt-and-braces for a
+-- future edit that loosens the IN.
+
+ALTER TABLE `instance_settings` ADD COLUMN `auto_acquire` text NOT NULL DEFAULT 'fetch_only'
+    CHECK (`auto_acquire` IN ('off', 'fetch_only', 'full'));
+
+-- The switch is read on EVERY acquisition decision, which is a hot path, and the read
+-- is by primary key anyway so this index serves nothing. It is deliberately NOT added:
+-- an index that duplicates the primary key lookup is an index that costs writes and
+-- returns nothing, and this repo has already been bitten by adding indexes for
+-- queries nobody runs (migration 113's header explains the one it did add).

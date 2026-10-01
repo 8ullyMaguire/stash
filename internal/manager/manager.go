@@ -128,6 +128,16 @@ type Manager struct {
 	// decision that makes it startable.
 	InstanceModeStore *sqlite.InstanceModeStore
 
+	// AutoAcquireStore holds the instance's capability-2 posture — the three-state
+	// sharing switch of off / fetch_only / full (§6b.3, R083).
+	//
+	// Wired here for the reason the ConsentStore comment gives, and this is the FIFTH
+	// time: a fully implemented, fully tested store that nothing constructs is a
+	// feature that does not exist. The switch is read at the point the permission is
+	// read, so it must be reachable from a Manager — a package-level global would be
+	// the alternative and it is the shape that makes a store untestable.
+	AutoAcquireStore *sqlite.AutoAcquireStore
+
 	// ConsentStore is where a user's metadata-sharing decision lives.
 	//
 	// It is here because this is the FOURTH time a store in this package was
