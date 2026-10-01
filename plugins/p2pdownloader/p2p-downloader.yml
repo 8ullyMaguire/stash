@@ -23,6 +23,17 @@
 # looks right, it is right in spirit, and it has no effect. This file is named
 # after the plugin instead, which is the enforcement.
 #
+# REMOVED 2026-10-01. This file did carry `id: p2p-downloader`, which the note
+# above says has no effect -- verified rather than assumed: `Config.id` is
+# unexported and `pkg/plugin/config.go:451-453` sets it from the FILENAME stem.
+# So the line was documentation of a fact the parser ignores, in a file whose
+# whole purpose is to be the thing the parser reads. It is removed rather than
+# left, because a key that looks load-bearing and is not is a trap for the next
+# person editing this file: renaming the plugin here would appear to work while
+# changing nothing, and the identity would still come from the name.
+#
+# To rename this plugin, rename THIS FILE. There is no other lever.
+#
 # # WHY interface: rpc
 #
 # pkg/plugin/config.go:355 offers three:
@@ -41,7 +52,6 @@
 # "./stash-plugin-p2pdownloader" would work and would also break on Windows,
 # where the extension is not written. Naming it bare is what the host documents.
 
-id: p2p-downloader
 name: P2P Downloader
 description: Fetches files over BitTorrent and ed2k into your library
 version: 1.0.0
