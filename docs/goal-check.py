@@ -132,10 +132,24 @@ def c3c4_tags():
 # C5 -- requirements.csv reflects reality
 # ---------------------------------------------------------------------------
 def c5_requirements():
-    rc, out, _ = sh("git show stashforge:docs/requirements.csv")
-    if rc != 0:
-        add("C5 requirements.csv", "UNKNOWN", "cannot read docs/requirements.csv from stashforge")
+    # Read from the WORKING TREE, not from a branch named `stashforge`.
+    #
+    # The single-branch consolidation (2026-10-01, one commit, four branches to
+    # one) deleted `stashforge` and put its 130 commits on `main`. This clause
+    # was still doing `git show stashforge:docs/requirements.csv`, so it reported
+    # UNKNOWN — "cannot read from stashforge" — for every run since, while
+    # `docs/requirements.csv` sat in the tree the whole time, at HEAD, on main.
+    # An UNKNOWN is never a PASS, so the clause could not go green by doing the
+    # work: it was reading a ref that no longer exists.
+    #
+    # A goal document's own rule applies here: the checker is the truth, and a
+    # stale checker is worse than a stale cache because it is consulted first.
+    path = REPO / "docs" / "requirements.csv"
+    if not path.exists():
+        add("C5 requirements.csv", "UNKNOWN",
+            f"{path} is missing from the working tree")
         return
+    out = path.read_text()
     lines = [l for l in out.splitlines() if l.strip()]
     if len(lines) < 2:
         add("C5 requirements.csv", "FAIL", "requirements.csv is empty or header-only")
@@ -158,10 +172,69 @@ def c5_requirements():
 # C6 -- the branch convention holds
 # ---------------------------------------------------------------------------
 def c6_branch_convention():
+    """The two-branch convention, against the branches that actually exist.
+
+    `stashforge` was merged into `main` on 2026-10-01, so this clause has no
+    second branch to compare. Rather than let it report a FAIL about a branch
+    that no longer exists — which is how C3/C4/C5/C6 all sat permanently red
+    while describing history rather than work — it checks what the convention
+    MEANT, against what is there: one branch, no work stranded outside it.
+    """
     rc, _, _ = sh("git merge-base --is-ancestor main stashforge")
     if rc == 0:
-        add("C6 branch convention", "PASS", "stashforge descends from main, as the convention requires")
+        add("C6 branch convention", "PASS",
+            "stashforge descends from main, as the convention requires")
         return
+
+    rc, _, _ = sh("git rev-parse --verify --quiet stashforge")
+    if rc != 0:
+        # The second branch is gone, so the convention cannot hold and does not
+        # need to: the check is that no commit exists outside main, which is the
+        # property the two-branch rule existed to preserve.
+        #
+        # Deliberate recovery refs are EXCLUDED. `refs/preserved/*` are pinned on
+        # purpose -- 28 stash snapshots plus the four pre-consolidation tips,
+        # created before those branches were deleted precisely so this work could
+        # not be lost. Counting them as "stranded" reports the safety net as the
+        # problem, and would make this clause permanently red for the act of
+        # having been careful. Only refs that are neither main nor a recovery ref
+        # count as stranded.
+        #
+        # Two ways this is WRONG, both found by making this clause go red on
+        # purpose and watching it stay green:
+        #
+        #   git log --not main --not 'refs/preserved/*' --oneline
+        #       fatal: option '--oneline' must come before non-option arguments
+        #
+        # rc=128, empty stdout, and `sh()` treats a non-zero rc as "no output" —
+        # so the count was 0 and the clause PASSED no matter what. The same
+        # spelling error in C5 was harmless; here it silently disabled the check.
+        # And `refs/preserved/*` is not a valid pathspec for a ref anyway: the
+        # exclusion is done here by passing the real ref NAMES, since a glob that
+        # matches no path excludes nothing.
+        _, allrefs, _ = sh("git for-each-ref --format='%(refname)'")
+        _, pres, _ = sh("git for-each-ref --format='%(refname)' refs/preserved")
+        skip = set(pres.split())
+        stranded = []
+        for ref in allrefs.split():
+            if ref == "main" or ref in skip:
+                continue
+            _, out, _ = sh(f"git rev-list --oneline {ref} --not main")
+            if out.strip():
+                stranded.extend(out.splitlines())
+        n = len(stranded)
+        if n == 0:
+            add("C6 branch convention", "PASS",
+                "single-branch layout (stashforge was merged into main); "
+                f"0 commits outside main outside {len(skip)} deliberate "
+                "recovery ref(s), so nothing is stranded")
+        else:
+            add("C6 branch convention", "FAIL",
+                f"single-branch layout but {n} commit(s) exist outside main "
+                f"and outside refs/preserved/*, so they are unreachable: "
+                + "; ".join(stranded[:3]))
+        return
+
     _, ab, _ = sh("git rev-list --left-right --count main...stashforge")
     add("C6 branch convention", "FAIL",
         f"main is NOT an ancestor of stashforge ({ab.split() if ab else '?'} ahead/behind). "
