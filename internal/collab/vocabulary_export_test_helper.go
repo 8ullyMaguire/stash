@@ -20,3 +20,19 @@ func VocabularyForTest() map[string]map[string]bool {
 	}
 	return out
 }
+
+// LinksForTest returns the whole link namespace, so a test OUTSIDE this package can
+// check the propose side against a write side it can only see through a real schema.
+//
+// It exists for the same reason VocabularyForTest does, and the parallel is exact: the
+// seam-closure test needs to ask "is every proposable link writable" and "is every
+// writable field proposable", and it cannot answer either question from one side.
+// A helper that returned only ProposableLinks(target) would force the test to know the
+// target list in advance, which is the list the test is supposed to be checking.
+func LinksForTest() map[string][]LinkKind {
+	out := make(map[string][]LinkKind, len(links))
+	for targetType := range links {
+		out[targetType] = ProposableLinks(targetType)
+	}
+	return out
+}

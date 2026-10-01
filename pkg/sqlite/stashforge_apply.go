@@ -62,9 +62,28 @@ var collabColumns = map[string]map[string]string{
 	"performer": {"name": "name", "disambiguation": "disambiguation", "details": "details", "gender": "gender", "birthdate": "birthdate", "country": "country"},
 	"studio":    {"name": "name", "details": "details", "parent_id": "parent_id"},
 	"tag":       {"name": "name", "description": "description"},
-	"gallery":   {"title": "title", "details": "details"},
-	"image":     {"title": "title", "rating": "rating"},
-	"group":     {"name": "name", "description": "description", "date": "date", "studio_id": "studio_id", "rating": "rating"},
+	// studio_id IS MAPPED FOR BOTH, and it was missing for both. That is a real bug
+	// this project hit rather than a hypothetical: the two targets DO have the column
+	// (pkg/sqlite/migrations/13_images.up.sql declares `studio_id` on both `images`
+	// and `galleries`, each with a foreign key to studios), and autotag's studio
+	// matcher has always run against all three target types. Before this line, a studio
+	// claim on an image or a gallery was REFUSED by collabColumnFor with "not a mapped
+	// column", which surfaced as the autotag scan erroring out on every image -- not as
+	// a quiet no-op, but not as anything pointing at the column map either.
+	//
+	// It is found by an END-TO-END test asserting on a real database, not by a unit
+	// test: the unit tests for autotag use mocks, a mock does not have a column map,
+	// and the guard that reads this map against the real schema (TestVocabulary_...)
+	// only covers the VOCABULARY side -- what is proposable -- not the reverse
+	// direction, which is "proposable, and writable when approved".
+	//
+	// Those are different questions and only this one would have caught it. A field can
+	// be in the vocabulary and unmapped here, and the consequence is an approval that
+	// fails at write time: the moderator voted, the audit row says it applied, and the
+	// field is unchanged.
+	"gallery": {"title": "title", "details": "details", "studio_id": "studio_id"},
+	"image":   {"title": "title", "rating": "rating", "studio_id": "studio_id"},
+	"group":   {"name": "name", "description": "description", "date": "date", "studio_id": "studio_id", "rating": "rating"},
 }
 
 func targetTableFor(targetType string) (string, error) {
@@ -319,3 +338,34 @@ func (s *CollabTargetStore) AppendAudit(ctx context.Context, entry collab.AuditE
 }
 
 var _ collab.TargetStore = (*CollabTargetStore)(nil)
+
+// WritableColumnsForTest returns the write side of the governance seam: every
+// (target, field) pair the applier can actually write.
+//
+// IT IS AN EXPORT AND NOT A TEST-ONLY DUPLICATE, and that is the whole point of it. The
+// seam-closure test compares this map against collab's vocabulary, and a helper that
+// built its answer from a hand-written list would make that comparison circular: both
+// sides would be the test author's belief about the schema rather than the schema. So
+// this returns the live map, and a change to collabColumns that breaks the seam fails
+// the test instead of quietly agreeing with itself.
+//
+// The name says ForTest because no production caller wants it -- an applier asking
+// "what could I write" is asking the wrong question, and would be the first step
+// towards letting a caller choose a field by string. The export is for the checker,
+// not for callers.
+func WritableColumnsForTest() map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(collabColumns))
+	for targetType, fields := range collabColumns {
+		inner := make(map[string]bool, len(fields))
+		for field, column := range fields {
+			// The COLUMN name is the value here, not the field name, because the two can
+			// differ deliberately -- that indirection is the comment on collabColumns'
+			// declaration. A test comparing field names against map keys would be
+			// asserting they are identical, which is the assumption the indirection
+			// exists to remove.
+			inner[field] = column != ""
+		}
+		out[targetType] = inner
+	}
+	return out
+}

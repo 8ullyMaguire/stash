@@ -47,6 +47,10 @@ const (
 	LinkImagePerformer LinkKind = "performer_ids"
 	// LinkImageTag adds a tag to an image (image_tags).
 	LinkImageTag LinkKind = "tag_ids"
+	// LinkGalleryPerformer adds a performer to a gallery (performers_galleries).
+	LinkGalleryPerformer LinkKind = "performer_ids"
+	// LinkGalleryTag adds a tag to a gallery (galleries_tags).
+	LinkGalleryTag LinkKind = "tag_ids"
 )
 
 // ErrLinkNotProposable is returned for a link that has no entry in links below.
@@ -119,6 +123,27 @@ var links = map[string]map[LinkKind]LinkShape{
 	"image": {
 		LinkImagePerformer: {Table: "performers_images", IdColumn: "image_id", LinkColumn: "performer_id"},
 		LinkImageTag:       {Table: "images_tags", IdColumn: "image_id", LinkColumn: "tag_id"},
+	},
+	// THE GALLERY BLOCK WAS MISSING, and it is the same omission as studio_id was on the
+	// vocabulary side: autotag has always matched performers and tags against galleries
+	// (internal/autotag/gallery.go), and neither the propose side nor the apply side had
+	// a shape for it. So a governed autotag -- the DEFAULT for a new instance, whose
+	// curation mode is `propose` -- could not file a performer or tag claim for a
+	// gallery at all, while the direct path could.
+	//
+	// Found the same way, and for the same reason: only the end-to-end test that runs
+	// the whole chain against a real database notices that a link kind is in the tagger
+	// and absent from the namespace. ValidateLink REFUSES an unmapped pair, so this
+	// failed loudly rather than silently -- which is the one saving grace, and it is why
+	// the failure read as an autotag error rather than as a missing field.
+	//
+	// The table and column names are again read off the migration rather than derived,
+	// and again there is no convention to derive them from: `performers_galleries` is
+	// ENTITY-first and `galleries_tags` is TARGET-first, in the same file, one CREATE
+	// apart. TestEveryLinkTableAndColumnIsReal checks them against a migrated database.
+	"gallery": {
+		LinkGalleryPerformer: {Table: "performers_galleries", IdColumn: "gallery_id", LinkColumn: "performer_id"},
+		LinkGalleryTag:       {Table: "galleries_tags", IdColumn: "gallery_id", LinkColumn: "tag_id"},
 	},
 }
 

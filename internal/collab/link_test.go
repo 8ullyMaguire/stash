@@ -147,13 +147,34 @@ func TestIsLinkFieldTellsTheTwoApart(t *testing.T) {
 	assert.False(t, collab.IsLinkField("nonsense", "performer_ids"))
 }
 
-// A GALLERY LINK IS NOT PROPOSABLE, because the map has no entry for it. Asserted
-// because a target added to the map by accident -- or by a later "while we are here" --
-// would let a machine file links against a join table nobody has checked.
+// EVERY TARGET IN THE MAP HAS A CHECKED JOIN TABLE, AND EVERY TARGET WITHOUT ONE IS
+// ABSENT. Asserted in BOTH directions because a target added to the map by accident --
+// or by a later "while we are here" -- would let a machine file links against a join
+// table nobody has checked.
+//
+// GALLERIES ARE NOW IN THE MAP, and this assertion used to pin their absence. That pin
+// was correct when it was written and is now INVERTED, which is the right way round: the
+// test's purpose was never "galleries must be absent", it was "a target is present only
+// if its join table has been checked against the real schema". The check happened
+// (TestEveryLinkTableAndColumnIsReal reads performers_galleries and galleries_tags off
+// a migrated database, and both exist -- migration 13, with foreign keys and indexes),
+// so the entry became legitimate and the pin had to move.
+//
+// Left as-is it would have been a test asserting a known-wrong fact, and the next
+// person to read it would conclude galleries have no join tables.
 func TestOnlyTheTargetsWithACheckedJoinTableCarryLinks(t *testing.T) {
-	assert.Nil(t, collab.ProposableLinks("gallery"),
-		"galleries have no checked join table in links, so they carry no links")
-	assert.Nil(t, collab.ProposableLinks("performer"))
+	// THE PRESENT CASE, and the table names are asserted rather than counted, because
+	// "two kinds" would still pass with the two swapped -- and the swap is a real
+	// corruption: a performer's id written into galleries_tags.tag_id.
+	assert.Equal(t, []collab.LinkKind{collab.LinkGalleryPerformer, collab.LinkGalleryTag},
+		collab.ProposableLinks("gallery"),
+		"galleries carry both a performer and a tag link, and the ORDER is stable "+
+			"because a form rendering them in map order would reshuffle per render")
+
+	assert.Nil(t, collab.ProposableLinks("performer"),
+		"a performer has no join table of its own -- it is the ENTITY on the far end "+
+			"of one, which is what makes the target/kind PAIR the unit rather than "+
+			"the kind alone")
 	assert.Nil(t, collab.ProposableLinks("nonsense"))
 
 	// And every target that does carry links has at least one, so the slice is never

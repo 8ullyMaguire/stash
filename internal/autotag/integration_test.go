@@ -551,10 +551,11 @@ func TestParsePerformerScenes(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, p := range performers {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			if err := p.LoadAliases(ctx, r.Performer); err != nil {
 				return err
 			}
@@ -605,10 +606,11 @@ func TestParseStudioScenes(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range studios {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Studio.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err
@@ -665,10 +667,11 @@ func TestParseTagScenes(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range tags {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Tag.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err
@@ -721,10 +724,11 @@ func TestParsePerformerImages(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, p := range performers {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			if err := p.LoadAliases(ctx, r.Performer); err != nil {
 				return err
 			}
@@ -776,10 +780,11 @@ func TestParseStudioImages(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range studios {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Studio.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err
@@ -836,10 +841,11 @@ func TestParseTagImages(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range tags {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Tag.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err
@@ -893,10 +899,11 @@ func TestParsePerformerGalleries(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, p := range performers {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			if err := p.LoadAliases(ctx, r.Performer); err != nil {
 				return err
 			}
@@ -948,10 +955,11 @@ func TestParseStudioGalleries(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range studios {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Studio.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err
@@ -1008,10 +1016,11 @@ func TestParseTagGalleries(t *testing.T) {
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       DirectSink{Targets: sqlite.NewCollabTargetStore()},
 	}
 
 	for _, s := range tags {
-		if err := withDB(func(ctx context.Context) error {
+		if err := withTxn(func(ctx context.Context) error {
 			aliases, err := r.Tag.GetAliases(ctx, s.ID)
 			if err != nil {
 				return err

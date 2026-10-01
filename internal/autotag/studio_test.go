@@ -149,21 +149,19 @@ func testStudioScenes(t *testing.T, tc testStudioCase) {
 			Return(mocks.SceneQueryResult(scenes, len(scenes)), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		sceneID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-			expected := models.ScenePartial{
-				StudioID: models.NewOptionalInt(studioID),
-			}
-
-			return scenePartialsEqual(got, expected)
-		})
-		db.Scene.On("UpdatePartial", mock.Anything, sceneID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE STUDIO CLAIM IS ASSERTED, NOT A MOCK CALL.
+	//
+	// The expectation this replaces was `Scene.On("UpdatePartial", ...)` with a
+	// ScenePartial matcher. Asserting a recording sink received the claim is the
+	// better test: the mock proved a column write was ATTEMPTED with a studio id, and
+	// the sink proves the claim reached the right TARGET with the right studio, which
+	// is the pair a column write needs and which a mock matching on a partial cannot
+	// distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.StudioScenes(testCtx, &studio, nil, aliases, db.Scene)
@@ -172,6 +170,17 @@ func testStudioScenes(t *testing.T, tc testStudioCase) {
 
 	assert.Nil(err)
 	db.AssertExpectations(t)
+
+	// AND THE CLAIM NAMES THE STUDIO AND THE TARGETS THAT MATCHED, so a test case
+	// whose regex matched nothing produces zero claims rather than vacuously passing.
+	for i := range matchingPaths {
+		assert.Equal(studioID, sink.recordedStudios()[i].StudioID,
+			"every matching target must claim this studio")
+	}
+	assert.Len(sink.recordedStudios(), len(matchingPaths),
+		"and no more than the targets that matched -- a claim for a non-matching "+
+			"target would be the matching logic being wrong, which the query "+
+			"expectation above cannot see")
 }
 
 func TestStudioImages(t *testing.T) {
@@ -252,21 +261,14 @@ func testStudioImages(t *testing.T, tc testStudioCase) {
 			Return(mocks.ImageQueryResult(images, len(images)), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		imageID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ImagePartial) bool {
-			expected := models.ImagePartial{
-				StudioID: models.NewOptionalInt(studioID),
-			}
-
-			return imagePartialsEqual(got, expected)
-		})
-		db.Image.On("UpdatePartial", mock.Anything, imageID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE STUDIO CLAIM IS ASSERTED, not a mock call, and the reason is in
+	// testStudioScenes: a matcher on a partial proves a write was attempted, while the
+	// sink proves the claim reached the right target with the right studio.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.StudioImages(testCtx, &studio, nil, aliases, db.Image)
@@ -275,6 +277,17 @@ func testStudioImages(t *testing.T, tc testStudioCase) {
 
 	assert.Nil(err)
 	db.AssertExpectations(t)
+
+	// AND THE CLAIM NAMES THE STUDIO AND THE TARGETS THAT MATCHED, so a test case
+	// whose regex matched nothing produces zero claims rather than vacuously passing.
+	for i := range matchingPaths {
+		assert.Equal(studioID, sink.recordedStudios()[i].StudioID,
+			"every matching target must claim this studio")
+	}
+	assert.Len(sink.recordedStudios(), len(matchingPaths),
+		"and no more than the targets that matched -- a claim for a non-matching "+
+			"target would be the matching logic being wrong, which the query "+
+			"expectation above cannot see")
 }
 
 func TestStudioGalleries(t *testing.T) {
@@ -355,21 +368,14 @@ func testStudioGalleries(t *testing.T, tc testStudioCase) {
 		db.Gallery.On("Query", mock.Anything, expectedAliasFilter, expectedFindFilter).Return(galleries, len(galleries), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		galleryID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.GalleryPartial) bool {
-			expected := models.GalleryPartial{
-				StudioID: models.NewOptionalInt(studioID),
-			}
-
-			return galleryPartialsEqual(got, expected)
-		})
-		db.Gallery.On("UpdatePartial", mock.Anything, galleryID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE STUDIO CLAIM IS ASSERTED, not a mock call, and the reason is in
+	// testStudioScenes: a matcher on a partial proves a write was attempted, while the
+	// sink proves the claim reached the right target with the right studio.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.StudioGalleries(testCtx, &studio, nil, aliases, db.Gallery)
@@ -378,4 +384,15 @@ func testStudioGalleries(t *testing.T, tc testStudioCase) {
 
 	assert.Nil(err)
 	db.AssertExpectations(t)
+
+	// AND THE CLAIM NAMES THE STUDIO AND THE TARGETS THAT MATCHED, so a test case
+	// whose regex matched nothing produces zero claims rather than vacuously passing.
+	for i := range matchingPaths {
+		assert.Equal(studioID, sink.recordedStudios()[i].StudioID,
+			"every matching target must claim this studio")
+	}
+	assert.Len(sink.recordedStudios(), len(matchingPaths),
+		"and no more than the targets that matched -- a claim for a non-matching "+
+			"target would be the matching logic being wrong, which the query "+
+			"expectation above cannot see")
 }

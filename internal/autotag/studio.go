@@ -5,59 +5,10 @@ import (
 
 	"github.com/stashapp/stash/pkg/match"
 	"github.com/stashapp/stash/pkg/models"
-	"github.com/stashapp/stash/pkg/txn"
 )
 
 // the following functions aren't used in Tagger because they assume
 // use within a transaction
-
-func addSceneStudio(ctx context.Context, sceneWriter models.SceneUpdater, o *models.Scene, studioID int) (bool, error) {
-	// don't set if already set
-	if o.StudioID != nil {
-		return false, nil
-	}
-
-	// set the studio id
-	scenePartial := models.NewScenePartial()
-	scenePartial.StudioID = models.NewOptionalInt(studioID)
-
-	if _, err := sceneWriter.UpdatePartial(ctx, o.ID, scenePartial); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func addImageStudio(ctx context.Context, imageWriter models.ImageUpdater, i *models.Image, studioID int) (bool, error) {
-	// don't set if already set
-	if i.StudioID != nil {
-		return false, nil
-	}
-
-	// set the studio id
-	imagePartial := models.NewImagePartial()
-	imagePartial.StudioID = models.NewOptionalInt(studioID)
-
-	if _, err := imageWriter.UpdatePartial(ctx, i.ID, imagePartial); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func addGalleryStudio(ctx context.Context, galleryWriter GalleryFinderUpdater, o *models.Gallery, studioID int) (bool, error) {
-	// don't set if already set
-	if o.StudioID != nil {
-		return false, nil
-	}
-
-	// set the studio id
-	galleryPartial := models.NewGalleryPartial()
-	galleryPartial.StudioID = models.NewOptionalInt(studioID)
-
-	if _, err := galleryWriter.UpdatePartial(ctx, o.ID, galleryPartial); err != nil {
-		return false, err
-	}
-	return true, nil
-}
 
 func getStudioTagger(p *models.Studio, aliases []string, cache *match.Cache) []tagger {
 	ret := []tagger{{
@@ -89,17 +40,7 @@ func (tagger *Tagger) StudioScenes(ctx context.Context, p *models.Studio, paths 
 				return false, nil
 			}
 
-			// set the studio id
-			scenePartial := models.NewScenePartial()
-			scenePartial.StudioID = models.NewOptionalInt(p.ID)
-
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				_, err := rw.UpdatePartial(ctx, o.ID, scenePartial)
-				return err
-			}); err != nil {
-				return false, err
-			}
-			return true, nil
+			return tagger.Sink.SetStudio(ctx, "scene", o.ID, p.ID)
 		}); err != nil {
 			return err
 		}
@@ -119,17 +60,7 @@ func (tagger *Tagger) StudioImages(ctx context.Context, p *models.Studio, paths 
 				return false, nil
 			}
 
-			// set the studio id
-			imagePartial := models.NewImagePartial()
-			imagePartial.StudioID = models.NewOptionalInt(p.ID)
-
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				_, err := rw.UpdatePartial(ctx, i.ID, imagePartial)
-				return err
-			}); err != nil {
-				return false, err
-			}
-			return true, nil
+			return tagger.Sink.SetStudio(ctx, "image", i.ID, p.ID)
 		}); err != nil {
 			return err
 		}
@@ -149,17 +80,7 @@ func (tagger *Tagger) StudioGalleries(ctx context.Context, p *models.Studio, pat
 				return false, nil
 			}
 
-			// set the studio id
-			galleryPartial := models.NewGalleryPartial()
-			galleryPartial.StudioID = models.NewOptionalInt(p.ID)
-
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				_, err := rw.UpdatePartial(ctx, o.ID, galleryPartial)
-				return err
-			}); err != nil {
-				return false, err
-			}
-			return true, nil
+			return tagger.Sink.SetStudio(ctx, "gallery", o.ID, p.ID)
 		}); err != nil {
 			return err
 		}

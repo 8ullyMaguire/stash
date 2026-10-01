@@ -275,26 +275,86 @@ each lives:
 | 3 | The plugin's modules are still the plugin's | seam test (retracted form) | `stash` |
 | 4 | The commons has no field that could hold a path | a schema grep over `stash-box` migrations | `stash-box` |
 
-**Check 4 does not exist yet** and is the first thing to build on the commons
-side, because it is the receiving end of check 1 and a one-sided guard is half
-a guard. It is `stash-box` requirement R074, below.
+**Check 4 was built on the commons side, and this section was STALE until 2026-10-02.**
 
-**Measured on 2026-09-30, so the guard knows its starting state.** Grepping every
-migration for a `text`/`varchar`/`inet` column whose *name* contains
-`path|url|host|dir|file`, the commons has exactly **one**:
+It used to say check 4 did not exist, with a measurement behind the claim: that the
+commons had "exactly one" path-shaped column. Both halves of that were out of date, and
+the measurement is the part worth recording because a guard written from it would have
+been wrong.
 
-```
-internal/database/migrations/postgres/04_image_tables.up.sql:3:    url VARCHAR NOT NULL
-```
+**The measurement was wrong, and re-taking it is what found the real work.** Re-measured
+by script over all 94 migrations on 2026-10-02, the commons has **six** address-shaped
+columns, not one:
 
-`images.url` is a **served URL** on the stash-box host, which is legitimate and
-is what §7.11's public API needs. So the guard is not "no column may look like
-a path" — that would be wrong on the first run and would get deleted. It is
-narrower and it is the one that matters: **a path, a hostname, or an IP address
-must not be storable, and a served URL must not be able to become a proxy for
-one** (a `file://`, a `\\host\share`, or a bare `/etc/passwd` in a URL field is
-the attack, and a string column accepts all three).
+| Column | Migration | What it is |
+|---|---|---|
+| `performer_urls.url` | `01_initial` | operator-typed inbound reference |
+| `studio_urls.url` | `01_initial` | operator-typed inbound reference |
+| `scene_urls.url` | `01_initial` | operator-typed inbound reference |
+| `images.url` | `04_image_tables` | **served to a client** — the one that matters |
+| `sites.url` | `21_site_urls` | operator-typed inbound reference |
+| `webhook_endpoints.target_url` | `84_add_webhooks` | the endpoint this instance POSTs to |
+| `federation_peers.base_url` | `89_identification_federation` | the peer's own base URL |
 
-The first version of that check must therefore be a **positive control** — a
-deliberately dirty value that the guard rejects — not a scan of the existing
-schema, which by the measurement above is already clean and would pass vacuously.
+The last three did not exist on 2026-09-30. So a guard written from the old
+measurement would have blessed one column and refused the other six — including
+`images.url`, which is the only one of the seven that is actually rendered to a client,
+and so the only one where a `file://` is an active primitive rather than a typo.
+
+**What the check actually is.** The rule is about SHAPE, not reachability, and the
+distinction is not a detail. A stored URL in a column a human transcribes is a typo at
+worst; a stored URL in a column handed to a client is a weapon aimed at whoever views
+it. So the two are governed by different predicates on purpose, and the reason is
+recorded in the code rather than only here:
+
+- `federation.ValidateImageURL` — `images.url` and only `images.url`. Scheme must be
+  `http` or `https`, and the value must carry no local-file marker. It does **not** do
+  DNS resolution, because this box never dials an image URL — a *client* does — so
+  refusing a hostname that does not resolve from here would reject legitimate rows, and
+  would be the guard being wrong in the direction that looks safe.
+- `federation.ValidateBaseURL` — `federation_peers.base_url` only. The opposite: a peer
+  is a host this box dials, so it resolves in DNS and refuses loopback, private and
+  link-local ranges, which is what stops an operator registering a peer pointing at
+  `169.254.169.254`.
+
+Both are wired, not merely defined, and a guard nothing calls is a document — this file
+*is* the document, so the wiring is part of the claim rather than an afterthought:
+
+| Guard | Called from | When |
+|---|---|---|
+| `ValidateImageURL` | `internal/service/image/service.go` | image write |
+| `ValidateBaseURL` | `internal/service/federation/service.go` (twice: create and update peer) | peer write |
+| `dialGuard` → `ValidateBaseURL` | `internal/service/federation/client.go`, per peer | **every dial** |
+
+The third row is the one that is easy to miss and the one that matters most. The
+write-time check cannot cover the rebinding window: a hostname that resolved to a public
+address when the peer row was written can resolve to `127.0.0.1` by the time we dial,
+because a DNS TTL has nothing to do with when an operator registered the peer. An
+attacker with a short TTL walks straight past a guard that only ran at insert. So the
+check runs on the way out too, as a per-peer failure rather than a fatal one — refusing
+the whole broadcast because one peer is unsafe would let any peer operator deny service
+to every other peer.
+
+**The positive control is the load-bearing part, and it is why the scan is not the
+test.** A scan of the existing schema passes vacuously — the schema is clean, it was
+clean on 2026-09-30, and it is clean now. So each predicate is tested by planting the
+attack and asserting the refusal:
+
+- `TestValidateImageURLRefusesLocalFileReferences` — `file:///etc/passwd`,
+  `\\host\share`, and a bare `/etc/passwd` with no scheme at all. The third is the one
+  a scheme check lets through, and it is why the guard is not a prefix test.
+- `TestAdminCannotRegisterAnUnsafePeer` — R074 stated as a user-visible outcome, with
+  `http://169.254.169.254/` in the table.
+
+Each is paired with a test that the *ordinary* value is accepted, in the same file,
+because a guard that refuses everything passes the attack cases and is deleted on first
+real use. That has already happened once here: the first version of `ValidateImageURL`
+reused the existing `IsSuspiciousValue` predicate, which is the F1 question-text
+predicate and rejects any value containing `http://` — so it refused every legitimate
+image URL on the column. The marker list is shared; the predicate is not.
+
+**What this section does not claim.** The six columns above are not all equally
+governed, and the table is the honest record of that: three are operator-typed and
+*scanned* rather than refused, because refusing them would break real data. If a
+hostile write can reach one of those, the current answer is a report, not a rejection,
+and closing that gap is open work rather than something this file claims is done.

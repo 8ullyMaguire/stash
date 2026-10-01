@@ -122,13 +122,46 @@ var vocabulary = map[string]map[string]proposableField{
 		"name":        {Type: TypeString},
 		"description": {Type: TypeString},
 	},
+	// studio_id IS PROPOSABLE FOR IMAGE AND GALLERY, and it was not. The column
+	// exists on both (pkg/sqlite/migrations/13_images.up.sql declares it on `images`
+	// and on `galleries`, each with a foreign key to studios and an index on it), and
+	// autotag's studio matcher has always run against all three target types.
+	//
+	// It is found by the END-TO-END tests in internal/autotag rather than by a unit
+	// test, which is the interesting part. Both halves of the governance chain were
+	// incomplete for these two targets and NEITHER existing guard noticed:
+	//
+	//   - collabColumns (the write side, pkg/sqlite) had no studio_id for image or
+	//     gallery, so an approved proposal would have failed at the UPDATE.
+	//   - this vocabulary (the propose side) had no studio_id either, so the proposal
+	//     could not be filed in the first place.
+	//
+	// The two guards that exist each cover one direction. TestVocabulary_EveryFieldIsARealColumn
+	// reads the vocabulary and checks every entry names a real column -- it cannot
+	// notice a column that is real, writable, and absent. And collabColumns has no
+	// test asserting it covers every field the vocabulary proposable, because "the
+	// write side must implement the propose side" was not written down as a rule
+	// anyone was checking.
+	//
+	// So the gap was invisible to both, and the only thing that found it was a test
+	// that runs the whole chain against a real database. That is the argument for
+	// those tests existing and not being trimmed for speed.
+	//
+	// THE DIRECTION IS THE DELIBERATE PART. Proposable means a VOTE is required, so
+	// making this field proposable can at worst produce a rejected proposal. Closing
+	// it while the direct path can still write the column would be the unsafe
+	// direction: an ungoverned write with no governed alternative. Asymmetry between
+	// scene and image here would have meant the governed path works for 1 of the 3
+	// entity types autotag matches.
 	"gallery": {
-		"title":   {Type: TypeString},
-		"details": {Type: TypeString},
+		"title":     {Type: TypeString},
+		"details":   {Type: TypeString},
+		"studio_id": {Type: TypeInt},
 	},
 	"image": {
-		"title":  {Type: TypeString},
-		"rating": {Type: TypeRating, Min: 1, Max: 5},
+		"title":     {Type: TypeString},
+		"rating":    {Type: TypeRating, Min: 1, Max: 5},
+		"studio_id": {Type: TypeInt},
 	},
 	"group": {
 		// NO `title` or `details`: a group has `name` and `description` (see

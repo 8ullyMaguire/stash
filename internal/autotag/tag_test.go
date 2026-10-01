@@ -149,24 +149,16 @@ func testTagScenes(t *testing.T, tc testTagCase) {
 			Return(mocks.SceneQueryResult(scenes, len(scenes)), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		sceneID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-			expected := models.ScenePartial{
-				TagIDs: &models.UpdateIDs{
-					IDs:  []int{tagID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return scenePartialsEqual(got, expected)
-		})
-		db.Scene.On("UpdatePartial", mock.Anything, sceneID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.TagScenes(testCtx, &tag, nil, aliases, db.Scene)
@@ -174,6 +166,22 @@ func testTagScenes(t *testing.T, tc testTagCase) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right tag on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(tagID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }
 
@@ -256,24 +264,16 @@ func testTagImages(t *testing.T, tc testTagCase) {
 			Return(mocks.ImageQueryResult(images, len(images)), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		imageID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ImagePartial) bool {
-			expected := models.ImagePartial{
-				TagIDs: &models.UpdateIDs{
-					IDs:  []int{tagID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return imagePartialsEqual(got, expected)
-		})
-		db.Image.On("UpdatePartial", mock.Anything, imageID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.TagImages(testCtx, &tag, nil, aliases, db.Image)
@@ -281,6 +281,22 @@ func testTagImages(t *testing.T, tc testTagCase) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right tag on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(tagID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }
 
@@ -363,25 +379,16 @@ func testTagGalleries(t *testing.T, tc testTagCase) {
 		db.Gallery.On("Query", mock.Anything, expectedAliasFilter, expectedFindFilter).Return(galleries, len(galleries), nil).Once()
 	}
 
-	for i := range matchingPaths {
-		galleryID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.GalleryPartial) bool {
-			expected := models.GalleryPartial{
-				TagIDs: &models.UpdateIDs{
-					IDs:  []int{tagID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return galleryPartialsEqual(got, expected)
-		})
-		db.Gallery.On("UpdatePartial", mock.Anything, galleryID, matchPartial).Return(nil, nil).Once()
-
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.TagGalleries(testCtx, &tag, nil, aliases, db.Gallery)
@@ -389,5 +396,21 @@ func testTagGalleries(t *testing.T, tc testTagCase) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right tag on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(tagID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }

@@ -191,6 +191,23 @@ type Manager struct {
 	// compile error either way.
 	CollabStore *sqlite.CollabProposalStore
 
+	// CurationStore reads and writes the instance's automatic-curation mode, which is
+	// how a machine's autotag match reaches shared content: filed as a proposal,
+	// applied directly, or not run at all.
+	//
+	// IT IS BUILT IN INIT rather than on demand, because both ways a read can go wrong
+	// are bad and only one of them is visible. A read that failed OPEN would be a
+	// silent governance bypass; a read that failed CLOSED would be a scan that quietly
+	// stopped, which an operator cannot distinguish from a scan that found nothing. A
+	// store that exists and is asked a question makes the caller choose which of the
+	// two it is.
+	CurationStore *sqlite.CurationStore
+
+	// CollabApply is the write surface where an approved proposal becomes a change:
+	// the same TargetStore the applier uses, so a direct autotag write and an approved
+	// one are the same statement.
+	CollabApply *sqlite.CollabTargetStore
+
 	// CollabReputation is the adapter from the row store to
 	// collab.ReputationStore, for the same reason CollabStore exists: they are
 	// different interfaces over different tables, and reaching for the wrong one

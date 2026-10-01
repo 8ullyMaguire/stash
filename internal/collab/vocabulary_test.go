@@ -149,14 +149,34 @@ func TestVocabulary_ProposableFieldsIsScopedAndSorted(t *testing.T) {
 		"the order must be stable; a Go map iteration order would reshuffle the form "+
 			"on every render")
 
-	// Image fields sort as rating, title -- so the bounds live on index 0, and
-	// finding them by INDEX is itself the bug this version of the test had.
+	// Image fields sort as rating, studio_id, title -- so the bounds live on index 0,
+	// and finding them by INDEX is itself the bug this version of the test had.
+	//
+	// THREE, and it was two. studio_id was added on 2026-10-03 because autotag matches
+	// studios against images and galleries as well as scenes, and a governed autotag
+	// could not file a studio claim for either of the other two targets. The column
+	// exists on both with a foreign key, so this is the schema rather than a new
+	// fiction -- see vocabulary.go for why the two existing guards could not see it
+	// and only internal/autotag's end-to-end tests could.
 	image := collab.ProposableFields("image")
-	require.Len(t, image, 2)
-	assert.Equal(t, "rating", image[0].Field, "sorted: rating before title")
+	require.Len(t, image, 3,
+		"three proposable image fields; the third is studio_id, which the column "+
+			"already had and the propose side did not")
+	assert.Equal(t, "rating", image[0].Field, "sorted: rating before studio_id before title")
 	assert.Equal(t, 1, image[0].Min, "the rating bounds are part of the type, so a form can render them")
 	assert.Equal(t, 5, image[0].Max)
-	assert.Equal(t, "title", image[1].Field)
+	assert.Equal(t, "studio_id", image[1].Field)
+	assert.Equal(t, "title", image[2].Field)
+
+	// AND THE SAME FOR GALLERY, because fixing one and not the other would be a
+	// half-measure that leaves the asymmetry the change was made to remove.
+	gallery := collab.ProposableFields("gallery")
+	require.Len(t, gallery, 3, "title, details, studio_id")
+	var galleryNames []string
+	for _, f := range gallery {
+		galleryNames = append(galleryNames, f.Field)
+	}
+	assert.Equal(t, []string{"details", "studio_id", "title"}, galleryNames)
 
 	assert.Nil(t, collab.ProposableFields("nonsense"),
 		"an unknown target type has no fields, not an error and not every field")

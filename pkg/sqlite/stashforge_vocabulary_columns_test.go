@@ -77,9 +77,15 @@ func TestVocabulary_FieldCountsArePinned(t *testing.T) {
 		"performer": 6,
 		"studio":    3, // was 4 in spec §4.1; studios have no url column
 		"tag":       2,
-		"gallery":   2,
-		"image":     2,
-		"group":     5, // name, description, date, studio_id, rating
+		// WAS 2. studio_id was added for both on 2026-10-03: the column exists with a
+		// foreign key on each, autotag matches studios against both target types, and
+		// without it a governed autotag could not file a studio claim for an image or a
+		// gallery at all. Found by internal/autotag's end-to-end tests -- the write-side
+		// map was missing it too, and neither this guard nor the reverse one can see a
+		// column that is real, writable and absent from both.
+		"gallery": 3, // title, details, studio_id
+		"image":   3, // title, rating, studio_id
+		"group":   5, // name, description, date, studio_id, rating
 	}
 
 	got := collab.VocabularyForTest()

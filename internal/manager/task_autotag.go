@@ -9,18 +9,31 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stashapp/stash/internal/autoproposal"
 	"github.com/stashapp/stash/internal/autotag"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/image"
 	"github.com/stashapp/stash/pkg/job"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/match"
 	"github.com/stashapp/stash/pkg/models"
 	"github.com/stashapp/stash/pkg/scene"
+	"github.com/stashapp/stash/pkg/txn"
 )
 
 type autoTagJob struct {
 	repository models.Repository
 	input      AutoTagMetadataInput
+
+	// manager is where the GOVERNANCE comes from, and it is the Manager rather than
+	// the repository on purpose. models.Repository is data access: it reads and writes
+	// rows. Curation is a permission, and it lives with the other permissions -- the
+	// proposal store, the target store, the curation mode -- which is where an
+	// operator looks for it.
+	//
+	// Without this field the job could not tell a governed autotag from an
+	// ungoverned one, which is the whole of §6b.2.
+	manager *Manager
 
 	cache match.Cache
 }
@@ -51,6 +64,21 @@ func (j *autoTagJob) isFileBasedAutoTag(input AutoTagMetadataInput) bool {
 }
 
 func (j *autoTagJob) autoTagFiles(ctx context.Context, progress *job.Progress, paths []string, performers, studios, tags bool) {
+	// THE GOVERNANCE DECISION, MADE ONCE FOR THE WHOLE SCAN.
+	//
+	// It is read here rather than per file, and the reason is in the field's comment:
+	// an operator who switched curation off halfway through a scan would otherwise get
+	// some files governed and some not, with nothing in the log saying so.
+	sink, err := j.sinkForCuration(ctx)
+	if err != nil {
+		logger.Errorf("auto-tag is misconfigured and will not run: %v", err)
+		return
+	}
+	if sink == nil {
+		logger.Infof("auto-tag is switched off (curation is off) and will not run")
+		return
+	}
+
 	t := autoTagFilesTask{
 		paths:      paths,
 		performers: performers,
@@ -59,6 +87,7 @@ func (j *autoTagJob) autoTagFiles(ctx context.Context, progress *job.Progress, p
 		progress:   progress,
 		repository: j.repository,
 		cache:      &j.cache,
+		sink:       sink,
 	}
 
 	t.process(ctx)
@@ -119,15 +148,139 @@ func (j *autoTagJob) autoTagSpecific(ctx context.Context, progress *job.Progress
 	j.autoTagTags(ctx, progress, input.Paths, tagIds)
 }
 
+// newTagger builds the Tagger this job uses, and THE SINK IT GETS IS THE GOVERNANCE
+// DECISION.
+//
+// §6b.2 and non-negotiable #5: an automatic tag/performer/studio suggestion is a
+// proposal, not a write, so a machine's claim lands in the same audit trail a human's
+// does. Every one of autotag's eighteen write sites now calls Sink.AddMatch rather than
+// the store, and this function is the only place that decides which of the two
+// implementations they get.
+//
+// IT IS ONE FUNCTION AND NOT THREE TAGGER LITERALS, because the job builds a Tagger in
+// three places (performers, studios, tags) and three literals each choosing a sink is
+// three places to keep in step -- and a divergence would mean one of the three applies
+// its matches directly while the other two file them, which is the exact split a
+// reader would never notice.
+//
+// The direct sink is chosen when curation is off, and off is not the default: see
+// j.sinkForCuration for why the refusal to build a Tagger at all matters more than the
+// choice.
+func (j *autoTagJob) newTagger(ctx context.Context, txnManager txn.Manager) (*autotag.Tagger, error) {
+	sink, err := j.sinkForCuration(ctx)
+	if err != nil {
+		// A MISCONFIGURED INSTANCE RUNS NO AUTOTAG, and that is the right direction.
+		//
+		// The job cannot run without a decision about what happens to a match, so it
+		// refuses rather than guessing: a scan that quietly stops is visible in the log
+		// and in the job's own error, and a scan that quietly laundered claims past
+		// governance would look exactly like a scan that worked.
+		//
+		// The error is RETURNED, not logged-and-continued, because the three callers
+		// each loop over a different entity type and a job that reported success after
+		// tagging nothing would be a false success in the progress bar.
+		return nil, err
+	}
+	if sink == nil {
+		// CurationOff: a supported configuration, not a failure. The tagger is not
+		// built because there is nothing for it to do.
+		return nil, nil
+	}
+	return &autotag.Tagger{TxnManager: txnManager, Cache: &j.cache, Sink: sink}, nil
+}
+
+// sinkForCuration returns the sink automatic curation should use.
+//
+// FILES BY DEFAULT. An automatic match is a machine's claim about a person or a
+// production, and the plan's own framing is that applying it directly is a machine
+// laundering a claim past governance -- so the governed path is the one a fresh
+// instance gets, and turning it off is a decision someone makes deliberately.
+//
+// The direct sink is reachable, and the policy below is where that decision is read.
+// It is read HERE, at the point the permission is used, rather than by omitting a code
+// path higher up: a refactor that dropped the check would then silently resume writing
+// directly, which is the failure the switch's own note warns about.
+func (j *autoTagJob) sinkForCuration(ctx context.Context) (autotag.Sink, error) {
+	mode, err := j.manager.CurationStore.CurationMode(ctx)
+	if err != nil {
+		// AN UNREADABLE MODE IS A REFUSAL, not a default. The store already refuses
+		// rather than guessing, and this does not undo that: a job that cannot tell
+		// whether curation is on must not run, because both available answers are
+		// wrong in a way nobody would notice. `propose` would be a decision nobody
+		// made; `apply` would launder claims.
+		return nil, fmt.Errorf("reading the curation mode: %w", err)
+	}
+
+	if !mode.CurationMayPropose() {
+		// CurationOff: the operator switched the feature off, so autotag does not
+		// run at all. This is checked HERE, at the point the permission is read, and
+		// not by omitting the call above -- a refactor that dropped the check would
+		// then silently resume applying matches, which is the failure the switch's
+		// own note warns about.
+		return nil, nil
+	}
+
+	if !mode.CurationMayApplyDirectly() {
+		// Direct writes, explicitly. This is the operator's choice and it is logged,
+		// because "autotag applied 4,000 matches without asking" is a thing an
+		// operator needs to be able to discover rather than infer.
+		logger.Infof("auto-tag is applying matches directly: automatic curation is " +
+			"switched off, so a machine's match is applied rather than proposed")
+		return autotag.DirectSink{Targets: j.manager.CollabTargetStore()}, nil
+	}
+
+	// The author is the operator, and it is REQUIRED rather than defaulted. §4.2's
+	// audit trail is the only way an operator later learns where a value came from,
+	// and "the scheduler did it" is not investigable -- so a job with no author to
+	// attribute to does not run.
+	author, err := j.manager.CurationAuthor(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("reading the user automatic suggestions are attributed to: %w", err)
+	}
+	if author.UserID == 0 {
+		return nil, fmt.Errorf("automatic suggestions must name the user they are " +
+			"attributed to, and this instance has no user to attribute them to. An " +
+			"unattributable automatic claim cannot be investigated later, so the " +
+			"scan does not run rather than running one nobody owns")
+	}
+
+	curator, err := autoproposal.NewCurator(
+		collab.NewProposer(j.manager.CollabStore),
+		autoproposal.Attribution{
+			Author: autoproposal.Author{UserID: author.UserID, Name: author.Name},
+			Source: "autotag",
+		},
+		// AutoApply is FALSE, and that is the load-bearing part of §6b.2: a performer
+		// or a studio is a claim about a person or a production, so it is never applied
+		// in bulk whatever the operator says. A tag is a descriptor, and even those go
+		// through the vote by default.
+		autoproposal.Policy{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return autotag.ProposalSink{Curator: curator}, nil
+}
+
 func (j *autoTagJob) autoTagPerformers(ctx context.Context, progress *job.Progress, paths []string, performerIds []string) {
 	if job.IsCancelled(ctx) {
 		return
 	}
 
 	r := j.repository
-	tagger := autotag.Tagger{
-		TxnManager: r.TxnManager,
-		Cache:      &j.cache,
+	tagger, err := j.newTagger(ctx, r.TxnManager)
+	if err != nil {
+		// REPORTED, not swallowed. A misconfigured instance runs no autotag, and a
+		// job that reported success after tagging nothing would be a false success in
+		// the progress bar.
+		logger.Errorf("auto-tag is misconfigured and will not run: %v", err)
+		return
+	}
+	if tagger == nil {
+		// CurationOff: the operator switched automatic curation off, so the feature
+		// does not run. Not an error.
+		logger.Infof("auto-tag is switched off (curation is off) and will not run")
+		return
 	}
 
 	for _, performerId := range performerIds {
@@ -222,9 +375,19 @@ func (j *autoTagJob) autoTagStudios(ctx context.Context, progress *job.Progress,
 	}
 
 	r := j.repository
-	tagger := autotag.Tagger{
-		TxnManager: r.TxnManager,
-		Cache:      &j.cache,
+	tagger, err := j.newTagger(ctx, r.TxnManager)
+	if err != nil {
+		// REPORTED, not swallowed. A misconfigured instance runs no autotag, and a
+		// job that reported success after tagging nothing would be a false success in
+		// the progress bar.
+		logger.Errorf("auto-tag is misconfigured and will not run: %v", err)
+		return
+	}
+	if tagger == nil {
+		// CurationOff: the operator switched automatic curation off, so the feature
+		// does not run. Not an error.
+		logger.Infof("auto-tag is switched off (curation is off) and will not run")
+		return
 	}
 
 	for _, studioId := range studioIds {
@@ -320,9 +483,19 @@ func (j *autoTagJob) autoTagTags(ctx context.Context, progress *job.Progress, pa
 	}
 
 	r := j.repository
-	tagger := autotag.Tagger{
-		TxnManager: r.TxnManager,
-		Cache:      &j.cache,
+	tagger, err := j.newTagger(ctx, r.TxnManager)
+	if err != nil {
+		// REPORTED, not swallowed. A misconfigured instance runs no autotag, and a
+		// job that reported success after tagging nothing would be a false success in
+		// the progress bar.
+		logger.Errorf("auto-tag is misconfigured and will not run: %v", err)
+		return
+	}
+	if tagger == nil {
+		// CurationOff: the operator switched automatic curation off, so the feature
+		// does not run. Not an error.
+		logger.Infof("auto-tag is switched off (curation is off) and will not run")
+		return
 	}
 
 	for _, tagId := range tagIds {
@@ -412,6 +585,15 @@ func (j *autoTagJob) autoTagTags(ctx context.Context, progress *job.Progress, pa
 }
 
 type autoTagFilesTask struct {
+	// sink is the governance decision, made ONCE by autoTagJob and passed in here.
+	//
+	// It is a field and not something each per-file task resolves, because these tasks
+	// run once per file: a per-file read of the curation mode would re-read it
+	// thousands of times in one scan, and an operator who changed the setting mid-scan
+	// would get some files governed and some not -- with nothing in the log saying so.
+	// One decision per scan is the only version whose behaviour is explainable.
+	sink autotag.Sink
+
 	paths      []string
 	performers bool
 	studios    bool
@@ -576,6 +758,7 @@ func (t *autoTagFilesTask) processScenes(ctx context.Context) {
 
 			tt := autoTagSceneTask{
 				repository: r,
+				sink:       t.sink,
 				scene:      ss,
 				performers: t.performers,
 				studios:    t.studios,
@@ -639,6 +822,7 @@ func (t *autoTagFilesTask) processImages(ctx context.Context) {
 
 			tt := autoTagImageTask{
 				repository: t.repository,
+				sink:       t.sink,
 				image:      ss,
 				performers: t.performers,
 				studios:    t.studios,
@@ -702,6 +886,7 @@ func (t *autoTagFilesTask) processGalleries(ctx context.Context) {
 
 			tt := autoTagGalleryTask{
 				repository: t.repository,
+				sink:       t.sink,
 				gallery:    ss,
 				performers: t.performers,
 				studios:    t.studios,
@@ -754,7 +939,13 @@ func (t *autoTagFilesTask) process(ctx context.Context) {
 
 type autoTagSceneTask struct {
 	repository models.Repository
-	scene      *models.Scene
+
+	// sink is where every match goes, decided ONCE by autoTagJob.sinkForCuration and
+	// passed in here. These tasks are constructed per file, so building a sink per file
+	// would re-read the curation mode thousands of times and could disagree between two
+	// files if an operator changed the setting mid-scan.
+	sink  autotag.Sink
+	scene *models.Scene
 
 	performers bool
 	studios    bool
@@ -773,17 +964,17 @@ func (t *autoTagSceneTask) Start(ctx context.Context, wg *sync.WaitGroup) {
 		}
 
 		if t.performers {
-			if err := autotag.ScenePerformers(ctx, t.scene, r.Scene, r.Performer, t.cache); err != nil {
+			if err := autotag.ScenePerformers(ctx, t.scene, r.Scene, r.Performer, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging scene performers for %s: %v", t.scene.DisplayName(), err)
 			}
 		}
 		if t.studios {
-			if err := autotag.SceneStudios(ctx, t.scene, r.Scene, r.Studio, t.cache); err != nil {
+			if err := autotag.SceneStudios(ctx, t.scene, r.Scene, r.Studio, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging scene studio for %s: %v", t.scene.DisplayName(), err)
 			}
 		}
 		if t.tags {
-			if err := autotag.SceneTags(ctx, t.scene, r.Scene, r.Tag, t.cache); err != nil {
+			if err := autotag.SceneTags(ctx, t.scene, r.Scene, r.Tag, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging scene tags for %s: %v", t.scene.DisplayName(), err)
 			}
 		}
@@ -798,7 +989,13 @@ func (t *autoTagSceneTask) Start(ctx context.Context, wg *sync.WaitGroup) {
 
 type autoTagImageTask struct {
 	repository models.Repository
-	image      *models.Image
+
+	// sink is where every match goes, decided ONCE by autoTagJob.sinkForCuration and
+	// passed in here. These tasks are constructed per file, so building a sink per file
+	// would re-read the curation mode thousands of times and could disagree between two
+	// files if an operator changed the setting mid-scan.
+	sink  autotag.Sink
+	image *models.Image
 
 	performers bool
 	studios    bool
@@ -812,17 +1009,17 @@ func (t *autoTagImageTask) Start(ctx context.Context, wg *sync.WaitGroup) {
 	r := t.repository
 	if err := r.WithTxn(ctx, func(ctx context.Context) error {
 		if t.performers {
-			if err := autotag.ImagePerformers(ctx, t.image, r.Image, r.Performer, t.cache); err != nil {
+			if err := autotag.ImagePerformers(ctx, t.image, r.Image, r.Performer, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging image performers for %s: %v", t.image.DisplayName(), err)
 			}
 		}
 		if t.studios {
-			if err := autotag.ImageStudios(ctx, t.image, r.Image, r.Studio, t.cache); err != nil {
+			if err := autotag.ImageStudios(ctx, t.image, r.Image, r.Studio, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging image studio for %s: %v", t.image.DisplayName(), err)
 			}
 		}
 		if t.tags {
-			if err := autotag.ImageTags(ctx, t.image, r.Image, r.Tag, t.cache); err != nil {
+			if err := autotag.ImageTags(ctx, t.image, r.Image, r.Tag, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging image tags for %s: %v", t.image.DisplayName(), err)
 			}
 		}
@@ -837,7 +1034,13 @@ func (t *autoTagImageTask) Start(ctx context.Context, wg *sync.WaitGroup) {
 
 type autoTagGalleryTask struct {
 	repository models.Repository
-	gallery    *models.Gallery
+
+	// sink is where every match goes, decided ONCE by autoTagJob.sinkForCuration and
+	// passed in here. These tasks are constructed per file, so building a sink per file
+	// would re-read the curation mode thousands of times and could disagree between two
+	// files if an operator changed the setting mid-scan.
+	sink    autotag.Sink
+	gallery *models.Gallery
 
 	performers bool
 	studios    bool
@@ -851,17 +1054,17 @@ func (t *autoTagGalleryTask) Start(ctx context.Context, wg *sync.WaitGroup) {
 	r := t.repository
 	if err := r.WithTxn(ctx, func(ctx context.Context) error {
 		if t.performers {
-			if err := autotag.GalleryPerformers(ctx, t.gallery, r.Gallery, r.Performer, t.cache); err != nil {
+			if err := autotag.GalleryPerformers(ctx, t.gallery, r.Gallery, r.Performer, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging gallery performers for %s: %v", t.gallery.DisplayName(), err)
 			}
 		}
 		if t.studios {
-			if err := autotag.GalleryStudios(ctx, t.gallery, r.Gallery, r.Studio, t.cache); err != nil {
+			if err := autotag.GalleryStudios(ctx, t.gallery, r.Gallery, r.Studio, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging gallery studio for %s: %v", t.gallery.DisplayName(), err)
 			}
 		}
 		if t.tags {
-			if err := autotag.GalleryTags(ctx, t.gallery, r.Gallery, r.Tag, t.cache); err != nil {
+			if err := autotag.GalleryTags(ctx, t.gallery, r.Gallery, r.Tag, t.cache, t.sink); err != nil {
 				return fmt.Errorf("tagging gallery tags for %s: %v", t.gallery.DisplayName(), err)
 			}
 		}

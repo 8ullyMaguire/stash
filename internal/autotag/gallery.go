@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/stashapp/stash/pkg/gallery"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/match"
 	"github.com/stashapp/stash/pkg/models"
 )
@@ -44,7 +44,7 @@ func getGalleryFileTagger(s *models.Gallery, cache *match.Cache) tagger {
 }
 
 // GalleryPerformers tags the provided gallery with performers whose name matches the gallery's path.
-func GalleryPerformers(ctx context.Context, s *models.Gallery, rw GalleryPerformerUpdater, performerReader models.PerformerAutoTagQueryer, cache *match.Cache) error {
+func GalleryPerformers(ctx context.Context, s *models.Gallery, rw GalleryPerformerUpdater, performerReader models.PerformerAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	t := getGalleryFileTagger(s, cache)
 
 	return t.tagPerformers(ctx, performerReader, func(subjectID, otherID int) (bool, error) {
@@ -57,18 +57,14 @@ func GalleryPerformers(ctx context.Context, s *models.Gallery, rw GalleryPerform
 			return false, nil
 		}
 
-		if err := gallery.AddPerformer(ctx, rw, s, otherID); err != nil {
-			return false, err
-		}
-
-		return true, nil
+		return sink.AddMatch(ctx, "gallery", t.ID, collab.LinkKind("performer_ids"), otherID, "")
 	})
 }
 
 // GalleryStudios tags the provided gallery with the first studio whose name matches the gallery's path.
 //
 // Gallerys will not be tagged if studio is already set.
-func GalleryStudios(ctx context.Context, s *models.Gallery, rw GalleryFinderUpdater, studioReader models.StudioAutoTagQueryer, cache *match.Cache) error {
+func GalleryStudios(ctx context.Context, s *models.Gallery, rw GalleryFinderUpdater, studioReader models.StudioAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	if s.StudioID != nil {
 		// don't modify
 		return nil
@@ -77,12 +73,12 @@ func GalleryStudios(ctx context.Context, s *models.Gallery, rw GalleryFinderUpda
 	t := getGalleryFileTagger(s, cache)
 
 	return t.tagStudios(ctx, studioReader, func(subjectID, otherID int) (bool, error) {
-		return addGalleryStudio(ctx, rw, s, otherID)
+		return sink.SetStudio(ctx, "gallery", t.ID, otherID)
 	})
 }
 
 // GalleryTags tags the provided gallery with tags whose name matches the gallery's path.
-func GalleryTags(ctx context.Context, s *models.Gallery, rw GalleryTagUpdater, tagReader models.TagAutoTagQueryer, cache *match.Cache) error {
+func GalleryTags(ctx context.Context, s *models.Gallery, rw GalleryTagUpdater, tagReader models.TagAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	t := getGalleryFileTagger(s, cache)
 
 	return t.tagTags(ctx, tagReader, func(subjectID, otherID int) (bool, error) {
@@ -95,10 +91,6 @@ func GalleryTags(ctx context.Context, s *models.Gallery, rw GalleryTagUpdater, t
 			return false, nil
 		}
 
-		if err := gallery.AddTag(ctx, rw, s, otherID); err != nil {
-			return false, err
-		}
-
-		return true, nil
+		return sink.AddMatch(ctx, "gallery", t.ID, collab.LinkKind("tag_ids"), otherID, "")
 	})
 }

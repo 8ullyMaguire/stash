@@ -301,6 +301,8 @@ func (s *Manager) initStashForgeCollab() {
 	// that interface. Without this line the governance logic is unreachable from
 	// the application and only its unit tests ever run.
 	s.CollabStore = sqlite.NewCollabProposalStore()
+	s.CurationStore = sqlite.NewCurationStore()
+	s.CollabApply = sqlite.NewCollabTargetStore()
 
 	// Same argument, for reputation. Without this line the weighted tally has no
 	// way to read a user's standing, so ComputeWeights would only ever see the

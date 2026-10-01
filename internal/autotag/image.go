@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/stashapp/stash/pkg/image"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/match"
 	"github.com/stashapp/stash/pkg/models"
 )
@@ -35,7 +35,7 @@ func getImageFileTagger(s *models.Image, cache *match.Cache) tagger {
 }
 
 // ImagePerformers tags the provided image with performers whose name matches the image's path.
-func ImagePerformers(ctx context.Context, s *models.Image, rw ImagePerformerUpdater, performerReader models.PerformerAutoTagQueryer, cache *match.Cache) error {
+func ImagePerformers(ctx context.Context, s *models.Image, rw ImagePerformerUpdater, performerReader models.PerformerAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	t := getImageFileTagger(s, cache)
 
 	return t.tagPerformers(ctx, performerReader, func(subjectID, otherID int) (bool, error) {
@@ -48,18 +48,14 @@ func ImagePerformers(ctx context.Context, s *models.Image, rw ImagePerformerUpda
 			return false, nil
 		}
 
-		if err := image.AddPerformer(ctx, rw, s, otherID); err != nil {
-			return false, err
-		}
-
-		return true, nil
+		return sink.AddMatch(ctx, "image", t.ID, collab.LinkImagePerformer, otherID, "")
 	})
 }
 
 // ImageStudios tags the provided image with the first studio whose name matches the image's path.
 //
 // Images will not be tagged if studio is already set.
-func ImageStudios(ctx context.Context, s *models.Image, rw ImageFinderUpdater, studioReader models.StudioAutoTagQueryer, cache *match.Cache) error {
+func ImageStudios(ctx context.Context, s *models.Image, rw ImageFinderUpdater, studioReader models.StudioAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	if s.StudioID != nil {
 		// don't modify
 		return nil
@@ -68,12 +64,12 @@ func ImageStudios(ctx context.Context, s *models.Image, rw ImageFinderUpdater, s
 	t := getImageFileTagger(s, cache)
 
 	return t.tagStudios(ctx, studioReader, func(subjectID, otherID int) (bool, error) {
-		return addImageStudio(ctx, rw, s, otherID)
+		return sink.SetStudio(ctx, "image", t.ID, otherID)
 	})
 }
 
 // ImageTags tags the provided image with tags whose name matches the image's path.
-func ImageTags(ctx context.Context, s *models.Image, rw ImageTagUpdater, tagReader models.TagAutoTagQueryer, cache *match.Cache) error {
+func ImageTags(ctx context.Context, s *models.Image, rw ImageTagUpdater, tagReader models.TagAutoTagQueryer, cache *match.Cache, sink Sink) error {
 	t := getImageFileTagger(s, cache)
 
 	return t.tagTags(ctx, tagReader, func(subjectID, otherID int) (bool, error) {
@@ -86,10 +82,6 @@ func ImageTags(ctx context.Context, s *models.Image, rw ImageTagUpdater, tagRead
 			return false, nil
 		}
 
-		if err := image.AddTag(ctx, rw, s, otherID); err != nil {
-			return false, err
-		}
-
-		return true, nil
+		return sink.AddMatch(ctx, "image", t.ID, collab.LinkImageTag, otherID, "")
 	})
 }

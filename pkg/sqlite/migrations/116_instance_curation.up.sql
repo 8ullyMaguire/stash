@@ -1,0 +1,50 @@
+-- Migration 116: instance curation mode
+--
+-- WHY A COLUMN ON instance_settings AND NOT A NEW TABLE
+--
+-- Curation answers "what may this instance do with an automatic match", and
+-- instance_settings is already the one-row table of instance-wide posture: `mode`
+-- says what may be published, and this says what a machine may write. Both are
+-- read in the same job (the autotag scheduler) and both are properties of the
+-- instance rather than of a user, so a separate table would be a second one-row
+-- table read in the same place.
+--
+-- WHY A TEXT COLUMN WITH A CHECK AND NOT A BOOLEAN
+--
+-- Three states, and a boolean cannot express the middle one. `off` / `propose` /
+-- `apply`: the plan's §6b.2 requires a machine's claim to be a proposal, and an
+-- operator may deliberately choose otherwise. A single bool gives two of the three.
+--
+-- TWO BOOLS WOULD BE WORSE, and this is R083's argument applied to curation: a
+-- pair admits (file=false, apply=true), which is an instance applying a machine's
+-- claims with no audit trail at all. The pair cannot distinguish that from a
+-- deliberate choice, so the type is one value from a closed set.
+--
+-- THE DEFAULT IS 'propose', AND THAT IS THE LOAD-BEARING DECISION
+--
+-- A new install files proposals rather than writing fields, so the governed path
+-- is the one an operator gets without configuring anything. Defaulting to 'apply'
+-- would make the safe path the one you have to opt into, and a library that
+-- silently asserted 4,000 machine-made claims about people on first run is not
+-- recoverable by a later setting.
+--
+-- 'off' is NOT the default even though it is the most conservative, because "off"
+-- means the feature does not run: a user who has never found the setting would get
+-- no autotag at all, and how a feature that exists to reduce manual work becomes
+-- ABSENT rather than declined is the same mistake R083's default avoids in the
+-- other direction.
+--
+-- WHY NOT NULL WITH THIS DEFAULT
+--
+-- A NULL here would mean the same as 'propose' (the zero value of the Go type) and
+-- would need a second COALESCE at every read. NOT NULL makes the value explicit
+-- and lets the CHECK do the validating, which is the same arrangement migration
+-- 115 uses for auto_acquire.
+ALTER TABLE `instance_settings` ADD COLUMN `curation` text NOT NULL DEFAULT 'propose'
+    CHECK (`curation` IN ('off', 'propose', 'apply'));
+
+-- The seeded row predates this column, so the ALTER's DEFAULT does not reach it on
+-- SQLite versions that apply ADD COLUMN without rewriting existing rows' values in
+-- the NOT NULL sense. An explicit UPDATE removes the dependency on that behaviour:
+-- the row now says what it means, in the file, rather than by inference.
+UPDATE `instance_settings` SET `curation` = 'propose' WHERE `curation` IS NULL OR `curation` = '';

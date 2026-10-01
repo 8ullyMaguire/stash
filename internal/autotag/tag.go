@@ -4,12 +4,9 @@ import (
 	"context"
 	"slices"
 
-	"github.com/stashapp/stash/pkg/gallery"
-	"github.com/stashapp/stash/pkg/image"
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/pkg/match"
 	"github.com/stashapp/stash/pkg/models"
-	"github.com/stashapp/stash/pkg/scene"
-	"github.com/stashapp/stash/pkg/txn"
 )
 
 type SceneQueryTagUpdater interface {
@@ -65,13 +62,7 @@ func (tagger *Tagger) TagScenes(ctx context.Context, p *models.Tag, paths []stri
 				return false, nil
 			}
 
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				return scene.AddTag(ctx, rw, o, p.ID)
-			}); err != nil {
-				return false, err
-			}
-
-			return true, nil
+			return tagger.Sink.AddMatch(ctx, "scene", o.ID, collab.LinkSceneTag, p.ID, p.Name)
 		}); err != nil {
 			return err
 		}
@@ -94,13 +85,7 @@ func (tagger *Tagger) TagImages(ctx context.Context, p *models.Tag, paths []stri
 				return false, nil
 			}
 
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				return image.AddTag(ctx, rw, o, p.ID)
-			}); err != nil {
-				return false, err
-			}
-
-			return true, nil
+			return tagger.Sink.AddMatch(ctx, "image", o.ID, collab.LinkImageTag, p.ID, p.Name)
 		}); err != nil {
 			return err
 		}
@@ -123,13 +108,7 @@ func (tagger *Tagger) TagGalleries(ctx context.Context, p *models.Tag, paths []s
 				return false, nil
 			}
 
-			if err := txn.WithTxn(ctx, tagger.TxnManager, func(ctx context.Context) error {
-				return gallery.AddTag(ctx, rw, o, p.ID)
-			}); err != nil {
-				return false, err
-			}
-
-			return true, nil
+			return tagger.Sink.AddMatch(ctx, "gallery", o.ID, collab.LinkKind("tag_ids"), p.ID, p.Name)
 		}); err != nil {
 			return err
 		}

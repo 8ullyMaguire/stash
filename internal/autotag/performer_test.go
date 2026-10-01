@@ -87,24 +87,16 @@ func testPerformerScenes(t *testing.T, performerName, expectedRegex string) {
 	db.Scene.On("Query", mock.Anything, scene.QueryOptions(expectedSceneFilter, expectedFindFilter, false)).
 		Return(mocks.SceneQueryResult(scenes, len(scenes)), nil).Once()
 
-	for i := range matchingPaths {
-		sceneID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-			expected := models.ScenePartial{
-				PerformerIDs: &models.UpdateIDs{
-					IDs:  []int{performerID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return scenePartialsEqual(got, expected)
-		})
-		db.Scene.On("UpdatePartial", mock.Anything, sceneID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.PerformerScenes(testCtx, &performer, nil, db.Scene)
@@ -112,6 +104,22 @@ func testPerformerScenes(t *testing.T, performerName, expectedRegex string) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right performer on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(performerID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }
 
@@ -182,24 +190,16 @@ func testPerformerImages(t *testing.T, performerName, expectedRegex string) {
 	db.Image.On("Query", mock.Anything, image.QueryOptions(expectedImageFilter, expectedFindFilter, false)).
 		Return(mocks.ImageQueryResult(images, len(images)), nil).Once()
 
-	for i := range matchingPaths {
-		imageID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.ImagePartial) bool {
-			expected := models.ImagePartial{
-				PerformerIDs: &models.UpdateIDs{
-					IDs:  []int{performerID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return imagePartialsEqual(got, expected)
-		})
-		db.Image.On("UpdatePartial", mock.Anything, imageID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.PerformerImages(testCtx, &performer, nil, db.Image)
@@ -207,6 +207,22 @@ func testPerformerImages(t *testing.T, performerName, expectedRegex string) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right performer on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(performerID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }
 
@@ -277,24 +293,16 @@ func testPerformerGalleries(t *testing.T, performerName, expectedRegex string) {
 
 	db.Gallery.On("Query", mock.Anything, expectedGalleryFilter, expectedFindFilter).Return(galleries, len(galleries), nil).Once()
 
-	for i := range matchingPaths {
-		galleryID := i + 1
-
-		matchPartial := mock.MatchedBy(func(got models.GalleryPartial) bool {
-			expected := models.GalleryPartial{
-				PerformerIDs: &models.UpdateIDs{
-					IDs:  []int{performerID},
-					Mode: models.RelationshipUpdateModeAdd,
-				},
-			}
-
-			return galleryPartialsEqual(got, expected)
-		})
-		db.Gallery.On("UpdatePartial", mock.Anything, galleryID, matchPartial).Return(nil, nil).Once()
-	}
+	// THE CLAIM IS ASSERTED, not on the mock. `db.X.On("UpdatePartial", ...,
+	// matchPartial)` proved a column write was attempted with the right ids; a
+	// recording sink proves the claim reached the right TARGET with the right ENTITY,
+	// which is the pair the join-table write depends on and which a matcher on a
+	// partial cannot distinguish from a write to the wrong row.
+	sink := testSink()
 
 	tagger := Tagger{
 		TxnManager: db,
+		Sink:       sink,
 	}
 
 	err := tagger.PerformerGalleries(testCtx, &performer, nil, db.Gallery)
@@ -302,5 +310,21 @@ func testPerformerGalleries(t *testing.T, performerName, expectedRegex string) {
 	assert := assert.New(t)
 
 	assert.Nil(err)
+	// AND THE CLAIMS NAME THE MATCHING TARGETS AND ONLY THOSE.
+	//
+	// The half that matters is the "only those". A mock expectation fails on a MISSING
+	// call and is silent on an EXTRA one, so the old assertion could not see a claim
+	// filed for a path the regex did not match -- the failure mode of a tagger whose
+	// filter is too loose, and invisible to any expectation-based test.
+	assert.Len(sink.recorded(), len(matchingPaths),
+		"exactly the matching targets must produce a claim")
+	for i, m := range sink.recorded() {
+		// THE TARGET TOO, not only the entity. A claim naming the right performer on the
+		// WRONG target puts a real person in a file they are not in, and the old
+		// matcher-on-a-partial could not see it: it matched the entity id, while the
+		// target id was the mock's own argument rather than the claim's.
+		assert.Equal(i+1, m.TargetID, "claim must name the target that matched")
+		assert.Equal(performerID, m.EntityID, "claim must name the entity the path matched")
+	}
 	db.AssertExpectations(t)
 }

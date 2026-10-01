@@ -26,6 +26,33 @@ import (
 type Tagger struct {
 	TxnManager txn.Manager
 	Cache      *match.Cache
+
+	// Sink is where every match this Tagger finds goes. Since 2026-10-03 that is a
+	// Sink rather than a direct call, and it is a FIELD rather than a parameter on each
+	// method because these methods are called from task_autotag.go with no governance
+	// plumbing in scope -- threading a sink through six call sites would have changed
+	// the shape of the caller without changing what it decides.
+	//
+	// A NIL SINK IS REFUSED by NewTagger, not defaulted to DirectSink. §6b.2's claim is
+	// that an automatic direct write is a machine laundering a claim past governance,
+	// so the direct path must be chosen rather than inherited by a caller who forgot
+	// to configure anything.
+	Sink Sink
+}
+
+// NewTagger builds a Tagger, and it REQUIRES a sink.
+//
+// There is deliberately no zero-value fallback to DirectSink. A Tagger with no sink is a
+// Tagger whose matches vanish, and a caller who sees no matches concludes autotag is
+// broken rather than that governance is misconfigured -- so the constructor refuses,
+// and the choice between filing and applying is made by whoever holds the decision.
+func NewTagger(txnManager txn.Manager, cache *match.Cache, sink Sink) (*Tagger, error) {
+	if sink == nil {
+		return nil, fmt.Errorf("autotag: a Tagger with no sink has nowhere to put a " +
+			"match. Pass ProposalSink to file matches as proposals, or DirectSink to " +
+			"apply them -- which is a governance decision, so it is made explicitly")
+	}
+	return &Tagger{TxnManager: txnManager, Cache: cache, Sink: sink}, nil
 }
 
 type tagger struct {

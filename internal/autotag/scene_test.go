@@ -193,23 +193,36 @@ func TestScenePerformers(t *testing.T) {
 			PerformerIDs: models.NewRelatedIDs([]int{}),
 		}
 
-		if test.Matches {
-			matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-				expected := models.ScenePartial{
-					PerformerIDs: &models.UpdateIDs{
-						IDs:  []int{performerID},
-						Mode: models.RelationshipUpdateModeAdd,
-					},
-				}
+		// THE CLAIM IS ASSERTED, not on the mock. `db.Scene.On("UpdatePartial", ...)`
+		// proved a column write was attempted; a recording sink proves the claim reached
+		// the right TARGET with the right ENTITY, which is the pair the write depends on
+		// and which a matcher on a partial cannot see.
+		sink := testSink()
 
-				return scenePartialsEqual(got, expected)
-			})
-			db.Scene.On("UpdatePartial", testCtx, sceneID, matchPartial).Return(nil, nil).Once()
-		}
-
-		err := ScenePerformers(testCtx, &scene, db.Scene, db.Performer, nil)
+		err := ScenePerformers(testCtx, &scene, db.Scene, db.Performer, nil, sink)
 
 		assert.Nil(err)
+		// A CLAIM IFF THE PATH MATCHED. Asserting that a claim arrived is only half
+		// the test; the other half is that NO claim arrives for a path that did not match.
+		//
+		// That half is what the mock expectation could not see. A mock fails on a MISSING
+		// call and is silent on an EXTRA one, so a tagger whose matcher was too loose
+		// passed the old suite -- and a claim filed for the wrong path is a real person
+		// attributed to a file they are not in.
+		if test.Matches {
+			assert.Len(sink.recorded(), 1, "a matching path must produce exactly one claim")
+			if len(sink.recorded()) == 1 {
+				assert.Equal(performerID, sink.recorded()[0].EntityID,
+					"the claim must name the entity the path matched")
+				assert.Equal(sceneID, sink.recorded()[0].TargetID,
+					"and the target that matched -- the right entity on the wrong target "+
+						"is a real corruption, and the pair is what the write needs")
+			}
+		} else {
+			assert.Empty(sink.recorded(),
+				"a NON-matching path must produce no claim")
+		}
+
 		db.AssertExpectations(t)
 	}
 }
@@ -239,24 +252,40 @@ func TestSceneStudios(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(db *mocks.Database, test pathTestTable) {
-		if test.Matches {
-			matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-				expected := models.ScenePartial{
-					StudioID: models.NewOptionalInt(studioID),
-				}
-
-				return scenePartialsEqual(got, expected)
-			})
-			db.Scene.On("UpdatePartial", testCtx, sceneID, matchPartial).Return(nil, nil).Once()
-		}
-
 		scene := models.Scene{
 			ID:   sceneID,
 			Path: test.Path,
 		}
-		err := SceneStudios(testCtx, &scene, db.Scene, db.Studio, nil)
+		// THE CLAIM IS ASSERTED, not on the mock. `db.Scene.On("UpdatePartial", ...)`
+		// proved a column write was attempted; a recording sink proves the claim reached
+		// the right TARGET with the right ENTITY, which is the pair the write depends on
+		// and which a matcher on a partial cannot see.
+		sink := testSink()
+
+		err := SceneStudios(testCtx, &scene, db.Scene, db.Studio, nil, sink)
 
 		assert.Nil(err)
+		// A CLAIM IFF THE PATH MATCHED. Asserting that a claim arrived is only half
+		// the test; the other half is that NO claim arrives for a path that did not match.
+		//
+		// That half is what the mock expectation could not see. A mock fails on a MISSING
+		// call and is silent on an EXTRA one, so a tagger whose matcher was too loose
+		// passed the old suite -- and a claim filed for the wrong path is a real person
+		// attributed to a file they are not in.
+		if test.Matches {
+			assert.Len(sink.recordedStudios(), 1, "a matching path must produce exactly one claim")
+			if len(sink.recordedStudios()) == 1 {
+				assert.Equal(studioID, sink.recordedStudios()[0].StudioID,
+					"the claim must name the entity the path matched")
+				assert.Equal(sceneID, sink.recordedStudios()[0].TargetID,
+					"and the target that matched -- the right entity on the wrong target "+
+						"is a real corruption, and the pair is what the write needs")
+			}
+		} else {
+			assert.Empty(sink.recordedStudios(),
+				"a NON-matching path must produce no claim")
+		}
+
 		db.AssertExpectations(t)
 	}
 
@@ -311,28 +340,41 @@ func TestSceneTags(t *testing.T) {
 	assert := assert.New(t)
 
 	doTest := func(db *mocks.Database, test pathTestTable) {
-		if test.Matches {
-			matchPartial := mock.MatchedBy(func(got models.ScenePartial) bool {
-				expected := models.ScenePartial{
-					TagIDs: &models.UpdateIDs{
-						IDs:  []int{tagID},
-						Mode: models.RelationshipUpdateModeAdd,
-					},
-				}
-
-				return scenePartialsEqual(got, expected)
-			})
-			db.Scene.On("UpdatePartial", testCtx, sceneID, matchPartial).Return(nil, nil).Once()
-		}
-
 		scene := models.Scene{
 			ID:     sceneID,
 			Path:   test.Path,
 			TagIDs: models.NewRelatedIDs([]int{}),
 		}
-		err := SceneTags(testCtx, &scene, db.Scene, db.Tag, nil)
+		// THE CLAIM IS ASSERTED, not on the mock. `db.Scene.On("UpdatePartial", ...)`
+		// proved a column write was attempted; a recording sink proves the claim reached
+		// the right TARGET with the right ENTITY, which is the pair the write depends on
+		// and which a matcher on a partial cannot see.
+		sink := testSink()
+
+		err := SceneTags(testCtx, &scene, db.Scene, db.Tag, nil, sink)
 
 		assert.Nil(err)
+		// A CLAIM IFF THE PATH MATCHED. Asserting that a claim arrived is only half
+		// the test; the other half is that NO claim arrives for a path that did not match.
+		//
+		// That half is what the mock expectation could not see. A mock fails on a MISSING
+		// call and is silent on an EXTRA one, so a tagger whose matcher was too loose
+		// passed the old suite -- and a claim filed for the wrong path is a real person
+		// attributed to a file they are not in.
+		if test.Matches {
+			assert.Len(sink.recorded(), 1, "a matching path must produce exactly one claim")
+			if len(sink.recorded()) == 1 {
+				assert.Equal(tagID, sink.recorded()[0].EntityID,
+					"the claim must name the entity the path matched")
+				assert.Equal(sceneID, sink.recorded()[0].TargetID,
+					"and the target that matched -- the right entity on the wrong target "+
+						"is a real corruption, and the pair is what the write needs")
+			}
+		} else {
+			assert.Empty(sink.recorded(),
+				"a NON-matching path must produce no claim")
+		}
+
 		db.AssertExpectations(t)
 	}
 

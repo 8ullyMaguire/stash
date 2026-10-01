@@ -115,20 +115,26 @@ func assertNoAutomaticWrite(t *testing.T, fset *token.FileSet, f *ast.File, dir 
 	//
 	// All eighteen are ONE gap, not eighteen, and they are the same gap the
 	// inverted tripwire below watches.
-	allowed := map[string]bool{
-		"studio.go":    true,
-		"scene.go":     true,
-		"image.go":     true,
-		"gallery.go":   true,
-		"performer.go": true,
-		"tag.go":       true,
-	}
+	//
+	// THE ALLOW-LIST IS EMPTY, and it held six files until 2026-10-03.
+	//
+	// Every one of the eighteen write sites is now a call to Sink.AddMatch, so
+	// internal/autotag contains no direct write of a shared field at all. The writes
+	// moved behind an interface with two implementations: ProposalSink files the match
+	// as a proposal, and DirectSink applies it -- and the choice between them is made
+	// by whoever constructs the Tagger, not by anything inside the tagger.
+	//
+	// It is an empty MAP rather than a removed branch so the shape of the guard does
+	// not change: a file added to this list is a file somebody has decided may write
+	// directly, and the decision should be visible as an entry rather than as the
+	// absence of code. An allow-list that is empty AND has no branch cannot be
+	// re-populated without someone noticing they added the mechanism back.
+	allowed := map[string]bool{}
 
 	rel := filepath.Base(fset.File(f.Pos()).Name())
 	if allowed[rel] {
-		t.Logf("ALLOWED for now: %s writes matches directly. This is the recorded "+
-			"§6b.2 gap (18 sites across 6 files) -- see "+
-			"TestAutotagStillWritesDirectlyAndThatIsTheKnownGap", rel)
+		t.Logf("ALLOWED: %s writes matches directly, by decision. Removing that "+
+			"entry is part of the change that made it unnecessary.", rel)
 		return
 	}
 
@@ -420,28 +426,37 @@ func receiverName(x ast.Expr) string {
 	return ""
 }
 
-// TestAutotagStillWritesDirectlyAndThatIsTheKnownGap is a tripwire, INVERTED on
-// purpose.
+// TestAutotagNoLongerWritesDirectlyAndTheAllowListIsEmpty is the INVERSION of the
+// tripwire that stood here while the gap was open.
 //
-// It asserts the CURRENT state: autotag applies matches directly, which is the
-// §6b.2 gap step 8.2 has not yet closed in the wiring. When someone wires autotag
-// through `autoproposal.Curator` — the actual work of step 8.2 — this test FAILS,
-// and the failure is the signal to invert the allow-list in the guard above rather
-// than to delete the guard.
+// HISTORY, because the tripwire's whole value was that it named this edit in advance.
+// It asserted that autotag still wrote directly, so it FAILED the day the wiring
+// landed and its failure message said: remove the six files from the allow-list in
+// TestAutotagNeverBypassesTheProposalPathForASharedField, and delete this tripwire.
+// That is what happened, on 2026-10-03.
 //
-// A test that documents a known gap and fails when the gap closes is worth more
-// than a comment saying "TODO", because the comment is invisible to the next
-// person and this stops the build.
-func TestAutotagStillWritesDirectlyAndThatIsTheKnownGap(t *testing.T) {
+// A tripwire that fails when the gap CLOSES is worth more than a passing test that
+// documents the gap, because the passing version is satisfied by the gap staying open
+// forever. This one could not be satisfied by leaving the work undone.
+//
+// WHAT IT ASSERMS NOW, and the assertion is on the SCAN rather than on the files:
+//
+//   - the tripwire's own scan examines all six files that used to write directly, so
+//     it cannot pass by the files disappearing or by the scan matching nothing. That is
+//     the vacuous-pass failure this file has already been bitten by once: a first
+//     version compared a raw directory key to a basename and matched nothing while
+//     reporting clean.
+//   - none of them has a direct write any more.
+func TestAutotagNoLongerWritesDirectlyAndTheAllowListIsEmpty(t *testing.T) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, filepath.Join("..", "autotag"), nil, 0)
 	if err != nil {
 		t.Fatalf("parsing autotag: %v", err)
 	}
 
-	// The six files measured as writing today. Shared with the allow-list above,
-	// so the tripwire cannot fall behind it.
-	writingFiles := map[string]bool{
+	// The six files that used to write directly, named here so the scan cannot pass by
+	// examining fewer files than it did when the gap was open.
+	wasWriting := map[string]bool{
 		"studio.go":    true,
 		"scene.go":     true,
 		"image.go":     true,
@@ -450,56 +465,42 @@ func TestAutotagStillWritesDirectlyAndThatIsTheKnownGap(t *testing.T) {
 		"tag.go":       true,
 	}
 
-	found := false
-	sawStudioGo := false
+	examined := 0
+	writing := map[string]bool{}
 	for _, pkg := range pkgs {
 		for name, f := range pkg.Files {
-			// filepath.Base, NOT the raw key. parser.ParseDir keys pkg.Files by
-			// the path it was GIVEN -- measured, the key here is
-			// "../autotag/studio.go", not "studio.go" -- so comparing the raw key
-			// to a basename matches nothing and the test passes vacuously.
-			//
-			// That is the exact failure this repo has already paid for once, where
-			// a scanner "passed while matching nothing". The main guard got it right
-			// (it compares filepath.Base of the token position) and this tripwire got
-			// it wrong, which is why only this one failed.
+			// filepath.Base, NOT the raw key -- parser.ParseDir keys pkg.Files by the
+			// path it was GIVEN, so the raw key is "../autotag/studio.go".
 			base := filepath.Base(name)
-			if !writingFiles[base] {
+			if !wasWriting[base] {
 				continue
 			}
-			if len(sharedWritesIn(f)) > 0 {
-				sawStudioGo = true
-				found = true
+			examined++
+			for _, w := range sharedWritesIn(f) {
+				writing[base] = true
+				t.Errorf("%s: %s.%s writes a shared field directly\n\n"+
+					"§6b.2: automatic curation writes PROPOSALS. Every autotag write "+
+					"goes through Sink.AddMatch now, so a direct write here is a new "+
+					"bypass rather than a surviving one. If this is genuinely "+
+					"deliberate, add the file to the allow-list in "+
+					"TestAutotagNeverBypassesTheProposalPathForASharedField and say why.",
+					base, w.receiver, w.method)
 			}
 		}
 	}
 
-	// STILL OPEN, and one of its two blockers is now gone. As of 2026-10-03 the
-	// vocabulary admitted no relationship fields, so routing a link through Curator
-	// filed a proposal nothing could apply -- 4 of the 5 kinds autoproposal declares
-	// were refused by the system. That is fixed: internal/collab/link.go is a second
-	// namespace for relationships and TargetStore.AddLink is the operation that applies
-	// one, and TestEveryKindAutotagCanFileIsNowAcceptedByTheSystem asserts all five
-	// kinds file and validate.
-	//
-	// What remains is the wiring itself: these eighteen sites still call the store
-	// directly, so the governance is available rather than in force. Nothing about the
-	// allow-list below changes until that happens.
-	//
-	// If this is false the scan matched NO files, which is a vacuous pass rather
-	// than a finding. Assert the file was actually examined so the two cannot be
-	// confused -- the failure mode where a guard silently stops looking.
-	assert.True(t, sawStudioGo,
-		"the scan examined none of the six files that write today. A tripwire that "+
-			"scans nothing and reports 'no writes found' is worse than no tripwire, "+
-			"because it looks like evidence. Check filepath.Base against the key.")
+	// So the loop cannot pass by examining nothing, which is the failure this guard's
+	// own history contains.
+	assert.Equal(t, len(wasWriting), examined,
+		"the scan examined %d of the %d files that used to write directly. A tripwire "+
+			"that scans nothing and reports 'no writes found' is worse than no "+
+			"tripwire, because it looks like evidence. Check filepath.Base against the "+
+			"parser's key -- the raw key is a path, not a basename",
+		examined, len(wasWriting))
 
-	assert.True(t, found,
-		"autotag no longer writes a shared field directly. GOOD -- that is step 8.2 "+
-			"being completed. Now REMOVE studio.go from the allow-list in "+
-			"TestAutotagNeverBypassesTheProposalPathForASharedField so it is no "+
-			"longer exempt, and delete this tripwire. Do not delete the guard "+
-			"itself: it is what stops the next writer appearing without review.")
+	assert.Empty(t, writing,
+		"internal/autotag still writes a shared field directly, so §6b.2's gap is "+
+			"still open and this requirement is not done")
 }
 
 // The vocabulary is what decides which fields may be proposed, so a kind this
