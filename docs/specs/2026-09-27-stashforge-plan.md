@@ -2782,3 +2782,116 @@ worked.
   repositories. Core exposes only the API they need (M7 step 7.7). The M5-era
   line "Mobile clients. The GraphQL surface is enough" is superseded — the
   surface is the deliverable, not the client.
+
+---
+
+## M8 — The node's content plane
+
+**Spec:** §6b (priority-shift spec) · **Ledger:** `docs/requirements.csv` R074–R086
+**Started 2026-10-02.** This phase does not replace M0–M7; it sits after them.
+
+§6b.1 is the reordering that matters: **M8 is not four subsystems, it is two.**
+Content acquisition (capability 2) and content preservation (capability 3) are one
+subsystem with two entry points — same transport, same verification, same consent
+gate — and splitting them would mean inventing a protocol twice. Capabilities 1 and
+4 are mostly built and need a filter, not a foundation.
+
+### Step 8.0 — The probes (COMPLETE, 2026-10-02)
+
+§6b.7 forbids coding past three probes. All three are measured and runnable; results
+in `docs/specs/2026-10-02-m8-probe-results.md`.
+
+```
+cd plugins/p2pdownloader
+go run ./cmd/probe_withhold     # does the transport withhold a peer address?
+go run ./cmd/probe_chunkhash    # what does verification cost, per shape?
+go run ./cmd/probe_serving      # what does serving a replica cost the host?
+```
+
+Two findings that shape every step below, both of which OVERRIDE the obvious plan:
+
+1. **The current transport does NOT satisfy §6b.4.** Discovery is address-free
+   (110–224 peers found with no address supplied, all via the DHT) and peer identity
+   `(InfoHash, PeerID)` carries no address — but the DHT exchanges **routable
+   addresses**, and a tracker sees the announcing IP outright. Peers were reached
+   without being *given* an address; they were not reached without addresses being
+   *exchanged*. Onion routing or a relay-carrying mesh is the only thing that meets
+   the requirement as written.
+2. **The chunk hash is not a width problem.** Over a billion 1 MiB chunks,
+   birthday-bound P(collision) is 7.35 × 10⁻⁴⁰ even at 128 bits. A 1 MiB chunk list
+   costs 0.0034 % of the content and saves a 4 GiB re-fetch. What matters is not
+   width but **provenance**: the existing 20-byte hashes were chosen to identify a
+   torrent, not to detect content change.
+
+### Step 8.1 — The three-state switch and the acquisition queue (R083, R075, R076)
+
+**Unblocked by step 0: needs no new transport.** This is the next step because it is
+capability 2's entry point and it shares the transport with capability 3 *without*
+requiring it yet.
+
+**The switch is three states, and a boolean cannot express the middle one.** `off` /
+`fetch_only` / `full`, with the table §6b.3 gives:
+
+| State | Fetches | Seeds | Uploads data |
+|---|---|---|---|
+| `off` | no | no | no |
+| `fetch_only` | yes | no | no |
+| `full` | yes | yes | per the existing upload control |
+
+- **Default is `fetch_only`, not `off`.** An instance that fetches but never seeds
+  leaks no data outward and cannot be made into a source for someone else, so
+  opting users in to the *harmless* half is not a leak. Non-negotiable #7 is about
+  the publish path, and `fetch_only` has none.
+- **Enforced at the point the permission is READ** — the same place the existing tier
+  policy is read — and **not** by omitting rows from a query. #7's own note is that
+  a refactor dropping the filter must not silently resume publishing.
+- **The three states must be individually observable in the type**, so a fourth
+  state added later cannot be smuggled in as a boolean. The switch's zero value must
+  be `off`, so an unset column is the safe state rather than the harmful one.
+
+**The queue is a VIEW, never a stored score** (#4): *what the mesh holds, minus what
+this instance has, ranked by §6a.5's function unmodified.* No new ranking is
+invented — `internal/discovery`'s is pointed at a download queue.
+
+### Step 8.2 — Automatic scan and curate (R086, capability 1)
+
+**Keep the scanner; add the policy.** All existing config, surfaced with a sensible
+default; **no new scanning machinery.** Curation is **proposals, not writes** (#5) —
+an automatic tag/performer/studio suggestion is a `collab.Proposer` proposal, so a
+machine's claim lands in the same audit trail a human's does. This is why automatic
+curation is safe to enable by default and why a direct write would be fatal: an
+automatic direct write is a machine laundering a claim past governance.
+
+### Step 8.3 — The content plane (R077, R078, R082, R079)
+
+**BLOCKED ON A TRANSPORT DECISION, and that is the honest state.** Probe 1 measured
+that the current transport does not meet §6b.4, so this step cannot be an
+implementation. It needs, in order:
+
+1. A transport meeting the property — onion routing or a relay-carrying mesh. Not
+   "a torrent library": §6b.4 states the requirement and §6b.7 refuses to name the
+   technology, because naming it here makes it a dependency.
+2. **The chunk-hash decision**, which COMMITS the wire format and cannot change once
+   peers exist. Two things are still open from probe 2: whether partial fetch is a
+   requirement or a nicety (if a replica is all-or-nothing at the scene level — which
+   is what the scanner and file model already assume — a chunk list buys nothing and
+   costs wire forever), and the ed2k precedent, where a wire format with a tree in it
+   was measured and kept out of the hash path.
+3. `manifest + content hash`, and a replica counting toward N **only after manifest
+   verification** (§6b.5) — never after a peer says it accepted the bytes.
+4. R079's alerts and R080's audit log. Note probe 3's finding: R080 answers *inbound*
+   ("what did we place and why") and **nothing records outbound fetches**, so an
+   operator who discovers they are serving a swarm cannot find out who did it.
+
+### Verification, per step
+
+```
+export GOFLAGS=-mod=mod
+go build ./... && go vet ./... && gofmt -l internal/
+go test ./... -count=1
+go test -tags integration -count=1 ./...
+cd plugins/p2pdownloader && go test ./... -count=1
+```
+
+Green on **both** gaming-pc and thinkcentre; green on one is not a pass.
+
