@@ -8,6 +8,20 @@ const ProgressIndefinite float64 = -1
 
 // Progress is used by JobExec to communicate updates to the job's progress to
 // the JobManager.
+//
+// # A nil *Progress is usable and does nothing
+//
+// Every method here tolerates a nil receiver, so a JobExec can report progress
+// unconditionally. That is what makes a job testable: `updater` is unexported
+// and needs a *Manager and a *Job, so a test in any other package cannot build
+// a real Progress at all -- and a job whose Execute dereferences it is a job
+// whose tests have to run a whole job manager, or panic.
+//
+// The alternative is every job guarding every call with `if progress != nil`,
+// which is a check that is never false in production and is therefore never
+// true in tests either -- so the guard would be untested code in the only place
+// it runs. A nil-safe method is the same amount of code, in one place, and the
+// behaviour is exercised by every test of every job.
 type Progress struct {
 	defined      bool
 	processed    int
@@ -24,6 +38,9 @@ type task struct {
 }
 
 func (p *Progress) updated() {
+	if p == nil {
+		return
+	}
 	var details []string
 	for _, t := range p.currentTasks {
 		details = append(details, t.description)
@@ -34,6 +51,10 @@ func (p *Progress) updated() {
 
 // Indefinite sets the progress to an indefinite amount.
 func (p *Progress) Indefinite() {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -44,6 +65,10 @@ func (p *Progress) Indefinite() {
 
 // Definite notifies that the total is known.
 func (p *Progress) Definite() {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -54,6 +79,10 @@ func (p *Progress) Definite() {
 // SetTotal sets the total number of work units and sets definite to true.
 // This is used to calculate the progress percentage.
 func (p *Progress) SetTotal(total int) {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -65,6 +94,10 @@ func (p *Progress) SetTotal(total int) {
 // AddTotal adds to the total number of work units. This is used to calculate the
 // progress percentage.
 func (p *Progress) AddTotal(total int) {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -75,6 +108,10 @@ func (p *Progress) AddTotal(total int) {
 // SetProcessed sets the number of work units completed. This is used to
 // calculate the progress percentage.
 func (p *Progress) SetProcessed(processed int) {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -102,6 +139,10 @@ func (p *Progress) calculatePercent() {
 // overwritten if Indefinite, SetTotal, Increment or SetProcessed is called.
 // Constrains the percent value between 0 and 1, inclusive.
 func (p *Progress) SetPercent(percent float64) {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -118,6 +159,10 @@ func (p *Progress) SetPercent(percent float64) {
 // Increment increments the number of processed work units. This is used to calculate the percentage.
 // If total is set already, then the number of processed work units will not exceed the total.
 func (p *Progress) Increment() {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -130,6 +175,10 @@ func (p *Progress) Increment() {
 // AddProcessed increments the number of processed work units by the provided
 // amount. This is used to calculate the percentage.
 func (p *Progress) AddProcessed(v int) {
+	if p == nil {
+		return
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -166,6 +215,15 @@ func (p *Progress) removeTask(t *task) {
 // ExecuteTask executes a task as part of a job. The description is used to
 // populate the Details slice in the parent Job.
 func (p *Progress) ExecuteTask(description string, fn func()) {
+	// The nil case still RUNS fn. Returning early here would report success
+	// having done nothing, which is the worst possible failure for a job: the
+	// user's library looks processed and no cluster was ever written. The
+	// progress label is what is lost, not the work.
+	if p == nil {
+		fn()
+		return
+	}
+
 	t := &task{
 		description: description,
 	}

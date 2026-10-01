@@ -58,8 +58,43 @@ func (r *Resolver) Mutation() MutationResolver {
 func (r *Resolver) Performer() PerformerResolver {
 	return &performerResolver{r}
 }
+
+// PersonCluster is a ResolverRoot because two of its fields are field
+// resolvers rather than struct fields.
+//
+// The cost of that is worth recording, because the alternative is invisible.
+// Without this method, `personClusterModel` may leave `members` nil and
+// `memberCount` zero -- which is deliberate, so that listing 20 clusters does
+// not read every member of every cluster to render 20 rows -- and gqlgen
+// generates `return obj.Members, nil`. That compiles, the field stays in the
+// schema, the type still looks right, and every client gets an empty list.
+// Nothing fails until someone selects the field in a query.
+//
+// `TestClusterFieldResolversAreActuallyWired` is the test that catches it, and
+// it is in resolver_cluster_test.go rather than here so the failure names the
+// property rather than the wiring.
+func (r *Resolver) PersonCluster() PersonClusterResolver {
+	return &personClusterResolver{r}
+}
+
+// personClusterResolver carries no state of its own: the members and the count
+// are read through the package-level cluster store, the same store the
+// pipeline writes, so a resolver holding a handle would be a second writer to a
+// table it does not own.
+type personClusterResolver struct{ *Resolver }
+
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
+}
+func (r *Resolver) User() UserResolver {
+	return &userResolver{r}
+}
+
+// EditProposal is the field resolver for EditProposal. Named for the type
+// rather than the field, which is this codebase's convention: one resolver
+// struct per GraphQL type, reused across every field on it.
+func (r *Resolver) EditProposal() EditProposalResolver {
+	return &editProposalResolver{r}
 }
 func (r *Resolver) Scene() SceneResolver {
 	return &sceneResolver{r}
@@ -115,6 +150,8 @@ func (r *Resolver) ConfigResult() ConfigResultResolver {
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+type userResolver struct{ *Resolver }
+type editProposalResolver struct{ *Resolver }
 
 type galleryResolver struct{ *Resolver }
 type galleryChapterResolver struct{ *Resolver }

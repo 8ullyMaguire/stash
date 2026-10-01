@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#1006",
+  "title": "PDF Support",
+  "excerpt": "It would be good if you could manage PDF files under a menu item Ebooks. One could select an image as a preview. This would be shown in a gallery of all PDFs with the title. And then open the pdf as normal in the browser. I don't mean text ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1010",
+  "title": "\"Search All\" functionality for scene tagger view",
+  "excerpt": "When using Tagger, having to manually search hundreds or even thousands of scenes, one by one, when fingerprints don't match, can become tiring and potentially even cause RSI. I'd like to propose a \"Search All\" button that would search stas",
+  "probe": ""
+ },
+ {
+  "key": "stash#1017",
+  "title": "One-click button to create all missing objects in \"Scene Scrape Results\" dialog",
+  "excerpt": "The ability to \"Add All\" in both individual fields and overall would save a lot of clicking. ![103057271-04d8c900-456d-11eb-870e-dde4e0f9fa39](https://user-images.githubusercontent.com/3514095/103105202-3f3c7780-45fa-11eb-9eeb-df12a666a085.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1024",
+  "title": "Performer-specific Tag-field in Scene Edit tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When scene has two or more female performers sometimes they different in acts (e.g. one did anal / squirt / swallow etc, the other didn't), and very often they have differen",
+  "probe": ""
+ },
+ {
+  "key": "stash#1028",
+  "title": "Stash built for a particular type of conventual studio-produced porn, management of porn outside that could be improved",
+  "excerpt": "## Summary Stash is currently build primarily for porn produced by a studio. As such it has patchy support for any porn that falls outside of this. I would love to see what peoples thinking about this is and ideally for support to improve o",
+  "probe": ""
+ },
+ {
+  "key": "stash#1029",
+  "title": "Folder-like structure for organizing content",
+  "excerpt": "## Summary Currently when Stash imports videos any folder structure is ignored when it comes to presenting those videos in the Scene view. The user is essentially presented with one big flat list which is filterable and sortable and such bu",
+  "probe": ""
+ },
+ {
+  "key": "stash#1030",
+  "title": "Add \"Media\" tab which combines scenes and images",
+  "excerpt": "## Description of the problem You might have a 10 second long gif and a 5 second silent video clip. As far as the user is concerned they are more or less the same thing. If anything the longer gif is more video like. The user should be able",
+  "probe": ""
+ },
+ {
+  "key": "stash#1052",
+  "title": "Keyboard shortcut to create scene marker while watching a video",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I create the same handful of markers (same title, default tag, tags) on almost every scene. It would be nice to have the ability to quickly create these. **Describe the solu",
+  "probe": ""
+ },
+ {
+  "key": "stash#1058",
+  "title": "Ability to select different audio track during playback",
+  "excerpt": "Most videos contain a single audio track, but there are times where a video may contain two audio tracks. The ability for Stash to allow one to select which track plays would be super handy!",
+  "probe": ""
+ },
+ {
+  "key": "stash#1111",
+  "title": "Checkbox to enable case insensitive RegEx filtering",
+  "excerpt": "Pretty self-explanatory. I'd love to see an option for case-insensitive RegEx filtering.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1125",
+  "title": "Upload image from the UI",
+  "excerpt": "It would make inserting images much easier if you could just drag and drop them from one browser window to another, without having to download them each time and then select them again in the file browser. In addition, a cropping tool like ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1127",
+  "title": "Support for sub-galleries",
+  "excerpt": "It would be nice to have a primary gallery for an actress and then sub-galleries located under the primary.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1129",
+  "title": "Browse and filter scenes by alphabet letter ",
+  "excerpt": "In Scene view (and i suppose in the others), having a way to click on a letter of the alphabet and filter the view by items that begin with that letter would be super helpful. see: https://ux.stackexchange.com/questions/63221/are-alphabet-f",
+  "probe": ""
+ },
+ {
+  "key": "stash#1161",
+  "title": "Option to link scenes to galleries if they are in the same folder",
+  "excerpt": "**Problem** The option now exists to create a gallery when a folder containing multiple images is found. Linking scenes to galleries is a tedious manual task. Some of us store scene videos in the picture folder of the scene. **Solution** If",
+  "probe": ""
+ },
+ {
+  "key": "stash#1165",
+  "title": "Filter the stash-box query based on existing metadata",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Searching with generic terms could lead to ambiguous results. If I search for \"2018-01-01 StudioXX\", I also get results for a studio named \"StudioXX YY\". I know that the par",
+  "probe": ""
+ },
+ {
+  "key": "stash#1170",
+  "title": "Add organized flag to performers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Can we have an organized flag for performers. I'm writing a plugin that will automatically scrape all performers with the specified performer scrapers in order. It would be ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1171",
+  "title": "Add clear logs button",
+  "excerpt": "Would be handy to have a clear logs button in the logs section. Nice to be able to clear the logs if you are de-bugging a scraper or something else. Perhaps next to the selector for , Info, debug etc.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1173",
+  "title": "In-app editor for config.yml file",
+  "excerpt": "As there are a bunch of features not surfaced into the configuration menus, a button to launch config.yml in the users default editor would be helpful (probably with a warning about \"advanced settings that could break your install\".",
+  "probe": ""
+ },
+ {
+  "key": "stash#118",
+  "title": "Alphabetical performer list inside sidebar",
+  "excerpt": "I have a suggestion regarding the front-end user interface #108 that would be displayed on every page containing the url `/performers*` ### Side panel alphabetical performer list - Lists all performers in alphabetical ascending order - A he",
+  "probe": "C62"
+ },
+ {
+  "key": "stash#1182",
+  "title": "Add \"Test\" button to \"Chrome CDP Path\" config option",
+  "excerpt": "It would be good for users to be able to ensure the config is set up correctly and responding to queries. Adding a \"test\" button that would query the executable or url with a random string seems like a good fix.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1183",
+  "title": "Add `{studioName}` and `{studioURL}` placeholder fields for sceneByFragment scrapers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have many media files from various different Studios, I use the existing functionality in the application to mass edit and assign a Studio to each. While a functional URL ",
+  "probe": ""
+ },
+ {
+  "key": "stash#12",
+  "title": "Account system",
+  "excerpt": "https://github.com/stashapp/StashServer/issues/43",
+  "probe": ""
+ },
+ {
+  "key": "stash#1220",
+  "title": "Ability to lookup similar scenes by PHASH in scene duplicate checker",
+  "excerpt": "Per discord discussion with @InfiniteTF putting suggestions for improvements to dupechecker here Some way to sort the list of duplicates... right now, it's by hash? Ability to click on Phash in fileinfo, and see a 'similar to this video' li",
+  "probe": ""
+ },
+ {
+  "key": "stash#1246",
+  "title": "Search Bar for Settings",
+  "excerpt": "As suggested on Discord (by B33N): > Do we have universal search feature already suggested? Like, let's say I type \"sound\" in the search bar and it will show or highlight everything related to it in settings? A search bar on the settings pa",
+  "probe": ""
+ },
+ {
+  "key": "stash#1253",
+  "title": "Separating tags for higher-level objects",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Some tags aren't always related to every object. For example, you might have a tag for an action like blowjob. This isn't useful for performers and can clutter up the list f",
+  "probe": ""
+ },
+ {
+  "key": "stash#1258",
+  "title": "Support audio files/object type",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There isn't a native way to play audio files in Stash. **Describe the solution you'd like** Adding support for audio files/stories. Metadata I would like to see: ``` name au",
+  "probe": ""
+ },
+ {
+  "key": "stash#1259",
+  "title": "Support text files/object type",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There isn't a native way to add text files in Stash. **Describe the solution you'd like** Adding support for text files/stories. Metadata I would like to see: ``` name autho",
+  "probe": ""
+ },
+ {
+  "key": "stash#1280",
+  "title": "Ability to configure default tab for object that have attached files",
+  "excerpt": "Adding this on behalf of several requests on Discord for this feature. Currently the default tab when clicking into Scenes or Performers is the \"Details\" tab. In regards to **Scenes**, this is disadvantageous when manually tagging a series ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1290",
+  "title": "Ability to Move Between Media in Collection",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In Stash you typically start in some kind of collection. It may be a gallery, a studio, the scenes page, etc. As soon as you select an individual piece of media though, you’",
+  "probe": ""
+ },
+ {
+  "key": "stash#1296",
+  "title": "Ability to parse a list of tags to add them in bulk to an object",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Adding my own tags one by one is a pain, it would be much faster and more efficient to add multiple tags at once **Describe the solution you'd like** It would be great if wh",
+  "probe": ""
+ },
+ {
+  "key": "stash#13",
+  "title": "Scene upload from UI",
+  "excerpt": "https://github.com/stashapp/StashServer/issues/45",
+  "probe": "C67"
+ },
+ {
+  "key": "stash#1317",
+  "title": "Global Filters (aka Libraries)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As you add more studios, performers, tags, scenes, etc. it can get really overwhelming. If you know what you want to see (amateurs, celebs, pornstars, MFM, etc) it still tak",
+  "probe": ""
+ },
+ {
+  "key": "stash#1334",
+  "title": "Unified Scene and Image View on Performer page",
+  "excerpt": "It would be great if you could see both the Scenes and Images of a particular performer in a unified manner (i.e. the same page), instead of having to switch between the two \"options\".",
+  "probe": ""
+ },
+ {
+  "key": "stash#1335",
+  "title": "Persistent scene filters settings",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Filter settings, if used, are often specific to particular videos. I have to set the same video every time I watch it. **Describe the solution you'd like** If filter setting",
+  "probe": ""
+ },
+ {
+  "key": "stash#1341",
+  "title": "Global option to only accept StashID in Scene Tagger",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** All of my scenes are scraped with the URL, if i use the tagger it will overwrite some information. I don't want to double-check every scene to see if something changed so i ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1365",
+  "title": "Contextual filtering across all objects",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Tags is one of the major ways you sort the content besides Performer and Studio. Its therefore inefficient to hide the tags under dropdown. Dropdown means it takes atleast t",
+  "probe": ""
+ },
+ {
+  "key": "stash#1367",
+  "title": "Extend Performer/Scene Tagger for other scrapers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Right now, if URLs are set for various scenes or performers, it is not possible to scrape them in bulk. You have to manually scrape each one. However, the new Stash Taggers ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1385",
+  "title": "Semantic FUSE filesystem to mount organised version of contents of library in host filesystem",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'd like my files to be tidy and navigable on my filesystem but I don't want Stash to make destructive edits to my files. **Describe the solution you'd like** I'd like to se",
+  "probe": ""
+ },
+ {
+  "key": "stash#1400",
+  "title": "Ratings for Tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As you start really tagging things (especially if you import tags from scrapers), your list of tags ends up HUGE. It becomes hard to easily find the tags you prefer (and to ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1445",
+  "title": "Resume Interrupted Task Queue",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** If a task is interrupted (for example by an automatically triggered Docker update), the existing queue is lost and has to be rebuilt from scratch. **Describe the solution yo",
+  "probe": ""
+ }
+]

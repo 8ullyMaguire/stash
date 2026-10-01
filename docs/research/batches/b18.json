@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash-box#1141",
+  "title": "[Feature] Additional metadata for male performers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Male performers are missing basic metadata fields in StashDB, such as penis size and circumcision status. Stashapp does have these fields, but they are missing in the databa",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#116",
+  "title": "[RFC] Scene import process",
+  "excerpt": "# Problem Need to provide a native data import process which handles mapping to other options. The process should allow for the creation of complete scene data without needing to perform post-import modifications. # Proposal This RFC is bas",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1161",
+  "title": "[Feature] Ability to mark performer link as defunct",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Various original links might get removed, deleted or suspended, but they don't lose their value entirely. They can still be used to lookup details on archives or cached page",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1175",
+  "title": "[Feature] Optional flag to exclude specific studios from accepting scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Our instance doesn't allow scenes to be added to parent network studios, but at the moment these occurrences have to be policed manually. **Describe the solution you'd like*",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1177",
+  "title": "[Bug Report] Fingerprint cluster view hash list population error",
+  "excerpt": "**Describe the bug** When switching between fingerprint clusters in the cluster view, for a scene with multiple clusters where a cross-scene has been found, and the hash list has been expanded, the list fills with duplicate entries every ti",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1178",
+  "title": "[Feature] Add \"Trailer\" / \"abridged\" scene type",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Right now trailers and abridged scenes from major studios are not allowed. https://guidelines.stashdb.org/docs/scenes/create/pornhub-scenes/ However, I regularly find the ha",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1179",
+  "title": "[Feature] Stash-box gallery fingerprint searching",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Galleries lack fingerprints. **Describe the solution you'd like** Stash-box has no gallery fingerprint search API AFAIK. I think it should be added so that scrapers can work",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1194",
+  "title": "[Feature] (De-)Localize links / language",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It is very easy to accidentally submit localized links (language.example.com) to StashDB. See https://stashdb.org/edits/019f58c7-8914-77ad-86b6-0beec41cda65 for example. **D",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1197",
+  "title": "[Feature] Copy StashID to Clipboard button for scenes and performers",
+  "excerpt": "It can be a little cumbersome to copy the StashID from the URL bar, especially if you’re not on the main tab (e.g., `Scene Pairings` or `Fingerprints`) where there’s also a fragment at the end of the URL. I’d like to have a button to copy t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1205",
+  "title": "[Bug Report] Low quality Performer image prioritization",
+  "excerpt": "The intent of #1089 was to prioritize a 2:3 image aspect ratio. The issue with this change is that in some cases, very low resolution photos are chosen over more suitable ones. Aspect ratio cannot be the sole method of identifying a quality",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1244",
+  "title": "[RFC] Performer submission form regrouping and decluttering",
+  "excerpt": "Submission form is becoming too cluttered and related information is mixed up. For example; Appearance related fields should be grouped together (or merged with tattoos and piercings tab) When choosing gender, form rearranges automatically ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1276",
+  "title": "[Feature] Adding popularity fields to performers and scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Sorting by popularity has been added the stashdb, for performers and scenes. Which is great and interesting information. As I understand is, for scenes this is the total num",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1277",
+  "title": "[Bug Report] Unclear error message for email cooldown",
+  "excerpt": "**Describe the bug** Apparently Stash-Box has a five minute cooldown period before it will send another email to the same address. However it's not clear to use that's what's happening because the error message says \"pending-email-change\". ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#1279",
+  "title": "[RFC] Studio Founding and Closure Dates + Defunct Status",
+  "excerpt": "Draft: for discussion, not implementation-ready. ### Scope Studios currently don't have founding/closure dates. Occasionally, users have to vote \"no\" erroneous removals because the link isn't accessible anymore, mainly due to being unclear ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#161",
+  "title": "[Feature] Add the posibility to order performer images",
+  "excerpt": "Right now, images are solely sorted by the image resolution. This is undesirable, the resolution of an image does not determine its quality. Some images may have a high resolution, but are in fact grainy. Also, the primary image may be unfl",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#203",
+  "title": "[Feature] Add image categorization",
+  "excerpt": "To support user preferences and different use cases for images, we should add image categorization. * Resolution: 2/3, 16/9, etc. * Crop: Bust, full body, three quarters, etc. * Orientation: Front, side, back, etc.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#205",
+  "title": "[Feature] Add performer shoe size",
+  "excerpt": "Shoe size is a static property that should be relatively low effort to add. The only question is whether to pick US or EU sizes.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#206",
+  "title": "[Feature] Add penis size, for male and trans performers",
+  "excerpt": "Should function similarly to measurement fields in that it's hidden for \"incompatible\" genders.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#210",
+  "title": "[Feature] Make the hair color field a multi-value field",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A lot of performers use a different hair color throughout their career, but only allowing one option limits us to just one hair color. If Jane Doe has brown hair in three sc",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#211",
+  "title": "[Feature] Include image guidelines directly on Stashbox",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There are Stashbox guidelines for uploading images, but how many users will review them before adding or modifying content? Most probably won't. **Describe the solution you'",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#212",
+  "title": "[Feature] Add cropperjs to the add image section",
+  "excerpt": "It might further improve the quality of uploaded pics by including [cropperjs](https://github.com/fengyuanchen/cropperjs) directly into the upload image section. The cropperjs can be made to: - Be locked into a 3:2 aspect ratio - The croppe",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#213",
+  "title": "[Feature] Lock fields",
+  "excerpt": "Eventually Stashbox is going going to encounter cases of vandalism or a lot of good faith bad edits on the same recurring fields of data. While all edits require approval, the pending edits will still clutter the queue. I think this is wher",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#226",
+  "title": "[Feature] Amending edits",
+  "excerpt": "Implement the option to amend/update already-submitted edits, prior to their application/rejection. This will help immensely in resolving conflicts (when they are identified ahead of time), correcting mistakes (typos, missing/incorrect data",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#234",
+  "title": "[Feature] Multiple-select field values (breast type, ethnicity, nationality, etc)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A few fields would be more accurately represented with the capacity to have multiple values. This is related to #210 and expands upon it. **Describe the solution you'd like*",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#237",
+  "title": "[RFC] Performer Image Categorization",
+  "excerpt": "## Scope There is a significant desire to better organize performer images on stash-box, particularly by allowing images to be categorized by crop, pose, and state of dress. ## Problem Stash-Box performer images are currently organized by r",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#279",
+  "title": "[Feature] Ability to upload multiple images for studios",
+  "excerpt": "Studios can have multiple logos and sizes: landscape, square, wordmarks, favicon, etc. Some logos also change over time. Please add the ability to upload more than one image per studio. Bonus if the images can have labels, such as \"landscap",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#283",
+  "title": "[Feature] Add the ability to search through edits",
+  "excerpt": "**Is your feature request related to a problem?** Currently, it is not possible to search among the edits, except from using the basic filters. A simple text search would be useful to find edits of interest. **Describe the solution you'd li",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#299",
+  "title": "[Feature] Make it possible to mark performers as ambiguous",
+  "excerpt": "**Is your feature request related to a problem?** A lot of ambiguous performers (e.g. Maria) have bogus metadata attached to them, such as birthdate, eye color, images of disambiguated performers and so forth. **Describe the solution you'd ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#303",
+  "title": "[Feature] Disallow the submission of thumbnails generated by stash",
+  "excerpt": "**Is your feature request related to a problem?** Some of the scenes submitted by the democracy use the automatically generated thumbnails by stash, not the official thumbnail. **Describe the solution you'd like** Stash-box should detect th",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#304",
+  "title": "[Feature] Ability to remove incorrect fingerprints from scenes",
+  "excerpt": "**Is your feature request related to a problem?** Stash's tagger may match scenes incorrectly due to incorrect fingerprints associated with scenes on stash-box. **Describe the solution you'd like** Make it possible to remove incorrect hashe",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#318",
+  "title": "Update performer unique name constraint",
+  "excerpt": "The performers table's unique name constraint should be updated to account for `NULL` disambiguation, and gender: ```sql DROP INDEX \"index_active_performers_on_name\"; CREATE UNIQUE INDEX \"index_active_performers_on_name\" ON \"performers\" (\"n",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#334",
+  "title": "[Feature] dvd cover art archive ",
+  "excerpt": "from a post i did on stash app. tought i should post it here too open ps2 loader and its app oplmanager has had ps2 art work that is user submittable for downloadable for the ps2 app. with this app they have great art for this. and they are",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#335",
+  "title": "[Feature] Performer Alias Disambiguation",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Allow for performer alias disambiguation **Describe the solution you'd like** Utilize the same/similar UI and backend that things like tattoos (Location/Description ) use we",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#336",
+  "title": "[Feature] Allow a pending performer to be added to a scene (placeholder)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, I am using the tagger to find the scenes and opening the scene in stashdb if something doesn't look right. If i notice that the performer is not unique, this mean",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#337",
+  "title": "[Bug] Scene edits from favorited networks don't appear in the Edits view",
+  "excerpt": "**Describe the bug** Edits to scenes within a network (parent studio) that you have favorited don't appear in the 'Edits' (/edits) view when 'Favorites' is toggled on. You have to manually favorite every single sub studio. **To Reproduce** ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#338",
+  "title": "[RFC] Collect more info with file hashes (fingerprints)",
+  "excerpt": "# Collect more info with file hashes (fingerprints) ## Scope ### OHASHs OHASHs seem to have limited usefulness when it comes to identifying scenes after PHASHs were added, to make OSHASHs potentially more useful I would suggest tracking the",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#342",
+  "title": "[Feature] Cameo/NonSex tag or list for performers in scene",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many scenes have extra performers listed that don't participate in the main act. **Describe the solution you'd like** IAFD has NonSex tag added to performer that is not part",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#345",
+  "title": "[Feature] Alternate Titles",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many scenes have used alternate titles for various reasons. Updated by the original studio, re-releases from different distributors, remasters, DVD releases, etc. While the ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#364",
+  "title": "[Feature] List of filters for a user",
+  "excerpt": "Allow a user to set some filters so that scenes with those tags don't appear anywhere for the user.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#417",
+  "title": "[Feature] Gamification/badges",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** StashDB contains 350,000 scenes but still most of people's collections won't be matched. More engagement and submissions from users would help. **Describe the solution you'd",
+  "probe": ""
+ }
+]

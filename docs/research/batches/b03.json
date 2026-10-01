@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#2082",
+  "title": "Ability to upload favicons to studios",
+  "excerpt": "**Describe the solution you'd like** Add ability for users to upload a 16x16 favicon to each studio on the studio (edit) page. I think about two years ago there was talk about adding studio website favicons to Trizkat's repo. Either way, sc",
+  "probe": ""
+ },
+ {
+  "key": "stash#2085",
+  "title": "Link parts of a compilation to their original scenes with markers",
+  "excerpt": "If you have a compilation scene, it should do something similar to what it does during deduplication to check whether part of a scene appears in a different scene. It should automatically generate a marker that links the part from the compi",
+  "probe": ""
+ },
+ {
+  "key": "stash#2094",
+  "title": "Automatically delete duplicate scenes based on pre-defined rules",
+  "excerpt": "Automatically delete exact duplicates based on some rules like format, bitrate, frames per second, etc. For example I always keep 720p over other resolutions, and I prefer 30 fps and the closest bitrate to 2.3,",
+  "probe": ""
+ },
+ {
+  "key": "stash#2121",
+  "title": "Add markers tab to performer page",
+  "excerpt": "Not vital but it'd be cool if you could see all markers a performer is in directly from their page instead of having to search with filters on the markers page. ![Screenshot_20211214-220544_Chrome](https://user-images.githubusercontent.com/",
+  "probe": ""
+ },
+ {
+  "key": "stash#2122",
+  "title": "Filter Functionality UI/UX Refactor Discussion",
+  "excerpt": "# Reworking Filtering / Search / Sort - Faceted Navigation This will be a discussion around making adjustments and improvements to the interface for filtering the content that Stash displays. ## Abstract It is generally accepted that the cu",
+  "probe": ""
+ },
+ {
+  "key": "stash#2123",
+  "title": "Improve Gallery Tab in Scene Details Page",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The \"Gallery\" tab on an individual scene's detail page is not particularly useful in its current state, and could use a few tweaks. Multiple points below, bold used for conv",
+  "probe": ""
+ },
+ {
+  "key": "stash#2142",
+  "title": "Change thumbnail slider to button",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** - The thumbnail slider is inconsistent with the rest of the button group - The slider has no label, no tool tip, and no icon to signify what it does - The slider uses about ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2149",
+  "title": "Phash validation",
+  "excerpt": "**Describe the bug** We recently started using phashes for matching against StashDB. This has exposed bugs in the phash generation process. A broken or unparsable file will result in common phashes, which will then be matched to a random sc",
+  "probe": ""
+ },
+ {
+  "key": "stash#2152",
+  "title": "De-duplicating auto-taggable strings",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Autotag builds regexes of Tag names, Tag aliases, Studio names, Studio aliases, and Performer names. We currently do only the most rudimentary matching, which leads to probl",
+  "probe": ""
+ },
+ {
+  "key": "stash#2160",
+  "title": "Ability to flip/mirror scenes in player on horizontal axis",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The filters available for a video include scaling, rotating and changing the aspect ratio, but you cannot flip a video (ie, invert on its vertical axis) or mirror (ie, inver",
+  "probe": ""
+ },
+ {
+  "key": "stash#2165",
+  "title": "Auto-populate metadata between scene/gallery relationship",
+  "excerpt": "Most pro studios release a gallery/zip along with the scene. After populating the metadata onto the scene, and then assigning the relationship with the gallery, the metadata should automatically populate onto the gallery. The current workar",
+  "probe": ""
+ },
+ {
+  "key": "stash#2170",
+  "title": "Set Scene Image using linked gallery images",
+  "excerpt": "Allow the ability to set scene image by using the linked gallery images or being able to look up a gallery and choosing a photo as the scene image **Describe alternatives you've considered** save the photo on the drive and upload it (takes ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2178",
+  "title": "Add language selector to the setup process",
+  "excerpt": "First, congratulations on the version 0.12 !! It's a great release !! The setting's new interface is very nice ! **Is your feature request related to a problem? Please describe.** The first page we see should be the place where we can chang",
+  "probe": ""
+ },
+ {
+  "key": "stash#2182",
+  "title": "Save Filter as Tag",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** My stash is currently divided into tags and custom filters I've saved. For example, standard tags like \"MILF\" can be found under tags, while more complex combinations (e.g. ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2185",
+  "title": "Set Image for Performers via images/gallery",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I think it would be great if I could set a performer cover image from browsing my images/galleries, currently it's not convenient at all.. I used to right click an image and",
+  "probe": ""
+ },
+ {
+  "key": "stash#2186",
+  "title": "Show stats for selected items",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I sometimes would like to quickly see how much space a specific scene or bunch of scenes takes up, but it is frustrating to go into each scene and to the file tab every time",
+  "probe": ""
+ },
+ {
+  "key": "stash#2227",
+  "title": "\"Generate thumbnail\" should update scene cover image immediately",
+  "excerpt": "Some months ago I remember that this feature did work: Once I generated a scene thumbnail in the scene edit dialogue, the picture of the cover image was updated with the newly generated picture as soon as I pressed the save button. Now this",
+  "probe": ""
+ },
+ {
+  "key": "stash#2248",
+  "title": "Move logging prefix to its own HTML element",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When using the logging web UI on smaller screens it becomes cluttered, a simple solution for this is custom CSS however the prefix for the source of the log is embedded with",
+  "probe": ""
+ },
+ {
+  "key": "stash#226",
+  "title": "Custom scenes and playlists",
+  "excerpt": "Markers are nice and all, but it would be really nice to be able to create custom scenes. As for the name of these custom scenes, I think \"moments\" or \"clips\" would be pretty appropriate for this. How I imagine that this would work would be",
+  "probe": ""
+ },
+ {
+  "key": "stash#2276",
+  "title": "Handling multi-part scenes, \"part X\" field and/or UI indicator?",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Hi, I have been using stash for a few months and really appreciating the `file-scene-movie` workflow, but the absence of multi-part scene handling is difficult with the work",
+  "probe": ""
+ },
+ {
+  "key": "stash#2293",
+  "title": "Non-ASCII performers fail to be tagged with Auto Tag",
+  "excerpt": "**Describe the bug** Non-ASCII performers appear to invalid to the auto taggers and cause the tagger to ignore the paths - specifically Japanese/Chinese in my case. Other non-ASCII characters were not tested. **To Reproduce** Steps to repro",
+  "probe": ""
+ },
+ {
+  "key": "stash#2296",
+  "title": "Support for scene extras similar Plex's movie extras",
+  "excerpt": "It would be nice to see an option to associate extras such as trailers, or behind-the-scenes videos to a scene similar to what is currently being done in Plex.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2297",
+  "title": "Include studio value in Scrape query search string",
+  "excerpt": "Current behaviour: When you Start a Scrape query from scene Edit, only the titel is put into the search box. That gives too many hits. Feature request: Include the Studio name if already set before, to filter the hits.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2305",
+  "title": "Dedicated Saved Filter list for tagger view",
+  "excerpt": "The Tagging UI should have its own list of saved filters. Keep finding myself making more and more filters and its all for tagging a single tag at a time in bulk. It makes large jobs easier without thinking. But it also bloats the general m",
+  "probe": "C46"
+ },
+ {
+  "key": "stash#2318",
+  "title": "Add ability to ignore more fields when using scene tagger",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently when using tagger, unlike with the identiy task, users don't have the ability to tell tagger to auto ignore or merge certain fields like Title, Data, Details, or P",
+  "probe": ""
+ },
+ {
+  "key": "stash#233",
+  "title": "Support additional gallery archive formats (7z, gz, tar.gz)",
+  "excerpt": "Right now Stash has a great little feature for image galleries that can continue to remain within a .zip file container it would be useful and helpful to walk through `.gz` `.tar.gz` and primarily `.7z` and any other compressed container fo",
+  "probe": ""
+ },
+ {
+  "key": "stash#2337",
+  "title": "Support multiple users with configurable permissions",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I would like to have my videos at a safe place. So my idea is that I would create 2 accounts for myself; an admin and a user. User account credentials are saved in the brows",
+  "probe": ""
+ },
+ {
+  "key": "stash#2350",
+  "title": "Flag previously deleted files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I would like to see a feature that flags previously deleted files. **Describe the solution you'd like** If you import a folder with a bunch or random videos, delete a few th",
+  "probe": ""
+ },
+ {
+  "key": "stash#2359",
+  "title": "[Meta] Update Stash to be inline with Stash-Box",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Stash-Box has progressed beyond Stash in some areas and it would be Ideal to keep the structures of things like scenes in sync **Describe the solution you'd like** Addition ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2381",
+  "title": "Add DuplicateChecker context to on delete hook",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** when using `sceneDuplicateChecker` a user may want to migrate the metadata from a deleted scene, currently the only way to do this is manually **Describe the solution you'd ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2397",
+  "title": "Add additional metrics about video quality in Duplicate Checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When having multiple duplicates, it is hard to see, which one has the best quality, because of different encodings, reencodings, manipulations etc. Because of that, resoluti",
+  "probe": ""
+ },
+ {
+  "key": "stash#2399",
+  "title": "Scene Tagger - Add option to exclude specific metadata fields from search query",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In the tagger view when the query mode is set to use auto/metadata, the query is formed using all the scene metadata. A lot of the time the default query which includes date",
+  "probe": ""
+ },
+ {
+  "key": "stash#2420",
+  "title": "Collapse button for excluded tag patterns",
+  "excerpt": "I have three feature requests for the excluded tag patterns: 1. Can we get a \"collapse button\" for the \"excluded tag patterns\". In my case I am working with a lot of tags in the \"excluded tag patterns\". So this makes me to scroll down all t",
+  "probe": ""
+ },
+ {
+  "key": "stash#245",
+  "title": "Auto Tag \"extra settings\"",
+  "excerpt": "@WithoutPants did a wonderful job on the auto tagger and it fits exactly what i imagined. I was wondering if we could add \"enhancements\" under the settings tab: ### auto tagging (by Created_at) I don't feel i want to run the auto tagger on ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2463",
+  "title": "Improve readability when logging to shell",
+  "excerpt": "**Describe the bug** While running stash in terminal, the logs are not displayed as they used to be when running the .exe in older versions, and that make them more difficult to read. **To Reproduce** Steps to reproduce the behavior: 1. Run",
+  "probe": ""
+ },
+ {
+  "key": "stash#2464",
+  "title": "Change default setting of PHash generation to ON for Scans",
+  "excerpt": "# Change default setting of PHash generation to ON for Scans PHashes are a very important aspect of the connection between Stash-Box and Stash, new users seem to expect this functionality to work \"out of the box\" if PHahes were on by defaul",
+  "probe": ""
+ },
+ {
+  "key": "stash#2479",
+  "title": "Add tag to objects based on scraping method",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No **Describe the solution you'd like** When Identify video, add by sources the ability to add a tag (for exemple, when tag by URL, add a tag \"tagbyURL\", and when tag by sta",
+  "probe": ""
+ },
+ {
+  "key": "stash#2492",
+  "title": "Sort scenes by date when they were rated",
+  "excerpt": "If possible, can you please implement a like button and more importantly an option to view all the liked videos sorted by date they were liked.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2494",
+  "title": "Option to reset metadata on an object",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Sometimes when the identify process is run, an incorrect match is selected, resulting in incorrect covers/tags/studios etc. **Describe the solution you'd like** A button to ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2507",
+  "title": "Support performer alias(es) in Auto Tag task",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When Auto-Tagging Performers in Scenes, the system currently only uses the Performer Name field, and doesn't take the aliases into account. **Describe the solution you'd lik",
+  "probe": ""
+ }
+]

@@ -16,6 +16,7 @@ import (
 	"github.com/stashapp/stash/internal/dlna"
 	"github.com/stashapp/stash/internal/log"
 	"github.com/stashapp/stash/internal/manager/config"
+	"github.com/stashapp/stash/pkg/auth"
 	"github.com/stashapp/stash/pkg/ffmpeg"
 	"github.com/stashapp/stash/pkg/fsutil"
 	"github.com/stashapp/stash/pkg/job"
@@ -50,7 +51,7 @@ type Manager struct {
 	ReadLockManager *fsutil.ReadLockManager
 
 	DownloadStore *DownloadStore
-	SessionStore  *session.Store
+	SessionStore  session.Store
 
 	PluginCache  *plugin.Cache
 	ScraperCache *scraper.Cache
@@ -62,6 +63,104 @@ type Manager struct {
 
 	Database   *sqlite.Database
 	Repository models.Repository
+
+	// StashForge multi-user surface. UserStore is always present; Auth is
+	// non-nil only when the instance is in multi-user mode, which is what the
+	// GraphQL resolvers type-assert on rather than asking a config question a
+	// second time.
+	UserStore models.UserStore
+
+	// TOTPStore holds the 2FA secrets and the durable single-use record of spent
+	// steps. It is nil in single-user mode, where there is exactly one account
+	// and the config password is the only credential -- so every 2FA call site
+	// has to ask whether it is nil rather than assume it.
+	TOTPStore *sqlite.TOTPStore
+
+	// LibraryAccessStore decides who may read a library; a library with no grant
+	// row is private to its owner.
+	//
+	// This is the ADMINISTRATION surface -- granting, revoking, listing. The
+	// SERVING decision goes through MediaScopeStore below, which additionally
+	// resolves which library a row is in. Both are needed and they answer
+	// different questions: this one is "does this grant row exist", that one is
+	// "may this caller have this file".
+	LibraryAccessStore *sqlite.LibraryAccessStore
+
+	// LibraryStore is the `libraries` TABLE: create, delete, list, and the
+	// ownership checks around them. Separate from LibraryAccessStore above even
+	// though both are about libraries, because one is on the authentication path
+	// (a single indexed read per media request) and this one is on the setup
+	// path (a scan of one user's libraries). Merging them would make the media
+	// gate's dependency a struct that grew setup methods.
+	LibraryStore *sqlite.LibraryStore
+
+	// MediaScopeStore is what every media-serving route asks: which library is
+	// this row in, who owns it, and may this caller have it (M4 step 4.3,
+	// spec §6.4).
+	//
+	// The nil test for this is against the CONCRETE POINTER at the call site,
+	// not against an interface -- a nil *sqlite.MediaScopeStore in an interface
+	// is a non-nil interface, and `gate == nil` would be false (HANDOFF.md #9).
+	// allowMedia in internal/api/stashforge_media_gate.go does that, and refuses
+	// when it is nil rather than passing the request through.
+	MediaScopeStore *sqlite.MediaScopeStore
+
+	// InstanceModeStore holds the instance's private/contribute/public decision
+	// and whether the first-run wizard has been completed.
+	//
+	// Always non-nil after init, unlike TOTPStore: the mode gate applies to EVERY
+	// mode, and an instance with no mode store would have no way to record the
+	// decision that makes it startable.
+	InstanceModeStore *sqlite.InstanceModeStore
+
+	// ConsentStore is where a user's metadata-sharing decision lives.
+	//
+	// It is here because this is the FOURTH time a store in this package was
+	// fully implemented, fully tested, and read by nothing: a grep for
+	// NewConsentStore found exactly one hit, its own constructor. So the store
+	// was not a feature that was switched off -- it was a feature nothing
+	// called, which is the same defect as the gate being unreachable and it
+	// survives every test in the tree. The rule that catches it is the cheap
+	// one: grep the constructor in NON-TEST files and see who builds it.
+	//
+	// Always non-nil after init, because §6.1's default (an absent row means
+	// opted IN) is resolved through this store, so a nil one would leave the
+	// publish path unable to answer the question at all.
+	ConsentStore *sqlite.ConsentStore
+	Auth         *auth.SessionStore
+	AuthMode     auth.Mode
+
+	// StashForge collaboration surface. The collab stores are present on every
+	// instance, including a single-user one: a single-user instance still needs
+	// somewhere to put an edit proposal if it is ever read by a remote stash
+	// box, and refusing to construct the store means the GraphQL layer has to
+	// carry a nil check that exists for no reason. What a single-user instance
+	// must NOT get is the ability to self-accept, and that is enforced in
+	// collab's policy, not here.
+	CollabProposals *sqlite.EditProposalStore
+	CollabVotes     *sqlite.ProposalVoteStore
+	CollabTargets   *sqlite.CollabTargetStore
+	// CollabStore is the adapter from the row stores to collab.ProposalStore.
+	// It is a separate field from CollabProposals because they are different
+	// interfaces over the same table, and reaching for the wrong one is a
+	// compile error either way.
+	CollabStore *sqlite.CollabProposalStore
+
+	// CollabReputation is the adapter from the row store to
+	// collab.ReputationStore, for the same reason CollabStore exists: they are
+	// different interfaces over different tables, and reaching for the wrong one
+	// should be a compile error.
+	CollabReputation *sqlite.CollabReputationStore
+
+	// PersonClusters is the identity-clustering store: clusters, their members,
+	// and the append-only record of who named them.
+	//
+	// On the manager rather than constructed per-resolver for the same reason
+	// as the stores above -- the store reaches the database through the package
+	// global, so there is no connection to own and nothing to inject. What the
+	// manager owns is the one instance, so a resolver cannot end up with two
+	// stores that disagree about what exists.
+	PersonClusters *sqlite.ClusterStore
 
 	SceneService   SceneService
 	ImageService   ImageService
@@ -77,6 +176,29 @@ func GetInstance() *Manager {
 	if instance == nil {
 		panic("manager not initialized")
 	}
+	return instance
+}
+
+// MaybeGetInstance returns the Manager, or nil when the process has none.
+//
+// # WHY THIS EXISTS
+//
+// GetInstance PANICS when there is no instance, which is the right behaviour
+// for code that cannot work without one -- a handler deep in a request that
+// assumes a running server. It is the WRONG behaviour for a security control
+// that is supposed to fail closed, because a panic is not a refusal: it is an
+// uncontrolled exit, it is recovered by the middleware into a 500, and in a
+// goroutine it takes the process down.
+//
+// M4's media gate hit exactly this. It read
+// `if mgr == nil || mgr.MediaScopeStore == nil` and the first clause was dead
+// code: GetInstance had already panicked. A guard that cannot be reached looks
+// exactly like a guard that works, which is why it needs a test that calls the
+// function with no Manager -- and that test is the one that found this.
+//
+// So the rule is: a refusal path asks MaybeGetInstance. Everything else asks
+// GetInstance, because everything else genuinely cannot proceed.
+func MaybeGetInstance() *Manager {
 	return instance
 }
 

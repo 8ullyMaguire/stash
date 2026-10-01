@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#1446",
+  "title": "Allow in-app renaming of scrapers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As you start adding more and more scrapers, it becomes very difficult remembering which scrapers focus on what. For example this screenshot is from the Create Performer page",
+  "probe": ""
+ },
+ {
+  "key": "stash#1459",
+  "title": "Add multiple new movies with url list",
+  "excerpt": "Think we need the ability to quickly add multiple movies just from urls. This way the user can easily get a list of movies and import it while having stash scrape the metadata and accept right away, Would also work great with #1458 to corre",
+  "probe": ""
+ },
+ {
+  "key": "stash#1460",
+  "title": "Ability to add a tag to a specific performer on object pages instead of to the object itself",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Right now all tags added to a scene or image universally apply to that media. If two Performers are in the scene / image though, both shouldn’t be getting the same tags. For",
+  "probe": ""
+ },
+ {
+  "key": "stash#1463",
+  "title": "Ability to map scraped tag to multiple Stash tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** ~~It would be useful in some cases for tags to share an alias, When scraping tags you can run into the case where a foreign might represent multiple local tags in stash, in ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1464",
+  "title": "Feed / Editing View for Collections (Galleries, Images, Scenes, etc)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Right now we have a few different views for collections: **Grid** - Good for an overview of content but not very useful for editing and metadata is ambiguous (only counts, n",
+  "probe": ""
+ },
+ {
+  "key": "stash#1495",
+  "title": "Split performer MEASUREMENTS value into distinct BUST, CUP, HIP, and WAIST values",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently a performer's _measurement_ value is contained within a single string variable. This makes specific filtering of a performer's measurements (bust, hip, or waist) v",
+  "probe": ""
+ },
+ {
+  "key": "stash#1508",
+  "title": "Support Multiple Sorts and apply them consecutively",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The addition of saved filters is gamechanging. Now that it’s really quick to pull up a predefined setup, the missing piece of the puzzle is sorting. You can currently only u",
+  "probe": ""
+ },
+ {
+  "key": "stash#1545",
+  "title": "Organize Scene Filter Dropdown with added category sections",
+  "excerpt": "# Title *### Scope* Refactoring the dropdown list for the scene filter ## Long Form ![Screenshot 2021-07-02 01 05 28](https://user-images.githubusercontent.com/3514095/124223471-c6026d80-dad1-11eb-81af-21a496cedec9.png) ![Screenshot 2021-07",
+  "probe": ""
+ },
+ {
+  "key": "stash#1580",
+  "title": "DLNA folders Recently added, Recently viewed, Unplayed",
+  "excerpt": "**Describe the solution you'd like** Would like to see more DLNA folders added. Namely Recently added, Recently viewed and Unplayed, sorted accordingly. (time added, time viewed and I guess time added for Unplayed too?) **Additional context",
+  "probe": ""
+ },
+ {
+  "key": "stash#1585",
+  "title": "Convert thumbnails to support progressive image loading or support lazy loading",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When Stash is opened, and the images haven't been cached, pages containing multiple images load images piece by piece, which is not in compliance with standards of today's w",
+  "probe": ""
+ },
+ {
+  "key": "stash#1586",
+  "title": "Folder View mode for browsing",
+  "excerpt": "I was wondering if there was a folder view feature in stash? I have downloads in folders that are already organized. Can I view the scenes by foler saved on the hard drive?",
+  "probe": ""
+ },
+ {
+  "key": "stash#1599",
+  "title": "Ability to Merge existing tags in Scene Scrape Results modal",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When scraping scenes with existing tags if the user wants to incorporate any existing tags into the scraped scene tag results their only option is to manually input each of ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1624",
+  "title": "Add oragnized flag to groups (aka movies)",
+  "excerpt": "Would be neat to have a completed movie flag the user can manually check and filter for. Allowing the user to see what movies is missing scenes and so on. This will also go great with a feature stash-box movie support aswell. For example th",
+  "probe": ""
+ },
+ {
+  "key": "stash#1652",
+  "title": "Improve/modernize consistency of formatting in scene detail",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The cosmetic formatting of the details lacks consistency: The date section is larger than the other values and is the only value that lacks a heading; the headings that do e",
+  "probe": ""
+ },
+ {
+  "key": "stash#1656",
+  "title": "Ability to mark scenes as not duplicate for scene duplicate checker",
+  "excerpt": "In the duplicate checker, let me mark two scenes as not duplicate, and do not show them again.",
+  "probe": ""
+ },
+ {
+  "key": "stash#1659",
+  "title": "Add a Manga/Doujin section",
+  "excerpt": "Clarification: I've been using Manga and Doujin interchangeably. I would like to see a dedicated manga section. Currently it is not convenient to view manga using the gallery section, as my image galleries and manga galleries mix together a",
+  "probe": ""
+ },
+ {
+  "key": "stash#1680",
+  "title": "Calculate automatic ratings for Performers, Tags & Groups based on related content",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Ratings for Performers, Studios, Movies and Tags based on the average ratings of the scenes. **Describe the solution you'd like** Only scenes that have a rating (or have bee",
+  "probe": ""
+ },
+ {
+  "key": "stash#1695",
+  "title": "Display plugin errors as toasts",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When a plugin (Hook or Normal) return a error (Using `error` JSON), Stash should show this message in the interface (like scraper do). Atm to know if a plugin fail to do a t",
+  "probe": ""
+ },
+ {
+  "key": "stash#1723",
+  "title": "Show Breadcrumb for Nested Tags",
+  "excerpt": "### Is your feature request related to a problem? Please describe. While the idea of nested tags are great, the current implementation doesn't add much use over non-nested tags. When tagging something there's no indication that a tag is nes",
+  "probe": ""
+ },
+ {
+  "key": "stash#1732",
+  "title": "Tag tree view mode for Nested Tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When viewing new nested tags, you don't know what our tag structure looks like which can make it difficult to edit. **Describe the solution you'd like** I propose to add \"ta",
+  "probe": ""
+ },
+ {
+  "key": "stash#1790",
+  "title": "Generalized support for external IDs",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Stash currently only supports the ability to store external ids from stash-boxes, this feature request is to allow for the `stash_id` concept to be generalized to allow for ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1811",
+  "title": "Faster/more intuitive UI/UX for adding to galleries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When comparing Stash to other tube sites or media sites in general e.g. YouTube, Spotify, etc - they all tend to have a quick and easy UX for adding content to personal form",
+  "probe": ""
+ },
+ {
+  "key": "stash#1828",
+  "title": "Getting Phash with a hook plugin",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have a hook plugin (`Scene.Create.Post`) that search on stashbox when scanning file , the problem is Phash is not generate when the plugin execute. So my stashbox search o",
+  "probe": ""
+ },
+ {
+  "key": "stash#185",
+  "title": "Query syntax",
+  "excerpt": "Feature enhancement request to add basic query syntax to searches. Query syntax would be an extension of the filter functionality deployed directly in the search boxes. Query syntax could add the ability to use operators (logical, text, str",
+  "probe": ""
+ },
+ {
+  "key": "stash#1863",
+  "title": "Child studios should Inherit posters from their parent",
+  "excerpt": "Child studios should automatically inherit the poster from its parent studio, that is, when the child studio has no poster set. So, in a scene card, when no poster has been set for the child studio, the parent studio emblem will appear inst",
+  "probe": ""
+ },
+ {
+  "key": "stash#1867",
+  "title": "Duplicate Checker tool for Images",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There doesn't seem to be any kind of UI for handling duplicate image files which prevents graceful organization, especially when adding files of improved resolution. **Descr",
+  "probe": ""
+ },
+ {
+  "key": "stash#1896",
+  "title": "Remember sort/filter settings when navigating outside the page",
+  "excerpt": "Every time you enter a particular section (scenes, images, movies, etc...) the sort and filter criteria reset to default. This can be frustrating having to reset this all the time to whatever one was working with before. eg: Filter all the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#1914",
+  "title": "Option to display linked scene title instead of gallery title",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** my gallery names are very generic and do not correlate with the scenes that are linked to them. renaming every gallery with the same name of the scenes takes some time **Des",
+  "probe": ""
+ },
+ {
+  "key": "stash#1924",
+  "title": "i18n: Streamline Singular/Plural Nouns",
+  "excerpt": "<!-- Update or delete the title if you need to delegate your title gore to something # Title *### Scope* <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind of summary so its easier for peopl",
+  "probe": ""
+ },
+ {
+  "key": "stash#1939",
+  "title": "Ability to export selected scenes to a .m3u playlist file",
+  "excerpt": "It would be nice to have the option to export selected or currently filtered scenes (or movies) to an .m3u playlist, which could then be saved to the desired location and opened by an external media player. In terms of the UI, this could po",
+  "probe": ""
+ },
+ {
+  "key": "stash#1961",
+  "title": "Performers sub-page and performer cards include objects from other studios instead of only current studio",
+  "excerpt": "The \"performers\" subtab of a Studio page currently considers ALL media from a performer, even from other studios. The Performer preview cards should display only media from the current studio, and filters should only consider media from tha",
+  "probe": ""
+ },
+ {
+  "key": "stash#1981",
+  "title": "Update performer scraper interface to parity with scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There is currently a divide between the interface used for scene scraping and performer scraping, scene `search` scrapers will show a preview of the scrape data so that the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2032",
+  "title": "Set tag image based on a marker image or scene image",
+  "excerpt": "It will be nice If I was able to set the tag image based on a marker image or scene image. This can be done by allowing a third and fourth option on \"Set image...\", one being \"From scene\" and the other \"From marker\". then I am able to searc",
+  "probe": ""
+ },
+ {
+  "key": "stash#2045",
+  "title": "Scraper option to choose the encoding of the URL",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I want to made a performer scraper for `seesaawiki.jp`. When using `performerByName`, stash will use the wrong encoding so the search don't work. **Describe the solution you",
+  "probe": ""
+ },
+ {
+  "key": "stash#2048",
+  "title": "Custom URL mapping for a single URL",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm working on adding support for deovr (a vr video player) in a python based plugin that generates some json files. Deovr looks for a json file /deovr from the base url of ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2049",
+  "title": "Request for Submissions: Stash Logo",
+  "excerpt": "# Stash Logo ## Scope and Requirements I would like to request candidates for a replacement Stash logo. Our current logo is used inconsistently and is easily confused with other meanings and projects. We want to refine our logo so that we h",
+  "probe": ""
+ },
+ {
+  "key": "stash#2055",
+  "title": "Extend Auto Tag task sources by title and description",
+  "excerpt": "I would love to have the option to extend the auto tagging source by title and description. A lot of times there are very comprehensive scene titles related to scene content and also tags. Another source is the description text. Often I fin",
+  "probe": ""
+ },
+ {
+  "key": "stash#2067",
+  "title": "Scan task button label change",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There seems to be contention about the Task's scan subsection, so I'm not sure what the future operation of the Scan button will be. However based on the iterations I've see",
+  "probe": ""
+ },
+ {
+  "key": "stash#2078",
+  "title": "Improve and add more classnames to elements in card-sections",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Custom CSS styling could be made easier if more elements had class names. **Describe the solution you'd like** Add class names to elements in the `card-section`'s. - make it",
+  "probe": ""
+ },
+ {
+  "key": "stash#2080",
+  "title": "Backup functionality should not work concurrently to other tasks",
+  "excerpt": "The backup functionality should lock / close the database before starting, and should not be allowed to execute if there are any tasks on the queue.",
+  "probe": ""
+ }
+]

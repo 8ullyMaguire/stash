@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#2511",
+  "title": "Create virtual files for compilations",
+  "excerpt": "If you have a scene that is a compilation and you have the source of the clips in the compilation it would be nice to substitute the compilation for a virtual file that had the links, time and duration to mark the start and end of the clip ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2521",
+  "title": "Ability to bulk submit scenes to stash-box",
+  "excerpt": "Currently you can only submit one scene at a time to stash-box. Being able to select each scene from the main scene page then be able to submit those selected to drafts on stash-box so you can work on them there. Would save a lot of time in",
+  "probe": ""
+ },
+ {
+  "key": "stash#2523",
+  "title": "Ability to change default quality when using live transcode",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When playing a video from a device, the quality needs to be set every time a new video is played. **Describe the solution you'd like** An option in settings that can allow u",
+  "probe": ""
+ },
+ {
+  "key": "stash#2528",
+  "title": "Show badge on Performer card in Scene Details Page if performer has StashID",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When ready to submit scene to a stash-box, it is not clear if performers have StashIDs and thus need to be submitted before scene. **Describe the solution you'd like** Addin",
+  "probe": ""
+ },
+ {
+  "key": "stash#2538",
+  "title": "Support mobile controls inside lightbox",
+  "excerpt": "### Describe the feature you'd like On mobile devices, the gallery lightbox should respond to standard mobile controls, commonly referred to as \"touch gestures\" or \"swipe navigation.\" Currently, Stash uses desktop image controls even in mob",
+  "probe": ""
+ },
+ {
+  "key": "stash#2540",
+  "title": "Image HTTP request referrer behavior",
+  "excerpt": "<!-- Update or delete the title if you need to delegate your title gore to something --> # Improving image scraping by changing HTTP request referrer behavior ## Scope <!-- describe the scope of your topic and your goals ideally within a si",
+  "probe": ""
+ },
+ {
+  "key": "stash#2542",
+  "title": "Allow `Esc` key to close any and all modal windows",
+  "excerpt": "Stash contains many areas that use pop-up modal windows, from the settings page to scraping functionality, these modal windows can only be closed by clicking a UI element, typically either the 'cancel' button or an 'x' button. **Describe th",
+  "probe": ""
+ },
+ {
+  "key": "stash#2548",
+  "title": "Select .zip files in Selective Scan",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When performing a Selective Scan, you can select an individual directory in a Library however you cannot select a .zip file. **Describe the solution you'd like** Select a .z",
+  "probe": ""
+ },
+ {
+  "key": "stash#260",
+  "title": "Use markers to create scene chapters/bookmarks",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There is currently no means to visually identify and quickly navigate to the different scenes within a full length movie (aka bookmarks or chapters as they are commonly call",
+  "probe": ""
+ },
+ {
+  "key": "stash#2626",
+  "title": "Add Missing Scraper Fields",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** [Not all available fields can be filled with scrapers](https://github.com/stashapp/stash/blob/develop/ui/v2.5/src/docs/en/ScraperDevelopment.md#object-fields). Especially fo",
+  "probe": ""
+ },
+ {
+  "key": "stash#2633",
+  "title": "Tag edit option to hide tag from dropdown lists",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** More of us are are organizing tags into nested hierarchies, but some of the parent tag categories aren't necessarily tags that are applied to content. They are simply catego",
+  "probe": ""
+ },
+ {
+  "key": "stash#2636",
+  "title": "Backup the Stash config",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I run Stash as a service using NSSM (Non-Sucking Service Manager). Coinciding with a Windows update the config file was reset. database, plugins_path, scrapers_path was set ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2645",
+  "title": "Custom playback speed (or just bring 4x back)",
+  "excerpt": "I'm probably the only person who misses the 4x playback speed option, but if there was a way to customize the set playback speeds so I could get it back, that would be wonderful. Either that, or just adding 4x back would be wonderful. Thank",
+  "probe": ""
+ },
+ {
+  "key": "stash#2647",
+  "title": "Ability to create a playlist from multiple markers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Cumpilations, best of etc could be made pretty easily with playlists for markers **Describe the solution you'd like** Adding end time for markers and adding playlists, where",
+  "probe": ""
+ },
+ {
+  "key": "stash#2651",
+  "title": "Ability to Merge existing Performers in Scene Scrape Results modal",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Frequently I will Bulk edit the details of a collection of similar scenes with common details like Studio/Performer/Tags etc. and then scrape each scene individually to add ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2662",
+  "title": "Create menu item for Interactive Options in settings",
+  "excerpt": "**Is your feature request related to a problem?** I have the feeling that the interactive options are hidden. For example, if you want to quickly change the funscript offset, you have to go to Interface and then go all the way down to find ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2679",
+  "title": "Option to choose Studio during selective scan",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In order to align with Stash's use of Studios to group Scenes I typically create a hierarchy of directories where one of the parent folders is the Studio of the scene. When ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2680",
+  "title": "Option to Scope Scene Filename Parser to Specific Studio",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When using the \"Scene Filename Parser\" tool it will by default search the entire library with only the \"Ignore organized scenes\" option available to limit the scope of the s",
+  "probe": ""
+ },
+ {
+  "key": "stash#2719",
+  "title": "Integrated way to import embedded metadata from JPEG",
+  "excerpt": "Its extra work to add image metadata if the images (jpegs) already have embeded metadata. It would be cool if Stash could scrape the data directly from the EXIF\\IPTC data, *specifically tags and comment\\title, and maybe star rating? if avai",
+  "probe": ""
+ },
+ {
+  "key": "stash#2722",
+  "title": "Gallery Filename Parser tool",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** If a naming convention is used for galleries, there is no possibility within Stash to parse gallery filenames similar to the scene filename parser. In particular this is ann",
+  "probe": ""
+ },
+ {
+  "key": "stash#2723",
+  "title": "Create second database within the program and fast switch between databases",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Create a second database within the program to separate collections. It seems possible by copying manually the program directory in explorer but the more elegant solution wo",
+  "probe": ""
+ },
+ {
+  "key": "stash#2734",
+  "title": "Achievements",
+  "excerpt": "To implement a framework to display community shared user-created achievements for individual performer pages, individual studio pages, individual tag pages, individual scene pages, and the statistics page ala AnalVids.com achievements as s",
+  "probe": ""
+ },
+ {
+  "key": "stash#2736",
+  "title": "Allow creating a tag from anywhere tags can be added",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When adding tags from the Edit pane of the Player view, if the user types a tag that doesn't exist, a dropdown option appears to create the tag globally and also add it the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2742",
+  "title": "Studio logo on cards visibility options",
+  "excerpt": "There has been discussion in the chat UI channel about visibility issues with studio logos being displayed on the card view. There are situations where the logo is unreadable because the background scene image is the same color as the logo.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2747",
+  "title": "Jellyfin-like external remote player support",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Playing video in a browser is very inconvenient and often requires server-side transcoding, which is extremely inefficient. So native player is preferable for video playback",
+  "probe": ""
+ },
+ {
+  "key": "stash#2762",
+  "title": "Ability to manually pause interactive funscript from the scene player",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** After climax, script continues and it isn't the best feeling in the world. **Describe the solution you'd like** Just like SLR recently added, there's buttons now to pause sc",
+  "probe": ""
+ },
+ {
+  "key": "stash#2765",
+  "title": "Lightbox image changes on rating/o-counter value change",
+  "excerpt": "Split from #2730 Also, if you order the images by o-counter, the image changes when the o counter value is changed from the lightbox. Similar issue for ratings.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2770",
+  "title": "Inject metadata into raw streams (for external players)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When opening Stash raw streams in external players, there is no metadata displayed. Just `stream` (last part of URL) instead of any name is displayed for each scene. Metadat",
+  "probe": ""
+ },
+ {
+  "key": "stash#2773",
+  "title": "Stash is unaware when an image has been replaced if the name is the same",
+  "excerpt": "**Describe the bug** Stash is not aware that a file has changed if the file that replaced it has the same name. I came across this when I was cleaning up some actual duplicates from a gallery, and then renamed the files to be sequentially n",
+  "probe": ""
+ },
+ {
+  "key": "stash#2780",
+  "title": "Transfer metadata between linked galleries and scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Usually - if there are galleries and scenes linked together - they will have the same metadata. There is no easy way to \"link\" or at least copy the metadata - especially the",
+  "probe": ""
+ },
+ {
+  "key": "stash#2808",
+  "title": "Add additional flag to objects to safeguard against deleting favorite content",
+  "excerpt": "Think there should be an extra verification step on deleting content/scenes based on the content the user likes. This should just be an extra pop-up to confirm it compared to normal deletion so you don't delete things you might like. It sho",
+  "probe": ""
+ },
+ {
+  "key": "stash#2814",
+  "title": "Follow XDG directory specifications",
+  "excerpt": "There was [an issue](https://github.com/stashapp/stash/issues/287) opened for this already, and it was closed because > Let's bring the number of open issues down and close this. The result is that stash still doesn't follow the xdg specifi",
+  "probe": ""
+ },
+ {
+  "key": "stash#2816",
+  "title": "Query in Scene Tagger using StashID",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It appears that the Scene Tagger view does not query Stash-Boxes using attached StashIDs. The \"Scrape All\" button uses a fingerprint lookup (same as the \"Scrape by fragment\"",
+  "probe": ""
+ },
+ {
+  "key": "stash#2824",
+  "title": "Slow scanning with huge amounts of videos",
+  "excerpt": "With huge amounts of videos, scanning local video content gets slower and slower. General info: Windows 10 Stash v0.16.1 stash-go.sqlite size: ~110MB DB contents: ~25k scenes, ~200k images stash folder location: ssd attached via smb Accordi",
+  "probe": ""
+ },
+ {
+  "key": "stash#2833",
+  "title": "`e` keyboard shortcut collides with subpages that use the same shortcut",
+  "excerpt": "**Describe the bug** Trying to use `E E` to edit a tag and it only works every other time When it doesnt work, going back to the tag page and re-entering it make it work **To Reproduce** Open a tag, type E E, nothing happens **Expected beha",
+  "probe": ""
+ },
+ {
+  "key": "stash#2836",
+  "title": "Add O-Counter to Galleries and allow Sorting Galleries by O-Counter",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently there is no way to add O-Counter for Galleries. O-Counter is added directly for Images, which does not achieve the same goal. **Describe the solution you'd like** ",
+  "probe": ""
+ },
+ {
+  "key": "stash#284",
+  "title": "Navigation using next/previous buttons for performers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Scrolling through performers from the performers page would be an added ux convenience per [Pornhub's performer pages previous/next triggers](https://www.pornhub.com/pornsta",
+  "probe": "C62"
+ },
+ {
+  "key": "stash#2858",
+  "title": "Save selected scraper inside saved filter on scene tagger",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Saved filters are quite useful for scraping and organizing new content, since one can save a view (e.g. tagger view) besides filters. But scraper source isn't saved, and one",
+  "probe": ""
+ },
+ {
+  "key": "stash#2866",
+  "title": "Show full path for scenes in scene tagger",
+  "excerpt": "Some of the data that is useful for tagging/scraping/searching can be contained in the path (e.g. studio name, or performer name) instead of the file name. **Describe the solution you'd like** It would be nice to see not only the file name ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2871",
+  "title": "Move task queue to a nav bar icon popover",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When there is an active task it is symbolized by a rotating settings spinner icon on the main navigation menu. However it requires the user to navigate away from their page ",
+  "probe": ""
+ }
+]

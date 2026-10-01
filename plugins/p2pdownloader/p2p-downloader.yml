@@ -1,0 +1,50 @@
+# The plugin's manifest: a .yml file in the configured plugins path.
+#
+# # WHY .yml AND NOT source.json
+#
+# Because that is what `pkg/plugin/plugins.go:141` reads: it walks the plugins
+# directory and loads every file whose extension is `.yml`. A `source.json` is
+# not read, is not an error, and is silently ignored -- so a manifest in the
+# wrong format is a plugin that never loads and gives no reason why.
+#
+# The plan originally specified `source.json` with a JSON body. That is the
+# shape stash-box uses for scraper configurations, not what the plugin host
+# parses, and it was corrected by reading pkg/plugin/config.go.
+#
+# # THE `id` IS NOT IN THIS FILE, AND THAT IS THE PART THAT BITES
+#
+# `plugin.Config.id` is an UNEXPORTED field, populated from the FILENAME stem
+# (plugins.go sets it when it loads the file). There is no way to set it from the
+# document, and no field to declare it under -- so a `id: p2p-downloader` line
+# here would be parsed by the YAML decoder into nothing at all, and the plugin's
+# identity would come entirely from this file being NAMED `p2p-downloader.yml`.
+#
+# A manifest carrying an `id` is therefore not an error and not a warning. It
+# looks right, it is right in spirit, and it has no effect. This file is named
+# after the plugin instead, which is the enforcement.
+#
+# # WHY interface: rpc
+#
+# pkg/plugin/config.go:355 offers three:
+#
+#   js   — goja, i.e. JavaScript. Cannot host a BitTorrent client.
+#   raw  — a binary that runs and exits. No DHT, no inbound connections, and a
+#          downloader that exits between requests cannot hold a peer list.
+#   rpc  — launched once, long-lived, over net/rpc/jsonrpc on stdin/stdout.
+#
+# rpc is the only one that fits, and it is a property of BitTorrent rather than a
+# preference. The process must stay up to keep a DHT table and its connections.
+#
+# # WHY exec NAMES THE BINARY WITHOUT A PATH
+#
+# The host searches $PATH and then the plugins directory (config.go:44), so
+# "./stash-plugin-p2pdownloader" would work and would also break on Windows,
+# where the extension is not written. Naming it bare is what the host documents.
+
+id: p2p-downloader
+name: P2P Downloader
+description: Fetches files over BitTorrent and ed2k into your library
+version: 1.0.0
+interface: rpc
+exec:
+  - stash-plugin-p2pdownloader

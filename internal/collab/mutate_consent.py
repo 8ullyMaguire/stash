@@ -1,0 +1,734 @@
+#!/usr/bin/env python3
+"""Mutation check for the consent guard (M3 step 3.1).
+
+The plan's warning is the reason this file exists:
+
+    This is the milestone where a mistake is irreversible -- a published private
+    library cannot be unpublished from users' copies. Mutation-check the opt-out:
+    make ShareOptedIn always return true and confirm
+    TestPublish_RefusedWhenOptedOut fails.
+
+So the mutation that matters most is the one that silently turns every user into
+a consenting one. If that mutation SURVIVES, this harness is telling you
+nothing about the guard, and the number below is decoration.
+
+Every mutation here must be KILLED. There is no EXEMPT list, and that is
+deliberate: a survivor in this file is either a missing test or a bug, and both
+are worth stopping for.
+"""
+
+import atexit
+import pathlib
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+CONSENT = ROOT / "internal/collab/consent.go"
+EXPORTER = ROOT / "internal/collab/exporter.go"
+MODE = ROOT / "internal/collab/mode.go"
+TOTP = ROOT / "internal/collab/totp.go"
+FEDERATION = ROOT / "internal/collab/federation.go"
+AUTH_TOTP = ROOT / "pkg/auth/totp.go"
+AUTH_SESSION = ROOT / "pkg/auth/session.go"
+API_WIZARD = ROOT / "internal/api/stashforge_wizard.go"
+API_POSTURE = ROOT / "internal/api/server.go"
+
+# Which file each mutation applies to, and the test selection that must kill it.
+AUTH_TEST_RE = ("Wiring_|Login_|TOTP")
+
+TEST_RE = ("Consent|Disclosure|PublishedField|SetConsent|Export|Publish|Payload|"
+           # M4 step 4.2: the replay guard, the counter, and the truncation.
+           "TOTP|"
+           # M4 step 4.4: the wizard gate.
+           "RequireWizard|WizardIncomplete|"
+           "SubmissionID|AssertNo|Federation|Commons|SignSubmission|MakeSubmission|"
+           "SummarizePeers|RedactPeerKey|"
+           # M4: the mode rules. CheckStartup and the media refusal, the two
+           # fail-closed defaults, and RequestScheme.
+           "Mode|CheckStartup|MediaNotFound|RequestScheme")
+
+# (file, label, old, new) -- each removes or inverts one safety property.
+CONSENT_MUTATIONS = [
+    (
+        "absent row treated as opted OUT (the default inverted)",
+        "		return true, nil\n	}\n	return choice == ChoiceOptedIn, nil",
+        "		return false, nil\n	}\n	return choice == ChoiceOptedIn, nil",
+    ),
+    (
+        "opt-out user reported as opted in (the reverse)",
+        "	return choice == ChoiceOptedIn, nil",
+        "	_ = choice\n	return true, nil",
+    ),
+    (
+        "a failed consent query is swallowed and reads as opted in",
+        "	if err != nil {\n		return \"\", false, fmt.Errorf(\"querying consent for user %d: %w\", userID, err)\n	}",
+        "	if err != nil {\n		return ChoiceOptedIn, true, nil\n	}",
+    ),
+    (
+        "a failed consent query is swallowed and reads as opted OUT",
+        "	if err != nil {\n		return \"\", false, fmt.Errorf(\"querying consent for user %d: %w\", userID, err)\n	}",
+        "	if err != nil {\n		return ChoiceOptedOut, true, nil\n	}",
+    ),
+    (
+        "corrupt metadata_share defaults to opted in instead of erroring",
+        "	if !parsed.Valid() {\n		return \"\", false, fmt.Errorf(\"consent for user %d has unknown metadata_share %q\", userID, choice)\n	}",
+        "	if !parsed.Valid() {\n		return ChoiceOptedIn, true, nil\n	}",
+    ),
+    (
+        "opted-out user is re-prompted (a prompt is a Share button)",
+        "	if choice == ChoiceOptedOut {\n		// Declined. Stays declined, and stays un-prompted, until a human says\n		// otherwise. See the comment above.\n		return false, nil\n	}",
+        "	if choice == ChoiceOptedOut {\n		return true, nil\n	}",
+    ),
+    (
+        "disclosure staleness inverted, so a stale answer looks current",
+        "	return version < current, nil",
+        "	return version >= current, nil",
+    ),
+    (
+        "an invalid choice is written instead of refused",
+        "	if !choice.Valid() {\n		return fmt.Errorf(\"consent choice %q is not one of %q or %q\", choice, ChoiceOptedIn, ChoiceOptedOut)\n	}",
+        "",
+    ),
+    (
+        "never-asked user is not prompted",
+        "	if !found {\n		return true, nil\n	}\n	if choice == ChoiceOptedOut {",
+        "	if !found {\n		return false, nil\n	}\n	if choice == ChoiceOptedOut {",
+    ),
+]
+
+
+def run(cmd, cwd):
+    return subprocess.run(
+        cmd, cwd=cwd, capture_output=True, text=True, shell=isinstance(cmd, str)
+    )
+
+
+EXPORTER_MUTATIONS = [
+    (
+        "exporter: an undisclosed field is passed through",
+        "		if allowed[k] {\n			out[k] = v\n		}",
+        "		_ = allowed\n		out[k] = v",
+    ),
+    (
+        "exporter: the dry-run default is flipped to a real publish",
+        "		// The first export after consent writes to disk and sends nothing\n		// (spec §6.3). The caller may clear this once the user has seen the\n		// disclosure and asked for a real publish.\n		DryRun: true,",
+        "		DryRun: false,",
+    ),
+    (
+        "exporter: a path-shaped value is no longer refused",
+        "	if i := strings.Index(v, \"/\"); i >= 0 && i < len(v)-1 {",
+        "	if i := -1; i >= 0 && i < len(v)-1 {",
+    ),
+    (
+        "exporter: a non-content fingerprint type is published",
+        "		if !allowedFingerprintTypes[k] {\n			continue\n		}",
+        "",
+    ),
+    (
+        "exporter: the submission id ignores the entries (content-blind)",
+        "		fmt.Fprintf(h, \"entry=%s/%d\\n\", e.TargetType, e.TargetID)",
+        "		_ = e",
+    ),
+]
+
+FEDERATION_MUTATIONS = [
+    (
+        "federation: the constant-time compare becomes a byte-by-byte one",
+        "	if !hmac.Equal([]byte(want), []byte(signature)) {",
+        "	if want != signature {",
+    ),
+    (
+        "federation: the content-address check is skipped (signature alone accepted)",
+        "	if err := VerifySubmissionContent(p, libraryID); err != nil {\n		r.audit(ctx, peer, \"federation_rejected_content_mismatch\", err)\n		return err\n	}",
+        "",
+    ),
+    (
+        "federation: the consume flag is not checked on receive",
+        "	if !peer.ConsumeFrom {\n		return fmt.Errorf(\"%w: peer %d (%s)\", ErrPeerConsumeNotEnabled, peer.ID, peer.Name)\n	}",
+        "",
+    ),
+    (
+        "federation: the publish flag is not checked when signing",
+        "	if !peer.PublishTo {\n		return SignedSubmission{}, fmt.Errorf(\"%w: peer %d (%s)\", ErrPeerPublishNotEnabled, peer.ID, peer.Name)\n	}",
+        "",
+    ),
+    (
+        "federation: an empty signature is accepted as if it verified",
+        "	if signature == \"\" {\n		return ErrUnsignedSubmission\n	}",
+        "",
+    ),
+    (
+        "federation: the commons read treats a missing authorizer as allowed",
+        "	if !allowed {\n		return Payload{}, ErrCommonsNotFound\n	}",
+        "	_ = allowed",
+    ),
+    (
+        "federation: the domain separator is dropped from the MAC",
+        "	mac.Write([]byte(\"stashforge/federation/v1\"))\n	mac.Write([]byte{0})",
+        "",
+    ),
+    (
+        "federation: a peer without a key is allowed to sign",
+        "	if len(peer.Key) == 0 {\n		// A peer with no key cannot sign, and an unsigned submission is refused\n		// on the receiving end anyway -- so failing here gives the operator a\n		// useful message instead of a rejection from a peer they cannot debug.\n		return SignedSubmission{}, fmt.Errorf(\"federation: peer %d (%s) has no key configured\", peer.ID, peer.Name)\n	}",
+        "",
+    ),
+]
+
+
+MODE_FIXTURES = [
+    # The whole point of step 4.1: public over plain HTTP must refuse to start.
+    ("public mode no longer requires TLS",
+     "func (m Mode) RequiresTLS() bool { return m == ModePublic }",
+     "func (m Mode) RequiresTLS() bool { return false }"),
+    ("public mode served over http",
+     "func ModeErrors(m Mode, scheme string) error {\n\tif !m.Valid() {",
+     "func ModeErrors(m Mode, scheme string) error {\n\tif true {"),
+    ("any scheme counts as secure",
+     '\treturn strings.EqualFold(strings.TrimSpace(scheme), "https")',
+     '\treturn true'),
+    ("contribute also refuses plain http (over-refusal is still a change)",
+     "func (m Mode) RequiresTLS() bool { return m == ModePublic }",
+     "func (m Mode) RequiresTLS() bool { return true }"),
+    ("contribute starts serving media",
+     "func (m Mode) ServesMedia() bool { return m == ModePublic }",
+     "func (m Mode) ServesMedia() bool { return m != ModePrivate }"),
+    ("private mode accepts anonymous proposals",
+     "func (m Mode) AcceptsAnonymousProposals() bool { return m == ModePublic }",
+     "func (m Mode) AcceptsAnonymousProposals() bool { return true }"),
+    # A grant is what authorises media in public mode; dropping it is a leak.
+    ("media served without a grant",
+     "\tif !hasGrant {\n\t\treturn ErrMediaNotServed\n\t}",
+     "\tif false {\n\t\treturn ErrMediaNotServed\n\t}"),
+    ("private and contribute serve media to a grantee",
+     "\tif !m.ServesMedia() {",
+     "\tif false {"),
+    # Undifferentiated 404: distinguishing them discloses that the file exists.
+    ("no-grant refusal names itself",
+     "var ErrMediaNotServed = errors.New(\"not found\")",
+     "var ErrMediaNotServed = errors.New(\"no library access grant for this file\")"),
+    # Fail closed. Every one of these flips a default to permissive.
+    ("an absent mode defaults to public",
+     "\treturn ModePrivate\n}",
+     "\treturn ModePublic\n}"),
+    ("an invalid mode on the context is taken at face value",
+     "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok && m.Valid() {\n\t\treturn m\n\t}",
+     "\tif m, ok := ctx.Value(ModeKey{}).(Mode); ok {\n\t\treturn m\n\t}"),
+    # The wizard's veto over an unchosen public mode.
+    ("the wizard no longer gates a public mode",
+     "\tif mode == ModePublic && !wizardCompleted {",
+     "\tif false {"),
+    ("the wizard gate applies to every mode",
+     "\tif mode == ModePublic && !wizardCompleted {",
+     "\tif !wizardCompleted {"),
+    # Store-side fail-closed: a missing row must not mean \"public\".
+    ("an absent context mode defaults to public",
+     "\treturn ModePrivate\n}",
+     "\treturn ModePublic\n}"),
+]
+
+
+TOTP_FIXTURES = [
+    # THE REPLAY GUARD. This is the whole point of step 4.2: RFC 6238 accepts the
+    # same code any number of times inside its window, and for a login second
+    # factor that is a real weakness.
+    ("a replayed code is accepted",
+     "\tif used[matched] {\n\t\treturn matched, ErrTOTPReplay\n\t}",
+     "\tif false {\n\t\treturn matched, ErrTOTPReplay\n\t}"),
+    ("a replay is reported as a distinct error (a confirmation oracle)",
+     "\tif errors.Is(err, ErrTOTPReplay) {\n\t\t// Folded into the generic error on purpose. See ErrTOTPInvalid.\n\t\treturn ErrTOTPInvalid\n\t}",
+     "\tif errors.Is(err, ErrTOTPReplay) {\n\t\treturn ErrTOTPReplay\n\t}"),
+    # THE COUNTER. int64(TOTPStep) is nanoseconds, so this bug makes every code
+    # come from counter 0 -- a constant that no real authenticator produces.
+    ("the counter divides by nanoseconds instead of seconds",
+     "return at.UTC().Unix() / int64(TOTPStep/time.Second)",
+     "return at.UTC().Unix() / int64(TOTPStep)"),
+    ("the counter is fixed at zero",
+     "return at.UTC().Unix() / int64(TOTPStep/time.Second)",
+     "return 0"),
+    # THE TRUNCATION. Masking a 32-bit word with 0x7fffffff also clears the high
+    # bits of three other bytes, so it disagrees with RFC 4226 most of the time.
+    ("dynamic truncation masks the whole word instead of the top byte",
+     "value := (int64(h[offset]&0x7f) << 24) |\n\t\t(int64(h[offset+1]) << 16) |\n\t\t(int64(h[offset+2]) << 8) |\n\t\tint64(h[offset+3])",
+     "value := int64(binary.BigEndian.Uint32(h[offset:offset+4]) & 0x7fffffff)"),
+    ("the dynamic-truncation offset uses the wrong mask",
+     "offset := h[len(h)-1] & 0x0f",
+     "offset := h[len(h)-1] & 0x07"),
+    # THE CONCURRENCY GUARD. Check-then-record split across two locks is exactly
+    # the race "single-use" exists to prevent, and is invisible single-threaded.
+    # The check and the record are ONE critical section. Moving the check to a
+    # separate pass (rather than into the same loop) is the realistic mistake,
+    # and it is exactly what TestTOTP_ConcurrentReplayIsRefused exists to catch.
+    ("the spend check and the record are not atomic",
+     "\tfor k, v := range g.used {\n\t\tif k < oldest {\n\t\t\tdelete(g.used, k)\n\t\t} else if v && k == step {\n\t\t\treturn false\n\t\t}\n\t}\n\tg.used[step] = true",
+     "\tfor k := range g.used {\n\t\tif k < oldest {\n\t\t\tdelete(g.used, k)\n\t\t}\n\t}\n\tif g.used[step] {\n\t\treturn false\n\t}\n\tg.used[step] = true"),
+    ("the spend guard is unlocked",
+     "\tg.mu.Lock()\n\tdefer g.mu.Unlock()",
+     "\t// unlocked"),
+    # DRIFT TOLERANCE.
+    ("the skew window is removed entirely",
+     "for delta := int64(-TOTPSkew); delta <= TOTPSkew; delta++ {",
+     "for delta := int64(0); delta <= 0; delta++ {"),
+    # DISCLOSURE.
+    ("the secret is printed by String()",
+     'func (s TOTPSecret) String() string {\n\tif s == "" {\n\t\treturn ""\n\t}\n\treturn "[REDACTED TOTP SECRET]"\n}',
+     'func (s TOTPSecret) String() string { return string(s) }'),
+    # MarkTOTPStep must return a copy: a shared map is how a replay gets through.
+    ("MarkTOTPStep mutates the caller's map",
+     "next := make(map[int64]bool, len(used)+1)",
+     "next := used"),
+    # Purge: dropping a step that is still acceptable reopens the window.
+    ("the purge drops steps that are still inside the window",
+     "\toldest := totpCounter(now) - TOTPSkew",
+     "\toldest := totpCounter(now) - 1000"),
+]
+
+# M4 step 4.4: the wizard gate. "The wizard cannot be skipped" is only true
+# while these comparisons are true. These belong to mode.go, NOT totp.go -- and
+# they were originally appended to TOTP_FIXTURES, which meant every one of them
+# would have mutated the wrong file and reported BROKEN forever.
+MODE_WIZARD_FIXTURES = [
+    ("the wizard gate lets an incomplete instance through",
+     "\t\t// that was never asked.\n\t\treturn ModePrivate, ErrWizardIncomplete{}\n\t}",
+     "\t\t// that was never asked.\n\t\treturn ModePrivate, nil\n\t}"),
+    ("the wizard gate is inverted",
+     "\tif !done {",
+     "\tif done {"),
+    # The gate must refuse BEFORE reading the mode, so an unchosen mode never
+    # becomes an answer to a question nobody asked.
+    ("the gate reads the mode before checking the wizard",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tif m, mErr := g.Mode(ctx); mErr == nil && m == ModePublic {\n\t\treturn m, nil\n\t}\n\tdone, err := g.WizardCompleted(ctx)"),
+    # The gate must return private on refusal, never the row's value.
+    ("the wizard refusal returns the instance's real mode",
+     "\t\treturn ModePrivate, ErrWizardIncomplete{}",
+     "\t\treturn ModePublic, ErrWizardIncomplete{}"),
+    # A database failure reported as "wizard incomplete" sends the operator to
+    # the setup screen when the real problem is a broken database.
+    ("a database failure is reported as the wizard refusal",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, err\n\t}",
+     "func RequireWizard(ctx context.Context, g Gate) (Mode, error) {\n\tdone, err := g.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, ErrWizardIncomplete{}\n\t}"),
+    ("an invalid mode from the gate is not an error",
+     "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, err\n\t}\n\treturn m, nil\n}",
+     "\tm, err := g.Mode(ctx)\n\tif err != nil {\n\t\treturn ModePrivate, nil\n\t}\n\tif !m.Valid() {\n\t\treturn ModePublic, nil\n\t}\n\treturn m, nil\n}"),
+]
+
+
+# pkg/auth: the 2FA boundary. These exist because the replay guard was ONCE
+# implemented, tested in isolation, and not called by the login path -- a comment
+# claimed the store owned the spend while the spend was never made. Every
+# mutation below removes or weakens one specific link in the chain, so the next
+# time that chain is broken by accident, a test fails instead of a reviewer
+# wondering why the comment and the code disagree.
+AUTH_TOTP_FIXTURES = [
+    # THE REPLAY SPEND. Removing this is precisely the bug that shipped.
+    ("the login path stops spending the step it just verified",
+     "\t\tfresh, err := s.totpStore.SpendTOTPStep(ctx, userID, step)",
+     "\t\tfresh, err := true, error(nil)\n\t\t_ = step"),
+    # The spend's verdict is what refuses a replay; ignoring it accepts one.
+    ("a spent step is treated as fresh",
+     "\t\tif !fresh {",
+     "\t\tif false {\n\t\t\t_ = fresh"),
+    # Failing OPEN when the store cannot record the spend: the single-use rule
+    # silently stops applying whenever the database is busy.
+    ("a store that cannot record the spend is ignored",
+     "\t\tif err != nil {\n\t\t\t// A store that cannot record the spend has not verified anything, so\n\t\t\t// the login is refused. Failing open here would mean the single-use\n\t\t\t// rule silently stops applying the first time the database is busy.\n\t\t\treturn fmt.Errorf(\"%w: %v\", ErrTOTPStoreUnavailable, err)",
+     "\t\tif err != nil {\n\t\t\t_ = err\n\t\t\t_ = fresh"),
+    # The arithmetic itself, on this path.
+    ("the login verifies no code at all",
+     "\t\tstep, err := collab.VerifyTOTPDetailed(collab.TOTPSecret(secret), code, s.now(), nil)",
+     "\t\tstep, err := int64(0), error(nil)"),
+    # THE PROMPT. Without this, an enrolled user with no code gets a session.
+    ("an enrolled user is not asked for a code",
+     "\t\tif code == \"\" {\n\t\t\treturn ErrTOTPRequired",
+     "\t\tif false {\n\t\t\treturn ErrTOTPRequired"),
+    # THE POLICY. An unavailable store must not read as "no 2FA".
+    ("a failed policy check reads as not-required",
+     "\t\t\tpolicyRequired, pErr := s.totp.Required(ctx, userID)",
+     "\t\t\tpolicyRequired, pErr := false, error(nil)"),
+    # THE LOCKOUT GUARD. Required-but-not-enrolled is a lockout, not a free pass.
+    ("a required but unenrolled account is let in",
+     "\t\tif secret == \"\" {",
+     "\t\tif false {"),
+]
+
+
+# pkg/auth/session.go: where a 2FA failure becomes indistinguishable from a wrong
+# password. The guarantee is the FOLD, not the marker it folds -- and my first
+# attempt mutated the marker inside checkSecondFactor and SURVIVED, correctly,
+# because the fold already hides it. Nothing observable changed, so there was
+# nothing for a test to catch. Mutating a comment's subject instead of the
+# mechanism is how a harness earns a meaningless pass.
+AUTH_SESSION_FIXTURES = [
+    ("a 2FA failure is not collapsed into the invalid-credentials error",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}\n\t\tif true {\n\t\t\treturn nil, err\n\t\t}"),
+    # The prompt is distinguishable ON PURPOSE -- the password is already proven,
+    # so there is nothing left to disclose. If this stops being the only
+    # distinguishable case, the fold has a hole and the form becomes an oracle.
+    ("a wrong code is distinguishable from a wrong password",
+     "\t\tif errors.Is(err, ErrTOTPRequired) {\n\t\t\treturn nil, err\n\t\t}",
+     "\t\tif true {\n\t\t\treturn nil, err\n\t\t}"),
+]
+
+
+# internal/api/stashforge_wizard.go: the one UNAUTHENTICATED POST in the
+# application, holding the capability to make an instance public. Each mutation
+# removes one guard, and the interesting ones are the ORDERING ones -- a wizard
+# that checks the key before the completed flag leaks whether a wizard ran.
+# The startup posture gate, in internal/api/server.go. Same reasoning as the
+# wizard: it is a security decision, and collab.CheckStartup shipped in 4.1 with
+# no production caller at all -- a tested rule nobody calls.
+API_POSTURE_FIXTURES = [
+    # The whole point of the gate. Public + http must not boot.
+    ("a public instance boots over plain HTTP",
+     "\tif err := collab.CheckStartup(mode, scheme, completed); err != nil {\n\t\treturn fmt.Errorf(\"refusing to start: %w\", err)\n\t}",
+     "\t_ = collab.CheckStartup(mode, scheme, completed)"),
+    # FAIL CLOSED. A store that cannot be read must stop the boot. Continuing
+    # "as if private" turns a database hiccup into a silent posture downgrade.
+    ("an unreadable mode boots anyway",
+     "\tmode, err := store.Mode(ctx)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"cannot determine the instance mode, refusing to start rather than guessing a posture: %w\", err)\n\t}",
+     "\tmode, err := store.Mode(ctx)\n\tif err != nil {\n\t\tmode = collab.ModePrivate\n\t}"),
+    # The subtle half. Mode may be perfectly readable and public-over-https --
+    # the one legal configuration -- while the WIZARD read fails. The gate exists
+    # to establish that public was consented to, so a failed consent read must
+    # refuse even when every other input says go.
+    ("an unreadable wizard flag boots anyway",
+     "\tcompleted, err := store.WizardCompleted(ctx)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"cannot determine whether the first-run wizard completed, refusing to start: %w\", err)\n\t}",
+     "\tcompleted, err := store.WizardCompleted(ctx)\n\tif err != nil {\n\t\tcompleted = true\n\t}"),
+    # The scheme, derived from the TLS config rather than assumed. A mutation
+    # that hardcodes "https" makes every boot look secure, including the
+    # plain-HTTP one this gate exists to catch.
+    #
+    # This one SURVIVED the first version, because the derivation was inline in
+    # Start() and every test passed a scheme in as an argument -- nothing could
+    # see where the argument came from. The function is extracted for that
+    # reason, and the anchor points at it.
+    ("the scheme is assumed to be https",
+     "\tif s.TLSConfig != nil {\n\t\treturn \"https\"\n\t}\n\treturn \"http\"",
+     "\treturn \"https\""),
+    # And the other direction: reporting https for a server that will serve
+    # plain HTTP because TLS is configured but not actually listening TLS. The
+    # derivation must be the TLS config and nothing else.
+    ("a non-nil TLS config is reported as plain HTTP",
+     "\tif s.TLSConfig != nil {\n\t\treturn \"https\"\n\t}",
+     "\tif s.TLSConfig != nil {\n\t\t_ = s.TLSConfig\n\t}\n\treturn \"http\""),
+]
+
+API_WIZARD_FIXTURES = [
+    ("the instance key is not checked at all",
+     "\tif !h.keyMatches(req.InstanceKey) {",
+     "\tif false {"),
+    # FAIL OPEN. A nil or empty key must match nothing; admitting instead hands
+    # an unauthenticated "make this public" to anyone who can reach the port.
+    ("an unconfigured key matches everything",
+     "\tif len(want) == 0 {\n\t\treturn false\n\t}",
+     "\tif len(want) == 0 {\n\t\treturn true\n\t}"),
+    # The TLS check, and specifically that it runs BEFORE the write.
+    ("a public mode is accepted over plain HTTP",
+     "\tif err := collab.ModeErrors(mode, scheme); err != nil {\n\t\th.fail(w, http.StatusBadRequest, codeInsecureScheme, err.Error())\n\t\treturn\n\t}",
+     "\tif err := collab.ModeErrors(mode, scheme); err != nil {\n\t\tslog.Warn(\"stashforge: public mode over plain HTTP\", \"error\", err)\n\t}"),
+    # Writing the decision before the TLS check would leave an unstartable
+    # instance with the flag already set.
+    ("the decision is written before the scheme is checked",
+     "\tscheme := collab.RequestScheme(r)",
+     "\tscheme := collab.RequestScheme(r)\n\t_ = h.store.CompleteWizard(ctx, mode, nil)"),
+    # ONE-SHOT. Without this, anyone who reaches the port can re-decide.
+    ("the wizard can be re-decided",
+     "\tif completed {\n\t\th.fail(w, http.StatusConflict, codeAlreadyCompleted,",
+     "\tif completed && false {\n\t\th.fail(w, http.StatusConflict, codeAlreadyCompleted,"),
+    # ORDERING: the key check must not be reachable before the completed check,
+    # or a bad key becomes an oracle for "has a wizard run".
+    ("the key is checked before the completed flag",
+     "\tcompleted, err := h.store.WizardCompleted(ctx)\n\tif err != nil {\n\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}",
+     "\tcompleted, err := h.store.WizardCompleted(ctx)\n\tif !h.keyMatches(req.InstanceKey) {\n\t\th.fail(w, http.StatusForbidden, codeBadInstanceKey, \"the instance key is incorrect\")\n\t\treturn\n\t}\n\tif err != nil {\n\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}"),
+    # An unreadable gate must be a refusal, not "completed" -- that would skip
+    # the gate entirely.
+    ("an unreadable gate reads as completed",
+     "\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not read the instance settings\")\n\t\treturn\n\t}\n\n\tresp := wizardResponse{Completed: completed}",
+     "\t\tslog.Error(\"stashforge: reading the wizard state\", \"error\", err)\n\t\tcompleted = true\n\t}\n\n\tresp := wizardResponse{Completed: completed}"),
+    # THE BODY LIMIT. An unbounded read on an unauthenticated endpoint.
+    #
+    # The cap is on the READER, not the decoder, and getting that wrong is not
+    # theoretical: json.Decoder stops at the end of the JSON value, so a small
+    # valid object followed by megabytes of trailing whitespace decodes cleanly
+    # and a decoder-side cap never fires. I wrote the decoder version first and
+    # the mutation harness reported it as a survivor -- correctly, because the cap
+    # was not doing anything.
+    ("the request body is unbounded",
+     "raw, readErr := io.ReadAll(limited)",
+     "raw, readErr := io.ReadAll(r.Body)\n\t_ = limited"),
+    # The overflow signal, once the cap IS on the reader.
+    ("an oversized body is accepted after the cap",
+     "\t\tif errors.As(readErr, &maxErr) {\n\t\t\th.fail(w, http.StatusRequestEntityTooLarge, codeBodyTooLarge, bodyTooLargeMessage)\n\t\t\treturn\n\t\t}",
+     "\t\tif errors.As(readErr, &maxErr) && false {\n\t\t\th.fail(w, http.StatusRequestEntityTooLarge, codeBodyTooLarge, bodyTooLargeMessage)\n\t\t\treturn\n\t\t}"),
+    # A failed write must not report success.
+    ("a decision that failed to persist reports success",
+     "\t\th.fail(w, http.StatusInternalServerError, codeInternal, \"could not record the instance mode\")",
+     "\t\th.write(w, wizardResponse{Completed: true, Mode: mode})"),
+    # An invalid mode must be refused with the value, so the operator can fix it.
+    ("an invalid mode is accepted",
+     "\tif !mode.Valid() {",
+     "\tif false {"),
+]
+
+
+def preflight():
+    """Verify every fixture before running any of them.
+
+    Added after three consecutive runs reported BROKEN with an anchor not found.
+    Each was a real mistake -- a one-line function written as a braced block, a
+    comment inside a branch, and a list of mode.go fixtures appended to the TOTP
+    list -- and each cost a full sweep to discover, because BROKEN is only
+    reported after every mutation has been applied and tested.
+
+    A broken anchor is a fixture that scores nothing, and a fixture that scores
+    nothing is worse than no fixture: the count says 53 while 6 of them did not
+    run. So the anchors are checked up front, and a mismatch is an error before
+    any file is touched.
+    """
+    originals = _snapshot()
+    problems = []
+    total = 0
+    for path, fixtures, _run in MUTATION_TARGETS:
+        for label, old, new in fixtures:
+            total += 1
+            if old not in originals[path]:
+                problems.append(f"{path.name}: {label} -- anchor not found")
+            elif old == new:
+                problems.append(f"{path.name}: {label} -- replacement is a no-op")
+    if problems:
+        print("PREFLIGHT FAILED -- no file was touched:", file=sys.stderr)
+        for p in problems:
+            print(f"  {p}", file=sys.stderr)
+        return 2
+    print(f"preflight ok: {total} fixtures, every anchor lands")
+    return 0
+
+
+def _expected_fixtures():
+    return sum(len(fixtures) for _path, fixtures, _run in MUTATION_TARGETS)
+
+
+# (path, fixtures) for every file this harness mutates. Declared ONCE and used
+# by the preflight, the runner, the restore guard and the restore verification.
+# It was two hardcoded tuples before, and they had already drifted once: adding
+# a file to the fixture loop and not to the originals map made the preflight
+# raise KeyError and the run abort with that file left mutated on disk.
+COLLAB_RUN = ("./internal/collab/", TEST_RE)
+AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
+API_RUN = ("./internal/api/", "TestWizard")
+
+# The startup posture gate's tests live in their own file, and a mutation in
+# server.go must be run against BOTH: TestCheckInstancePosture and
+# TestServerScheme. Selecting on the wizard alone would report the posture
+# mutations as untested, because none of them touch a wizard test.
+POSTURE_RUN = ("./internal/api/", "TestCheckInstancePosture|TestServerScheme")
+
+# (path, fixtures, (package, -run selector)). ONE list, consumed by the
+# preflight, the runner and the restore guard.
+#
+# It was three hardcoded lists of the same file set, and they had drifted twice:
+# the posture group was added to the preflight and the originals map but not to
+# the runner's `work`, so a full sweep reported "74 applied" while the preflight
+# said 79 fixtures -- a count that looks fine and is 5 short, which is the worst
+# way for a mutation harness to be wrong. Nothing warns about a mutation that
+# simply never ran.
+MUTATION_TARGETS = [
+    (CONSENT, CONSENT_MUTATIONS, COLLAB_RUN),
+    (EXPORTER, EXPORTER_MUTATIONS, COLLAB_RUN),
+    (FEDERATION, FEDERATION_MUTATIONS, COLLAB_RUN),
+    (MODE, MODE_FIXTURES, COLLAB_RUN),
+    (MODE, MODE_WIZARD_FIXTURES, COLLAB_RUN),
+    (TOTP, TOTP_FIXTURES, COLLAB_RUN),
+    (AUTH_TOTP, AUTH_TOTP_FIXTURES, AUTH_RUN),
+    (AUTH_SESSION, AUTH_SESSION_FIXTURES, AUTH_RUN),
+    (API_WIZARD, API_WIZARD_FIXTURES, API_RUN),
+    (API_POSTURE, API_POSTURE_FIXTURES, POSTURE_RUN),
+]
+
+def _snapshot():
+    """Read every mutated file once, keyed by path.
+
+    Deduplicated by path, because two fixture groups may target one file (MODE
+    has both MODE_FIXTURES and MODE_WIZARD_FIXTURES) and a dict keyed twice on
+    the same path is fine for reading but reads twice to write.
+    """
+    return {p: p.read_text() for p in dict.fromkeys(p for p, _f, _r in MUTATION_TARGETS)}
+
+
+def _install_restore_guard(originals):
+    """Make the restore happen even if this process is killed mid-run.
+
+    try/finally handles an exception, but NOT SIGINT or SIGTERM: the default
+    disposition of both terminates immediately without unwinding, and SIGKILL
+    cannot be handled at all. The interrupted run that prompted this left
+    `return true, nil` in consent.go and `DryRun: false` in exporter.go sitting
+    in the working tree -- the two mutations in the project that would publish a
+    user who declined.
+
+    So the restore is registered three ways: a finally block, an atexit hook, and
+    a signal handler. A SIGKILL still defeats all three, which is why
+    `verify_restored` is also run before anything is committed.
+    """
+    def restore():
+        for path, text in originals.items():
+            try:
+                if path.read_text() != text:
+                    path.write_text(text)
+                    print(f"restored {path.name}", file=sys.stderr)
+            except OSError:
+                pass
+
+    atexit.register(restore)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, lambda s, f: (restore(), sys.exit(130)))
+        except (ValueError, OSError):
+            pass  # not on the main thread; the finally block still applies
+    return restore
+
+
+def verify_restored(originals):
+    """Fail loudly if the tree is still mutated. Called after the run and by
+    verify_tree.py before any commit."""
+    dirty = [p.name for p, t in originals.items() if p.read_text() != t]
+    if dirty:
+        print(
+            "FATAL: these files are not at their original content: "
+            + ", ".join(dirty)
+            + "\nRun: git checkout -- internal/collab/",
+            file=sys.stderr,
+        )
+        return 2
+    return 0
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if preflight() != 0:
+        return 2
+
+    # --preflight must CHECK ONLY. Without this it checked every anchor, printed
+    # "preflight ok", and then ran the entire sweep anyway -- so the flag that
+    # exists to answer "would this sweep be valid" was a three-minute sweep, and
+    # I used it as a smoke test and got 74 results instead of the 79 I asked
+    # about.
+    if "--preflight" in argv:
+        return 0
+    COLLAB_RUN = ("./internal/collab/", TEST_RE)
+    AUTH_RUN = ("./pkg/auth/", AUTH_TEST_RE)
+    API_RUN = ("./internal/api/", "TestWizard")
+
+    work = [
+        (path, mutation, run)
+        for path, fixtures, run in MUTATION_TARGETS
+        for mutation in fixtures
+    ]
+    originals = _snapshot()
+    killed, survived, broken = [], [], []
+    _install_restore_guard(originals)
+
+    try:
+        for path, (label, old, new), (pkg, sel) in work:
+            original = originals[path]
+            if old not in original:
+                # A replacement that does not land reports as a survivor that
+                # means nothing. Distinguish it, or the number lies.
+                broken.append(f"{label} -- ANCHOR NOT FOUND (mutation never applied)")
+                print(f"BROKEN   {label} (anchor not found)")
+                continue
+
+            mutated = original.replace(old, new, 1)
+            if mutated == original:
+                broken.append(f"{label} -- replacement was a no-op")
+                print(f"BROKEN   {label} (no-op replacement)")
+                continue
+
+            path.write_text(mutated)
+            proc = run(
+                ["go", "test", pkg, "-run", sel, "-count=1"],
+                ROOT,
+            )
+            out = proc.stdout + proc.stderr
+
+            # A mutation that does not compile kills no test, and a guard that
+            # only looks for a test failure will score it SURVIVED -- a lie
+            # about the suite. Detect the build error explicitly.
+            # A genuine compile failure. Detected by BUILDING, not by grepping
+            # the test output: the previous regex matched any line starting with
+            # "# " (after an optional "[n]" or "] " prefix), and a testify
+            # failure report is full of lines that look like one --
+            # "    --- FAIL:" and the indented "Error:" blocks. Two mutations
+            # that were correctly KILLED were scored BROKEN instead, so the
+            # harness reported a hole that did not exist and would have sent the
+            # next person looking for one.
+            #
+            # `go vet` compiles the package without running anything, so a
+            # mutant that fails to build is caught here and a mutant that fails
+            # a test is caught by the return code below. Nothing is inferred from
+            # the shape of the output.
+            build = run(["go", "vet", pkg], ROOT)
+            bout = build.stdout + build.stderr
+            if build.returncode != 0:
+                print(f"BROKEN   {label} (does not compile -- scores nothing)")
+                broken.append(f"{label} -- does not compile")
+                if bout:
+                    first = bout.strip().splitlines()[0]
+                    print(f"           {first}")
+            elif proc.returncode != 0:
+                killed.append(label)
+                print(f"KILLED   {label}")
+            else:
+                print(f"SURVIVED {label}  <-- investigate")
+                survived.append(label)
+
+    finally:
+        for path, text in originals.items():
+            path.write_text(text)
+        _restore = None
+
+    # Confirm the restore actually took, so an interrupted run cannot leave the
+    # tree mutated for the next commit.
+    if verify_restored(originals) != 0:
+        return 2
+
+    total = len(work)
+    expected = _expected_fixtures()
+    print(f"\napplied {total} / killed {len(killed)} / survived {len(survived)} / broken {len(broken)}")
+
+    # The count the preflight promised, against the count that ran. A mutation
+    # that never runs is indistinguishable from a mutation that passes, and the
+    # number is the only place it would show: "74 applied" beside a preflight
+    # that said 79 is a 5-mutation hole with a clean-looking summary. This is the
+    # check that would have caught the posture fixtures being wired into two of
+    # the three lists.
+    if total != expected:
+        print(
+            f"\nCOUNT MISMATCH: preflight checked {expected} fixtures but only "
+            f"{total} ran. A mutation group is wired into MUTATION_TARGETS for "
+            f"the preflight and the runner differently -- see the comment on "
+            f"MUTATION_TARGETS.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if broken:
+        print("\nBROKEN means the harness itself failed, not that the code is weak:", file=sys.stderr)
+        for b in broken:
+            print(f"  {b}", file=sys.stderr)
+        return 2
+    if survived:
+        print(
+            "\nA survivor in this file is either a missing test or a bug in the guard.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

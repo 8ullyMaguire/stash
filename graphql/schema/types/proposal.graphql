@@ -1,0 +1,156 @@
+# StashForge — the proposal surface.
+#
+# This is the ONLY write path to shared content, and that is a governance
+# invariant rather than a convention. No mutation here edits a scene title or a
+# performer name directly; every change to a shared field is a proposal that
+# settles through voting or moderation, and only `collab.Applier.Apply` writes
+# the settled value to the row.
+#
+# The invariant is enforced by `TestNoResolverWritesASharedFieldDirectly`, which
+# reads the generated resolver registry rather than trusting a comment. A comment
+# saying "do not edit shared fields here" is a request; a test that fails when
+# someone does it is a guarantee.
+
+"""
+A proposed change to one field of one object.
+
+A proposal is not an edit. It is a *claim* that a field should hold a value,
+which other people agree or disagree with. The field's displayed value changes
+only when the proposal settles, and only `Apply` writes it.
+"""
+type EditProposal {
+  id: ID!
+  """
+  The kind of object: `scene`, `performer`, `studio`, `tag`, `gallery`, `image`
+  or `group`. Checked against a closed vocabulary — an open field list is a
+  stored-XSS surface, so an unlisted target type is a 422 rather than a 500.
+  """
+  targetType: String!
+  targetId: ID!
+  "The field being proposed for, e.g. `title`. Also from the closed vocabulary."
+  field: String!
+  "Null when the field is currently unset. Distinct from an empty string."
+  oldValue: String
+  """
+  The proposed value. Null means "clear this field", which is a different edit
+  from "set it to the empty string" and is stored differently.
+  """
+  newValue: String
+  "Why the author proposed it. Shown to voters, because a reasonless vote is noise."
+  rationale: String
+  author: User!
+  """
+  `open`, `accepted`, `rejected`, `withdrawn` or `superseded`.
+  `superseded` is a distinct terminal state from `rejected`: a newer proposal
+  replaced this one, which is not a judgement on it.
+  """
+  status: String!
+  """
+  Σ(+1) − Σ(−1) across voters. Computed from the vote rows on every read, never
+  read from a stored counter — a counter is a thing to be able to be wrong.
+  """
+  score: Int!
+  "Distinct voters. Guards the quorum path against one account voting thrice."
+  voters: Int!
+  createdAt: Timestamp!
+  "When it was decided. Null while open."
+  decidedAt: Timestamp
+  """
+  The current caller's vote: 1, -1, or null if they have not voted. Null is
+  distinct from 0, which would mean "abstained" and is not a thing here.
+  """
+  myVote: Int
+  """
+  Why the caller may not act on it: `author`, `decided`, or null. Lets the UI
+  disable a button with a reason instead of failing on click.
+  """
+  blockedReason: String
+}
+
+input EditProposalInput {
+  targetType: String!
+  targetId: ID!
+  field: String!
+  newValue: String
+  rationale: String
+}
+
+"""
+One page of proposals, for a feed.
+"""
+type ProposalConnection {
+  edges: [ProposalEdge!]!
+  "Null when there is no next page, so a client can stop without a count."
+  nextCursor: String
+}
+
+type ProposalEdge {
+  node: EditProposal!
+  cursor: String!
+}
+
+extend type Query {
+  """
+  Proposals, filtered. Every filter is optional and they compose with AND.
+
+  `status` is filtered server-side and the list is scoped to what the caller may
+  see: a non-moderator never sees a moderation queue, because the queue is a
+  view of others' pending proposals rather than a permission the caller lacks
+  midway through.
+  """
+  proposals(
+    targetType: String
+    targetId: ID
+    targetField: String
+    status: String
+    authorId: ID
+    "Only proposals the caller authored. Cheaper than filtering client-side."
+    mine: Boolean
+    limit: Int
+    offset: Int
+  ): [EditProposal!]!
+
+  """
+  The moderation queue: open proposals, oldest first, for a steward or the
+  owner. Separate from `proposals(status: "open")` so that "show me the queue"
+  is a single permission check in one place rather than a query filter every
+  caller has to remember to apply.
+  """
+  moderationQueue(limit: Int, offset: Int): [EditProposal!]!
+
+  """
+  Proposals the caller has not yet voted on, for their own dashboard.
+  """
+  pendingMyVote(limit: Int, offset: Int): [EditProposal!]!
+}
+
+extend type Mutation {
+  """
+  Propose a change to one field of one object.
+
+  Rejects with 422 when the field is not in the vocabulary, when the value
+  fails validation for that field's type, or when the author's previous
+  proposal on this same field was rejected (sticky rejection — see
+  `collab.ValidateProposal`).
+  """
+  propose(input: EditProposalInput!): EditProposal!
+
+  """
+  Vote on a proposal. `value` is 1 or -1; voting twice replaces the earlier
+  vote rather than erroring, because changing your mind is normal and an
+  error would make people open a second account to do it.
+  """
+  vote(proposalId: ID!, value: Int!): EditProposal!
+
+  "Withdraw a proposal you authored. Only while it is still open."
+  withdraw(proposalId: ID!): EditProposal!
+
+  """
+  Accept or reject on a moderator's authority, bypassing quorum.
+
+  Requires moderator or owner. Neither branch edits a shared field: accepting
+  records the decision and the settled value is written by `Apply`, which is
+  idempotent and appends exactly one audit row however many times it runs.
+  """
+  moderate(proposalId: ID!, approve: Boolean!, reason: String): EditProposal!
+}

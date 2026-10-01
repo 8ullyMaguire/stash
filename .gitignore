@@ -64,10 +64,6 @@ node_modules
 dist
 .DS_Store
 /.local*
-
-# The P2P downloader plugin lives on the stashforge branch. main is the soft
-# fork of upstream and carries only fixes for upstream issues.
-plugins/
 # The PR triage snapshot is a derived artefact, not a source file.
 # Regenerate with:  python3 docs/pr_triage.py fetch
 #
@@ -81,3 +77,6 @@ docs/pr-queue.json
 # Python bytecode from docs/ scripts (goal-check.py, issue ledgers)
 __pycache__/
 *.pyc
+
+# mutation harness lock: a runtime artefact, not source
+plugins/p2pdownloader/.mutation-harness.lock

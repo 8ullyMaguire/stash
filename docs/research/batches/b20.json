@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash-box#619",
+  "title": "[Feature] Make Career start and Career end automatic",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** A lot of the time, performers will have incorrect dates set for their career starts and ends. This can come from a site like IAFD having the date set to their last scene at ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#62",
+  "title": "[Feature] Share Markers via Stash-Box",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Importing markers into stash at the moment is a bit of a hassle, it would be nice to be able to do this automatically from stash-box, this sort of crowd sourcing of metadata",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#621",
+  "title": "[Bug Report] \"Failed to load edits.\" after deleting a 'site' that is used in a pending edit.",
+  "excerpt": "In a rare situation, a problematic edit can cause the `/edits` page to not load and instead return the message: `Error: Failed to load edits.` **To Reproduce** 1. Create a new site (`/sites/add`), for example `reproducer-site` 2. Create a p",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#624",
+  "title": "[Feature] Sort scenes by duration",
+  "excerpt": "",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#627",
+  "title": "[Feature] Edit Dependencies or Multi Edit Submissions",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** There can be some friction when contributing new scenes to a stash-box when a performer/studio needs to be created for example when trying to submit a new scene for a st",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#628",
+  "title": "[Feature] Filter in GraphQL Last Updated",
+  "excerpt": "Add a extra filter for performers and scenes search in graphql. Where updated date is greater or equal to the date provided. It would be helpful to get lastest updated performers or scenes based on last updated. Instead of grabbing records ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#630",
+  "title": "[RFC] Add Trusted Users with Double Votes",
+  "excerpt": "### Scope <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind of summary so its easier for people to determine if they can contribute at a glance. --> Trusted users get double votes; their vo",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#633",
+  "title": "[RFC] Anonymize Fingerprints for User Privacy",
+  "excerpt": "# Anonymize Fingerprints for User Privacy ## Scope Currently, StashBox instances (such as StashDB) are a giant database of users and what's in their porn collection. That could be considered sensitive data for many users. Adding some abstra",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#637",
+  "title": "[RFC] Adapt for hentai/animated content",
+  "excerpt": "Here are some caveats I've read on discord that need some ideas to improve stash-box for this kind of content: - animators often create alternative releases, these will have to be their own separate entries in Stash - animators often don't ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#641",
+  "title": "[Feature] Add studio level tags which are automatically applied to scenes",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many tags apply to all scenes from a studio and are often missing on scenes. For example all scenes from \"Tushy\" studio are \"Straight\", all scenes from \"POVD\" are \"Straight\"",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#643",
+  "title": "Allow Users to Hide Specific Content (e.g. Gay, Straight, Trans, BDSM) when using Stash-DB",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Using Stash-DB right now is an awkward experience if you do not want to be exposed to certain genres of pornography. **Describe the solution you'd like** I think a site-wide",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#648",
+  "title": "[Feature] Alternate Scene Covers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, guidelines for StashDB are to use the original official cover sourced directly from the studio whenever possible. We needed to clarify this because there are so m",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#649",
+  "title": "[Bug Report] Bad behaviour when image backend or image location not specified",
+  "excerpt": "**Describe the bug** If `image_backend` is not specified, it silently defaults to `file`. If `image_location` is not specified, the system still allows images to be created in the database, and it places the image files in the current worki",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#651",
+  "title": "[Feature] Administrative section for blacklisting domains from link fields",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It is a recurring issue that unwanted domains are added to the link field of scenes, such as JavLibrary. While using crowdsourcing to filter bad data or guideline violations",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#655",
+  "title": "[RFC] Logging improvements",
+  "excerpt": "## Problem Currently the `stash-box` code is littered with these error handling conditionals that fail silently, without propagating the error through the return and without logging. ```go ret, err := somefunction() if err != nil { return }",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#656",
+  "title": "[Feature] Ability to remove info from edit history and report button",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When a performer's private data is exposed on StashDB, merely deleting the data from their page is insufficient because it will persist in their edit history. Only staff hav",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#660",
+  "title": "[Bug Report] Limit Field Lengths on Form Fields",
+  "excerpt": "**Describe the bug** Submission Forms allow for submission of metadata that exceed the field size in db **To Reproduce** Steps to reproduce the behavior: See edit https://stashdb.org/edits/0c64042e-1eea-492a-8946-97cd2800edf3 **Expected beh",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#661",
+  "title": "[Feature] Flag Links as Archives",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, there is no supported link type for pages archived by services like the Wayback Machine. Typically archived pages are used as studio links for unavailable scenes ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#663",
+  "title": "[RFC] Release Groups / Scene Groups",
+  "excerpt": "_After a brief discussion on Discord, I asked for help writing an issue addressing the long requested \"release groups\" feature, primarily inspired by the system implemented by MusicBrainz to track multiple releases of the same album. The fo",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#664",
+  "title": "[Feature] Default Ordering of Links",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** This is something that's annoyed me for a while now but rarely felt important enough to bring up. I'm mentioning it now because WithoutPants is currently working on expandin",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#665",
+  "title": "[Feature] Increase margin between URL favicons",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There isn't enough padding between the presented URL favicons, and it's causing incorrect clicks. **Describe the solution you'd like** Move `margin-right: 5px` from the `img",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#666",
+  "title": "[Feature] Visually stack URL icons from the same domain/category to reduce overcrowding",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The number of performer URLs is growing significantly, particularly with the inclusion of network profile URLs. However, this will impact the presentation of URL icons, lead",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#676",
+  "title": "[Feature] Add more info fields to studios",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Other database sites do not seem to have much fundamental data about studios. Some additional fundamental fields would be helpful for archival/historical and prospective fil",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#69",
+  "title": "[Feature] Changelog on StashDB for bulk activity and site/network additions",
+  "excerpt": "**Describe the solution you'd like** I had an idea on the Discord that the StashDB site should have a Changelog section, where you can track bulk changes to the database, and also with site/network additions. Perhaps also error correction t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#700",
+  "title": "[Feature] Pinned comments",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** How can we track relevant notes -- such as metadata nuances or specific guides for users on a per studio/performer/tag basis? We currently lack this capability. Generally th",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#703",
+  "title": "[Bug Report] Unable to Update Merges",
+  "excerpt": "**Describe the bug** I've confirmed on StashDB with both tag merges and performer merges, the \"Update\" button does not allow you to update or change the merge. Instead of sending you to an edit form that includes the merge information, it b",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#713",
+  "title": "[Feature] Import scenes from stash-box to stash.",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** We can submit scenes from stash to stash-box, why not the other way around? Sometimes I browse stashdb and find a scene that I like but don't want to look for it and downloa",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#714",
+  "title": "[Feature] Warn about entity name collisions before submitting edits",
+  "excerpt": "Name collisions are frustrating since they only surface after the edit has been submitted and approved. We should check before submitting if an edit will result in a collision, and warn the user so they can reconsider, or clean up. Examples",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#722",
+  "title": "[Feature Request] Automatic Image Tagging",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Not specifically a problem, just an annoyance. I have a lot of pictures in my database, but going through and tagging them all is burdensome. So, if possible, I'd like a way",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#726",
+  "title": "[Feature] Add validation for name field against aliases",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Right now, stash-box allows adding an identical alias as the name. Since search and scraping already matches both, I feel like this is redundant clutter. **Describe the solu",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#727",
+  "title": "[Bug Report] GQL imageCreate schema still accepts `url`",
+  "excerpt": "**Describe the bug** the imageCreate mutation still accepts URL when only `path` should be affected **To Reproduce** query: ```gql mutation imageCreate { imageCreate( input: { url: \"https://upload.wikimedia.org/wikipedia/commons/6/66/SMPTE_",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#729",
+  "title": "[Bug Report] nil pointer dererence on SceneEditUpdate mutation",
+  "excerpt": "**Describe the bug** When submitting a `sceneEditUpdate` mutation with a mismatched `operation` enum, GQL will pass through an internal system error **To Reproduce** 1. Create an edit via WebUI with ID `edit-uuid` of enum `CREATE` 2. Update",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#733",
+  "title": "[Feature] Block content on website by tags, studios, stars, gender...",
+  "excerpt": "Is your feature request related to a problem? Please describe. Context: When searching on scenes at the StashDB website, you are able to filter content by tag that it's ok for a very precise search, but you are not allowed to block content ",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#734",
+  "title": "[Bug Report] SMTP over TLS is unsupported",
+  "excerpt": "Connecting to port 465 with implicit TLS doesn't work currently, only port 587 with STARTTLS, which is less secure. https://gist.github.com/chrisgillis/10888032",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#738",
+  "title": "Submitting draft with existing image causes pq error",
+  "excerpt": "SceneDraft mutation should check if image exists before inserting.",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#742",
+  "title": "[Feature] Filter Performer's scenes by alias",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently only possible to filter performers by studio and/or tag. **Describe the solution you'd like** An option to filter by alias assigned to scene **Describe alternative",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#743",
+  "title": "[RFC] Improved edit count calculation; current method is flawed",
+  "excerpt": "## Problem Currently, accepted edit counts serve primarily as a metric for gauging a user's trustworthiness and participation. However, in the context of proposed leaderboards and/or gamification (see #417, #569), the existing method of cal",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#745",
+  "title": "[Feature] Modifiable/Expanded Image Upload Extensions",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Not a problem. Just an user experience inconvenience. Currently, the file selection window for uploading images for performers and scenes is set to jpeg and webp. This doesn",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#75",
+  "title": "[Feature] search for duration",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** i have al lot of scenes from different sites with meaningless names (for example only a number) => a real pain to tag. **Describe the solution you'd like** On some studios t",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#760",
+  "title": "[RFC] Automate performer disambiguation",
+  "excerpt": "### Synopsis The current implementation of manual-entry string disambiguation leads to inefficiencies and inaccuracies. To correct for this I propose we remove the decision of adding a disambiguation field from the end-user, and automate th",
+  "probe": ""
+ }
+]

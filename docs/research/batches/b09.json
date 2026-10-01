@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#4306",
+  "title": "Allow user to define TagFilterType for various input forms",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** Users with an extensive list of tags may only want some of them to display when adding them to an item ### **Describe the solution you'd like** Allow user to define a st",
+  "probe": ""
+ },
+ {
+  "key": "stash#4318",
+  "title": "Scene gallery view",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** There's no way to view multiple scenes without opening several stashapp tabs. **Describe the solution you'd like** A Gallery-type view for Scenes, giving the user the abilit",
+  "probe": ""
+ },
+ {
+  "key": "stash#4326",
+  "title": "Ability to browse related content during video playback without leaving fullscreen mode",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** if i am playing a video on full screen mode,sometimes i wanna change it, for that i have to exit full screen,go back to different page and select another video and then full",
+  "probe": ""
+ },
+ {
+  "key": "stash#4332",
+  "title": "Make \"exclusions\" regex field with more user friendly UI",
+  "excerpt": "The Exclusions edit popup (on Settings > Library > Exclusions) prompts you to enter a regex pattern to determine excluded content on Scans and Cleans. The related documentation page shows the current process: [Exclude File Configuration](ht",
+  "probe": ""
+ },
+ {
+  "key": "stash#4336",
+  "title": "Renaming and presentation of all tagging/scraper components and related labels",
+  "excerpt": "### Scope To enhance the user-friendliness of all tag related component labels and presentation. ## Goals - Concise and relevant labels a non-technical user would understand - Avoid technical jargon such as \"fragment\" and \"scrape\" - Mitigat",
+  "probe": ""
+ },
+ {
+  "key": "stash#4351",
+  "title": "Add transformational filters to images",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** With [better support for images and galleries](https://discord.com/channels/559159668438728723/1161028708874858616) on some of our minds, I'd like the same sort of adjustmen",
+  "probe": ""
+ },
+ {
+  "key": "stash#4353",
+  "title": "Auto-save metadata fields that already include a confirmation",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Manually adding a tag to a scene already requires quite a few clicks. There is already a feature to auto-save when changing toggles from the Settings page. Using this auto-s",
+  "probe": ""
+ },
+ {
+  "key": "stash#4366",
+  "title": "Run backup as a queued task",
+  "excerpt": "Currently, if you're running any tasks (scanning, auto tag, etc.) when you click the Backup button it runs concurrently. Expected behavior is that it would be added to the queue. I brought this up in Discord, and @DingDongSoLong4 mentioned:",
+  "probe": ""
+ },
+ {
+  "key": "stash#4383",
+  "title": "Ability to filter Groups by Alias",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently there's no option to filter Groups by their Aliases, even though filters for every other field of a Group exists. **Describe the solution you'd like** Add the opti",
+  "probe": ""
+ },
+ {
+  "key": "stash#4384",
+  "title": "Multiple image support for tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently each performer and tag has a single set image (static or animated) that doesn't change. **Describe the solution you'd like** I request for an ability to have multi",
+  "probe": ""
+ },
+ {
+  "key": "stash#4409",
+  "title": "Hardlink Duplicates in scene duplicate checker",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In the duplicate checker, can we add an option to hardlink any deleted files so we can keep the stash id active for the deleted duplicates? I'd like to have only the largest",
+  "probe": ""
+ },
+ {
+  "key": "stash#4415",
+  "title": "Scrapers that build a queryURL",
+  "excerpt": "There are several niggling issues with scrapers that build a queryURL in order to provide `scrapeByFragment` functionality and in aggregate this is creating a poor user experience. For this example we can use the following scraper: ```yml n",
+  "probe": ""
+ },
+ {
+  "key": "stash#4418",
+  "title": "Plugin page disclaimer",
+  "excerpt": "If y'all want to preemptively save yourselves from any potential grief remember to add a disclaimer on the plugins page similar to the one we created for the CSS/JS injection sections. This is mainly for any updates that might break a plugi",
+  "probe": ""
+ },
+ {
+  "key": "stash#4433",
+  "title": "Ability to set settings in scraper yaml configuration file",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** v24 included a plugin manager for scrapers and plugins and settings for plugins. However, there are no such settings for scrapers. Prior to v24 the general solution was to e",
+  "probe": ""
+ },
+ {
+  "key": "stash#4457",
+  "title": "Scene Tagger regex specify replacement instead of space in blacklist field",
+  "excerpt": "**Describe the solution you'd like** An option to replace strings instead of removing them in the Tagger \"blacklist\" section **Additional context** Originally proposed in [discord](https://discord.com/channels/559159668438728723/55915993150",
+  "probe": ""
+ },
+ {
+  "key": "stash#4458",
+  "title": "Scene Tagger blacklist regex enhancements",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The current blacklist regex is workable, but has severe limitations. Would just like a bit of extended functionality to make the Search functionality more flexible. It's not",
+  "probe": ""
+ },
+ {
+  "key": "stash#4465",
+  "title": "Task Queue Improvements",
+  "excerpt": "**Describe the solution you'd like** Several general improvements to the Task Queue: - Make the Task Queue box resizable in the UI - Rather than \"Generating\" or Scanning\" for queued tasks, also include some more descriptive information - Al",
+  "probe": ""
+ },
+ {
+  "key": "stash#4467",
+  "title": "Ability to scrape scene markers",
+  "excerpt": "Some sites and networks offer marker data for their scenes, most often through their API. Currently this can only be exploited by `sceneByFragment` script scrapers as they can use the Stash GQL API to query for extra information about the c",
+  "probe": ""
+ },
+ {
+  "key": "stash#4499",
+  "title": "Sort performers by play duration",
+  "excerpt": "It would be helpful to be able to sort performers by play count and play duration, where: - performer play count = sum of all play count of scenes where performer appear - performer play duration = sum of all play durations of scenes where ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4505",
+  "title": "Improved Tag Selection inside dropdowns",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When in the edit panel of a video, adding tags should be much easier - when typing the desired tag, the tag dropdown disappears once you select a tag and you must begin typi",
+  "probe": ""
+ },
+ {
+  "key": "stash#4510",
+  "title": "Suggestions for UI Plugin API improvements",
+  "excerpt": "Per WP's suggestion, this is an issue for plugin developers to request improvements to the UI plugin API. This single issue would be used to keep requests in one place. My current requests (completed): * [x] Date picker support * [x] Countr",
+  "probe": ""
+ },
+ {
+  "key": "stash#4513",
+  "title": "Ability to sort and/or filter library list",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When user has long library list with folders, it can become complicated to read such list. Because paths are sorted by date added, and if multiple drives are involved, list ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4523",
+  "title": "Add new field to support performer role in relation to the scene",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The current performer-scene relation lacks flexibility as performers may not always portray themselves and might assume specific roles within a scene. Additionally, not all ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4536",
+  "title": "Casting the video never loads or plays while the casting is activated",
+  "excerpt": "**Describe the bug** Casting video does not work when trying to cast to an Nvidia Shield Pro (2019). Upon casting the video never loads or plays, but the casting is activated. **To Reproduce** Steps to reproduce the behavior: 1. Play a Stas",
+  "probe": ""
+ },
+ {
+  "key": "stash#4549",
+  "title": "Video controls and filters do not reset on queue change",
+  "excerpt": "Filters (transforms included) and the video controls persist when switching to another scene in the queue. To reproduce, change filters like brightness, zoom, rotate, etc. Click the Queue tab to change scene. The filters remain. This may no",
+  "probe": ""
+ },
+ {
+  "key": "stash#4556",
+  "title": "Prevent installing multiple themes simultaneously ",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, a user can install multiple theme plugins simultaneously, with unpredictable results (one of the installed themes overrides the others). **Describe the solution y",
+  "probe": "C61"
+ },
+ {
+  "key": "stash#4560",
+  "title": "Blob remains in use and prevents performer image from being replaced/deleted",
+  "excerpt": "**Describe the bug** I sometimes get the error message below, when I change the image of a performer. **To Reproduce** It is not 100% reproducible unfortunately. Sometimes it happens, sometimes not. These are the steps I followed when it ha",
+  "probe": ""
+ },
+ {
+  "key": "stash#4586",
+  "title": "Save default caption settings / Language rulesets",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently the caption settings are reset after each playback. Subtitle is not automatically enabled based on video language. **Describe the solution you'd like** - Add abili",
+  "probe": ""
+ },
+ {
+  "key": "stash#4589",
+  "title": "Custom label for captions/subtitles",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have multiple subtitles of the same language for one scene, which makes it difficult to properly label and know which one I am selecting. **Describe the solution you'd lik",
+  "probe": ""
+ },
+ {
+  "key": "stash#4594",
+  "title": "Ability to define Clips/Sub-Scenes from Scenes",
+  "excerpt": "Hi, First, thanks to everyone who's worked on Stash, really appreciate your efforts. I'm aware this is a near-duplicate of a couple of other feature requests, and there's a lot of overlap with several others. Please feel free to tag/move/et",
+  "probe": ""
+ },
+ {
+  "key": "stash#4619",
+  "title": "Tags Page > Tag Item > Additional Performers (Not named like that) Nav Item for Performers who have scenes with that Tag",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** On the tags page for any tag item, we currently have a performers nav bar option for performers who are tagged with that tag. It would be nice to see an additional option th",
+  "probe": ""
+ },
+ {
+  "key": "stash#4640",
+  "title": "Add Manga (2-image) layout option to Image lightbox",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Many NSFW mangas/doujins have \"double-page-spread\" images, that is one large horizontal image divided into two vertical images. Since stash's Image Lightbox view seems to di",
+  "probe": ""
+ },
+ {
+  "key": "stash#4642",
+  "title": "Allow playback of secondary files",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Playing a non-primary file currently requires switching the primary file. **Describe the solution you'd like** With the file refactor (multiple files per scene) and the merg",
+  "probe": ""
+ },
+ {
+  "key": "stash#4647",
+  "title": "Option to delete linked objects",
+  "excerpt": "When deleting a gallery or scene, I often forget to navigate to the associated gallery/galleries and scenes, which I almost always want to delete as well. 1. When deleting a scene which has one or more linked galleries, show a list of those",
+  "probe": ""
+ },
+ {
+  "key": "stash#4651",
+  "title": "Global search bar",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Add a way to quickly search things when not on a page with a search bar, for example on the list view the search bar will filter for just one type of content. Currently you ",
+  "probe": ""
+ },
+ {
+  "key": "stash#4656",
+  "title": "Support for galleryByQueryFragment for image galleries",
+  "excerpt": "### Describe the feature you'd like I’d like to enable scraping `galleryByQueryFragment` for image galleries. This feature would allow scene metadata to be applied to galleries, even when the corresponding scene is not present in one's Stas",
+  "probe": ""
+ },
+ {
+  "key": "stash#4667",
+  "title": "Popovers may appear outside the viewport",
+  "excerpt": "Hovering over any item that activates a popover over when the item is near enough to the edge of the viewport will cause the popover to appear partially or completely off-screen. **To Reproduce** Steps to reproduce the behavior: 1. Go to an",
+  "probe": ""
+ },
+ {
+  "key": "stash#4673",
+  "title": "Add data-values attributes to div.scene-specs-overlay span elements; add span.overlay-duration class; report framerate shorthand",
+  "excerpt": "The reported video data within `div.scene-specs-overlay` could still use a bit of polishing, including the addition of displaying overlay framerate appended to the resolution to complete the resolution and framerate shorthand that's now com",
+  "probe": ""
+ },
+ {
+  "key": "stash#4680",
+  "title": "O-Counter history for Images and Performers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In v0.25.0 O-Counter history tracking was added for scenes. However, this feature is missing from images and performers. **Describe the solution you'd like** - Add O-Counter",
+  "probe": ""
+ },
+ {
+  "key": "stash#4698",
+  "title": "Track and display statistics about scene duplicate checker actions",
+  "excerpt": "** Feature request** StashApp performs well, and it maintains well organized statistics about the number of scenes, total play, play count, O count etc, I would love to see same kind of stats under the \"Tools\" / \"Scene Duplicate Checker\" me",
+  "probe": ""
+ }
+]

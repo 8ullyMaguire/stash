@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/stashapp/stash/internal/collab"
 	"github.com/stashapp/stash/internal/static"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
@@ -104,6 +105,12 @@ func (rs groupRoutes) GroupCtx(next http.Handler) http.Handler {
 		})
 		if group == nil {
 			http.Error(w, http.StatusText(404), 404)
+			return
+		}
+
+		// §6.4's gate, BEFORE the handler reads the image. Covers /frontimage
+		// and /backimage. See stashforge_media_gate.go.
+		if !allowMedia(w, r, collab.TargetGroup, int64(group.ID)) {
 			return
 		}
 

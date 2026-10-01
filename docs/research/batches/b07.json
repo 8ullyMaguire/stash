@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#3625",
+  "title": "Support funscripts for Kiiroo interactive toys",
+  "excerpt": "Mac users have it difficult to find a good media player that provides script play. Many people use Stash of the ease of use. the same as with buying a Kirov Keon. I’m missing support for the Kiiroo Keon. Buttplug.io is amazing interactive t",
+  "probe": ""
+ },
+ {
+  "key": "stash#3637",
+  "title": "Add Aspect Ratio to scene File Info tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm basically frustrated there's no real option to filter scenes by VR and non-VR (virtual reality). There are times when I'm looking for VR-scenes only and other times when",
+  "probe": ""
+ },
+ {
+  "key": "stash#3651",
+  "title": "Configurable browser path and CLI arguments in Desktop Integration",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I normally use Firefox which doesn't support certain video codecs so Stash has to transcode some video files which wouldn't be necessary if I could configure it to use Chrom",
+  "probe": ""
+ },
+ {
+  "key": "stash#3655",
+  "title": "Option to display tag image next to the tag name in card popovers",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It is visually easier for me to see the image of the tag right next to the tag name on scene pages. Currently I am not able to do that unless I hover over the tag. I would l",
+  "probe": ""
+ },
+ {
+  "key": "stash#3664",
+  "title": "Long filenames cause cryptic deletion errors",
+  "excerpt": "**Describe the bug** My filesystem (zfs) has filename length limits of 255 bytes. While all the files in my library fall within these limits, I did not realize that stash requires renaming files to add the \".delete\" suffix before deletion, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3685",
+  "title": "Custom menu items for saved scene/marker filters",
+  "excerpt": "I am a heavy user of the saved scene filter feature. I don't use many of the existing top level tabs much (Stash, Scenes, Markers, Performers, Studios, Tags) **I'd like to be able to add saved scene/marker filters as top level tabs** **Desc",
+  "probe": ""
+ },
+ {
+  "key": "stash#3692",
+  "title": "Improve log settings",
+  "excerpt": "### Scope As a developer and a user, the logs--both the generated files and the UI section in the settings--could be improved for UX and DX alike. <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;",
+  "probe": ""
+ },
+ {
+  "key": "stash#3693",
+  "title": "Smart Tags (Organized Saved Filters)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I try to be euphemistic here... Let's say I'd like more hair tags, Long Blond Hair (Female), Red Pigtail Hair (Female), etc. and put them under an Appearance tag as children",
+  "probe": ""
+ },
+ {
+  "key": "stash#3694",
+  "title": "Allow creating `New` objects from subpages",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When we are editing tags and adding Parent Tags and Sub-Tags, we can't add new tags there, and there is no New button in the page's header either when we are in edit mode, w",
+  "probe": ""
+ },
+ {
+  "key": "stash#3700",
+  "title": "'Add to Gallery' Option for Selected Images",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The only way to add images to a gallery is to create or open a gallery, then search for the image. If your images aren't titled perfectly then it can be almost impossible to",
+  "probe": ""
+ },
+ {
+  "key": "stash#3711",
+  "title": "Replace Tags field dropdown with Checkbox Tree",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When we are searching for a tag so we can add it to a scene, performer, marker, etc., we can't see our existing tag structure and we have to remember the tag's exact name or",
+  "probe": ""
+ },
+ {
+  "key": "stash#3722",
+  "title": "pHash Improvement for Short Durations",
+  "excerpt": "## Problem The current phash implementation builds a collage image of 25 frames taken at regular intervals, ignoring the first and last 5% of the video. The phash of this image is then calculated and stored as the phash of the video. This h",
+  "probe": ""
+ },
+ {
+  "key": "stash#3734",
+  "title": "Setting to replace scene cover with sprites used for scene scrubber ",
+  "excerpt": "Have a setting to see the screenshot collage (sprite) instead of a single screenshot as the scene thumbnail both on the http://localhost:9999/scenes page and on individual scene http://localhost:9999/scenes/1 pages.",
+  "probe": ""
+ },
+ {
+  "key": "stash#3738",
+  "title": "Update \"Updated At\" date when funscript is attached to the scene",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** If you add a funscript file to a scene already in your library, upon scanning to ingest the funscript to the system, the date fields for the record do not update, which on a",
+  "probe": ""
+ },
+ {
+  "key": "stash#3741",
+  "title": "Scene detail screen loads full size thumbnails of all items in the queue",
+  "excerpt": "**Describe the bug** While loading either a list of scenes, or loading a scene detail page, browser memory usage spikes and the page is slow to load (up to 45s to finish, in my local-network testing). This is because the scenes in the queue",
+  "probe": ""
+ },
+ {
+  "key": "stash#3749",
+  "title": ".forceGallery metadata & include scenes on scan",
+  "excerpt": "With the introduction of .forceGallery in #3715 (thanks @yoshnopa!!!), I'd love to see this file host metadata to further automate gallery creation/updating. Alongside that, it would be great if scenes were automatically attached to the gal",
+  "probe": ""
+ },
+ {
+  "key": "stash#3750",
+  "title": "Ability to set viewport dimensions for CDP scraper",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When scraping scenes I have a site that has a UI that is much easier to scrape when it is in the mobile view, the only way to force it is by setting the view port size... **",
+  "probe": ""
+ },
+ {
+  "key": "stash#3751",
+  "title": "Option to set default gender for new performer",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** As a gay man, gay porn actors always import as women which I just find mildly irritating. **Describe the solution you'd like** A setting to default the gender thumbnail for ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3769",
+  "title": "Auto Tag might be sped up by keeping tags in RAM",
+  "excerpt": "**Describe the bug** The Auto-Tagger may be improved by holding tag info in memory rather than repeated individual SQL queries. I was watching the logs while auto-tagging and saw tons and tons of `SELECT alias from tag_aliases WHERE tag_id ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3773",
+  "title": "Persistent settings/toggles via cookies",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Particular user toggles/settings on scene/images/gallery and settings pages are not remembered with navigating away from a page/refreshing a page. **Describe the solution yo",
+  "probe": ""
+ },
+ {
+  "key": "stash#3781",
+  "title": "Display filtered object counts in subpages",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When navigating to the performer's tab on a studio page the performer's total library counts are displayed for scenes, images, galleries, etc. Also when sorting, such as by ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3790",
+  "title": "Update Filters in Search View, Add IsHaving along with isMissing and make it a checkbox based one rather than radio button one",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I need to check which all scenes of my collection are having all metadata. Organised flag is not good enough, as I need to rely on IDENTIFY task which itself is unreliable. ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3809",
+  "title": "Distribute as Flatpak on Linux",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Flatpak is quickly becoming the standard way of installing apps and as immutable distributions are becoming more popular this is the main/only way of installing on such syst",
+  "probe": ""
+ },
+ {
+  "key": "stash#3819",
+  "title": "Make lightbox slideshow options aware of image clips that have duration",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Previously, images could only be static images, meaning slideshow delay is a simple matter. Now we have clips, and clips have their own lengths that can vary. Either we have",
+  "probe": ""
+ },
+ {
+  "key": "stash#3824",
+  "title": "Display most common scene tags per performer",
+  "excerpt": "I would like a way to see the most common tags per performer, and the most common performers per tag. Note this does NOT mean the tags assigned to the performer themselves - just the tags related to the scenes/galleries the performer appear",
+  "probe": ""
+ },
+ {
+  "key": "stash#3825",
+  "title": "Scene aliases for Performers \"Jane Doe as Jane\"",
+  "excerpt": "### **Describe the solution you'd like** Ability to set an alias for a performer per scene in the same way that Stash-Box allows. #### Areas this feature would affect * Tagger - scene aliases would be pulled down from stash-box when tagging",
+  "probe": ""
+ },
+ {
+  "key": "stash#3837",
+  "title": "Expand `VR tag` settings option to support multiple tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In v0.21.0, a feature was added to show a \"VR\" button when a configurable tag is added to the config (https://github.com/stashapp/stash/pull/3636). However, sub-tags aren't ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3849",
+  "title": "Wrong order of images in galleries on identical files",
+  "excerpt": "**Describe the bug** Different image galleries may have the exact same image for several reasons: - Two different sets of the same scenarios that share one or two images - A gallery that is a compilation of images from other galleries When ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3855",
+  "title": "Change O-Counter value via keybaord shortcut during video playback",
+  "excerpt": "I think it would be cool if we could increase the O-Counter by typing in a number when viewing a video / image as opposed to clicking the o-counter multiple times.",
+  "probe": ""
+ },
+ {
+  "key": "stash#3859",
+  "title": "New Scene View Mode TikTok style",
+  "excerpt": "### Describe the feature you'd like I propose that Stash implements a new view scheme mode for scenes, similar to how TikTok displays videos or inspired by xfree.com. This mode would allow video skipping in the video queue through the scrol",
+  "probe": ""
+ },
+ {
+  "key": "stash#3861",
+  "title": "Localization setting to display units in either metric, imperial units, or both",
+  "excerpt": "This request is tied to #3703 (performer page restructure), but I am breaking it up into its own constituent part. The current layout can accommodate the display of both metric and imperial measurement units, but it may be best to give the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3866",
+  "title": "User configurable keyboard shortcuts for VideoJS",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** ~~When watching a video, there is no way to go forward 5 seconds, except waiting 5 seconds.~~ I can't define shortcuts e.g. Shift+Right Ctrl+Right and what they do myself. *",
+  "probe": ""
+ },
+ {
+  "key": "stash#3867",
+  "title": "Option to search subfolders when generating galleries",
+  "excerpt": "I'm working on organizing a large onlyfans library, and one thing that I am missing right now is the ability to auto-generate libraries for each performer. Right now, if you enable the automatic gallery generation feature, it will create mu",
+  "probe": ""
+ },
+ {
+  "key": "stash#3869",
+  "title": "Use videojs-vr player by default in VR tagged scenes & default videojs-vr rotation",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When opening VR-tagged videos, we have to click on the VR button, then choose 360 every single time to enable the VR player, then, we have to rotate the view 90 degrees beca",
+  "probe": ""
+ },
+ {
+  "key": "stash#3871",
+  "title": "Ability to add custom country/state codes for Country field",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The current country code list is incomplete for example we only have the option of United Kingdom, although can be considered a country, it's actually comprised of four coun",
+  "probe": ""
+ },
+ {
+  "key": "stash#3875",
+  "title": "Extract and display embedded subtitles",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently mkv files that have subtitles embedded will not display those subtitles. **Describe the solution you'd like** Stash can display external captions but it should als",
+  "probe": ""
+ },
+ {
+  "key": "stash#39",
+  "title": "Similar/related scenes tab based on scene details",
+  "excerpt": "This could show up as a tab on the scene pages or as a module for the dashboard",
+  "probe": ""
+ },
+ {
+  "key": "stash#3917",
+  "title": "Include short \"Scenes\" (pre-clipped files) in the Marker browser by tag",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I use the markers tab to find good clips that I create in Stash. I have some files that are already clipped I tag these \"Clip\" I would like to have the option to include tho",
+  "probe": ""
+ },
+ {
+  "key": "stash#3921",
+  "title": "Gallery update when galleries change from ZIP based to folder based",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Since #2721 has been resolved, renaming/moving folder based galleries is now recognized by Stash. However, as of now changing from a zip based gallery to a folder based gall",
+  "probe": ""
+ },
+ {
+  "key": "stash#3923",
+  "title": "Ability to play and navigate markers from a playlist",
+  "excerpt": "I couldn't find a related feature request although it is so obvious that this is missing: A playlist to skip through a filtered selection of markers with a next/previous button in videoplayer just like the routine which exists for scenes. N",
+  "probe": ""
+ }
+]

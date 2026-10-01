@@ -104,6 +104,18 @@ models:
     model: github.com/stashapp/stash/internal/manager.ImportObjectsInput
   ScanMetaDataFilterInput:
     model: github.com/stashapp/stash/internal/manager.ScanMetaDataFilterInput
+  # StashForge M4 -- public hosting. The model types live in
+  # internal/api/models_hosting.go and are DISTINCT from the collab domain
+  # types on purpose: the schema promises a nullable `isPrivate: Boolean` where
+  # the domain has a three-state *bool, and gqlgen maps a nil *bool onto a
+  # non-null Boolean by returning false -- which would publish a library whose
+  # owner never decided. The conversion is where the null is preserved.
+  TOTPStatus:
+    model: github.com/stashapp/stash/internal/api.TOTPStatusModel
+  TOTPEnrollment:
+    model: github.com/stashapp/stash/internal/api.TOTPEnrollmentModel
+  Library:
+    model: github.com/stashapp/stash/internal/api.LibraryModel
   # renamed types
   BulkUpdateIdMode:
     model: github.com/stashapp/stash/pkg/models.RelationshipUpdateMode
@@ -143,5 +155,20 @@ models:
   Performer:
     fields:
       career_length:
+        resolver: true
+  # The cluster's members and member count are field resolvers, not struct
+  # fields. `personClusterModel` deliberately leaves both nil/zero so that
+  # listing 20 clusters does not read every member of every cluster to render
+  # 20 rows -- which is the whole point of the review queue being a queue.
+  #
+  # Without `resolver: true` here gqlgen generates `return obj.Members, nil`,
+  # which compiles, passes every test that does not query the field, and returns
+  # an empty list to every client. The field is still in the schema and the
+  # type still looks right, so the breakage is invisible from outside.
+  PersonCluster:
+    fields:
+      members:
+        resolver: true
+      memberCount:
         resolver: true
   

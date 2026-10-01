@@ -1,0 +1,56 @@
+# StashForge — account management.
+#
+# These four mutations and one query are the entire multi-user surface. They are
+# present on a single-user instance too, and there they return an error saying
+# so: an instance that never opted into accounts must not offer a registration
+# path that silently does nothing.
+
+"""
+An account on this instance. Never includes the password hash: there is no field
+for it, so no resolver can leak one by forgetting to omit it.
+"""
+type User {
+  id: ID!
+  username: String!
+  "Null when the user never set one."
+  email: String
+  createdAt: Timestamp!
+  "True when the account may not log in. Readable only by the owner."
+  disabled: Boolean!
+  """
+  The instance owner. Grants user management, library paths, settings and
+  moderator appointment -- and nothing else. There is no field for overruling a
+  quorum-accepted edit, and no resolver that does it.
+  """
+  isOwner: Boolean!
+  "True when this user is a moderator. Appointed by the owner."
+  isModerator: Boolean!
+  "Earned by accepted proposals. Delta-only in the store; no user can set it."
+  reputation: Int!
+}
+
+"""
+A successful login. The session id is deliberately NOT in the response body: the
+server sets it as an HttpOnly cookie, so a page that renders this response cannot
+read the session out of the DOM, out of localStorage, or out of a JS variable.
+"""
+type AuthPayload {
+  user: User!
+}
+
+input RegisterInput {
+  username: String!
+  password: String!
+  """
+  Required on every instance that already has one account. On an instance with
+  no accounts the first registration needs no key, because there is nobody to
+  issue one -- otherwise a fresh instance could never be bootstrapped.
+  """
+  inviteKey: String
+  email: String
+}
+
+input LoginInput {
+  username: String!
+  password: String!
+}

@@ -1,5 +1,12 @@
 "The query root for this schema"
 type Query {
+  """
+  The currently authenticated user, or null when anonymous. Anonymous is the
+  normal state of most requests, so this is not an error.
+  """
+  me: User
+
+
   # Filters
   findSavedFilter(id: ID!): SavedFilter
   findSavedFilters(mode: FilterMode): [SavedFilter!]!
@@ -280,6 +287,19 @@ type Query {
 }
 
 type Mutation {
+  "Create an account. Requires an invite key unless this instance has no accounts yet."
+  register(input: RegisterInput!): AuthPayload!
+
+  """
+  Authenticate, and set the session cookie. Every failure mode returns the same
+  error, so this form cannot be used to enumerate accounts.
+  """
+  login(input: LoginInput!): AuthPayload!
+
+  "Destroy the current session and clear its cookie."
+  logout: Boolean!
+
+
   setup(input: SetupInput!): Boolean!
 
   "Migrates the schema to the required version. Returns the job ID"
@@ -477,6 +497,14 @@ type Mutation {
   metadataExport: ID!
   "Start a scan. Returns the job ID"
   metadataScan(input: ScanMetadataInput!): ID!
+  """
+  Cluster the faces found in the library by who they are. Returns the job ID.
+
+  The ID is the JOB, not the result: the pass decodes frames and runs models
+  over every scene, so it takes a long time and can be watched and cancelled in
+  the job list. The number of clusters is in the log, not in this response.
+  """
+  faceClustering: ID!
   "Start generating content. Returns the job ID"
   metadataGenerate(input: GenerateMetadataInput!): ID!
   "Start auto-tagging. Returns the job ID"

@@ -73,9 +73,24 @@ const Galleries = lazyComponent(
 
 const Groups = lazyComponent(() => import("./components/Groups/Groups"));
 const Tags = lazyComponent(() => import("./components/Tags/Tags"));
+// StashForge: the proposal surface. Its own route rather than a tab inside an
+// entity page, because a proposal is about a claim on shared content and the
+// claims span every entity type — filing them under scenes would make performers
+// and studios second-class.
+const Proposals = lazyComponent(
+  () => import("./components/Proposals/Proposals")
+);
 const Images = lazyComponent(() => import("./components/Images/Images"));
 const Setup = lazyComponent(() => import("./components/Setup/Setup"));
 const Migrate = lazyComponent(() => import("./components/Setup/Migrate"));
+
+// StashForge's first-run sharing decision. A DEFAULT export, which
+// lazyComponent requires -- the first version of this component exported it
+// named, and the import type-checks fine while the route renders an empty
+// component at runtime.
+const StashForgeWizard = lazyComponent(
+  () => import("./components/Setup/StashForgeWizard")
+);
 
 const SceneFilenameParser = lazyComponent(
   () => import("./components/SceneFilenameParser/SceneFilenameParser")
@@ -258,6 +273,7 @@ export const App: React.FC = () => {
             <Route path="/galleries" component={Galleries} />
             <Route path="/performers" component={Performers} />
             <Route path="/tags" component={Tags} />
+            <Route path="/proposals" component={Proposals} />
             <Route path="/studios" component={Studios} />
             <Route path="/groups" component={Groups} />
             <Route path="/stats" component={Stats} />
@@ -271,6 +287,12 @@ export const App: React.FC = () => {
               component={SceneDuplicateChecker}
             />
             <Route path="/setup" component={Setup} />
+            {/* StashForge's first-run sharing decision. A SEPARATE route from
+                /setup: that one is upstream's config wizard, and this one is the
+                one-time posture choice. Same screen would mean an operator who
+                re-runs configuration lands in the sharing decision, which the
+                server refuses with wizard_already_completed. */}
+            <Route path="/stashforge/wizard" component={StashForgeWizard} />
             <Route path="/welcome" component={Welcome} />
             <Route path="/migrate" component={Migrate} />
             <PluginRoutes />

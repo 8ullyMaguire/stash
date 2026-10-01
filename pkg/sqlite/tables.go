@@ -432,4 +432,58 @@ var (
 		table:    goqu.T(savedFilterTable),
 		idColumn: goqu.T(savedFilterTable).Col(idColumn),
 	}
+
+	// StashForge. The users table is not a normal content table: nothing
+	// joins to it except invite_keys and user_sessions, and it must not
+	// participate in any cascade delete that a content deletion could trigger.
+	userTableMgr = &table{
+		table:    goqu.T(userTable),
+		idColumn: goqu.T(userTable).Col(idColumn),
+	}
+
+	// user_sessions is keyed by a BLOB (the session id hash), not an integer
+	// id, so its idColumn is the hash column rather than the shared `id`.
+	userSessionTableMgr = &table{
+		table:    goqu.T(sessionTable),
+		idColumn: goqu.T(sessionTable).Col("id"),
+	}
+
+	// invite_keys is likewise keyed by the key hash.
+	inviteTableMgr = &table{
+		table:    goqu.T(inviteTable),
+		idColumn: goqu.T(inviteTable).Col(inviteKeyHashColumn),
+	}
+
+	// edit_proposals is keyed by the shared integer `id`, unlike the BLOB- and
+	// hash-keyed auth tables above it.
+	editProposalTableMgr = &table{
+		table:    goqu.T(editProposalsTable),
+		idColumn: goqu.T(editProposalsTable).Col(idColumn),
+	}
+
+	// proposal_votes has a COMPOSITE primary key (proposal_id, user_id) and no
+	// `id` of its own, so it opts out of the standard destroy/find-by-id path
+	// entirely. Its idColumn is the first key column, which is what the
+	// repository's getAll would use — but nothing in this file calls it.
+	proposalVoteTableMgr = &table{
+		table:    goqu.T(proposalVotesTable),
+		idColumn: goqu.T(proposalVotesTable).Col("proposal_id"),
+	}
+
+	collabAuditTableMgr = &table{
+		table:    goqu.T(collabAuditTable),
+		idColumn: goqu.T(collabAuditTable).Col(idColumn),
+	}
+
+	// field_reputation has a THREE-column composite primary key
+	// (user_id, target_type, field) and no `id` of its own, so like
+	// proposal_votes it opts out of the standard find-by-id / destroy path
+	// entirely. Every read and write in stashforge_reputation.go is by the
+	// triple, never by a single id, so the idColumn here is never used -- it is
+	// set to the first key column only because the repository struct requires
+	// one.
+	fieldReputationTableMgr = &table{
+		table:    goqu.T(fieldReputationTable),
+		idColumn: goqu.T(fieldReputationTable).Col("user_id"),
+	}
 )

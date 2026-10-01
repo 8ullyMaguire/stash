@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#2879",
+  "title": "Add settings option to hide scene tabs sidebar by default",
+  "excerpt": "Settings -> Interface Currently has a \"Show Scrubber\" option that hides the scrubber by default but it can still be toggled via keystrokes. I'd like a similar option to collapse the sidebar by default.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2902",
+  "title": "Add option for images to inherit metadata from the gallery they are in",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm a collector of erotica (think sites like _MetArt_) for well over a decade and as such I have tens of thousands of galleries in my Stash containing millions of images. Wh",
+  "probe": ""
+ },
+ {
+  "key": "stash#2903",
+  "title": "Ability to check stash-box matches based on last updated date in scene tagger",
+  "excerpt": "### Problem Once a scene has been matched, a user typically wouldn't be able to receive any updates if details have been updated (maybe males were added or titles were fixed), or if the scene was deleted as a duplicate. There is an update f",
+  "probe": ""
+ },
+ {
+  "key": "stash#2905",
+  "title": "Ability to pre-trancode video file and store it for playback in lower quality",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When using Stash on a bandwidth limited connection the user experience is not great when compared to other streaming/tube sites. The playback will take a long time to start ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2913",
+  "title": "Queue Looping",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When you have a short queue you have to play the first video to start again. **Describe the solution you'd like** It would be great if there was a \"[X] Loop\" check box next ",
+  "probe": ""
+ },
+ {
+  "key": "stash#2914",
+  "title": "Ability to to configure delay/rate limit on per scraper basis",
+  "excerpt": "### Describe the feature you'd like I would like the ability to specify a time period in milliseconds between individual requests when using the identify or scrape metadata features in Tagger. ### Describe the benefits this would bring to e",
+  "probe": ""
+ },
+ {
+  "key": "stash#2942",
+  "title": "Parse scene details field when using auto tag task",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I noticed that even if the description/details of a video has tags included in it, which I have preexisting in stash, it currently does not use this information to tag it. *",
+  "probe": ""
+ },
+ {
+  "key": "stash#2944",
+  "title": "Add user interface to move files using `moveFiles`",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Whenever a file is moved into a different folder on the computer, all its markers, tags, and other data get reset. One has to manually edit the database in order to keep the",
+  "probe": ""
+ },
+ {
+  "key": "stash#2954",
+  "title": "Generate marker preview immediately after marker is created",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** After creating a marker, you always have to generate the previews manually. **Describe the solution you'd like** A toggleable option in the settings that makes Stash generat",
+  "probe": ""
+ },
+ {
+  "key": "stash#2956",
+  "title": "Add the ability to sort Images and Galleries by Performer Age",
+  "excerpt": "Please the ability to sort Galleries, Scenes etc. by Performer Age.",
+  "probe": ""
+ },
+ {
+  "key": "stash#2960",
+  "title": "Make \"Create galleries from folders containing images\" more robust to specify gallery folders with regexp",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** \"Create galleries from folders containing images\" is limited to all-or-nothing functionality. If an end-user has an image library path that contains more than image sets, su",
+  "probe": ""
+ },
+ {
+  "key": "stash#2973",
+  "title": "Give a measure of importance to tags",
+  "excerpt": "Give importance to tags so that when a file is renamed if all tags can't be used, because it would exceed the maximum length, the most important tags are used. The number of submissions or votes in stash-box would be a way to measure the ta",
+  "probe": ""
+ },
+ {
+  "key": "stash#2976",
+  "title": "Include performers and tags in scene keyword searching",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When searching scenes, often I want to search by keywords that are tagged, but not included in the scene. Or sometimes I search by performer name. It is frustrating that sce",
+  "probe": ""
+ },
+ {
+  "key": "stash#3001",
+  "title": "Adding `File.Destroy.Post` hook",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have files on cloud: - **Before** FileRefactor, a plugin would send a command to Rclone (CLI to manage cloud storage) to delete this file. This plugin is trigger when the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3031",
+  "title": "Funscript related ideas/goals",
+  "excerpt": "Braindump (and cut and paste of discord posted ideas) to improve how Stash handles funscripts: Funscript support is great for a single script, but as the tech is evolving, the use of multiple scripts (alternative, or multiaxis) is being mor",
+  "probe": ""
+ },
+ {
+  "key": "stash#3038",
+  "title": "Optimize/compress images in both generated folder and database",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The file size of images located in the *generated/screenshots* and *generated/thumbnails* (and I'm guessing the database too) can be unnecessarily large, especially with lar",
+  "probe": ""
+ },
+ {
+  "key": "stash#3065",
+  "title": "Make Stash more suitable for JAV",
+  "excerpt": "<!-- Update or delete the title if you need to delegate your title gore to something # Title Make Stash more suitable for JAV *### Scope* <!-- describe the scope of your topic and your goals ideally within a single paragraph or TL;DR kind o",
+  "probe": ""
+ },
+ {
+  "key": "stash#3073",
+  "title": "Allow downloading/caching of video(s) for offline use",
+  "excerpt": "As titled, under some circumstances it'd be nice to be able to download / cache a few videos offline. Say if you're expecting to be cut off from the server running Stash. I'm imagining that it would just download to the local Browser storag",
+  "probe": ""
+ },
+ {
+  "key": "stash#3074",
+  "title": "Content recommendations based on recent history",
+  "excerpt": "Here's an idea based off a feature on a lot of tube sites: providing a page with \"recommended\" content from your library based on recent viewing history. This idea is different from the current filter system in the sense that it's adjusting",
+  "probe": ""
+ },
+ {
+  "key": "stash#3077",
+  "title": "Advanced SubStation Alpha (ASS) subtitle format support",
+  "excerpt": "name.mkv name.ass need display .ass subtitle in video Spec: https://web.archive.org/web/20170625033533/http://www.tcax.org/docs/ass-specs.htm",
+  "probe": ""
+ },
+ {
+  "key": "stash#3078",
+  "title": "Add Quit Stash option from the Web UI",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I wasn't aware it was possible to quit stash other than through task manager until I asked and someone pointed out that it's possible with the windows task bar in the bottom",
+  "probe": ""
+ },
+ {
+  "key": "stash#3107",
+  "title": "DLNA legacy folders",
+  "excerpt": "I have an older samsung TV which can open some legacy folders (or kindof), called \"Videos\" \"Images\" \"Music\" \"All Content\" Add folders compatible with this. **Describe alternatives you've considered** Using MiniDLNA, rclone serve dlna as the",
+  "probe": ""
+ },
+ {
+  "key": "stash#3122",
+  "title": "Create All/New/Missing on Scene Tagger page",
+  "excerpt": "A common request/concern from new users is: \"Wait, if I use Tagger, like you recommend, I have to click on EVERY new performer/studio/tag to add them? That will take forever, and I don't want to do that. Don't you guys have a setting to jus",
+  "probe": ""
+ },
+ {
+  "key": "stash#3130",
+  "title": "Scene/Performer Tagger Configuration UI Refactor",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The tagger configuration requires more mouse clicks and modals than necessary. The layout is also inconsistent between the scenes and performer taggers. Addressing these two",
+  "probe": ""
+ },
+ {
+  "key": "stash#3135",
+  "title": "Expose Saved Filters over DLNA",
+  "excerpt": "It'd be great if DLNA shows saved filters with its custom sorting. For example using Plex I can see what's new or just 4K videos, which is what I use dlna the most with the TV.",
+  "probe": ""
+ },
+ {
+  "key": "stash#314",
+  "title": "Add functionality to prevent cleaning on particular drives (Hot swap drive user)",
+  "excerpt": "Hi folks I'm sure I'm not the only person who doesn't have a NAS solution and has an archive of all porn spread across multiple drives (as it stands I have 13 drives, only 3 so far have I started archiving stuff from...) My problem is, as I",
+  "probe": ""
+ },
+ {
+  "key": "stash#3159",
+  "title": "Improve filtering in presence of NULL values",
+  "excerpt": "# Improve filtering in presence of NULL values ### Scope Current behavior is that there are specific conditions for NULL and there are conditions for values that ignore scenes with NULL in that field. There is no way to construct an OR quer",
+  "probe": ""
+ },
+ {
+  "key": "stash#3171",
+  "title": "Synology NAS and folders table",
+  "excerpt": "**Describe the bug** With the introduction of the 'folders' table in 0.17 (I believe), all folders under the root are added. Synology makes hidden folders called `@eaDir` in any folder that contains one or more videos and inside that folder",
+  "probe": ""
+ },
+ {
+  "key": "stash#3172",
+  "title": "Stash icon almost invisible on windows 10 dark mode",
+  "excerpt": "## Scope just the color, please... its almost invisible ## Start menu ![image](https://user-images.githubusercontent.com/17786532/203318756-c07273cf-e3c7-40e2-8f37-46b43663c01e.png) ## System Tray ![image](https://user-images.githubusercont",
+  "probe": ""
+ },
+ {
+  "key": "stash#3189",
+  "title": "Fallback to scene cover in Duplicate Checker tool if no scrubber sprites are generated",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When scanning for new files I only generate PHash's, so I can check if I have a file doubled. But in `DuplicateChecker` it does not show any preview/thumbnail of the video f",
+  "probe": ""
+ },
+ {
+  "key": "stash#3197",
+  "title": "Add ratings to markers",
+  "excerpt": "> Allow the option to give an end to markers to use them as clips for example [in this case](https://github.com/stashapp/stash/issues/2511#issuecomment-1318682305). _Originally posted in https://github.com/stashapp/stash/issues/3147_ > Anot",
+  "probe": ""
+ },
+ {
+  "key": "stash#3200",
+  "title": "Tag colors",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have a lot of tags. Some tags fall under common categories. I'd like to make tags of the same nature to be more like each other and more distinguishable from other tags vi",
+  "probe": ""
+ },
+ {
+  "key": "stash#3219",
+  "title": "Add toggles in settings to hide fields on edit pages",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Scene editing panel was already pretty long and didn't fit into my screen (1920x1080, 100% scale everywhere) in 0.17.2. Version 0.18.0 added a couple new fields at the top (",
+  "probe": ""
+ },
+ {
+  "key": "stash#3220",
+  "title": "Option to convert scene to fileless scene if attached primary file is deleted",
+  "excerpt": "Since we have fileless scene availability since 18.0. it would be nice to have availability to delete the primary file (and make the fileless scene this way). maybe also solution through the current deletion dialog to only delete the file a",
+  "probe": ""
+ },
+ {
+  "key": "stash#3221",
+  "title": "Add a button inside toasts to quickly undo accidentally created tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Often when tagging new items added to stash, I'll be quickly typing partial tags and hitting Enter from muscle memory. However, if the tag has already been applied to the sc",
+  "probe": ""
+ },
+ {
+  "key": "stash#3232",
+  "title": "Merge tag to scene button & functionality for performers and studios tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Repeatedly manually adding the same performer and website specific tags to scenes takes too long and tags are easily missed/forgotten [...] **Describe the solution you'd lik",
+  "probe": ""
+ },
+ {
+  "key": "stash#3237",
+  "title": "Request sub-task within Generate to run Identify on a file",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It seems like a waste of time to run Generate and Identify separately as they have to happen serially and not in parallel. **Describe the solution you'd like** Would like a ",
+  "probe": ""
+ },
+ {
+  "key": "stash#3238",
+  "title": "Allow different time units for minimum play percent option",
+  "excerpt": "This is an addition to the recently implemented #633 Currently the play counter is incremeted based on a percentage of the video watched, defined in the option \"Minimum Play Percent\". I understand the use case for short videos needing a per",
+  "probe": ""
+ },
+ {
+  "key": "stash#325",
+  "title": "Ability to \"Select All\" objects across all pages",
+  "excerpt": "Selecting a large number of scenes is challenging because the selection mechanism operates within the context of the visible page. Ideally, it should be possible to select ALL results of the current filter/search. One option would be to spl",
+  "probe": ""
+ },
+ {
+  "key": "stash#3250",
+  "title": "Add ratings directly to the scene player",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Having to go into the edit panel to rate scenes is cumbersome, I end up tending to avoid rating scenes when in fact want to. **Describe the solution you'd like** I propose, ",
+  "probe": ""
+ }
+]

@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#6744",
+  "title": "Option to check specific folder for subtitles",
+  "excerpt": "### Describe the feature you'd like In the library settings, allow the user to specify a folder path or paths containing external subtitle files. When the video player loads a video, in addition to checking if an .SRT file exists alongside ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6745",
+  "title": "Ability to link scraped studio to existing studio from scrape dialog window",
+  "excerpt": "### Describe the feature you'd like The scene URL scraper interface lets you link a tag to an existing tag: <img width=\"306\" height=\"111\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/4d2ccb74-2128-4680-b3c9-06d12476d352\" /> B",
+  "probe": ""
+ },
+ {
+  "key": "stash#6781",
+  "title": "[epic] src/ui dependency update spree",
+  "excerpt": "Documenting significant changes and linking all PRs together PRS: #6779 ## Sprint 1 (#6777) sig changes - removed `string.prototype.replaceall` polyfill - replaced videojs-vr with @blaineam/videojs-vr for webxr support + merged patches - re",
+  "probe": ""
+ },
+ {
+  "key": "stash#6793",
+  "title": "Add similar markers filters that exist on scenes",
+  "excerpt": "### Describe the feature you'd like Currently the filters on Markers feels lacking compared to what the Scenes has. Things like Performer Tags, Performer Count, Performer Favourited, Path, Orientation would be great to filter on the markers",
+  "probe": ""
+ },
+ {
+  "key": "stash#6795",
+  "title": "Create and manage Custom Fields to be used across all Scenes",
+  "excerpt": "### Describe the feature you'd like Currently, custom fields have to be created per-scene and manually named every time. It would be great if there were a way to create a new custom field that will be universally applied to all scenes, that",
+  "probe": ""
+ },
+ {
+  "key": "stash#6811",
+  "title": "Show marker ranges on scene player control bar on mobile screens",
+  "excerpt": "### Describe the feature you'd like #### Current Behavior Currently, on small screens, markers with both start and end times only show up as blips on the scene player control bar, as opposed to showing up as bars depicting their range, like",
+  "probe": ""
+ },
+ {
+  "key": "stash#6814",
+  "title": "Queue gets stuck on fileless scenes",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug If there is a fileless scene in the queue, the automatic playlist feature gets stuck on it. It shows the next scene's ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6816",
+  "title": "Reduce size of the action buttons on performer page",
+  "excerpt": "### Describe the feature you'd like Just recently upgraded to v0.31.0. I have a slight issue with the buttons on the performs page. The spacing is off. Also I feel there are too many buttons at the bottom, crowding the page <img width=\"488\"",
+  "probe": ""
+ },
+ {
+  "key": "stash#6823",
+  "title": "Standardize Buttons on Performers Cards",
+  "excerpt": "### Describe the feature you'd like The buttons under the performers cards showing counts of videos, galleries, groups etc.) are really uneven <img width=\"272\" height=\"125\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/19fab1c",
+  "probe": ""
+ },
+ {
+  "key": "stash#6837",
+  "title": "Ability to skip generation tasks on scenes where it failed",
+  "excerpt": "### Describe the feature you'd like It would be nice if Stash attempted a generation on a particular scene and then based on the existence of the generated files marked the task as complete or failed and then did not attempt generation on t",
+  "probe": ""
+ },
+ {
+  "key": "stash#684",
+  "title": "Non-privileged user in Docker build",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** at present, `stash` is running as root in the Docker container. **Describe the solution you'd like** ideally, a new non-privileged user should be created to execute `stash`,",
+  "probe": ""
+ },
+ {
+  "key": "stash#6860",
+  "title": "Allow setting default tab on studio details page on a per-studio basis",
+  "excerpt": "### Describe the feature you'd like Allow the user to choose a default tab to show on the studio details page (scenes, galleries, images, performers, etc) for each studio. Alternatively, filters could be defined and sorted in order of prece",
+  "probe": ""
+ },
+ {
+  "key": "stash#6861",
+  "title": "Cover Image usability improvements + metadata",
+  "excerpt": "I wasn't sure if it would clutter the issue list if I broke these down, so I put all my thoughts on this topic in one issue. Sorry if that makes it more difficult to track the individual suggestions. Generating custom cover images for scene",
+  "probe": ""
+ },
+ {
+  "key": "stash#6864",
+  "title": "Move disableAnimation lightbox option from GraphQL to UI config",
+  "excerpt": "> Having to do a graphql changes for lightbox options is pretty rough. We should move this into the UI config at some point. _Originally posted by @WithoutPants in https://github.com/stashapp/stash/pull/6354#pullrequestreview-3527977439_",
+  "probe": ""
+ },
+ {
+  "key": "stash#6866",
+  "title": "Dynamically hide non applicable performer fields based on gender",
+  "excerpt": "## Describe the feature you'd like In working with performers, we are not doing any gender aware field filtering and are showing some illogical fields. I propose supressing the display of fields by default of performer fields which are excl",
+  "probe": ""
+ },
+ {
+  "key": "stash#6871",
+  "title": "Add paths and behavior flags to findFolders() and findFiles()",
+  "excerpt": "### Describe the feature you'd like Currently, in the GQL schema findFolders() and findFiles() have an `ids: [ID!]` parameter for finding records by ids. We should add `paths: [String!]` to this. Also I had a discussion with WP on Discord r",
+  "probe": ""
+ },
+ {
+  "key": "stash#6873",
+  "title": "Add Image(s) to scrapeSingleTag",
+  "excerpt": "### Describe the feature you'd like Add `Image` field to ScrapeSingleTag to allow scraping and setting the image via stash-box api ### Describe the benefits this would bring to existing users Would be an easier way to distribute and to shar",
+  "probe": ""
+ },
+ {
+  "key": "stash#6874",
+  "title": "safe catch/ bypass of PluginApi.patch",
+  "excerpt": "### Describe the feature you'd like Add try/catch blocks to PluginApi.patch to prevent hard ui crashes ### Describe the benefits this would bring to existing users Broken plugins hooking into PluginApi like [overlay-info](https://discourse.",
+  "probe": ""
+ },
+ {
+  "key": "stash#6875",
+  "title": "Enter troubleshooting mode via ENV/ argument",
+  "excerpt": "### Describe the feature you'd like Ability to enable troubleshooting mode from a broken plugin without having to enter UI/ mess with config.yml ### Describe the benefits this would bring to existing users Disable possibly misbehaving plugi",
+  "probe": "C78"
+ },
+ {
+  "key": "stash#6883",
+  "title": "Log X-Real-IP from reverse proxy",
+  "excerpt": "### Describe the feature you'd like Stash is running behind nginx stream+reverse proxy. Source IP address for any request is 127.0.0.1 so all entries of incorrect login contains this address 127.0.0.1 is it possible to write to the log the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6897",
+  "title": "Sub-Groups without scenes not displaying initial page-load properly",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug If you have a sub-group without direct scenes, the UI will skip over scenes and performers and select the Sub-Groups t",
+  "probe": ""
+ },
+ {
+  "key": "stash#6899",
+  "title": "Add defaults for plugin settings",
+  "excerpt": "### Describe the feature you'd like Right now one can set `displayName, description, type` for settings in myPlugin.yml It would be nice if there would also be a `default` ### Describe the benefits this would bring to existing users Right n",
+  "probe": ""
+ },
+ {
+  "key": "stash#691",
+  "title": "SOCKS5 proxy support for scraping",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** SOCKS/Proxy support **Describe the solution you'd like** Enable the use of proxy servers for scraping of data",
+  "probe": ""
+ },
+ {
+  "key": "stash#6925",
+  "title": "Performer Age vs. Birthday Sort",
+  "excerpt": "### Describe the feature you'd like On the performer page there is an option to sort by birthday, which is really just an age sort youngest/oldest. Under the filter options there is options for Age, Birthday before/after X, and Birth Year. ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6939",
+  "title": "Phash Generation task does not generate for videos classified as images in Stash",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug With the new feature of Image phashes, i would also expect non images (mpvs, mp4s etc) that we have set stash to class",
+  "probe": ""
+ },
+ {
+  "key": "stash#6944",
+  "title": "Add/Remove/Reorder scenes from Group page",
+  "excerpt": "### Describe the feature you'd like On the group detail page's Scenes tab, support full scene management: adding scenes to the group (with a scene_index), de-linking scenes from the group (without deleting the scene), and editing a scene's ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6945",
+  "title": "Add Scenes field to ScrapedGroup schema",
+  "excerpt": "### Describe the feature you'd like Add a scenes field to the ScrapedGroup GraphQL type so that group scrapers can return per-scene data (title, duration, performers, index) alongside DVD-level metadata. ### Describe the benefits this would",
+  "probe": ""
+ },
+ {
+  "key": "stash#6949",
+  "title": "Animated Images using VideoFile in GQL",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Animated images currently seem to be half-and-half `VideoFile` type and Image record. This causes an issue whereby que",
+  "probe": ""
+ },
+ {
+  "key": "stash#6953",
+  "title": "Improve dense scene marker readability",
+  "excerpt": "### Describe the feature you'd like Improve the Scene Player marker rendering so markers remain visually distinct when several markers are close together on the timeline. The current colored marker UI is useful when markers are spaced out, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6955",
+  "title": "Settings option to enable automatic scrolling in wall view",
+  "excerpt": "### Describe the feature you'd like Add a toggle for Wall View mode to allow the wall to auto-scroll through the page, maybe a dropdown could be added that controls the speed at which it scrolls through entries as well (maybe as pixels per ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6956",
+  "title": "Improve \"Clear Date Data\" popups",
+  "excerpt": "### Describe the feature you'd like Reattempt of #6911. When doing a mass clear of the Scene Play History or Scene O-Count History, clicking \"Clear Date Data\" on either one shows the same popup. The popup text refers to the Play History, ev",
+  "probe": ""
+ },
+ {
+  "key": "stash#6970",
+  "title": "Add IS_NULL and NOT_NULL modifiers to duration field for Group filter",
+  "excerpt": "### Describe the feature you'd like Add `IS_NULL` and `NOT_NULL` modifier to the duration field. <img width=\"467\" height=\"76\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/1fe8ea12-f437-4d88-8a90-a83510b88b45\" /> ### Describe ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6978",
+  "title": "HEVC Video in MKV playback freezes when skipped to another part of the video on Firefox",
+  "excerpt": "### Have you enabled troubleshooting mode? - [x] I confirm that the troubleshooting mode is enabled. ### Describe the bug Hi! I'd like to report that HEVC videos (h265) playback is bugged in Firefox. It plays (after some delay) but scrubbin",
+  "probe": ""
+ },
+ {
+  "key": "stash#6979",
+  "title": "Ability to add tags to exclusion list from tags page",
+  "excerpt": "### Describe the feature you'd like A bulk action on the Tags page to add selected tags to Excluded Tag Patterns, with options to also remove those tags from scenes and/or delete them after adding the exclusion. ### Describe the benefits th",
+  "probe": ""
+ },
+ {
+  "key": "stash#6982",
+  "title": "Ability to fast forward/rewind at 2x speed using long press",
+  "excerpt": "### Describe the feature you'd like In many online video players, there is the ability to long press (longpress) on the video and when you do it on the right side, it fast forwards at a higher speed (2x or 4x), while if you do it on the lef",
+  "probe": ""
+ },
+ {
+  "key": "stash#6987",
+  "title": "Ability to reinstall plugin from installed plugins section",
+  "excerpt": "### Describe the feature you'd like Ability to allow re-install of plugins from ui would be nice. ### Describe the benefits this would bring to existing users Reinstallation is beneficial because - - sometimes some plugins install platform ",
+  "probe": ""
+ },
+ {
+  "key": "stash#700",
+  "title": "Make in-app help section more noticeable to new users",
+  "excerpt": "**Describe the solution you'd like** Being on the Discord I have come across a number of new users of Stash who didn't realise that there is a Help section within Stash itself, so my idea was for something to draw their attention to the hel",
+  "probe": ""
+ },
+ {
+  "key": "stash#7007",
+  "title": "Official Docker image with hardware acceleration support",
+  "excerpt": "### Describe the feature you'd like Add hardware acceleration support to official Docker image hosted by stashapp. ### Describe the benefits this would bring to existing users It would remove the need for users to build their own image or \"",
+  "probe": ""
+ },
+ {
+  "key": "stash#7013",
+  "title": "Avoid unnecessary cover image updates when re-scraping scenes",
+  "excerpt": "### Describe the feature you'd like Whenever we scrape any scene, if the scene is already scraped say from stashdb, it will have the correct cover image. However, on a re-scrape, the image is still asked to be updated, even though it may no",
+  "probe": ""
+ },
+ {
+  "key": "stash#7020",
+  "title": "Image view counter",
+  "excerpt": "### Describe the feature you'd like Just like scenes have a play counter, images should have a view counter. It should: - increments counter and sets last viewed at on full size view - when image detail view is opened - when lightbox shows ",
+  "probe": ""
+ }
+]

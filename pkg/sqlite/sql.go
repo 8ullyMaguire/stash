@@ -127,21 +127,42 @@ func getSort(sort string, direction string, tableName string) string {
 	}
 }
 
-func getRandomSort(tableName string, direction string, seed uint64) string {
-	// cap seed at 10^8
-	seed %= 1e8
+// randomSortPolyBound is the largest value of x for which the polynomial below
+// still fits in int64: x*x*P1 + x*P2 <= 2^63-1 with P1=52959209, P2=1047483763.
+//
+// 417,314, derived rather than guessed. x^2*52959209 exceeds int64 at
+// x = 417,315, and that is what makes the old seed cap of 1e8 wrong: a seed of
+// 1e8 puts x in the millions, so EVERY id overflowed, SQLite degraded the
+// result to float64, and the trailing % 2147483647 became a no-op. The sort
+// key came back as the constant 1 for every row, so "random" ordering silently
+// meant "by id".
+const randomSortPolyBound = 417314
 
+func getRandomSort(tableName string, direction string, seed uint64) string {
+	// The seed is used as-is. The old code reduced it with %= 1e8, which existed
+	// to keep the polynomial inside int64; now that the reduction happens per-id
+	// (below) the cap is not merely unnecessary but harmful -- a seed of 1e9 and
+	// one of 1e8 would differ by exactly one full period of the id modulus and
+	// so produce a near-identical order.
 	colName := getColumn(tableName, "id")
 
-	// https://stackoverflow.com/questions/21949795#comment33255354_21949859
-	// p1 := 52959209
-	// p2 := 1047483763
-	// p3 := 2147483647
-	// n := <colName>
-	// ORDER BY ((n+seed)*(n+seed)*p1 + (n+seed)*p2) % p3
-	// since sqlite converts overflowing numbers to reals, a custom db function that uses uints with overflow should be faster,
-	// however in practice the overhead of calling a custom function vastly outweighs the benefits
-	return fmt.Sprintf(" ORDER BY mod((%[1]s + %[2]d) * (%[1]s + %[2]d) * 52959209 + (%[1]s + %[2]d) * 1047483763, 2147483647) %[3]s", colName, seed, direction)
+	// Reduce x = id + seed modulo the bound BEFORE the polynomial, so the
+	// arithmetic is int64 for every id. The order stays a deterministic
+	// function of (id, seed) that varies with the seed and is not monotonic in
+	// id, which is all an ORDER BY needs -- it does not have to be a bijection
+	// on the id space, and ids that collide under the reduction simply get
+	// nearby keys.
+	//
+	// The original expression is the standard "pseudo-random ordering" trick
+	// from https://stackoverflow.com/questions/21949795, written for an engine
+	// whose integers are wider. It is not portable as written, and the two ways
+	// it failed are both silent: an unknown function (mod) and an overflow that
+	// collapses the key to a constant. Neither raises an error a caller would
+	// notice; the sort just quietly stops being random.
+	return fmt.Sprintf(
+		" ORDER BY (((%[1]s + %[2]d) %% %[3]d) * ((%[1]s + %[2]d) %% %[3]d) * 52959209 "+
+			"+ ((%[1]s + %[2]d) %% %[3]d) * 1047483763) %% 2147483647 %[4]s",
+		colName, seed, randomSortPolyBound, direction)
 }
 
 func getCountSort(primaryTable, joinTable, primaryFK, direction string) string {

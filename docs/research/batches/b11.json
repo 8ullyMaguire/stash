@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#5210",
+  "title": "Support non-unique studio names",
+  "excerpt": "# Problem Limitation for unique studio names only. Current behavior requires each studio name to be unique. While duplicate studio names is rare, more studios are publishing their content on different platforms, and they're retaining their ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5237",
+  "title": "Naming issue for Taiwan in list of countries",
+  "excerpt": "**Describe the bug** Taiwan is currently labelled a \"province of China\". This name is only used by communist China and countries/institutions that pander to them, and does not represent the people of Taiwan. Officially the island is a provi",
+  "probe": ""
+ },
+ {
+  "key": "stash#5238",
+  "title": "Sort URLs alphabetically with optional ability manually re-order",
+  "excerpt": "With the addition of URLs in objects such as performers, movies, I would have expected those URLs to be sorted upon update similar to aliases. However that does not appear to be the case.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5273",
+  "title": "Enhancements to the Tags System, File Details and Settings",
+  "excerpt": "1. Ability to color code tags, whether it be the frame around the the tag or the actual word to help quickly differentiate tags To Make it easier to differentiate between male/female/others actors by their names or what character their play",
+  "probe": ""
+ },
+ {
+  "key": "stash#5275",
+  "title": "Option to flatten VR scene preview and markers previews",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, when Stash generates preview videos for VR scenes, or markers from VR scenes, the preview video is in the original VR format, often side-by-side fisheye video. In",
+  "probe": ""
+ },
+ {
+  "key": "stash#5312",
+  "title": "Adding crop & pan for video filters",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** In the filters tab it is currently not possible to hide black bars to either side of the video without cutting off part of the image. Black borders were relatively common in",
+  "probe": ""
+ },
+ {
+  "key": "stash#5313",
+  "title": "Support deinterlacing during playback",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently there is no good way of watching interlaced content in Stash even when transcoding the video. While there are a million different deinterlacing options and none of",
+  "probe": ""
+ },
+ {
+  "key": "stash#5317",
+  "title": "Sometimes images are placed outside the viewport in lightbox on Android",
+  "excerpt": "**Describe the bug** Tested in brave on android, image placed off screen. Specifically if image is jpg and width is bigger around 7600px. This does not happen in firefox, only chromium based browsers. **Stash Version: (from Settings -> Abou",
+  "probe": ""
+ },
+ {
+  "key": "stash#5326",
+  "title": "Add icon to performer profile/card to indicate performer has passed away",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No **Describe the solution you'd like** Unfortunately many performers pass away at a young age. Luckily Stash is already updated now so it's possible to enter a death_date (",
+  "probe": ""
+ },
+ {
+  "key": "stash#5329",
+  "title": "Improving the merge modal window layout",
+  "excerpt": "## Summary To propose a cosmetic adjustment to the merge modal window to ensure consistency in the placement of the \"source\" and \"destination\" fields and the addition of helper text for clarity of what scene is the merge target. ## Problem ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5336",
+  "title": "Edit Modal - Improving bulk editing workflow",
+  "excerpt": "## Summary This RFC proposes a UI/UX change to the bulk editing workflow of multiple items/objects (i.e. Scenes) and their multi-field input values on the Edit modal windows. To replace the current method of using tabs with a simpler, less ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5352",
+  "title": "Option to show full size images in gallery preview scrubber",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Allow for full resolution images to be shown in preview when looking at a gallery images in wall mode Rather than looking at the smaller sprite the full resolution image can",
+  "probe": ""
+ },
+ {
+  "key": "stash#5364",
+  "title": "Show O-Count on gallery cards (using sum of image O-Counts)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** When browsing galleries, it is difficult to determine the total O-count of galleries without opening them and scrolling through every image. **Describe the solution you'd li",
+  "probe": ""
+ },
+ {
+  "key": "stash#5384",
+  "title": "Ability to add images and galleries to groups",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The current system is very tailored to produced content. It's not very good for event/location based content (like Mardi Gras, WNBR, or the painted ladies of Times Square). ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5390",
+  "title": "Regenerate scene markers and scrubber sprites after merging",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, I have to manually regenerate a merged scene's sprites and markers after merging. **Describe the solution you'd like** It would be great if all assets invalidated",
+  "probe": ""
+ },
+ {
+  "key": "stash#5394",
+  "title": "Add \"Include sub-group content\" toggle on groups page in scenes tab",
+  "excerpt": "### **Description:** Currently, when a containing group has subgroups, the Scenes tab is empty. This can be inconvenient, especially when dealing with groups that have numerous subgroups. ### **Proposed Solution:** To improve usability and ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5397",
+  "title": "Middle Align scene_index on scene cards",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No **Describe the solution you'd like** Middle align the Scene # field under groups (Right now its on the bottom). ![image](https://github.com/user-attachments/assets/edbcdc",
+  "probe": ""
+ },
+ {
+  "key": "stash#5399",
+  "title": "Ability to add icons/favicons for performer links",
+  "excerpt": "As of now, it appears that only twitter and Instagram show as their own icons under a performers page. All other links are housed under the generic link icon. I understand that not every link can be accounted for, but some common links like",
+  "probe": ""
+ },
+ {
+  "key": "stash#5400",
+  "title": "Open performer link directly if it only has single link of that type",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Since the update to version 27, external links don't go straight to the site when you click on them, instead they show a dropdown menu with the full hyperlink. **Describe th",
+  "probe": ""
+ },
+ {
+  "key": "stash#5412",
+  "title": "Scene Duplicate Checker report",
+  "excerpt": "# Improvements on Scene Duplicate Checker Report The plugin [DupFileManager](https://github.com/David-Maisonave/Axter-Stash/tree/main/plugins/DupFileManager) also creates a report similar to Scene Duplicate Checker, but I do think the struc",
+  "probe": ""
+ },
+ {
+  "key": "stash#5419",
+  "title": "Ability to set marker offset ",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Once sharing markers becomes more commonplace, there might arise a need to be able to move all (or a subset of) markers of a scene in one direction or the other by a fixed o",
+  "probe": ""
+ },
+ {
+  "key": "stash#5420",
+  "title": "Expose scene subtitles over DLNA",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** External subtitles do not show up when accessing content over DLNA. **Describe the solution you'd like** External subtitles can be selected when playing media over DLNA.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5430",
+  "title": "Count Sub-tag scenes in the Tag View when \"Display subtag content\" is turned on",
+  "excerpt": "**Describe the bug** In the Tag View Setting, there is an option to display subtag content. The logic behind it is to treat subtag content as part of the parent tag. However, the scene count of the parent tag in the Tag View still does not ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5434",
+  "title": "Add icon/field to performer profile/card to indicate performer activity status",
+  "excerpt": "Can we add a field to the performers page called 'Status' where we can enter whether a performer is still active, retired or deceased. I think it would be best placed at the very top, just above 'Gender' ![image](https://github.com/user-att",
+  "probe": ""
+ },
+ {
+  "key": "stash#5444",
+  "title": "Add flag to scenes to exclude those performers from \"Appear With\" tab",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** With compilation scenes, multiple performers are often involved. When all the performers are added, Stash incorrectly lists all of them as “Appears With” in the compilation.",
+  "probe": ""
+ },
+ {
+  "key": "stash#5448",
+  "title": "Live marker preview",
+  "excerpt": "### Current problem Marker previews take up a lot of space. Say you have: `60k markers` * `10 MiB (20s video)` = `600 GiB` ### Proposed solution A way to only generate marker image preview, and when hover, just stream the actual video. Any ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5450",
+  "title": "Watchlist queue",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No, it is not related to a problem. **Describe the solution you'd like** There should be a watchlist like on most, if not all, streaming services including paid ones (Netfli",
+  "probe": ""
+ },
+ {
+  "key": "stash#5460",
+  "title": "Ability to Pin/Favorite scrapers",
+  "excerpt": "**Describe the solution you'd like** Love the fact that the new release has pinned the Stashbox scrapers to the top of the scrapers list! Made me think that it would be cool to add other \"pinned\" scrapers. Could be based on how frequently t",
+  "probe": ""
+ },
+ {
+  "key": "stash#5468",
+  "title": "Option to link galleries to scenes if they are in the same folder",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I recently scraped and downloaded lot of scenes and galleries of those videos and it's a nightmare to go to each gallery and link the scenes of that gallery. **Describe the ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5498",
+  "title": "Add IMPORT option to import tags, galleries, performers, and studios",
+  "excerpt": "### Is your feature request related to a problem? Please describe. There's a clear option to export tags, galleries, performers, and studios. But I could not find an option to import the data. It's common practice for applications to have a",
+  "probe": ""
+ },
+ {
+  "key": "stash#5500",
+  "title": "Ability to filter scenes by scene_index",
+  "excerpt": "The scene_index field on a scene is the scene number within a group/movie. There doesn't appear to be a filter for this in the UI or GraphQL. I would like to query a list of scenes with a null scene_index value. The \"sceneUpdate\" mutation a",
+  "probe": ""
+ },
+ {
+  "key": "stash#5514",
+  "title": "Multi-language entries",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No...maybe? **Describe the solution you'd like** There's a lot of text that user can fill, but various languages in the world. So, add multilingual support for Stash app and",
+  "probe": ""
+ },
+ {
+  "key": "stash#5517",
+  "title": "Inhibit system sleep while tasks are running",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The PC I run Stash on goes to sleep while I'm playing a scene on my phone/tablet. This happens because I have Windows set to put the computer to sleep after 30 minutes. **De",
+  "probe": ""
+ },
+ {
+  "key": "stash#5518",
+  "title": "Tagger view for groups with batch tasks",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** The option to add tags to a group has been added recently. I am using Stash for a long time now and thus have a lot of groups (in my case these are all movies as the functio",
+  "probe": ""
+ },
+ {
+  "key": "stash#552",
+  "title": "Calculate average performer rating from rated scenes",
+  "excerpt": "**Describe the solution you'd like** It would be nice to have another feature of rating performer other than using favorite feature. This new rating feature would be automatic - calculated average number of all performers rated scenes(from ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5532",
+  "title": "Main page horizontal customization",
+  "excerpt": "The contents in the main page is listed vertically. For example like below. User can simply make this through drag-and-drop. ``` [Scenes (filter1) ] [Scenes (filter2) ] [Performers (filter1)] [Performers (filter2)] ``` It would be a good fe",
+  "probe": ""
+ },
+ {
+  "key": "stash#5534",
+  "title": "Offload Thumbnail Generation to External Computer",
+  "excerpt": "### Is your feature request related to a problem? Please describe. I am currently using a Raspberry Pi to run Stash, and everything works as expected. However, tasks like video thumbnail and chapter preview generation can be resource-intens",
+  "probe": ""
+ },
+ {
+  "key": "stash#5536",
+  "title": "Migrate Scene Previews To Its Own Directory ",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** Currently previews reside in `<generated>\\screenshots\\<oshash>.mp4` it's not really that intuitive, previews are also directly tied to a File, not necessarily a Scene, e",
+  "probe": ""
+ },
+ {
+  "key": "stash#5538",
+  "title": "Performer Image Malformed via Local Image URL when API/Creds Enabled",
+  "excerpt": "**Describe the bug** When setting a performer image via a local image URL when credentials/API key is set, the image becomes malformed. With no auth, the image updates and persists as normal. **To Reproduce** Steps to reproduce the behavior",
+  "probe": ""
+ },
+ {
+  "key": "stash#5541",
+  "title": "Ability to manually trigger Auto Tag on single performer alias",
+  "excerpt": "# Problem `Auto Tag `For some performers with multiple aliases (**especially European performers**, some will have dozens of aliases), only the main name will be used to set the Tag. If you need to use an alias for `Auto Tag`, you need to c",
+  "probe": ""
+ }
+]

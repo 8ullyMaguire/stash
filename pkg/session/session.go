@@ -45,13 +45,13 @@ func (e InvalidCredentialsError) Error() string {
 
 var ErrUnauthorized = errors.New("unauthorized")
 
-type Store struct {
+type CookieStore struct {
 	sessionStore *sessions.CookieStore
 	config       SessionConfig
 }
 
-func NewStore(c SessionConfig) *Store {
-	ret := &Store{
+func NewCookieStore(c SessionConfig) *CookieStore {
+	ret := &CookieStore{
 		sessionStore: sessions.NewCookieStore(c.GetSessionStoreKey()),
 		config:       c,
 	}
@@ -62,7 +62,7 @@ func NewStore(c SessionConfig) *Store {
 	return ret
 }
 
-func (s *Store) Login(w http.ResponseWriter, r *http.Request) error {
+func (s *CookieStore) Login(w http.ResponseWriter, r *http.Request) error {
 	// ignore error - we want a new session regardless
 	newSession, _ := s.sessionStore.Get(r, cookieName)
 
@@ -87,7 +87,7 @@ func (s *Store) Login(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *Store) Logout(w http.ResponseWriter, r *http.Request) error {
+func (s *CookieStore) Logout(w http.ResponseWriter, r *http.Request) error {
 	session, err := s.sessionStore.Get(r, cookieName)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (s *Store) Logout(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *Store) GetSessionUserID(w http.ResponseWriter, r *http.Request) (string, error) {
+func (s *CookieStore) GetSessionUserID(w http.ResponseWriter, r *http.Request) (string, error) {
 	session, err := s.sessionStore.Get(r, cookieName)
 	// ignore errors and treat as an empty user id, so that we handle expired
 	// cookie
@@ -147,7 +147,7 @@ func GetCurrentUserID(ctx context.Context) *string {
 	return nil
 }
 
-func (s *Store) Authenticate(w http.ResponseWriter, r *http.Request) (userID string, err error) {
+func (s *CookieStore) Authenticate(w http.ResponseWriter, r *http.Request) (userID string, err error) {
 	c := s.config
 
 	// translate api key into current user, if present

@@ -1,0 +1,62 @@
+[
+ {
+  "key": "stash-box#948",
+  "title": "[Bug Report] Some images do not get saved",
+  "excerpt": "Very rarely an image will fail to get saved when uploaded to StashDB. This always happens with the same image and has been tested across both different browsers and different users. **To Reproduce** 1. Download [this NSFW image](https://med",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#95",
+  "title": "[Feature] Query URL/Request Scrape",
+  "excerpt": "We should be able to query urls on the site and if not found, it should have an option to request a scrape. The Scraping system should be automatic with its own work queue for missing scenes. Ofc it should only scrape sites it supports. Doi",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#950",
+  "title": "[Bug Report] No warning when creating a performer with same name+disambiguation",
+  "excerpt": "**Describe the bug** Context: https://stashdb.org/edits/017f88cd-f3cf-4681-9b6a-77675655c4e3 I was creating an edit for a performer, but it turned out that the same performer (same name/disambiguation) already existed in the database. Howev",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#953",
+  "title": "[Feature] SSO/discourse account linking",
+  "excerpt": "Now we have moved from discord to discourse, it would be nice that we have two way linking into accounts. Now there is no easy way to contact user from stashdb. There is several approaches; - Link accounts via openid and support SSO, and sh",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#954",
+  "title": "[Feature] Browser notification support",
+  "excerpt": "Add support for browser notifications via [Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#956",
+  "title": "[Bug Report] registration form still requiring invite key with with require_invite false",
+  "excerpt": "**Describe the bug** When the config flag has require_invite set to false, the registration page hides the invite field but the user still gets a validation message saying \"invalid invite key\" when clicking \"Register\" **To Reproduce** Steps",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#969",
+  "title": "[Feature] Sort list of tags by scene count (and display count next to each)",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I know this is not the primary use case for StashDB but I've found it can be a really good way to see what's out there and find videos I might be interested in. Tags are a h",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#973",
+  "title": "[Bug Report] Valid URL is not accepted",
+  "excerpt": "**Describe the bug** `https://bondageliberation.com/videos?q={%22models%22:%2257%22}` is a valid URL (you can load it) but stash-box claims it is invalid when trying to use it in a performer profile **To Reproduce** Steps to reproduce the b",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#974",
+  "title": "[Bug Report] Network page lists scenes but no performers",
+  "excerpt": "**Describe the bug** When on a network/parent studio page such as https://stashdb.org/studios/b1bcb12f-f280-4bb2-b4b6-6d93d89839d1, there is a list of scenes (from the sub-studios). But the performers page does not show anything. **To Repro",
+  "probe": ""
+ },
+ {
+  "key": "stash-box#986",
+  "title": "[Feature] Filter by multiple tags",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm frustrated when I go to filter the trending videos by a tag and can't add another tag on to the filter. **Describe the solution you'd like** Multi-selecting tags **Descr",
+  "probe": ""
+ }
+]

@@ -1,0 +1,242 @@
+[
+ {
+  "key": "stash#5873",
+  "title": "Filter Markers tab by \"Is missing thumbnail/preview\"",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I like the (relatively) new feature of sorting tags, scenes, performers, etc. by \"Is missing image\" for example. **Describe the solution you'd like** I'd like to be able to ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5893",
+  "title": "Filter by File Modification Time for Scenes and Images",
+  "excerpt": "While we can order by File Modification Time, it would be nice to filter items based on it too.",
+  "probe": ""
+ },
+ {
+  "key": "stash#591",
+  "title": "XPath scraper shouldn't remove newlines for Details field",
+  "excerpt": "**Describe the bug** Currently, when a scene scraper is run, the resulting Detail field's newlines get removed. **To Reproduce** Steps to reproduce the behavior: 1. Go to the edit tab on a scene 2. Fill in an URL of a scene with a multiline",
+  "probe": ""
+ },
+ {
+  "key": "stash#5939",
+  "title": "Ability to run scene filename parser on selected scenes",
+  "excerpt": "Right now we have a parser that can be run from settings. This is the wrong place to have it, as it does not allow it to be run on a limited selection of scenes. I think there should be a parser that is run from the navigator on a selection",
+  "probe": ""
+ },
+ {
+  "key": "stash#5942",
+  "title": "Ability to edit scene marker directly from scene card",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** No problem. Feature improvement. It is very difficult sometimes to find a marker when there are a lot of them in a particular video. **Describe the solution you'd like** Fro",
+  "probe": ""
+ },
+ {
+  "key": "stash#5944",
+  "title": "Include settings when executing plugin task",
+  "excerpt": "# Include settings when executing plugin task ### Scope While scoping the development of an embedded JavaScript plugin, I was surprised to learn that a plugin's settings aren't available within the plugin's runtime environment by default. I",
+  "probe": ""
+ },
+ {
+  "key": "stash#5953",
+  "title": "Deleting a file while generating for it locks up scan/generate",
+  "excerpt": "**Describe the bug** If Stash is generating content such as thumbnail for a file/scene, and you happen to delete the scene in that time, scan/generate is frozen until stash is fully restarted. The task can't be successfully cancelled from U",
+  "probe": ""
+ },
+ {
+  "key": "stash#5966",
+  "title": "Pattern Match Studio URLs",
+  "excerpt": "### **Is your feature request related to a problem? Please describe.** Since most objects in stash can have multiple URLs now it would be good to not just rely on the index of the of a given URL to determine the \"Primary\" URL of an object. ",
+  "probe": ""
+ },
+ {
+  "key": "stash#5970",
+  "title": "GQL sorting by custom field value",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I'm writing a plugin that extensively uses performer custom fields. One feature of the plugin is a leaderboard where performers are ranked by a value stored in the custom fi",
+  "probe": ""
+ },
+ {
+  "key": "stash#5979",
+  "title": "Top navigation bar cut off on mobile devices with notch/floating island",
+  "excerpt": "## Description When viewing Stash on a mobile device that has a notch or floating island, the layout of the page becomes constrained at the sides. This has the affect of reducing the available content area available for elements on the page",
+  "probe": ""
+ },
+ {
+  "key": "stash#5987",
+  "title": "Upgrade React + Dependencies",
+  "excerpt": "# Upgrade React v17.0.2 → 18.x.x ### Scope The version of React used by Stash was released [4 years ago](https://github.com/facebook/react/blob/main/CHANGELOG.md#1702-march-22-2021). Since then two major new versions have been released. The",
+  "probe": "C67"
+ },
+ {
+  "key": "stash#5992",
+  "title": "Add \"Add Child Tag\" and \"Add Parent Tag\" Buttons in Single Tag View",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Not a problem, simple feature request that saves a little time building out tags. **Describe the solution you'd like** From Single Tag View add a button to Add Child Tag and",
+  "probe": ""
+ },
+ {
+  "key": "stash#5998",
+  "title": "Ability to configure specific custom fields to be hidden from object pages",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** I have a mix of custom fields that contain information I'd like to be displayed (shoe size, blood type), and those that contain raw data (mostly JSON for plugins). The custo",
+  "probe": ""
+ },
+ {
+  "key": "stash#6008",
+  "title": "Support for scanning Encryped Archives",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Currently, Stash does not support scanning encrypted archives that require a password. I have some torrent files that I need to continue seeding, and extracting them manuall",
+  "probe": ""
+ },
+ {
+  "key": "stash#6013",
+  "title": "sys.stdin.read function response is too long",
+  "excerpt": "When the plugin uses the sys.stdin.read() function to obtain data, if the returned json contains the attribute cover_image and the image in cover_image is too large, it will cause the sys.stdin.read() function to respond too long, sometimes",
+  "probe": ""
+ },
+ {
+  "key": "stash#6045",
+  "title": "Ability to set external image as gallery cover",
+  "excerpt": "Can we please have the function to upload a cover image to a gallery, like we can do with videos, rather than select an image from the Gallery. Reason is I want to be able to resize the cover image to remove logos and fill the thumbnail wit",
+  "probe": ""
+ },
+ {
+  "key": "stash#6050",
+  "title": "Ability to start marker in AB Loop mode if it has start/stop time",
+  "excerpt": "### Describe the feature you'd like I would like a button or toggle that allows users to run Markers as AB loops directly from the Marker screen without needing to manually set the loop each time. ### Describe the benefits this would bring ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6052",
+  "title": "Ability to run Bulk Auto Tag from Tags page",
+  "excerpt": "At the moment, I have to individually open my >50 custom tags that I enclose in curly brackets (e.g. {Tag}) and manually click auto-tag for each and it works in identifying corresponding filenames and adding these tags. I am requesting for ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6057",
+  "title": "Add O-Counter to markers",
+  "excerpt": "Hey folks, First of all thank you very much for your amazing work, really glad I found stashapp. I was wondering about the feasibility of the the following feature, that I'd consider a valuable add-on: A **performer field and an O-counter f",
+  "probe": ""
+ },
+ {
+  "key": "stash#6062",
+  "title": "Permit GraphQL API to update video captions",
+  "excerpt": "### Describe the feature you'd like I would like to permit passing the [`VideoCaptions`](https://github.com/stashapp/stash/blob/develop/graphql/schema/types/scene.graphql#L34C1-L34C20) type to the [`SceneUpdateInput`](https://github.com/sta",
+  "probe": ""
+ },
+ {
+  "key": "stash#6071",
+  "title": "Support immersive VR video from browser via WebXR API",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** It seems that videojs-vr does not support immersive VR, it only supports projection of the VR format videos onto a 2D surface that you can pan around with click+drag. This m",
+  "probe": ""
+ },
+ {
+  "key": "stash#6076",
+  "title": "Add option to sort sub-groups by number of the sub-group item",
+  "excerpt": "### Describe the feature you'd like I would like the ability to modify the sorting of the Sub-Groups tab under Groups, either by following the number of the sub-group item or by allowing users to select their preferred sort order. ### Descr",
+  "probe": ""
+ },
+ {
+  "key": "stash#6078",
+  "title": "Add studio code field for Groups",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Because I use groups for JAV movies, often I'd like to search them by studio code, but there currently isn't a way to do so. Right now I can just search scenes by studio cod",
+  "probe": ""
+ },
+ {
+  "key": "stash#6080",
+  "title": "Enable installation as Windows service",
+  "excerpt": "**Is your feature request related to a problem? Please describe.** Stash currently runs only when a user with access to the executable is logged in. This is inconvenient if the machine it runs on reboots automatically to apply updates, for ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6088",
+  "title": "[meta] O-Counter feature requests",
+  "excerpt": "## Aggregation - #5024 ## New Counters - #2836 - #4680 - #4853 ## UI / UX - #5193 - #3855",
+  "probe": ""
+ },
+ {
+  "key": "stash#6112",
+  "title": "Support for sub-scraper post process option for scrapeJson scrapers",
+  "excerpt": "### Describe the feature you'd like A lot of sites use ld+json for metadata for scraping https://github.com/search?q=repo%3Astashapp%2FCommunityScrapers%20ld%2Bjson&type=code ### Describe the benefits this would bring to existing users Inst",
+  "probe": ""
+ },
+ {
+  "key": "stash#6121",
+  "title": "Display resolution of scraped images across all scraper modals",
+  "excerpt": "### Describe the feature you'd like I would like to be able to see the resolution of the current and scraped images added in forms other than scenes. For example, when scraping a scene you see the current image resolution as well as the scr",
+  "probe": ""
+ },
+ {
+  "key": "stash#6134",
+  "title": "Add image support to identify task",
+  "excerpt": "### Describe the feature you'd like Simply put, there's no automatic way of applying tags to a directory of images based on filename information. Same as there is for videos using \"Identify\". Would really like this for my thousands of image",
+  "probe": ""
+ },
+ {
+  "key": "stash#6183",
+  "title": "Redirect old scene page to merged scene page after merge",
+  "excerpt": "### Describe the feature you'd like When you merge multiple scenes into one, stash should remember the old IDs and into which they were merged. Whenever you access a URL with the old IDs it should send back a 308 permanent redirect to the n",
+  "probe": ""
+ },
+ {
+  "key": "stash#6185",
+  "title": "Create automatic backup upon installing a new plugin to protect from malicious plugins",
+  "excerpt": "### Describe the feature you'd like A recent discussion mentioned how a plugin was accidentally deleting too much data. That got me thinking, what protections are in place to warn or protect people from malicious plugins? I propose a couple",
+  "probe": ""
+ },
+ {
+  "key": "stash#6193",
+  "title": "Ability to Skip Preview Generation based on set duration threshold",
+  "excerpt": "### Describe the feature you'd like For short videos, such as those below 1 min in length, I'd prefer the video preview generation be skipped. The threshold for video length could be set by the user. ### Describe the benefits this would bri",
+  "probe": ""
+ },
+ {
+  "key": "stash#6218",
+  "title": "Ability to re-order performers in scene cards",
+  "excerpt": "### Describe the feature you'd like Can we please make it that Trans and Non-Binary performers are listed BEFORE Male performers ### Describe the benefits this would bring to existing users A lot of female presenting performers identify as ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6231",
+  "title": "Add keyboard shortcut to trigger \"Merge...\" action from scenes page",
+  "excerpt": "### Describe the feature you'd like It would be useful to have a keyboard shortcut to merge scenes. I would suggest `m`, I think it's currently unmapped. The workflow would be: - select 2 or more scenes - press `m` This would pop up the mer",
+  "probe": ""
+ },
+ {
+  "key": "stash#6246",
+  "title": "Scene Tagger Navbar floats out of position",
+  "excerpt": "### Describe the bug Seems to primarily impact mobile usage. The Navbar at the bottom of tagger view will float and roam out of place when resize events occur like \"scrape all\" events. ### Steps to reproduce In tagger view easiest to reprod",
+  "probe": ""
+ },
+ {
+  "key": "stash#6254",
+  "title": "Inherit tag images from tagged scenes",
+  "excerpt": "### Describe the feature you'd like It would be nice if we could generate a thumbnail from a scene and have that be the parents thumbnail. For example with tags(parent) click on a scene (child) and it gives you the ability to set the parent",
+  "probe": ""
+ },
+ {
+  "key": "stash#6274",
+  "title": "[meta] \"short form\" video content",
+  "excerpt": "# Inclusion in media browser - add \"clips\" to galleries https://github.com/stashapp/stash/issues/1574 - \"media\" with scenes and images https://github.com/stashapp/stash/issues/1030 - dedicated area https://github.com/stashapp/stash/issues/6",
+  "probe": ""
+ },
+ {
+  "key": "stash#6283",
+  "title": "Ability to arbitrarily group/organize scrapers",
+  "excerpt": "### Describe the feature you'd like Organization and categorization of scrapers, extending https://github.com/stashapp/stash/pull/5041 ### Describe the benefits this would bring to existing users When triggering any Query scrapes, all the s",
+  "probe": ""
+ },
+ {
+  "key": "stash#6311",
+  "title": "Multi axis Funscript and Serial Connections (OSR2+ & SR6)",
+  "excerpt": "Would like to see the inclusion of Multi axis scripts and a Serial Connections to connect a device like the TempestMAX OSR2 or SR6. **Describe the solution you'd like** Recognize and load more than 1 Funscript file with axis descriptors. Tr",
+  "probe": ""
+ },
+ {
+  "key": "stash#6335",
+  "title": "Allow tablet view to be full desktop view instead of mobile view",
+  "excerpt": "### Describe the feature you'd like I use Stash an on iPad Air 5th Gen. At present, the top bar only shows the homepage link, not any of the normal object headings. There is an abundance of unused space to show scenes, performers, studios, ",
+  "probe": ""
+ },
+ {
+  "key": "stash#6339",
+  "title": "Filter for multi-axis interactive scenes",
+  "excerpt": "### Describe the feature you'd like In addition to interactive scripts, it would be nice to have the option to filter for media with multiple axes associated with it. As in not just a .funscript file but also .roll.funscript, .pitch..funscr",
+  "probe": ""
+ }
+]
