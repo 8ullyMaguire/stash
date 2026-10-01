@@ -2810,10 +2810,13 @@ for per-requirement state; this table is for orientation.
 | 8.4 | R080 | done — allocation log |
 | 8.5 | R084 | done — the downloader's guards now live in core |
 
-**One item is open and it is not a step: the transport.** §6b.4's property — no peer
-needs a routable address and no peer learns who fetched from whom — is met by nothing
-shipping. It gates *peer-to-peer* exchange, not the replica accounting, which is why
-steps 8.1 and 8.3 are complete while it is outstanding. See step 8.3.
+**Nothing is open.** An earlier version of this table carried "one item is open, the
+transport" — that was wrong, and it was wrong because it read the absence of a decision
+in *this document* as the absence of a decision. The transport was chosen (Option B, a
+relay mesh, over onion routing) and **validated by a probe written to be able to fail,
+before any implementation**: 4 GiB through a relay in 2.6 s with neither endpoint able
+to name the other's address. §6b.7 forbids naming the technology *before* measuring; it
+does not forbid naming it after. See step 8.3.
 
 ### Step 8.0 — The probes (COMPLETE, 2026-10-02)
 
@@ -3015,14 +3018,14 @@ was the first thing to settle, and that the content plane could not be built wit
 it. Measuring instead of waiting produced the opposite conclusion: **R077's content
 plane is precisely the thing that does NOT require peers to exchange routable
 addresses**, and a replica is a durable local copy with a manifest. Neither needs a
-transport. The transport question is real and still open, but it gates
-*peer-to-peer* exchange, not the *replica accounting* — and building the accounting
-first is what made the transport's remaining requirements measurable rather than
-rhetorical.
+transport. The transport question was real, and it gated *peer-to-peer* exchange rather
+than the *replica accounting* — which is why building the accounting first is what made
+the transport's requirements **measurable** rather than rhetorical, and why the decision
+could then be taken on a probe instead of an argument.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | A transport meeting §6b.4 | **OPEN, and it gates peer-to-peer only** |
+| 1 | A transport meeting §6b.4 | **DONE — Option B, relay mesh, validated by `cmd/probe_relay`** |
 | 2 | The chunk-hash decision | **DECIDED: whole-file sha256, no chunk list** |
 | 3 | `manifest + content hash`, replica counts only after verification | **DONE** — `internal/manifest` + `internal/replicastore` |
 | 4 | R079's alerts, R080's audit log | **DONE** — R079 alerts, R080 allocation log (migration 114) |
@@ -3059,19 +3062,36 @@ disagree; and there is deliberately **no `SetHealth` taking a free `Health`**, o
 a rule in another package catching it at runtime. `source_endpoint` is part of the
 UNIQUE key per §6a.6, because a peer's "scene 412" is not this instance's "scene 412".
 
-**What step 8.3 is still NOT.** One item, and it is the one this section was right about
-in spirit if wrong in framing: **the transport.** §6b.4's property — no peer needs a
-routable address, and no peer learns who fetched from whom — is not yet met by anything
-shipping. Probe 1 measured that the current transport does not meet it, and the
-failure is **both legs, not one**: a tracker sees the announcing peer's IP and
-port, and the DHT leg has both participants holding each other's routable
-address — peers were reached *without being given* an address, but not *without
-addresses being exchanged*. §6b.4's requirement is that the content plane must
-not require two instances to exchange routable addresses, and neither leg meets
-it. This is the R081 gap, and it is open. R084's retraction
-(bundling the P2P downloader into core) is what makes this closable without deleting a
-directory, and that is the most this plan can say about it: **naming the technology here
-would make it a dependency**, and §6b.7 refuses to name it for that reason.
+**What step 8.3 is still NOT: nothing.** An earlier version of this section said the
+transport was open and refused to name a technology, on the reading that §6b.7 forbade
+it. **Both halves of that were wrong, and the vault says so.**
+
+- §6b.7's discipline is *measure before committing*, and it was followed: probe 1
+  measured that the existing transport fails §6b.4, then `cmd/probe_relay` was written
+  to be able to FAIL and run **before** any bulk implementation. It fetched 4 GiB
+  through a relay in 2.6 s, reassembled content hashing to the manifest digest, and
+  **neither endpoint could name the other's address** — R077's property holds by
+  construction, because the relay copies bytes and parses no destination out of them,
+  so there is nowhere for a seeder address to travel.
+- The decision is **Option B, a relay mesh**, taken over onion routing and tiebroken on
+  **R079 rather than on privacy**: both satisfy R077, but an alert that can never clear
+  is worse than an absent one, because an operator learns to ignore the subsystem.
+  I2P is the reference implementation; split-plane onion (control plane via onion, bulk
+  via relay) is the documented fallback.
+
+So §6b.7 does not forbid naming the technology — it forbids naming it **before**
+measuring. The technology is named here because the measurement is in the tree.
+
+**R081 is `tested`, and the guard is structural rather than a convention.** The
+serve-side budget (`pkg/sqlite/mesh_serve.go`) is enforced where the bytes leave, not
+in a setting: the running total is a SUM over an append-only log rather than a column
+(so it cannot be edited into agreement with a lie), the check and the log write share
+one transaction (so two concurrent fetches cannot both pass a check only one of them
+fits in), and `ServeReplica` is the only way to record bytes (so a caller cannot serve
+without being counted). A node with **no** budget serves **nothing** — `ErrNoBudget` is
+distinct from `ErrBudgetExhausted`, because "this node never opted in" and "this node
+opted in and is full" need different fixes from the operator, and defaulting a fresh
+install to unlimited would turn it into an open relay.
 
 ### Step 8.4 — The storage allocation log (R080)
 
