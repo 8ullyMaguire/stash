@@ -114,19 +114,40 @@ func TestVocabulary_NilValueIsAValidEdit(t *testing.T) {
 		"clearing a rating is legitimate even though ratings are bounded")
 }
 
+// proposableFieldView is a test-local pair for reading one field's bounds by name.
+type proposableFieldView struct{ Min, Max int }
+
 // ProposableFields is what the UI renders a form from, so it must be stable and
 // must not leak fields from other target types.
 func TestVocabulary_ProposableFieldsIsScopedAndSorted(t *testing.T) {
 	scene := collab.ProposableFields("scene")
+	// FIVE, and this is the SECOND time this assertion has fired on this count -- the
+	// first was the url removal. It earns its keep: on 2026-10-03 it caught a change
+	// I had just made and was about to commit.
+	//
+	// I added performer_ids and tag_ids to the scene and image vocabularies to close
+	// step 8.2's second recorded gap, and this file said "7" while pkg/sqlite's
+	// TestVocabulary_EveryFieldIsARealColumn said something better: those are not
+	// columns of scenes or images. They are JOIN TABLES, and the apply path
+	// interpolates a vocabulary field straight into an UPDATE. So the change would
+	// have validated, filed, approved and then failed as a SQL error on the first
+	// proposal a user touched -- the exact shape of defect this test was written for
+	// when spec §4.1's studio.url was found to be a fiction.
+	//
+	// The change is reverted and the count is back to five. The gap is REAL and still
+	// open, and the honest record of it is the comment in vocabulary.go rather than a
+	// field that works in validation and dies in SQL.
 	require.Len(t, scene, 5,
-		"five proposable scene fields: spec §4.1 listed six, but scene.url is not a column")
+		"five proposable scene fields: spec §4.1 listed six, but scene.url is not a "+
+			"column -- and performer_ids/tag_ids are join tables, not columns either")
 
 	var names []string
 	for _, f := range scene {
 		names = append(names, f.Field)
 	}
 	assert.Equal(t, []string{"date", "details", "director", "studio_id", "title"}, names,
-		"the order must be stable; a Go map iteration order would reshuffle the form on every render")
+		"the order must be stable; a Go map iteration order would reshuffle the form "+
+			"on every render")
 
 	// Image fields sort as rating, title -- so the bounds live on index 0, and
 	// finding them by INDEX is itself the bug this version of the test had.

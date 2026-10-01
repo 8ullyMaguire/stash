@@ -61,12 +61,49 @@ var vocabulary = map[string]map[string]proposableField{
 		"director":  {Type: TypeString},
 		"studio_id": {Type: TypeInt},
 		"date":      {Type: TypeDate},
+		// NO `performer_ids` or `tag_ids`, and NOT because the columns do not exist --
+		// because they are not COLUMNS. They are join tables (scene_performers,
+		// scene_tags), and every field in this map is a column name that
+		// TargetStore.WriteFieldIfChanged interpolates straight into an UPDATE. There
+		// is no SQL that UPDATEs a set.
+		//
+		// I ADDED THESE ON 2026-10-03 to close plan step 8.2's recorded gap, and
+		// pkg/sqlite's TestVocabulary_EveryFieldIsARealColumn caught it: it reads the
+		// real columns off a migrated database and refused both. Without that test the
+		// change would have validated, been filed, been approved, and then failed as a
+		// SQL error on the first proposal a user touched -- the same defect spec §4.1's
+		// studio.url was, and the same thing that test was written for. So: reverted.
+		//
+		// The gap is real and it takes TWO changes, not a map entry:
+		//
+		//  1. list semantics -- the field names a set, one proposal carries one entity
+		//     id, and the apply path needs an operation for "insert into a join table"
+		//     rather than an UPDATE. The additive reading is honest (and the reason a
+		//     removal is deliberately not expressible), but it is not an UPDATE.
+		//  2. a TargetStore method for it. TargetStore is four methods and every one is
+		//     a column read or write; AddLink(ctx, targetType, targetID, kind, entityID)
+		//     is a change to the surface where a vote becomes a write on shared
+		//     content, and it deserves its own review rather than a patch smuggled in
+		//     beside this map.
+		//
+		// TestLinkKindsCannotBeProposedYetAndThatIsTheKnownGap in internal/autoproposal
+		// is the inverted tripwire: it asserts the gap is still open and names both
+		// steps, so it fails the day either lands.
+
 		// NO `url`. A scene's URLs live in the `scene_urls` JOIN table
 		// (scene.go:34), which is multi-valued and ordered. Proposing a single
 		// `url` would mean either inventing a column that does not exist or
 		// silently dropping every URL but one -- and "edit the url" is not an
 		// edit the single-field proposal model can express honestly. Out of
 		// scope until the proposal model carries list semantics.
+		//
+		// NOTE THE ASYMMETRY WITH performer_ids ABOVE, because it looks like an
+		// inconsistency and is not. A url is an ATTRIBUTE of the scene -- one
+		// scene, one canonical url, and the rest are alternates -- so "change the
+		// url" is a well-posed single-field edit that a rewrite of the set would
+		// destroy. A performer is not an attribute; the set is the field and the
+		// member is the edit. The test is whether one claim can honestly own the
+		// whole set, and only the url fails it.
 	},
 	"performer": {
 		"name":           {Type: TypeString},
@@ -216,9 +253,37 @@ func ValidateValue(targetType, field string, value *string) error {
 		return nil
 
 	case TypeInt:
+		// THE EMPTY CHECK IS REDUNDANT, and a mutation run is what said so: deleting
+		// `if *value == ""` leaves the suite green, and it SHOULD, because
+		// strconv.Atoi("") yields 0 and the `n <= 0` test below refuses it.
+		//
+		// It is kept for the reason the parse check above is kept and this one is
+		// not: all three say "invalid", but the intent differs. Atoi("") is an
+		// EMPTY id, which is a different mistake from an unparseable one, and a
+		// future reader who adds an int-typed field with a different bound can see
+		// that the two cases were considered. The cost is one comparison.
+		//
+		// Verified rather than assumed: with this removed, EVERY TypeInt field still
+		// refuses the empty string, and the only fields that accept "" are
+		// TypeString ones (performer/name, studio/name), which take a different
+		// branch entirely.
 		if *value == "" {
 			return ErrValueInvalid
 		}
+		// THE ERROR CHECK IS NOT REDUNDANT WITH THE n <= 0 CHECK BELOW, and a mutation
+		// run is what established it. Deleting this `if err != nil` leaves the whole
+		// suite green, which reads like dead code -- and it is not.
+		//
+		// strconv.Atoi SATURATES on overflow and reports the error SEPARATELY:
+		//
+		//     "abc"                  -> n=0,          err != nil
+		//     "9223372036854775808" -> n=MaxInt64,   err != nil
+		//
+		// So "abc" is caught by n <= 0 either way and looks redundant, while an
+		// id past MaxInt64 becomes MaxInt64: positive, plausible, and pointing at an
+		// entity that cannot exist. Positivity refuses a value that is not a valid id;
+		// the parse check refuses a valid id written in a form the parse rejects.
+		// Two different questions, and only one of them looks redundant.
 		n, err := strconv.Atoi(strings.TrimSpace(*value))
 		if err != nil {
 			return ErrValueInvalid
