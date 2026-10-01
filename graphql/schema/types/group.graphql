@@ -1,10 +1,12 @@
 "GroupDescription represents a relationship to a group with a description of the relationship"
-type GroupDescription {
+type GroupDescription @requiresRole(role: "subscriber") {
+
   group: Group!
   description: String
 }
 
-type Group {
+type Group @publicRead {
+
   id: ID!
   name: String!
   aliases: String
@@ -130,7 +132,8 @@ input ReorderSubGroupsInput {
   insert_after: Boolean
 }
 
-type FindGroupsResultType {
+type FindGroupsResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   groups: [Group!]!
 }

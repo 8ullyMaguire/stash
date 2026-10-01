@@ -1,4 +1,5 @@
-type SceneFileType {
+type SceneFileType @requiresRole(role: "subscriber") {
+
   size: String
   duration: Float
   video_codec: String
@@ -9,7 +10,8 @@ type SceneFileType {
   bitrate: Int
 }
 
-type ScenePathsType {
+type ScenePathsType @requiresRole(role: "subscriber") {
+
   screenshot: String # Resolver
   preview: String # Resolver
   stream: String # Resolver
@@ -21,22 +23,26 @@ type ScenePathsType {
   caption: String # Resolver
 }
 
-type SceneMovie {
+type SceneMovie @requiresRole(role: "subscriber") {
+
   movie: Movie!
   scene_index: Int
 }
 
-type SceneGroup {
+type SceneGroup @requiresRole(role: "subscriber") {
+
   group: Group!
   scene_index: Int
 }
 
-type VideoCaption {
+type VideoCaption @requiresRole(role: "subscriber") {
+
   language_code: String!
   caption_type: String!
 }
 
-type Scene {
+type Scene @publicRead {
+
   id: ID!
   title: String
   code: String
@@ -220,7 +226,8 @@ input ScenesDestroyInput {
   destroy_file_entry: Boolean
 }
 
-type FindScenesResultType {
+type FindScenesResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   "Total duration in seconds"
   duration: Float!
@@ -236,12 +243,14 @@ input SceneParserInput {
   ignoreOrganized: Boolean
 }
 
-type SceneMovieID {
+type SceneMovieID @requiresRole(role: "subscriber") {
+
   movie_id: ID!
   scene_index: String
 }
 
-type SceneParserResult {
+type SceneParserResult @requiresRole(role: "subscriber") {
+
   scene: Scene!
   title: String
   code: String
@@ -260,7 +269,8 @@ type SceneParserResult {
   tag_ids: [ID!]
 }
 
-type SceneParserResultType {
+type SceneParserResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   results: [SceneParserResult!]!
 }
@@ -270,7 +280,8 @@ input SceneHashInput {
   oshash: String
 }
 
-type SceneStreamEndpoint {
+type SceneStreamEndpoint @requiresRole(role: "subscriber") {
+
   url: String!
   mime_type: String
   label: String
@@ -296,7 +307,8 @@ input SceneMergeInput {
   o_history: Boolean
 }
 
-type HistoryMutationResult {
+type HistoryMutationResult @requiresRole(role: "subscriber") {
+
   count: Int!
   history: [Time!]!
 }

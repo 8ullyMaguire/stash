@@ -1,4 +1,5 @@
-type GalleryChapter {
+type GalleryChapter @requiresRole(role: "subscriber") {
+
   id: ID!
   gallery: Gallery!
   title: String!
@@ -20,7 +21,8 @@ input GalleryChapterUpdateInput {
   image_index: Int
 }
 
-type FindGalleryChaptersResultType {
+type FindGalleryChaptersResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   chapters: [GalleryChapter!]!
 }

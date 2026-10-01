@@ -12,7 +12,8 @@ enum CircumcisedEnum {
   UNCUT
 }
 
-type Performer {
+type Performer @publicRead {
+
   id: ID!
   name: String!
   disambiguation: String
@@ -192,7 +193,8 @@ input PerformerDestroyInput {
   id: ID!
 }
 
-type FindPerformersResultType {
+type FindPerformersResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   performers: [Performer!]!
 }

@@ -40,7 +40,8 @@ reason this is a mutation returning a dedicated type rather than a field on
 instance, and one compromised read key would harvest every unscanned secret and
 mint codes for all of them, forever.
 """
-type TOTPEnrollment {
+type TOTPEnrollment @requiresRole(role: "subscriber") {
+
   """
   The `otpauth://` provisioning URI. Render this as a QR code and nothing else
   needs implementing; a standard authenticator app scans it directly.
@@ -64,7 +65,8 @@ type TOTPEnrollment {
 """
 The caller's own 2FA state.
 """
-type TOTPStatus {
+type TOTPStatus @requiresRole(role: "subscriber") {
+
   """
   True when a secret exists — the STATE. False for an account that has never
   enrolled.
@@ -97,7 +99,8 @@ unique per owner rather than globally, and the default library is the one
 `isDefault` marks — which exists so a row with no library has somewhere to
 resolve to.
 """
-type Library {
+type Library @requiresRole(role: "subscriber") {
+
   id: ID!
   name: String!
   """
@@ -163,7 +166,8 @@ enum LibraryAccessAction {
 # Query
 # ---------------------------------------------------------------------------
 
-extend type Query {
+extend type Query @requiresRole(role: "subscriber") {
+
   """
   The caller's own 2FA state.
 
@@ -199,14 +203,14 @@ extend type Mutation {
   code scanned off the wrong screen — and the recovery is a hand-edit of the
   database.
   """
-  beginTOTPEnrollment: TOTPEnrollment!
+  beginTOTPEnrollment: TOTPEnrollment! @requiresWriteRole(role: "contributor")
 
   """
   Finish enrolment with a code from the authenticator. Refuses when no enrolment
   is pending, so a client cannot report a successful enrolment that enrolled
   nothing and then clear its "scan this code" screen.
   """
-  confirmTOTPEnrollment(input: TOTPCodeInput!): Boolean!
+  confirmTOTPEnrollment(input: TOTPCodeInput!): Boolean! @requiresWriteRole(role: "contributor")
 
   """
   Remove 2FA. Requires a CODE, not just a session: a session authenticates as
@@ -214,7 +218,7 @@ extend type Mutation {
   stolen session cannot be a permanent downgrade. The code is the proof that the
   person at the keyboard also holds the authenticator.
   """
-  disableTOTP(input: TOTPCodeInput!): Boolean!
+  disableTOTP(input: TOTPCodeInput!): Boolean! @requiresWriteRole(role: "contributor")
 
   """
   Grant or revoke a user's access to one of the caller's libraries. Requires
@@ -224,10 +228,10 @@ extend type Mutation {
   media at all — so a grant recorded on a `contribute` instance is a record of
   intent that takes effect if the mode ever changes, and says nothing on its own.
   """
-  grantLibraryAccess(input: LibraryAccessInput!): Boolean!
+  grantLibraryAccess(input: LibraryAccessInput!): Boolean! @requiresWriteRole(role: "steward")
 
   "Create a library belonging to the caller."
-  createLibrary(name: String!): Library!
+  createLibrary(name: String!): Library! @requiresWriteRole(role: "steward")
 
   """
   Delete one of the caller's libraries. Its rows fall out of any library, which
@@ -238,7 +242,7 @@ extend type Mutation {
   right and the deletion would still be an outage for every file not yet
   organised into a library.
   """
-  deleteLibrary(id: ID!): Boolean!
+  deleteLibrary(id: ID!): Boolean! @requiresWriteRole(role: "steward")
 
   """
   Record this user's metadata-sharing decision. `opted-out` is a hard stop in
@@ -246,5 +250,5 @@ extend type Mutation {
   dialog with a Share button, and any implementation reading "did not click
   Share" as consent has published a user who declined.
   """
-  setConsent(metadataShare: String!): Boolean!
+  setConsent(metadataShare: String!): Boolean! @requiresWriteRole(role: "steward")
 }

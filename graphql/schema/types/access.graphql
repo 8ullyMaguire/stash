@@ -1,0 +1,62 @@
+# StashForge — access-control annotations.
+#
+# The spec's five-role model (Commons §8.3) and its instruction that "the tier
+# filter must be enforced in the query layer, not the UI" are, until something
+# enforces them, a paragraph in a document.
+#
+# These directives are how the requirement becomes checkable. They carry no
+# runtime behaviour by themselves: gqlgen is not asked to honour them, and no
+# resolver consults them yet. What they do is make the DECISION explicit and
+# reviewable at the point where it is made — on the field — so a schema-walking
+# test can require that every field states its policy, and a reviewer can see
+# what it is without reading the resolver.
+#
+# Which role is sufficient, rather than which role is required. "sufficientRole:
+# steward" means a subscriber may not read this field, and says nothing about
+# whether an admin may: the role ladder is ordered, so admin implies steward.
+#
+# Deliberately NOT a permission system yet. Turning these into enforcement means
+# walking the selection set of every query, which is the next step and a much
+# larger piece of work. Writing them down first is what makes that step
+# mechanical rather than archaeological.
+
+"""The lowest role from the spec's five-role ladder that may read this field.
+
+Roles are ordered: subscriber < contributor < steward < admin, so a field
+requiring `steward` is readable by a steward and by an admin, and not by a
+contributor. `public` sits below subscriber and is the no-login role."""
+directive @requiresRole(role: String!) on FIELD_DEFINITION | OBJECT | INTERFACE
+
+"""The lowest role from the five-role ladder that may call this mutation.
+
+Separate from @requiresRole because the two fail differently. A read that is
+wrong leaks data; a write that is wrong corrupts it, so mutations are held to a
+stricter floor by convention and the distinction is worth making in the schema."""
+directive @requiresWriteRole(role: String!) on FIELD_DEFINITION
+
+"""This field is deliberately readable by anyone, including the no-login public role.
+
+The opt-out marker, and it exists because "no annotation" and "explicitly public"
+have to mean different things. If silence meant public, then forgetting the
+annotation would silently expose a field, which is the exact failure the coverage
+test is meant to catch. With this marker, a field is either annotated with what it
+requires or explicitly declared harmless to anyone — and the test refuses both
+silence and a wrong claim.
+
+Kept to fields where the answer is genuinely obvious: a public site still needs a
+title, a performer name and a scene's runtime. Anything arguable should carry a
+role instead, so that the argument is visible.
+
+`| OBJECT` is REQUIRED for the type-level use, and this is a claim the earlier
+version of this file made wrongly. Measured against gqlparser v2.5.27, the exact
+version this repo pins:
+
+    directive @publicRead on FIELD_DEFINITION
+    type Tag @publicRead { id: ID! }
+      -> Directive publicRead is not applicable on OBJECT.
+
+so without `| OBJECT` the type-level form — which is the whole scheme, since the
+read side is decided per type — cannot be written at all. `| INTERFACE` likewise:
+`interface BaseFile` is a real type in this schema, and `requiresRole` without it
+is rejected with "not applicable on INTERFACE"."""
+directive @publicRead on FIELD_DEFINITION | OBJECT | INTERFACE

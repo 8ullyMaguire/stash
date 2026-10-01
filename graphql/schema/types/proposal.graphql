@@ -18,7 +18,8 @@ A proposal is not an edit. It is a *claim* that a field should hold a value,
 which other people agree or disagree with. The field's displayed value changes
 only when the proposal settles, and only `Apply` writes it.
 """
-type EditProposal {
+type EditProposal @requiresRole(role: "subscriber") {
+
   id: ID!
   """
   The kind of object: `scene`, `performer`, `studio`, `tag`, `gallery`, `image`
@@ -78,18 +79,21 @@ input EditProposalInput {
 """
 One page of proposals, for a feed.
 """
-type ProposalConnection {
+type ProposalConnection @requiresRole(role: "subscriber") {
+
   edges: [ProposalEdge!]!
   "Null when there is no next page, so a client can stop without a count."
   nextCursor: String
 }
 
-type ProposalEdge {
+type ProposalEdge @requiresRole(role: "subscriber") {
+
   node: EditProposal!
   cursor: String!
 }
 
-extend type Query {
+extend type Query @requiresRole(role: "subscriber") {
+
   """
   Proposals, filtered. Every filter is optional and they compose with AND.
 
@@ -133,17 +137,17 @@ extend type Mutation {
   proposal on this same field was rejected (sticky rejection — see
   `collab.ValidateProposal`).
   """
-  propose(input: EditProposalInput!): EditProposal!
+  propose(input: EditProposalInput!): EditProposal! @requiresWriteRole(role: "contributor")
 
   """
   Vote on a proposal. `value` is 1 or -1; voting twice replaces the earlier
   vote rather than erroring, because changing your mind is normal and an
   error would make people open a second account to do it.
   """
-  vote(proposalId: ID!, value: Int!): EditProposal!
+  vote(proposalId: ID!, value: Int!): EditProposal! @requiresWriteRole(role: "contributor")
 
   "Withdraw a proposal you authored. Only while it is still open."
-  withdraw(proposalId: ID!): EditProposal!
+  withdraw(proposalId: ID!): EditProposal! @requiresWriteRole(role: "contributor")
 
   """
   Accept or reject on a moderator's authority, bypassing quorum.
@@ -152,5 +156,5 @@ extend type Mutation {
   records the decision and the settled value is written by `Apply`, which is
   idempotent and appends exactly one audit row however many times it runs.
   """
-  moderate(proposalId: ID!, approve: Boolean!, reason: String): EditProposal!
+  moderate(proposalId: ID!, approve: Boolean!, reason: String): EditProposal! @requiresWriteRole(role: "steward")
 }

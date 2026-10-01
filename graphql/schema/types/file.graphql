@@ -1,9 +1,11 @@
-type Fingerprint {
+type Fingerprint @requiresRole(role: "subscriber") {
+
   type: String!
   value: String!
 }
 
-type Folder {
+type Folder @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -25,7 +27,8 @@ type Folder {
   updated_at: Time!
 }
 
-interface BaseFile {
+interface BaseFile @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -46,7 +49,8 @@ interface BaseFile {
   updated_at: Time!
 }
 
-type BasicFile implements BaseFile {
+type BasicFile implements BaseFile @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -67,7 +71,8 @@ type BasicFile implements BaseFile {
   updated_at: Time!
 }
 
-type VideoFile implements BaseFile {
+type VideoFile implements BaseFile @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -99,7 +104,8 @@ type VideoFile implements BaseFile {
   updated_at: Time!
 }
 
-type ImageFile implements BaseFile {
+type ImageFile implements BaseFile @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -128,7 +134,8 @@ type ImageFile implements BaseFile {
 
 union VisualFile = VideoFile | ImageFile
 
-type GalleryFile implements BaseFile {
+type GalleryFile implements BaseFile @requiresRole(role: "subscriber") {
+
   id: ID!
   path: String!
   basename: String!
@@ -175,7 +182,8 @@ input FileSetFingerprintsInput {
   fingerprints: [SetFingerprintsInput!]!
 }
 
-type FindFilesResultType {
+type FindFilesResultType @requiresRole(role: "subscriber") {
+
   count: Int!
 
   "Total megapixels of any image files"
@@ -189,7 +197,8 @@ type FindFilesResultType {
   files: [BaseFile!]!
 }
 
-type FindFoldersResultType {
+type FindFoldersResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   folders: [Folder!]!
 }

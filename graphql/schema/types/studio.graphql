@@ -1,4 +1,5 @@
-type Studio {
+type Studio @publicRead {
+
   id: ID!
   name: String!
   url: String @deprecated(reason: "Use urls")
@@ -96,7 +97,8 @@ input StudioDestroyInput {
   id: ID!
 }
 
-type FindStudiosResultType {
+type FindStudiosResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   studios: [Studio!]!
 }

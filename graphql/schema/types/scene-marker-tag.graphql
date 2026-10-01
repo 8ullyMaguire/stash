@@ -1,4 +1,5 @@
-type SceneMarkerTag {
+type SceneMarkerTag @requiresRole(role: "subscriber") {
+
   tag: Tag!
   scene_markers: [SceneMarker!]!
 }

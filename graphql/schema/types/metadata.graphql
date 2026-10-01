@@ -46,7 +46,8 @@ input GeneratePreviewOptionsInput {
   previewPreset: PreviewPreset
 }
 
-type GenerateMetadataOptions {
+type GenerateMetadataOptions @requiresRole(role: "subscriber") {
+
   covers: Boolean
   sprites: Boolean
   previews: Boolean
@@ -62,7 +63,8 @@ type GenerateMetadataOptions {
   clipPreviews: Boolean
 }
 
-type GeneratePreviewOptions {
+type GeneratePreviewOptions @requiresRole(role: "subscriber") {
+
   "Number of segments in a preview file"
   previewSegments: Int
   "Preview segment duration, in seconds"
@@ -107,7 +109,8 @@ input ScanMetadataInput {
   filter: ScanMetaDataFilterInput
 }
 
-type ScanMetadataOptions {
+type ScanMetadataOptions @requiresRole(role: "subscriber") {
+
   "Forces a rescan on files even if modification time is unchanged"
   rescan: Boolean!
   "Generate covers during scan"
@@ -180,7 +183,8 @@ input AutoTagMetadataInput {
   tags: [String!]
 }
 
-type AutoTagMetadataOptions {
+type AutoTagMetadataOptions @requiresRole(role: "subscriber") {
+
   """
   IDs of performers to tag files with, or "*" for all
   """
@@ -258,14 +262,16 @@ input IdentifyMetadataInput {
 }
 
 # types for default options
-type IdentifyFieldOptions {
+type IdentifyFieldOptions @requiresRole(role: "subscriber") {
+
   field: String!
   strategy: IdentifyFieldStrategy!
   "creates missing objects if needed - only applicable for performers, tags and studios"
   createMissing: Boolean
 }
 
-type IdentifyMetadataOptions {
+type IdentifyMetadataOptions @requiresRole(role: "subscriber") {
+
   "any fields missing from here are defaulted to MERGE and createMissing false"
   fieldOptions: [IdentifyFieldOptions!]
   "defaults to true if not provided"
@@ -285,13 +291,15 @@ type IdentifyMetadataOptions {
   skipSingleNamePerformerTag: String
 }
 
-type IdentifySource {
+type IdentifySource @requiresRole(role: "subscriber") {
+
   source: ScraperSource!
   "Options defined for a source override the defaults"
   options: IdentifyMetadataOptions
 }
 
-type IdentifyMetadataTaskOptions {
+type IdentifyMetadataTaskOptions @requiresRole(role: "subscriber") {
+
   "An ordered list of sources to identify items with. Only the first source that finds a match is used."
   sources: [IdentifySource!]!
   "Options defined here override the configured defaults"
@@ -349,7 +357,8 @@ enum SystemStatusEnum {
   OK
 }
 
-type SystemStatus {
+type SystemStatus @requiresRole(role: "subscriber") {
+
   databaseSchema: Int
   databasePath: String
   configPath: String

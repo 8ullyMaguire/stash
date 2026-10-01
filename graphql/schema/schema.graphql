@@ -1,5 +1,6 @@
 "The query root for this schema"
-type Query {
+type Query @requiresRole(role: "subscriber") {
+
   """
   The currently authenticated user, or null when anonymous. Anonymous is the
   normal state of most requests, so this is not an error.
@@ -288,149 +289,149 @@ type Query {
 
 type Mutation {
   "Create an account. Requires an invite key unless this instance has no accounts yet."
-  register(input: RegisterInput!): AuthPayload!
+  register(input: RegisterInput!): AuthPayload! @requiresWriteRole(role: "public")
 
   """
   Authenticate, and set the session cookie. Every failure mode returns the same
   error, so this form cannot be used to enumerate accounts.
   """
-  login(input: LoginInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload! @requiresWriteRole(role: "public")
 
   "Destroy the current session and clear its cookie."
-  logout: Boolean!
+  logout: Boolean! @requiresWriteRole(role: "public")
 
 
-  setup(input: SetupInput!): Boolean!
+  setup(input: SetupInput!): Boolean! @requiresWriteRole(role: "admin")
 
   "Migrates the schema to the required version. Returns the job ID"
-  migrate(input: MigrateInput!): ID!
+  migrate(input: MigrateInput!): ID! @requiresWriteRole(role: "admin")
 
   "Downloads and installs ffmpeg and ffprobe binaries into the configuration directory. Returns the job ID."
-  downloadFFMpeg: ID!
+  downloadFFMpeg: ID! @requiresWriteRole(role: "admin")
 
-  sceneCreate(input: SceneCreateInput!): Scene
-  sceneUpdate(input: SceneUpdateInput!): Scene
-  sceneMerge(input: SceneMergeInput!): Scene
-  bulkSceneUpdate(input: BulkSceneUpdateInput!): [Scene!]
-  sceneDestroy(input: SceneDestroyInput!): Boolean!
-  scenesDestroy(input: ScenesDestroyInput!): Boolean!
-  scenesUpdate(input: [SceneUpdateInput!]!): [Scene]
+  sceneCreate(input: SceneCreateInput!): Scene @requiresWriteRole(role: "contributor")
+  sceneUpdate(input: SceneUpdateInput!): Scene @requiresWriteRole(role: "contributor")
+  sceneMerge(input: SceneMergeInput!): Scene @requiresWriteRole(role: "contributor")
+  bulkSceneUpdate(input: BulkSceneUpdateInput!): [Scene!] @requiresWriteRole(role: "contributor")
+  sceneDestroy(input: SceneDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  scenesDestroy(input: ScenesDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  scenesUpdate(input: [SceneUpdateInput!]!): [Scene] @requiresWriteRole(role: "steward")
 
   "Increments the o-counter for a scene. Returns the new value"
-  sceneIncrementO(id: ID!): Int! @deprecated(reason: "Use sceneAddO instead")
+  sceneIncrementO(id: ID!): Int! @deprecated(reason: "Use sceneAddO instead") @requiresWriteRole(role: "contributor")
   "Decrements the o-counter for a scene. Returns the new value"
-  sceneDecrementO(id: ID!): Int! @deprecated(reason: "Use sceneRemoveO instead")
+  sceneDecrementO(id: ID!): Int! @deprecated(reason: "Use sceneRemoveO instead") @requiresWriteRole(role: "contributor")
 
   "Increments the o-counter for a scene. Uses the current time if none provided."
-  sceneAddO(id: ID!, times: [Timestamp!]): HistoryMutationResult!
+  sceneAddO(id: ID!, times: [Timestamp!]): HistoryMutationResult! @requiresWriteRole(role: "contributor")
   "Decrements the o-counter for a scene, removing the last recorded time if specific time not provided. Returns the new value"
-  sceneDeleteO(id: ID!, times: [Timestamp!]): HistoryMutationResult!
+  sceneDeleteO(id: ID!, times: [Timestamp!]): HistoryMutationResult! @requiresWriteRole(role: "contributor")
 
   "Resets the o-counter for a scene to 0. Returns the new value"
-  sceneResetO(id: ID!): Int!
+  sceneResetO(id: ID!): Int! @requiresWriteRole(role: "contributor")
 
   "Sets the resume time point (if provided) and adds the provided duration to the scene's play duration"
-  sceneSaveActivity(id: ID!, resume_time: Float, playDuration: Float): Boolean!
+  sceneSaveActivity(id: ID!, resume_time: Float, playDuration: Float): Boolean! @requiresWriteRole(role: "contributor")
 
   "Resets the resume time point and play duration"
   sceneResetActivity(
     id: ID!
     reset_resume: Boolean
     reset_duration: Boolean
-  ): Boolean!
+  ): Boolean! @requiresWriteRole(role: "contributor")
 
   "Increments the play count for the scene. Returns the new play count value."
-  sceneIncrementPlayCount(id: ID!): Int!
+  sceneIncrementPlayCount(id: ID!): Int! @requiresWriteRole(role: "contributor")
     @deprecated(reason: "Use sceneAddPlay instead")
 
   "Increments the play count for the scene. Uses the current time if none provided."
-  sceneAddPlay(id: ID!, times: [Timestamp!]): HistoryMutationResult!
+  sceneAddPlay(id: ID!, times: [Timestamp!]): HistoryMutationResult! @requiresWriteRole(role: "contributor")
   "Decrements the play count for the scene, removing the specific times or the last recorded time if not provided."
-  sceneDeletePlay(id: ID!, times: [Timestamp!]): HistoryMutationResult!
+  sceneDeletePlay(id: ID!, times: [Timestamp!]): HistoryMutationResult! @requiresWriteRole(role: "contributor")
   "Resets the play count for a scene to 0. Returns the new play count value."
-  sceneResetPlayCount(id: ID!): Int!
+  sceneResetPlayCount(id: ID!): Int! @requiresWriteRole(role: "contributor")
 
   "Generates screenshot at specified time in seconds. Leave empty to generate default screenshot"
-  sceneGenerateScreenshot(id: ID!, at: Float): ID!
+  sceneGenerateScreenshot(id: ID!, at: Float): ID! @requiresWriteRole(role: "admin")
 
-  sceneMarkerCreate(input: SceneMarkerCreateInput!): SceneMarker
-  sceneMarkerUpdate(input: SceneMarkerUpdateInput!): SceneMarker
-  bulkSceneMarkerUpdate(input: BulkSceneMarkerUpdateInput!): [SceneMarker!]
-  sceneMarkerDestroy(id: ID!): Boolean!
-  sceneMarkersDestroy(ids: [ID!]!): Boolean!
+  sceneMarkerCreate(input: SceneMarkerCreateInput!): SceneMarker @requiresWriteRole(role: "steward")
+  sceneMarkerUpdate(input: SceneMarkerUpdateInput!): SceneMarker @requiresWriteRole(role: "steward")
+  bulkSceneMarkerUpdate(input: BulkSceneMarkerUpdateInput!): [SceneMarker!] @requiresWriteRole(role: "steward")
+  sceneMarkerDestroy(id: ID!): Boolean! @requiresWriteRole(role: "steward")
+  sceneMarkersDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
 
-  sceneAssignFile(input: AssignSceneFileInput!): Boolean!
+  sceneAssignFile(input: AssignSceneFileInput!): Boolean! @requiresWriteRole(role: "steward")
 
-  imageUpdate(input: ImageUpdateInput!): Image
-  bulkImageUpdate(input: BulkImageUpdateInput!): [Image!]
-  imageDestroy(input: ImageDestroyInput!): Boolean!
-  imagesDestroy(input: ImagesDestroyInput!): Boolean!
-  imagesUpdate(input: [ImageUpdateInput!]!): [Image]
+  imageUpdate(input: ImageUpdateInput!): Image @requiresWriteRole(role: "contributor")
+  bulkImageUpdate(input: BulkImageUpdateInput!): [Image!] @requiresWriteRole(role: "contributor")
+  imageDestroy(input: ImageDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  imagesDestroy(input: ImagesDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  imagesUpdate(input: [ImageUpdateInput!]!): [Image] @requiresWriteRole(role: "steward")
 
   "Increments the o-counter for an image. Returns the new value"
-  imageIncrementO(id: ID!): Int!
+  imageIncrementO(id: ID!): Int! @requiresWriteRole(role: "contributor")
   "Decrements the o-counter for an image. Returns the new value"
-  imageDecrementO(id: ID!): Int!
+  imageDecrementO(id: ID!): Int! @requiresWriteRole(role: "contributor")
   "Resets the o-counter for a image to 0. Returns the new value"
-  imageResetO(id: ID!): Int!
+  imageResetO(id: ID!): Int! @requiresWriteRole(role: "contributor")
 
-  galleryCreate(input: GalleryCreateInput!): Gallery
-  galleryUpdate(input: GalleryUpdateInput!): Gallery
-  bulkGalleryUpdate(input: BulkGalleryUpdateInput!): [Gallery!]
-  galleryDestroy(input: GalleryDestroyInput!): Boolean!
-  galleriesUpdate(input: [GalleryUpdateInput!]!): [Gallery]
+  galleryCreate(input: GalleryCreateInput!): Gallery @requiresWriteRole(role: "contributor")
+  galleryUpdate(input: GalleryUpdateInput!): Gallery @requiresWriteRole(role: "contributor")
+  bulkGalleryUpdate(input: BulkGalleryUpdateInput!): [Gallery!] @requiresWriteRole(role: "contributor")
+  galleryDestroy(input: GalleryDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  galleriesUpdate(input: [GalleryUpdateInput!]!): [Gallery] @requiresWriteRole(role: "steward")
 
-  addGalleryImages(input: GalleryAddInput!): Boolean!
-  removeGalleryImages(input: GalleryRemoveInput!): Boolean!
-  setGalleryCover(input: GallerySetCoverInput!): Boolean!
-  resetGalleryCover(input: GalleryResetCoverInput!): Boolean!
+  addGalleryImages(input: GalleryAddInput!): Boolean! @requiresWriteRole(role: "contributor")
+  removeGalleryImages(input: GalleryRemoveInput!): Boolean! @requiresWriteRole(role: "contributor")
+  setGalleryCover(input: GallerySetCoverInput!): Boolean! @requiresWriteRole(role: "contributor")
+  resetGalleryCover(input: GalleryResetCoverInput!): Boolean! @requiresWriteRole(role: "contributor")
 
-  galleryChapterCreate(input: GalleryChapterCreateInput!): GalleryChapter
-  galleryChapterUpdate(input: GalleryChapterUpdateInput!): GalleryChapter
-  galleryChapterDestroy(id: ID!): Boolean!
+  galleryChapterCreate(input: GalleryChapterCreateInput!): GalleryChapter @requiresWriteRole(role: "contributor")
+  galleryChapterUpdate(input: GalleryChapterUpdateInput!): GalleryChapter @requiresWriteRole(role: "contributor")
+  galleryChapterDestroy(id: ID!): Boolean! @requiresWriteRole(role: "steward")
 
-  performerCreate(input: PerformerCreateInput!): Performer
-  performerUpdate(input: PerformerUpdateInput!): Performer
-  performerDestroy(input: PerformerDestroyInput!): Boolean!
-  performersDestroy(ids: [ID!]!): Boolean!
-  bulkPerformerUpdate(input: BulkPerformerUpdateInput!): [Performer!]
-  performerMerge(input: PerformerMergeInput!): Performer!
+  performerCreate(input: PerformerCreateInput!): Performer @requiresWriteRole(role: "contributor")
+  performerUpdate(input: PerformerUpdateInput!): Performer @requiresWriteRole(role: "contributor")
+  performerDestroy(input: PerformerDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  performersDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
+  bulkPerformerUpdate(input: BulkPerformerUpdateInput!): [Performer!] @requiresWriteRole(role: "contributor")
+  performerMerge(input: PerformerMergeInput!): Performer! @requiresWriteRole(role: "contributor")
 
-  studioCreate(input: StudioCreateInput!): Studio
-  studioUpdate(input: StudioUpdateInput!): Studio
-  studioDestroy(input: StudioDestroyInput!): Boolean!
-  studiosDestroy(ids: [ID!]!): Boolean!
-  bulkStudioUpdate(input: BulkStudioUpdateInput!): [Studio!]
+  studioCreate(input: StudioCreateInput!): Studio @requiresWriteRole(role: "contributor")
+  studioUpdate(input: StudioUpdateInput!): Studio @requiresWriteRole(role: "contributor")
+  studioDestroy(input: StudioDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  studiosDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
+  bulkStudioUpdate(input: BulkStudioUpdateInput!): [Studio!] @requiresWriteRole(role: "contributor")
 
-  movieCreate(input: MovieCreateInput!): Movie
+  movieCreate(input: MovieCreateInput!): Movie @requiresWriteRole(role: "contributor")
     @deprecated(reason: "Use groupCreate instead")
-  movieUpdate(input: MovieUpdateInput!): Movie
+  movieUpdate(input: MovieUpdateInput!): Movie @requiresWriteRole(role: "contributor")
     @deprecated(reason: "Use groupUpdate instead")
-  movieDestroy(input: MovieDestroyInput!): Boolean!
+  movieDestroy(input: MovieDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
     @deprecated(reason: "Use groupDestroy instead")
-  moviesDestroy(ids: [ID!]!): Boolean!
+  moviesDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
     @deprecated(reason: "Use groupsDestroy instead")
-  bulkMovieUpdate(input: BulkMovieUpdateInput!): [Movie!]
+  bulkMovieUpdate(input: BulkMovieUpdateInput!): [Movie!] @requiresWriteRole(role: "contributor")
     @deprecated(reason: "Use bulkGroupUpdate instead")
 
-  groupCreate(input: GroupCreateInput!): Group
-  groupUpdate(input: GroupUpdateInput!): Group
-  groupDestroy(input: GroupDestroyInput!): Boolean!
-  groupsDestroy(ids: [ID!]!): Boolean!
-  bulkGroupUpdate(input: BulkGroupUpdateInput!): [Group!]
+  groupCreate(input: GroupCreateInput!): Group @requiresWriteRole(role: "contributor")
+  groupUpdate(input: GroupUpdateInput!): Group @requiresWriteRole(role: "contributor")
+  groupDestroy(input: GroupDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  groupsDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
+  bulkGroupUpdate(input: BulkGroupUpdateInput!): [Group!] @requiresWriteRole(role: "contributor")
 
-  addGroupSubGroups(input: GroupSubGroupAddInput!): Boolean!
-  removeGroupSubGroups(input: GroupSubGroupRemoveInput!): Boolean!
+  addGroupSubGroups(input: GroupSubGroupAddInput!): Boolean! @requiresWriteRole(role: "contributor")
+  removeGroupSubGroups(input: GroupSubGroupRemoveInput!): Boolean! @requiresWriteRole(role: "contributor")
 
   "Reorder sub groups within a group. Returns true if successful."
-  reorderSubGroups(input: ReorderSubGroupsInput!): Boolean!
+  reorderSubGroups(input: ReorderSubGroupsInput!): Boolean! @requiresWriteRole(role: "contributor")
 
-  tagCreate(input: TagCreateInput!): Tag
-  tagUpdate(input: TagUpdateInput!): Tag
-  tagDestroy(input: TagDestroyInput!): Boolean!
-  tagsDestroy(ids: [ID!]!): Boolean!
-  tagsMerge(input: TagsMergeInput!): Tag
-  bulkTagUpdate(input: BulkTagUpdateInput!): [Tag!]
+  tagCreate(input: TagCreateInput!): Tag @requiresWriteRole(role: "contributor")
+  tagUpdate(input: TagUpdateInput!): Tag @requiresWriteRole(role: "contributor")
+  tagDestroy(input: TagDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+  tagsDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
+  tagsMerge(input: TagsMergeInput!): Tag @requiresWriteRole(role: "steward")
+  bulkTagUpdate(input: BulkTagUpdateInput!): [Tag!] @requiresWriteRole(role: "contributor")
 
   """
   Moves the given files to the given destination. Returns true if successful.
@@ -441,62 +442,62 @@ type Mutation {
   matches one of the media extensions.
   Creates folder hierarchy if needed.
   """
-  moveFiles(input: MoveFilesInput!): Boolean!
-  deleteFiles(ids: [ID!]!): Boolean!
+  moveFiles(input: MoveFilesInput!): Boolean! @requiresWriteRole(role: "steward")
+  deleteFiles(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
   "Deletes file entries from the database without deleting the files from the filesystem"
-  destroyFiles(ids: [ID!]!): Boolean!
+  destroyFiles(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
 
-  fileSetFingerprints(input: FileSetFingerprintsInput!): Boolean!
+  fileSetFingerprints(input: FileSetFingerprintsInput!): Boolean! @requiresWriteRole(role: "steward")
   "Reveal the file in the system file manager"
-  revealFileInFileManager(id: ID!): Boolean!
+  revealFileInFileManager(id: ID!): Boolean! @requiresWriteRole(role: "admin")
   "Reveal the folder in the system file manager"
-  revealFolderInFileManager(id: ID!): Boolean!
+  revealFolderInFileManager(id: ID!): Boolean! @requiresWriteRole(role: "admin")
 
   # Saved filters
-  saveFilter(input: SaveFilterInput!): SavedFilter!
-  destroySavedFilter(input: DestroyFilterInput!): Boolean!
-  setDefaultFilter(input: SetDefaultFilterInput!): Boolean!
+  saveFilter(input: SaveFilterInput!): SavedFilter! @requiresWriteRole(role: "contributor")
+  destroySavedFilter(input: DestroyFilterInput!): Boolean! @requiresWriteRole(role: "contributor")
+  setDefaultFilter(input: SetDefaultFilterInput!): Boolean! @requiresWriteRole(role: "contributor")
     @deprecated(reason: "now uses UI config")
 
   "Change general configuration options"
-  configureGeneral(input: ConfigGeneralInput!): ConfigGeneralResult!
-  configureInterface(input: ConfigInterfaceInput!): ConfigInterfaceResult!
-  configureDLNA(input: ConfigDLNAInput!): ConfigDLNAResult!
-  configureScraping(input: ConfigScrapingInput!): ConfigScrapingResult!
+  configureGeneral(input: ConfigGeneralInput!): ConfigGeneralResult! @requiresWriteRole(role: "admin")
+  configureInterface(input: ConfigInterfaceInput!): ConfigInterfaceResult! @requiresWriteRole(role: "admin")
+  configureDLNA(input: ConfigDLNAInput!): ConfigDLNAResult! @requiresWriteRole(role: "admin")
+  configureScraping(input: ConfigScrapingInput!): ConfigScrapingResult! @requiresWriteRole(role: "admin")
   configureDefaults(
     input: ConfigDefaultSettingsInput!
-  ): ConfigDefaultSettingsResult!
+  ): ConfigDefaultSettingsResult! @requiresWriteRole(role: "admin")
 
   "overwrites the entire plugin configuration for the given plugin"
-  configurePlugin(plugin_id: ID!, input: Map!): Map!
+  configurePlugin(plugin_id: ID!, input: Map!): Map! @requiresWriteRole(role: "admin")
 
   """
   overwrites the UI configuration
   if input is provided, then the entire UI configuration is replaced
   if partial is provided, then the partial UI configuration is merged into the existing UI configuration
   """
-  configureUI(input: Map, partial: Map): Map!
+  configureUI(input: Map, partial: Map): Map! @requiresWriteRole(role: "admin")
   """
   sets a single UI key value
   key is a dot separated path to the value
   """
-  configureUISetting(key: String!, value: Any): Map!
+  configureUISetting(key: String!, value: Any): Map! @requiresWriteRole(role: "admin")
 
   "Generate and set (or clear) API key"
-  generateAPIKey(input: GenerateAPIKeyInput!): String!
+  generateAPIKey(input: GenerateAPIKeyInput!): String! @requiresWriteRole(role: "admin")
 
   "Returns a link to download the result"
-  exportObjects(input: ExportObjectsInput!): String
+  exportObjects(input: ExportObjectsInput!): String @requiresWriteRole(role: "admin")
 
   "Performs an incremental import. Returns the job ID"
-  importObjects(input: ImportObjectsInput!): ID!
+  importObjects(input: ImportObjectsInput!): ID! @requiresWriteRole(role: "admin")
 
   "Start an full import. Completely wipes the database and imports from the metadata directory. Returns the job ID"
-  metadataImport: ID!
+  metadataImport: ID! @requiresWriteRole(role: "steward")
   "Start a full export. Outputs to the metadata directory. Returns the job ID"
-  metadataExport: ID!
+  metadataExport: ID! @requiresWriteRole(role: "steward")
   "Start a scan. Returns the job ID"
-  metadataScan(input: ScanMetadataInput!): ID!
+  metadataScan(input: ScanMetadataInput!): ID! @requiresWriteRole(role: "admin")
   """
   Cluster the faces found in the library by who they are. Returns the job ID.
 
@@ -504,39 +505,39 @@ type Mutation {
   over every scene, so it takes a long time and can be watched and cancelled in
   the job list. The number of clusters is in the log, not in this response.
   """
-  faceClustering: ID!
+  faceClustering: ID! @requiresWriteRole(role: "steward")
   "Start generating content. Returns the job ID"
-  metadataGenerate(input: GenerateMetadataInput!): ID!
+  metadataGenerate(input: GenerateMetadataInput!): ID! @requiresWriteRole(role: "steward")
   "Start auto-tagging. Returns the job ID"
-  metadataAutoTag(input: AutoTagMetadataInput!): ID!
+  metadataAutoTag(input: AutoTagMetadataInput!): ID! @requiresWriteRole(role: "steward")
   "Clean metadata. Returns the job ID"
-  metadataClean(input: CleanMetadataInput!): ID!
+  metadataClean(input: CleanMetadataInput!): ID! @requiresWriteRole(role: "steward")
   "Clean generated files. Returns the job ID"
-  metadataCleanGenerated(input: CleanGeneratedInput!): ID!
+  metadataCleanGenerated(input: CleanGeneratedInput!): ID! @requiresWriteRole(role: "steward")
   "Identifies scenes using scrapers. Returns the job ID"
-  metadataIdentify(input: IdentifyMetadataInput!): ID!
+  metadataIdentify(input: IdentifyMetadataInput!): ID! @requiresWriteRole(role: "steward")
 
   "Migrate generated files for the current hash naming"
-  migrateHashNaming: ID!
+  migrateHashNaming: ID! @requiresWriteRole(role: "admin")
   "Migrates legacy scene screenshot files into the blob storage"
-  migrateSceneScreenshots(input: MigrateSceneScreenshotsInput!): ID!
+  migrateSceneScreenshots(input: MigrateSceneScreenshotsInput!): ID! @requiresWriteRole(role: "admin")
   "Migrates blobs from the old storage system to the current one"
-  migrateBlobs(input: MigrateBlobsInput!): ID!
+  migrateBlobs(input: MigrateBlobsInput!): ID! @requiresWriteRole(role: "admin")
 
   "Anonymise the database in a separate file. Optionally returns a link to download the database file"
-  anonymiseDatabase(input: AnonymiseDatabaseInput!): String
+  anonymiseDatabase(input: AnonymiseDatabaseInput!): String @requiresWriteRole(role: "admin")
 
   "Optimises the database. Returns the job ID"
-  optimiseDatabase: ID!
+  optimiseDatabase: ID! @requiresWriteRole(role: "admin")
 
   "Reload scrapers"
-  reloadScrapers: Boolean!
+  reloadScrapers: Boolean! @requiresWriteRole(role: "admin")
 
   """
   Enable/disable plugins - enabledMap is a map of plugin IDs to enabled booleans.
   Plugins not in the map are not affected.
   """
-  setPluginsEnabled(enabledMap: BoolMap!): Boolean!
+  setPluginsEnabled(enabledMap: BoolMap!): Boolean! @requiresWriteRole(role: "admin")
 
   """
   Run a plugin task.
@@ -553,15 +554,15 @@ type Mutation {
     description: String
     args: [PluginArgInput!] @deprecated(reason: "Use args_map instead")
     args_map: Map
-  ): ID!
+  ): ID! @requiresWriteRole(role: "admin")
 
   """
   Runs a plugin operation. The operation is run immediately and does not use the job queue.
   Returns a map of the result.
   """
-  runPluginOperation(plugin_id: ID!, args: Map): Any
+  runPluginOperation(plugin_id: ID!, args: Map): Any @requiresWriteRole(role: "admin")
 
-  reloadPlugins: Boolean!
+  reloadPlugins: Boolean! @requiresWriteRole(role: "admin")
 
   """
   Installs the given packages.
@@ -569,7 +570,7 @@ type Mutation {
   If an error occurs when installing a package, the job will continue to install the remaining packages.
   Returns the job ID
   """
-  installPackages(type: PackageType!, packages: [PackageSpecInput!]!): ID!
+  installPackages(type: PackageType!, packages: [PackageSpecInput!]!): ID! @requiresWriteRole(role: "admin")
   """
   Updates the given packages.
   If a package is not installed, it will not be installed.
@@ -578,54 +579,55 @@ type Mutation {
   If an error occurs when updating a package, the job will continue to update the remaining packages.
   Returns the job ID.
   """
-  updatePackages(type: PackageType!, packages: [PackageSpecInput!]): ID!
+  updatePackages(type: PackageType!, packages: [PackageSpecInput!]): ID! @requiresWriteRole(role: "admin")
   """
   Uninstalls the given packages.
   If an error occurs when uninstalling a package, the job will continue to uninstall the remaining packages.
   Returns the job ID
   """
-  uninstallPackages(type: PackageType!, packages: [PackageSpecInput!]!): ID!
+  uninstallPackages(type: PackageType!, packages: [PackageSpecInput!]!): ID! @requiresWriteRole(role: "admin")
 
-  stopJob(job_id: ID!): Boolean!
-  stopAllJobs: Boolean!
+  stopJob(job_id: ID!): Boolean! @requiresWriteRole(role: "admin")
+  stopAllJobs: Boolean! @requiresWriteRole(role: "admin")
 
   "Submit fingerprints to stash-box instance"
   submitStashBoxFingerprints(
     input: StashBoxFingerprintSubmissionInput!
-  ): Boolean!
+  ): Boolean! @requiresWriteRole(role: "steward")
 
   "Submit scene as draft to stash-box instance"
-  submitStashBoxSceneDraft(input: StashBoxDraftSubmissionInput!): ID
+  submitStashBoxSceneDraft(input: StashBoxDraftSubmissionInput!): ID @requiresWriteRole(role: "steward")
   "Submit performer as draft to stash-box instance"
-  submitStashBoxPerformerDraft(input: StashBoxDraftSubmissionInput!): ID
+  submitStashBoxPerformerDraft(input: StashBoxDraftSubmissionInput!): ID @requiresWriteRole(role: "steward")
 
   "Backup the database. Optionally returns a link to download the database file"
-  backupDatabase(input: BackupDatabaseInput!): String
+  backupDatabase(input: BackupDatabaseInput!): String @requiresWriteRole(role: "admin")
 
   "DANGEROUS: Execute an arbitrary SQL statement that returns rows."
-  querySQL(sql: String!, args: [Any]): SQLQueryResult!
+  querySQL(sql: String!, args: [Any]): SQLQueryResult! @requiresWriteRole(role: "admin")
 
   "DANGEROUS: Execute an arbitrary SQL statement without returning any rows."
-  execSQL(sql: String!, args: [Any]): SQLExecResult!
+  execSQL(sql: String!, args: [Any]): SQLExecResult! @requiresWriteRole(role: "admin")
 
   "Run batch performer tag task. Returns the job ID."
-  stashBoxBatchPerformerTag(input: StashBoxBatchTagInput!): String!
+  stashBoxBatchPerformerTag(input: StashBoxBatchTagInput!): String! @requiresWriteRole(role: "steward")
   "Run batch studio tag task. Returns the job ID."
-  stashBoxBatchStudioTag(input: StashBoxBatchTagInput!): String!
+  stashBoxBatchStudioTag(input: StashBoxBatchTagInput!): String! @requiresWriteRole(role: "steward")
   "Run batch tag tag task. Returns the job ID."
-  stashBoxBatchTagTag(input: StashBoxBatchTagInput!): String!
+  stashBoxBatchTagTag(input: StashBoxBatchTagInput!): String! @requiresWriteRole(role: "steward")
 
   "Enables DLNA for an optional duration. Has no effect if DLNA is enabled by default"
-  enableDLNA(input: EnableDLNAInput!): Boolean!
+  enableDLNA(input: EnableDLNAInput!): Boolean! @requiresWriteRole(role: "admin")
   "Disables DLNA for an optional duration. Has no effect if DLNA is disabled by default"
-  disableDLNA(input: DisableDLNAInput!): Boolean!
+  disableDLNA(input: DisableDLNAInput!): Boolean! @requiresWriteRole(role: "admin")
   "Enables an IP address for DLNA for an optional duration"
-  addTempDLNAIP(input: AddTempDLNAIPInput!): Boolean!
+  addTempDLNAIP(input: AddTempDLNAIPInput!): Boolean! @requiresWriteRole(role: "admin")
   "Removes an IP address from the temporary DLNA whitelist"
-  removeTempDLNAIP(input: RemoveTempDLNAIPInput!): Boolean!
+  removeTempDLNAIP(input: RemoveTempDLNAIPInput!): Boolean! @requiresWriteRole(role: "admin")
 }
 
-type Subscription {
+type Subscription @requiresRole(role: "subscriber") {
+
   "Update from the metadata manager"
   jobsSubscribe: JobStatusUpdate!
 

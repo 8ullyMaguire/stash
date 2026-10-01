@@ -7,7 +7,8 @@ enum JobStatus {
   FAILED
 }
 
-type Job {
+type Job @requiresRole(role: "subscriber") {
+
   id: ID!
   status: JobStatus!
   subTasks: [String!]
@@ -29,7 +30,8 @@ enum JobStatusUpdateType {
   UPDATE
 }
 
-type JobStatusUpdate {
+type JobStatusUpdate @requiresRole(role: "subscriber") {
+
   type: JobStatusUpdateType!
   job: Job!
 }

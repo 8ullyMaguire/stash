@@ -31,7 +31,8 @@ said they resemble each other.
 This is a hypothesis, not a fact. `name` being non-null is the only signal that
 a human looked at it.
 """
-type PersonCluster {
+type PersonCluster @requiresRole(role: "subscriber") {
+
   id: ID!
   """
   The name a human gave this cluster, or null when nobody has.
@@ -89,7 +90,8 @@ type PersonCluster {
 One appearance of a face in one target, and the evidence linking it to its
 cluster.
 """
-type PersonClusterMember {
+type PersonClusterMember @requiresRole(role: "subscriber") {
+
   "The cluster this appearance belongs to."
   clusterId: ID!
   """
@@ -126,7 +128,8 @@ revisited four times, and that is worth more than the current name alone: when a
 merge turns out to have been wrong, the question is who decided and when, and a
 single mutable column cannot answer it.
 """
-type PersonClusterNameRecord {
+type PersonClusterNameRecord @requiresRole(role: "subscriber") {
+
   clusterId: ID!
   "The name that was set."
   name: String!
@@ -145,7 +148,8 @@ type PersonClusterNameRecord {
 """
 A page of clusters waiting for a human to look at them.
 """
-type PersonClusterReviewPage {
+type PersonClusterReviewPage @requiresRole(role: "subscriber") {
+
   "The clusters, oldest first: the one that has been unnamed longest is the one a user is most likely to have an opinion about."
   clusters: [PersonCluster!]!
   """
@@ -158,7 +162,8 @@ type PersonClusterReviewPage {
 }
 
 
-extend type Query {
+extend type Query @requiresRole(role: "subscriber") {
+
   """
   A cluster by id, or null when there is none.
 
@@ -220,7 +225,7 @@ extend type Mutation {
     looks like an attribution and is not one.
     """
     actor: String!
-  ): PersonCluster!
+  ): PersonCluster! @requiresWriteRole(role: "contributor")
 
   """
   Remove a cluster's name, keeping the history.
@@ -228,8 +233,8 @@ extend type Mutation {
   Unnaming is not un-deciding. The `PersonClusterNameRecord` rows stay, so the
   fact that somebody once decided this was "Alice" remains visible.
   """
-  clearPersonClusterName(clusterId: ID!): PersonCluster!
+  clearPersonClusterName(clusterId: ID!): PersonCluster! @requiresWriteRole(role: "contributor")
 
   "Set a user-supplied label on a cluster. Not a performer reference."
-  setPersonClusterHandle(clusterId: ID!, handle: String!): PersonCluster!
+  setPersonClusterHandle(clusterId: ID!, handle: String!): PersonCluster! @requiresWriteRole(role: "contributor")
 }

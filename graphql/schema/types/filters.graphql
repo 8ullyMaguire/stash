@@ -13,7 +13,8 @@ input FindFilterType {
   direction: SortDirectionEnum
 }
 
-type SavedFindFilterType {
+type SavedFindFilterType @requiresRole(role: "subscriber") {
+
   q: String
   page: Int
   """
@@ -984,7 +985,8 @@ enum FilterMode {
   IMAGES
 }
 
-type SavedFilter {
+type SavedFilter @requiresRole(role: "subscriber") {
+
   id: ID!
   mode: FilterMode!
   name: String!

@@ -9,7 +9,8 @@
 An account on this instance. Never includes the password hash: there is no field
 for it, so no resolver can leak one by forgetting to omit it.
 """
-type User {
+type User @requiresRole(role: "subscriber") {
+
   id: ID!
   username: String!
   "Null when the user never set one."
@@ -34,7 +35,8 @@ A successful login. The session id is deliberately NOT in the response body: the
 server sets it as an HttpOnly cookie, so a page that renders this response cannot
 read the session out of the DOM, out of localStorage, or out of a JS variable.
 """
-type AuthPayload {
+type AuthPayload @requiresRole(role: "subscriber") {
+
   user: User!
 }
 

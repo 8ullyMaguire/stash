@@ -1,10 +1,12 @@
-type DLNAIP {
+type DLNAIP @requiresRole(role: "subscriber") {
+
   ipAddress: String!
   "Time until IP will be no longer allowed/disallowed"
   until: Time
 }
 
-type DLNAStatus {
+type DLNAStatus @requiresRole(role: "subscriber") {
+
   running: Boolean!
   "If not currently running, time until it will be started. If running, time until it will be stopped"
   until: Time

@@ -1,11 +1,13 @@
-type PluginPaths {
+type PluginPaths @requiresRole(role: "subscriber") {
+
   # path to javascript files
   javascript: [String!]
   # path to css files
   css: [String!]
 }
 
-type Plugin {
+type Plugin @requiresRole(role: "subscriber") {
+
   id: ID!
   name: String!
   description: String
@@ -27,20 +29,23 @@ type Plugin {
   paths: PluginPaths!
 }
 
-type PluginTask {
+type PluginTask @requiresRole(role: "subscriber") {
+
   name: String!
   description: String
   plugin: Plugin!
 }
 
-type PluginHook {
+type PluginHook @requiresRole(role: "subscriber") {
+
   name: String!
   description: String
   hooks: [String!]
   plugin: Plugin!
 }
 
-type PluginResult {
+type PluginResult @requiresRole(role: "subscriber") {
+
   error: String
   result: String
 }
@@ -65,7 +70,8 @@ enum PluginSettingTypeEnum {
   BOOLEAN
 }
 
-type PluginSetting {
+type PluginSetting @requiresRole(role: "subscriber") {
+
   name: String!
   display_name: String
   description: String

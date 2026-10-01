@@ -205,7 +205,8 @@ input ConfigGeneralInput {
   maximumSprites: Int
 }
 
-type ConfigGeneralResult {
+type ConfigGeneralResult @requiresRole(role: "subscriber") {
+
   "Array of file paths to content"
   stashes: [StashConfig!]!
   "Path to the SQLite database"
@@ -376,7 +377,8 @@ input ConfigImageLightboxInput {
   disableAnimation: Boolean
 }
 
-type ConfigImageLightboxResult {
+type ConfigImageLightboxResult @requiresRole(role: "admin") {
+
   slideshowDelay: Int
   displayMode: ImageLightboxDisplayMode
   scaleUp: Boolean
@@ -451,7 +453,8 @@ input ConfigInterfaceInput {
   notificationsEnabled: Boolean
 }
 
-type ConfigDisableDropdownCreate {
+type ConfigDisableDropdownCreate @requiresRole(role: "admin") {
+
   performer: Boolean!
   tag: Boolean!
   studio: Boolean!
@@ -459,7 +462,8 @@ type ConfigDisableDropdownCreate {
   gallery: Boolean!
 }
 
-type ConfigInterfaceResult {
+type ConfigInterfaceResult @requiresRole(role: "subscriber") {
+
   "True if SFW content mode is enabled"
   sfwContentMode: Boolean!
 
@@ -538,7 +542,8 @@ input ConfigDLNAInput {
   videoSortOrder: String
 }
 
-type ConfigDLNAResult {
+type ConfigDLNAResult @requiresRole(role: "admin") {
+
   serverName: String!
   "True if DLNA service should be enabled by default"
   enabled: Boolean!
@@ -563,7 +568,8 @@ input ConfigScrapingInput {
   excludeTagPatterns: [String!]
 }
 
-type ConfigScrapingResult {
+type ConfigScrapingResult @requiresRole(role: "admin") {
+
   "Scraper user agent string"
   scraperUserAgent: String
   "Scraper CDP path. Path to chrome executable or remote address"
@@ -574,7 +580,8 @@ type ConfigScrapingResult {
   excludeTagPatterns: [String!]!
 }
 
-type ConfigDefaultSettingsResult {
+type ConfigDefaultSettingsResult @requiresRole(role: "admin") {
+
   scan: ScanMetadataOptions
   identify: IdentifyMetadataTaskOptions
   autoTag: AutoTagMetadataOptions
@@ -599,7 +606,8 @@ input ConfigDefaultSettingsInput {
 }
 
 "All configuration settings"
-type ConfigResult {
+type ConfigResult @requiresRole(role: "admin") {
+
   general: ConfigGeneralResult!
   interface: ConfigInterfaceResult!
   dlna: ConfigDLNAResult!
@@ -610,7 +618,8 @@ type ConfigResult {
 }
 
 "Directory structure of a path"
-type Directory {
+type Directory @requiresRole(role: "subscriber") {
+
   path: String!
   parent: String
   directories: [String!]!
@@ -623,7 +632,8 @@ input StashConfigInput {
   excludeImage: Boolean!
 }
 
-type StashConfig {
+type StashConfig @requiresRole(role: "subscriber") {
+
   path: String!
   excludeVideo: Boolean!
   excludeImage: Boolean!
@@ -633,7 +643,8 @@ input GenerateAPIKeyInput {
   clear: Boolean
 }
 
-type StashBoxValidationResult {
+type StashBoxValidationResult @requiresRole(role: "subscriber") {
+
   valid: Boolean!
   status: String!
 }

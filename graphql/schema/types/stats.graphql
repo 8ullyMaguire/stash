@@ -1,4 +1,5 @@
-type StatsResultType {
+type StatsResultType @requiresRole(role: "subscriber") {
+
   scene_count: Int!
   scenes_size: Float!
   scenes_duration: Float!

@@ -28,13 +28,15 @@ union ScrapedContent =
   | ScrapedGroup
   | ScrapedPerformer
 
-type ScraperSpec {
+type ScraperSpec @requiresRole(role: "subscriber") {
+
   "URLs matching these can be scraped with"
   urls: [String!]
   supported_scrapes: [ScrapeType!]!
 }
 
-type Scraper {
+type Scraper @requiresRole(role: "subscriber") {
+
   id: ID!
   name: String!
   "Details for performer scraper"
@@ -51,7 +53,8 @@ type Scraper {
   group: ScraperSpec
 }
 
-type ScrapedStudio {
+type ScrapedStudio @publicRead {
+
   "Set if studio matched"
   stored_id: ID
   name: String!
@@ -67,7 +70,8 @@ type ScrapedStudio {
   remote_site_id: String
 }
 
-type ScrapedTag {
+type ScrapedTag @publicRead {
+
   "Set if tag matched"
   stored_id: ID
   name: String!
@@ -78,7 +82,8 @@ type ScrapedTag {
   remote_site_id: String
 }
 
-type ScrapedScene {
+type ScrapedScene @publicRead {
+
   title: String
   code: String
   details: String
@@ -118,7 +123,8 @@ input ScrapedSceneInput {
   remote_site_id: String
 }
 
-type ScrapedGallery {
+type ScrapedGallery @publicRead {
+
   title: String
   code: String
   details: String
@@ -144,7 +150,8 @@ input ScrapedGalleryInput {
   # no studio, tags or performers
 }
 
-type ScrapedImage {
+type ScrapedImage @publicRead {
+
   title: String
   code: String
   details: String
@@ -173,7 +180,8 @@ input ScraperSourceInput {
   scraper_id: ID
 }
 
-type ScraperSource {
+type ScraperSource @requiresRole(role: "subscriber") {
+
   "Index of the configured stash-box instance to use. Should be unset if scraper_id is set"
   stash_box_index: Int @deprecated(reason: "use stash_box_endpoint")
   "Stash-box endpoint"
@@ -282,12 +290,14 @@ input StashBoxPerformerQueryInput {
   q: String
 }
 
-type StashBoxPerformerQueryResult {
+type StashBoxPerformerQueryResult @requiresRole(role: "subscriber") {
+
   query: String!
   results: [ScrapedPerformer!]!
 }
 
-type StashBoxFingerprint {
+type StashBoxFingerprint @requiresRole(role: "subscriber") {
+
   algorithm: String!
   hash: String!
   duration: Int!

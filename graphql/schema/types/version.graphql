@@ -1,10 +1,12 @@
-type Version {
+type Version @requiresRole(role: "subscriber") {
+
   version: String
   hash: String!
   build_time: String!
 }
 
-type LatestVersion {
+type LatestVersion @requiresRole(role: "subscriber") {
+
   version: String!
   shorthash: String!
   release_date: String!

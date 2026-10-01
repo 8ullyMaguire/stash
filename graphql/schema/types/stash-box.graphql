@@ -1,4 +1,5 @@
-type StashBox {
+type StashBox @requiresRole(role: "subscriber") {
+
   endpoint: String!
   api_key: String!
   name: String!
@@ -13,7 +14,8 @@ input StashBoxInput {
   max_requests_per_minute: Int
 }
 
-type StashID {
+type StashID @requiresRole(role: "subscriber") {
+
   endpoint: String!
   stash_id: String!
   updated_at: Time!

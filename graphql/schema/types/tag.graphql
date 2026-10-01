@@ -1,4 +1,5 @@
-type Tag {
+type Tag @publicRead {
+
   id: ID!
   name: String!
   "Value that does not appear in the UI but overrides name for sorting"
@@ -70,7 +71,8 @@ input TagDestroyInput {
   id: ID!
 }
 
-type FindTagsResultType {
+type FindTagsResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   tags: [Tag!]!
 }

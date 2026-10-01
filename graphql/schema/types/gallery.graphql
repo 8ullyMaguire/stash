@@ -1,10 +1,12 @@
-type GalleryPathsType {
+type GalleryPathsType @requiresRole(role: "subscriber") {
+
   cover: String!
   preview: String! # Resolver
 }
 
 "Gallery type"
-type Gallery {
+type Gallery @publicRead {
+
   id: ID!
   title: String
   code: String
@@ -111,7 +113,8 @@ input GalleryDestroyInput {
   destroy_file_entry: Boolean
 }
 
-type FindGalleriesResultType {
+type FindGalleriesResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   galleries: [Gallery!]!
 }

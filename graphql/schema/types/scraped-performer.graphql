@@ -1,5 +1,6 @@
 "A performer from a scraping operation..."
-type ScrapedPerformer {
+type ScrapedPerformer @publicRead {
+
   "Set if performer matched"
   stored_id: ID
   name: String

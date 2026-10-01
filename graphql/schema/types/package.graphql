@@ -3,7 +3,8 @@ enum PackageType {
   Plugin
 }
 
-type Package {
+type Package @requiresRole(role: "subscriber") {
+
   package_id: String!
   name: String!
   version: String
@@ -23,7 +24,8 @@ input PackageSpecInput {
   sourceURL: String!
 }
 
-type PackageSource {
+type PackageSource @requiresRole(role: "subscriber") {
+
   name: String
   url: String!
   local_path: String

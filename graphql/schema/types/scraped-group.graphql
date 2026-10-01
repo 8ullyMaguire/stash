@@ -1,5 +1,6 @@
 "A movie from a scraping operation..."
-type ScrapedMovie {
+type ScrapedMovie @publicRead {
+
   stored_id: ID
   name: String
   aliases: String
@@ -33,7 +34,8 @@ input ScrapedMovieInput {
 }
 
 "A group from a scraping operation..."
-type ScrapedGroup {
+type ScrapedGroup @publicRead {
+
   stored_id: ID
   name: String
   aliases: String

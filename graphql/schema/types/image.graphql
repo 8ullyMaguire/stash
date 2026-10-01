@@ -1,4 +1,5 @@
-type Image {
+type Image @publicRead {
+
   id: ID!
   title: String
   code: String
@@ -24,14 +25,16 @@ type Image {
   custom_fields: Map!
 }
 
-type ImageFileType {
+type ImageFileType @requiresRole(role: "subscriber") {
+
   mod_time: Time!
   size: Int!
   width: Int!
   height: Int!
 }
 
-type ImagePathsType {
+type ImagePathsType @requiresRole(role: "subscriber") {
+
   thumbnail: String # Resolver
   preview: String # Resolver
   image: String # Resolver
@@ -97,7 +100,8 @@ input ImagesDestroyInput {
   destroy_file_entry: Boolean
 }
 
-type FindImagesResultType {
+type FindImagesResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   "Total megapixels of the images"
   megapixels: Float!

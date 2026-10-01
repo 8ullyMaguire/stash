@@ -1,4 +1,5 @@
-type SceneMarker {
+type SceneMarker @requiresRole(role: "subscriber") {
+
   id: ID!
   scene: Scene!
   title: String!
@@ -49,12 +50,14 @@ input BulkSceneMarkerUpdateInput {
   tag_ids: BulkUpdateIds
 }
 
-type FindSceneMarkersResultType {
+type FindSceneMarkersResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   scene_markers: [SceneMarker!]!
 }
 
-type MarkerStringsResultType {
+type MarkerStringsResultType @requiresRole(role: "subscriber") {
+
   count: Int!
   id: ID!
   title: String!
