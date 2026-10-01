@@ -92,9 +92,12 @@ func TestAutotagNeverBypassesTheProposalPathForASharedField(t *testing.T) {
 func assertNoAutomaticWrite(t *testing.T, fset *token.FileSet, f *ast.File, dir string) {
 	t.Helper()
 
-	// The allow-list, naming the ONE file that writes today: `internal/autotag/
-	// studio.go`, which has six `UpdatePartial` call sites (measured, not guessed).
+	// THE ALLOW-LIST, WHICH IS NOW EMPTY. The history of how it got here is below,
+	// because the shape of the guard is the point and a reader who only sees an empty
+	// map cannot tell an empty map from a guard that was never wired to anything.
 	//
+	// IT NAMED ONE FILE: `internal/autotag/studio.go`, with six `UpdatePartial` call
+	// sites (measured, not guessed). It held six files by the end. It is empty.
 	// I first wrote `task_autotag.go` here, on the reasonable-sounding assumption
 	// that the job that RUNS autotag is what writes. It is not: that file has zero
 	// `UpdatePartial` calls. The write happens one layer down, in the matching
@@ -102,10 +105,10 @@ func assertNoAutomaticWrite(t *testing.T, fset *token.FileSet, f *ast.File, dir 
 	// exempted a file with no writes while flagging three real ones -- and both
 	// tests failed, which is how it was found.
 	//
-	// It is named rather than left silent because an unnamed allow-list entry is
-	// how a guard gets deleted, and because this is what makes the test a
-	// tripwire: wiring autotag through `autoproposal.Curator` makes this entry the
-	// thing to remove, and the tripwire below starts failing.
+	// It was named rather than left silent because an unnamed allow-list entry is
+	// how a guard gets deleted, and naming it is what made this test a tripwire:
+	// wiring autotag through `autoproposal.Curator` made this entry the thing to
+	// remove, and the tripwire below started failing. That is what happened.
 	//
 	// Measured, after the guard learned the second write shape: EIGHTEEN sites
 	// across SIX files. The six `UpdatePartial` in studio.go were only what the

@@ -2796,6 +2796,25 @@ subsystem with two entry points — same transport, same verification, same cons
 gate — and splitting them would mean inventing a protocol twice. Capabilities 1 and
 4 are mostly built and need a filter, not a foundation.
 
+### M8 at a glance (added 2026-10-02)
+
+**All thirteen M8 requirements are `tested`.** `docs/requirements.csv` is the authority
+for per-requirement state; this table is for orientation.
+
+| Step | Requirements | State |
+|---|---|---|
+| 8.0 | R074, R085, R086 | done — probes run, alignment corrected, R086 wired |
+| 8.1 | R077, R081 | done — content plane + the node-side privacy gate |
+| 8.2 | R075, R076, R083, R086 | done — queue, three-state switch, the sink |
+| 8.3 | R078, R079, R082 | done — manifest, alerts, replication gate |
+| 8.4 | R080 | done — allocation log |
+| 8.5 | R084 | done — the downloader's guards now live in core |
+
+**One item is open and it is not a step: the transport.** §6b.4's property — no peer
+needs a routable address and no peer learns who fetched from whom — is met by nothing
+shipping. It gates *peer-to-peer* exchange, not the replica accounting, which is why
+steps 8.1 and 8.3 are complete while it is outstanding. See step 8.3.
+
 ### Step 8.0 — The probes (COMPLETE, 2026-10-02)
 
 §6b.7 forbids coding past three probes. All three are measured and runnable; results
@@ -2824,6 +2843,15 @@ Two findings that shape every step below, both of which OVERRIDE the obvious pla
    torrent, not to detect content change.
 
 ### Step 8.1 — The three-state switch and the acquisition queue (R083, R075, R076)
+
+**DONE (2026-10-02/03).** R083 as migration 115 + `internal/collab/acquire.go`,
+R075/R076 as `internal/acquisition`, R077 as `internal/replicastore`, R081's node-side
+gate. The one design decision worth repeating here because it is the kind that gets
+re-litigated: **the default is `fetch_only`, not `off`.** An instance that fetches but
+never seeds leaks no data outward and cannot be made into a source for someone else, so
+opting a new install in to the harmless half is not a leak. Defaulting to `off` makes
+preservation unreachable for everyone who never found a setting — how a feature that
+exists to prevent loss becomes absent rather than declined.
 
 **Unblocked by step 0: needs no new transport.** This is the next step because it is
 capability 2's entry point and it shares the transport with capability 3 *without*
@@ -2865,6 +2893,12 @@ automatic direct write is a machine laundering a claim past governance.
 **DONE (2026-10-02), commit `a3ae8a405`.** `internal/autoproposal` — the policy half,
 with the scanner untouched.
 
+**DONE (2026-10-02), commit `7f99999d2`.** The wiring half: `internal/autotag` routes
+through a `Sink`, curation is a three-state mode defaulting to `propose`, and the
+end-to-end tests found two production gaps in the process (image/gallery `studio_id`
+on both the propose and write sides, and the gallery link namespace). Step 8.2 is
+complete — see the section below for both, and for what the two gaps were.
+
 The load-bearing part is not the matching, it is that **there is no path from a
 failed proposal to a write.** `Curate` returns an error on a filing failure; it does
 not fall back. Otherwise every outage of the proposal store would silently become a
@@ -2887,20 +2921,50 @@ application of descriptors** — a tag may be applied directly, and a performer 
 studio is refused whatever the switch says, because asserting a performer is a claim
 about a person.
 
-**What step 8.2 is NOT: done.** Two things remain, both recorded rather than glossed:
+**Step 8.2 is DONE, and both gaps this section used to list are closed (2026-10-02).**
 
-- **The wiring.** `internal/autotag/studio.go` still writes directly (6 `UpdatePartial`
-  sites, measured). Routing it through `Curator` is the change that makes the
-  governance real rather than available.
-  `TestAutotagNeverBypassesTheProposalPathForASharedField` holds `studio.go` on an
-  **explicit allow-list**, and
-  `TestAutotagStillWritesDirectlyAndThatIsTheKnownGap` asserts the gap is still open
-  so it **fails the day the wiring lands**, naming the exact edit to make then. A
-  `TODO` comment is invisible to the next person; this stops the build.
-- **The vocabulary.** `internal/collab/vocabulary.go` declares no relationship
-  fields, so a link add cannot yet pass `ValidateValue` — a proposal whose field the
-  vocabulary does not know can never be applied. The test names this as the
-  remaining work rather than asserting it away.
+The text below is kept, because a plan that silently drops its own open items is
+indistinguishable from a plan that never had them. Read it as the record of what was
+open when this step was written.
+
+- **The wiring — CLOSED.** `internal/autotag` contains no direct write of a shared
+  field. All eighteen sites are calls to a `Sink`, and the choice between the two
+  implementations is made by whoever constructs the `Tagger`, from the instance's
+  curation mode, once per scan. The allow-list in
+  `internal/autoproposal/write_path_guard_test.go` is an **empty map**, and the
+  tripwire is inverted to
+  `TestAutotagNoLongerWritesDirectlyAndTheAllowListIsEmpty`.
+
+  The sink has **two** methods, and that split was forced rather than chosen:
+  `AddMatch` for a relationship (a join-table INSERT) and `SetStudio` for a field (a
+  column write). The first version carried a studio through `AddMatch` as the kind
+  `"studio_id"`, and eighteen tests failed on an unmet `UpdatePartial` because a sink
+  implementing `AddMatch` faithfully cannot write a column. `DirectSink` delegates to
+  the same `collab.TargetStore` the applier uses, so the direct and governed paths
+  differ in **governance** and never in mechanics.
+
+- **The vocabulary — CLOSED.** `internal/collab/link.go` is a closed map keyed on the
+  **(target, kind) pair** — the pair is necessary because the same kind string names
+  different tables per target — and `TargetStore.AddLink` is the operation. A link is
+  additive only and there is deliberately no `RemoveLink`.
+
+**AND THE END-TO-END TESTS FOUND TWO REAL PRODUCTION GAPS WHILE CLOSING IT.** Both are
+recorded here because the plan is the place a reader looks for what is left, and these
+were found *after* the two items above were believed closed:
+
+1. `studio_id` was neither proposable nor writable for **image and gallery**. The
+   column exists on both with a foreign key, so a governed autotag — the default for a
+   new instance — could not file a studio claim for either.
+2. The **link namespace had no gallery entries**, so performer and tag claims on a
+   gallery were equally unfileable.
+
+The cause was two guards each covering one direction of the same seam. A guard reading
+the propose side cannot see a column that is real, writable and *absent*, which is not
+a broken field but an ungoverned one; nothing checked the reverse. The consequence is
+worse than a crash — a vote recorded as applied, the field unchanged, the audit row
+saying it changed, and no discrepancy ever reported.
+`TestTheProposeSideAndTheWriteSideAreTheSameSurface` now asserts the equality in both
+directions.
 
 **One note on the detector, because it nearly shipped broken.** The guard does not
 enumerate method names — `internal/api`'s equivalent misses `UpdatePartial`, which
@@ -2915,24 +2979,106 @@ confirm it bites: two real violations caught, `archive/zip` correctly silent.
 
 ### Step 8.3 — The content plane (R077, R078, R082, R079)
 
-**BLOCKED ON A TRANSPORT DECISION, and that is the honest state.** Probe 1 measured
-that the current transport does not meet §6b.4, so this step cannot be an
-implementation. It needs, in order:
+**DONE, and this section was the most out of date in the plan (corrected 2026-10-02).**
+It read "BLOCKED ON A TRANSPORT DECISION" and listed four things to do first. All four
+were done, in a different order and by a route this section did not anticipate — which
+is why the plan is the wrong place to read the current state, and `docs/requirements.csv`
+is the right one. The text below is kept as the record.
 
-1. A transport meeting the property — onion routing or a relay-carrying mesh. Not
-   "a torrent library": §6b.4 states the requirement and §6b.7 refuses to name the
-   technology, because naming it here makes it a dependency.
-2. **The chunk-hash decision**, which COMMITS the wire format and cannot change once
-   peers exist. Two things are still open from probe 2: whether partial fetch is a
-   requirement or a nicety (if a replica is all-or-nothing at the scene level — which
-   is what the scanner and file model already assume — a chunk list buys nothing and
-   costs wire forever), and the ed2k precedent, where a wire format with a tree in it
-   was measured and kept out of the hash path.
-3. `manifest + content hash`, and a replica counting toward N **only after manifest
-   verification** (§6b.5) — never after a peer says it accepted the bytes.
-4. R079's alerts and R080's audit log. Note probe 3's finding: R080 answers *inbound*
-   ("what did we place and why") and **nothing records outbound fetches**, so an
-   operator who discovers they are serving a swarm cannot find out who did it.
+**What the blocked-on-transport framing got wrong.** It assumed the transport decision
+was the first thing to settle, and that the content plane could not be built without
+it. Measuring instead of waiting produced the opposite conclusion: **R077's content
+plane is precisely the thing that does NOT require peers to exchange routable
+addresses**, and a replica is a durable local copy with a manifest. Neither needs a
+transport. The transport question is real and still open, but it gates
+*peer-to-peer* exchange, not the *replica accounting* — and building the accounting
+first is what made the transport's remaining requirements measurable rather than
+rhetorical.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | A transport meeting §6b.4 | **OPEN, and it gates peer-to-peer only** |
+| 2 | The chunk-hash decision | **DECIDED: whole-file sha256, no chunk list** |
+| 3 | `manifest + content hash`, replica counts only after verification | **DONE** — `internal/manifest` + `internal/replicastore` |
+| 4 | R079's alerts, R080's audit log | **DONE** — R079 alerts, R080 allocation log (migration 114) |
+
+**On item 2, which this section called a wire-format commitment that cannot change.**
+It could and did: the decision is a **whole-file sha256 with no chunk list**, because a
+replica is all-or-nothing at the scene level — which is what the scanner and the file
+model already assume — so a chunk list buys nothing and costs wire forever once peers
+exist. This is the ed2k precedent applied: a wire format with a tree in it was measured
+and deliberately kept out of the hash path. The commitment is now made and it is the
+cheap one to hold.
+
+**On item 3, and the part that is a design constraint rather than a feature.** A peer
+saying it stored the bytes is a **claim** (non-negotiable #14), the same posture the
+downloader takes toward a peer-supplied filename. So health is a **checked column, not
+a counter** — no `verification_score`, no `failure_count` — `verified_at` is the
+evidence and is NULL whenever health is anything but `verified`, so the two cannot
+disagree; and there is deliberately **no `SetHealth` taking a free `Health`**, only
+`SetSettableHealth`, so the compiler rejects the wrong call at the call site rather than
+a rule in another package catching it at runtime. `source_endpoint` is part of the
+UNIQUE key per §6a.6, because a peer's "scene 412" is not this instance's "scene 412".
+
+**What step 8.3 is still NOT.** One item, and it is the one this section was right about
+in spirit if wrong in framing: **the transport.** §6b.4's property — no peer needs a
+routable address, and no peer learns who fetched from whom — is not yet met by anything
+shipping. Probe 1 measured that the current transport does not meet it, and the
+transport discloses peer IPs, which is the R081 gap still open. R084's retraction
+(bundling the P2P downloader into core) is what makes this closable without deleting a
+directory, and that is the most this plan can say about it: **naming the technology here
+would make it a dependency**, and §6b.7 refuses to name it for that reason.
+
+### Step 8.4 — The storage allocation log (R080)
+
+**DONE (2026-10-03), migration 114 + `pkg/sqlite/stashforge_allocation_log.go`.** This
+step had **no section in the plan at all** until 2026-10-02 — the requirement was tracked
+in `docs/requirements.csv` and implemented from there, so the plan was not the place a
+reader looked and did not find it. The section is here now so the plan and the ledger
+agree.
+
+The requirement is that an operator can audit **what was placed and why**, and it is
+distinct from R078's manifest because that answers *what do I hold* while this answers
+*why am I storing a fourth copy of a scene nobody watches on a disk I pay for*.
+
+- `reason` is **NOT NULL and NOT an enum.** An enum is a closed list of justifications,
+  and every justification nobody anticipated becomes a NULL — which is exactly the row
+  that needs explaining. What is enforced is that a reason **exists and is non-blank**.
+- The log is **hash-chained** like migration 108's `collab_audit`, and for §5.1's reason:
+  the owner is not an admin over content, and a log any SQL session can `UPDATE` does not
+  support that. Here it bites harder than elsewhere, because the operator most likely to
+  want the log is the one **disserved** by a rewritten row.
+- `at` is **inside the hashed payload**, so an edited timestamp is caught rather than
+  being the one field a forger can adjust freely.
+- The log **COPIES** `source_endpoint` and `scene_id` rather than joining `mesh_replica`:
+  a log that depends on the row it audits can be made to lie by rewriting that row, and
+  `ON DELETE CASCADE` would take the log entry with it.
+- It answers **inbound**. Migration 110 records the outbound side separately, and joining
+  them would let one row claim bytes that never moved.
+
+### Step 8.5 — Bundle the P2P downloader into core (R084)
+
+**DONE (2026-10-03), `internal/api/stashforge_p2p_guards_test.go`.** Also had **no
+section here**, for the same reason as 8.4.
+
+This step is not a feature and that is the whole of it: §6b.8 **retracts**
+non-negotiable #11 ("the P2P downloader can be removed as a directory"), and a
+retraction is discharged by a guarantee, not by a behaviour change. The module boundary
+already existed — `plugins/p2pdownloader/go.mod` is its own module and core neither
+requires nor replaces it.
+
+**What actually changed is WHERE the guarantee is checked.** Every guard in §6b.8's list
+lived in the plugin module, which means every guard there was one someone could delete by
+deleting a directory — exactly the option the retraction removed. So the guarantee that
+they **exist** now lives in core, where a missing guard is a test failure rather than a
+fact about a directory. Each of the five (consent gate, storage gate, path sanitiser,
+upload control, and the `ErrRefusedUpFront`/`ErrRefused` distinction) is asserted
+**independently**, because one test asserting all five passes as soon as four exist.
+
+Asserting presence is not asserting correctness — the plugin's own tests do that — so
+this adds the layer the retraction removed and nothing else. **The stated cost is pinned
+rather than argued**: a user can no longer remove the feature, so a future change cannot
+quietly restore the plugin's removability and claim to have kept §6b.8's guarantees.
 
 ### Verification, per step
 
