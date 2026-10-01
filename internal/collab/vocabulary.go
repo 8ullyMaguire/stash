@@ -61,34 +61,28 @@ var vocabulary = map[string]map[string]proposableField{
 		"director":  {Type: TypeString},
 		"studio_id": {Type: TypeInt},
 		"date":      {Type: TypeDate},
-		// NO `performer_ids` or `tag_ids`, and NOT because the columns do not exist --
-		// because they are not COLUMNS. They are join tables (scene_performers,
-		// scene_tags), and every field in this map is a column name that
-		// TargetStore.WriteFieldIfChanged interpolates straight into an UPDATE. There
-		// is no SQL that UPDATEs a set.
+		// NO `performer_ids` or `tag_ids` HERE, and that is not an oversight: they are
+		// not COLUMNS, they are join tables, and every field in this map is a column
+		// name that TargetStore.WriteFieldIfChanged interpolates straight into an
+		// UPDATE. There is no SQL that UPDATEs a set.
 		//
-		// I ADDED THESE ON 2026-10-03 to close plan step 8.2's recorded gap, and
-		// pkg/sqlite's TestVocabulary_EveryFieldIsARealColumn caught it: it reads the
-		// real columns off a migrated database and refused both. Without that test the
-		// change would have validated, been filed, been approved, and then failed as a
-		// SQL error on the first proposal a user touched -- the same defect spec §4.1's
-		// studio.url was, and the same thing that test was written for. So: reverted.
+		// I ADDED THEM ON 2026-10-03 and pkg/sqlite's TestVocabulary_EveryFieldIsARealColumn
+		// caught it: the unit suite went green and the integration suite refused, for
+		// exactly the reason this comment gives. Without that guard the change would
+		// have validated, been filed, been approved, and then failed as a SQL error on
+		// the first proposal a user touched -- the same defect spec §4.1's studio.url
+		// was, and the same thing that guard was written for. Reverted.
 		//
-		// The gap is real and it takes TWO changes, not a map entry:
+		// THEY ARE NOT MISSING, THOUGH. Links live in their own namespace -- see
+		// link.go, and TargetStore.AddLink for the operation that applies one. A
+		// relationship is an INSERT and a field is an UPDATE, and keeping them apart
+		// is what lets both be governed by the same vote.
 		//
-		//  1. list semantics -- the field names a set, one proposal carries one entity
-		//     id, and the apply path needs an operation for "insert into a join table"
-		//     rather than an UPDATE. The additive reading is honest (and the reason a
-		//     removal is deliberately not expressible), but it is not an UPDATE.
-		//  2. a TargetStore method for it. TargetStore is four methods and every one is
-		//     a column read or write; AddLink(ctx, targetType, targetID, kind, entityID)
-		//     is a change to the surface where a vote becomes a write on shared
-		//     content, and it deserves its own review rather than a patch smuggled in
-		//     beside this map.
-		//
-		// TestLinkKindsCannotBeProposedYetAndThatIsTheKnownGap in internal/autoproposal
-		// is the inverted tripwire: it asserts the gap is still open and names both
-		// steps, so it fails the day either lands.
+		// The join table names in that map are read off a migrated database by
+		// TestEveryLinkTableAndColumnIsReal, because I first wrote four plausible and
+		// wrong ones (scene_performers, image_performers, scene_tags, image_tags --
+		// the schema says performers_scenes, scenes_tags, performers_images,
+		// images_tags, with no convention to derive them from).
 
 		// NO `url`. A scene's URLs live in the `scene_urls` JOIN table
 		// (scene.go:34), which is multi-valued and ordered. Proposing a single

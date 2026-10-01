@@ -474,6 +474,18 @@ func TestAutotagStillWritesDirectlyAndThatIsTheKnownGap(t *testing.T) {
 		}
 	}
 
+	// STILL OPEN, and one of its two blockers is now gone. As of 2026-10-03 the
+	// vocabulary admitted no relationship fields, so routing a link through Curator
+	// filed a proposal nothing could apply -- 4 of the 5 kinds autoproposal declares
+	// were refused by the system. That is fixed: internal/collab/link.go is a second
+	// namespace for relationships and TargetStore.AddLink is the operation that applies
+	// one, and TestEveryKindAutotagCanFileIsNowAcceptedByTheSystem asserts all five
+	// kinds file and validate.
+	//
+	// What remains is the wiring itself: these eighteen sites still call the store
+	// directly, so the governance is available rather than in force. Nothing about the
+	// allow-list below changes until that happens.
+	//
 	// If this is false the scan matched NO files, which is a vacuous pass rather
 	// than a finding. Assert the file was actually examined so the two cannot be
 	// confused -- the failure mode where a guard silently stops looking.

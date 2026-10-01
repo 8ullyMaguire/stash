@@ -22,6 +22,16 @@ type fakeTargets struct {
 	rejected map[int]string
 	audit    []collab.AuditEntry
 
+	// Link state, kept SEPARATE from rows/present rather than reusing them.
+	//
+	// A link is not a column and its correctness rule is different: "is this member in
+	// the set", not "does this column hold this value". Folding them into one map would
+	// let a link test pass because a column of the same name happened to be set, which
+	// is the confusion IsLinkField exists to prevent -- so the fake does not model it.
+	links    map[string]bool // "type|id|kind|entity"
+	linkErr  error
+	linkAdds int
+
 	// Injection points, nil in the happy path.
 	readErr       error
 	writeErr      error
@@ -38,6 +48,7 @@ func newFakeTargets() *fakeTargets {
 		rows:     map[string]*string{},
 		present:  map[string]bool{},
 		rejected: map[int]string{},
+		links:    map[string]bool{},
 	}
 }
 
@@ -131,6 +142,37 @@ func equalPtr(a, b *string) bool {
 // edit_proposals.decided_by is a foreign key, so a rejection without an actor
 // fails at the SQL layer — and the fake drifted from the interface until this
 // signature changed, which is how the unit suite stopped compiling.
+// AddLink is the fake's link path. The linkAddErr injection point mirrors writeErr, so
+// a test can make the link fail without touching the column path -- which matters
+// because the two are dispatched separately and a shared error field would let a
+// column failure masquerade as a link failure.
+func (f *fakeTargets) AddLink(_ context.Context, t string, id int, kind collab.LinkKind, entityID int) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.linkErr != nil {
+		return false, f.linkErr
+	}
+	// The shape is validated even by the fake, so a test cannot file a link with a
+	// negative id and see it succeed. The real store checks this too, and a fake that
+	// did not would let a bug through that the store would have caught.
+	if entityID <= 0 {
+		return false, collab.ErrValueInvalid
+	}
+	key := t + "|" + strconvItoa(id) + "|" + string(kind) + "|" + strconvItoa(entityID)
+	if f.links[key] {
+		return false, nil // already there: the uniqueness-constraint outcome
+	}
+	f.links[key] = true
+	f.linkAdds++
+	return true, nil
+}
+
+func (f *fakeTargets) hasLink(t string, id int, kind collab.LinkKind, entityID int) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.links[t+"|"+strconvItoa(id)+"|"+string(kind)+"|"+strconvItoa(entityID)]
+}
+
 func (f *fakeTargets) MarkRejected(_ context.Context, id int, deciderID int, reason string) error {
 	f.lastDeciderID = deciderID
 	f.mu.Lock()

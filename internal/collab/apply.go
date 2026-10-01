@@ -84,6 +84,30 @@ var ErrAlreadyDecided = errors.New("proposal has already been decided")
 // content. Everything above it is logic that can be tested exhaustively; this
 // is the boundary, and it is small enough to read in one sitting.
 type TargetStore interface {
+	// AddLink adds one entity to a relationship set, and reports whether it added
+	// one.
+	//
+	// IT IS A SEPARATE METHOD, and not a field name WriteFieldIfChanged understands,
+	// because a relationship is not a column. A vocabulary field is interpolated into
+	// an UPDATE; a link is an INSERT into a join table, and there is no SQL that
+	// UPDATEs a set. My first attempt added the join tables to the vocabulary as if
+	// they were columns and pkg/sqlite's TestVocabulary_EveryFieldIsARealColumn
+	// caught it, which is why this exists.
+	//
+	// ADDITIVE ONLY, and that is the whole safety argument. `performer_ids` names the
+	// SET and the value names one member to add, so a removal is not expressible
+	// anywhere in this signature. If it were, one reviewer's "yes, that performer is in
+	// this scene" could unlink the other four with an audit trail showing only an add.
+	//
+	// added is false when the member was ALREADY there, which is not an error: the
+	// join table's own uniqueness constraint is the concurrency guard, so two workers
+	// applying the same approved link produce one row between them and the loser
+	// reports false. The apply path maps that to the same already-correct outcome a
+	// redundant column write produces, so re-applying is idempotent.
+	//
+	// There is deliberately no RemoveLink. See above.
+	AddLink(ctx context.Context, targetType string, targetID int, kind LinkKind, entityID int) (added bool, err error)
+
 	// ReadField returns the target's current value for a field. found is false
 	// when the row does not exist, which is a different thing from the row
 	// existing with a NULL value.
@@ -171,9 +195,96 @@ func NewApplier(targets TargetStore) *Applier { return &Applier{targets: targets
 //
 // Step 2 before step 3 is deliberate. A re-applied proposal whose value is no
 // longer valid by today's rules is still correct -- the field already says what
+// applyLink applies an approved LINK proposal, and it is deliberately a separate
+// function rather than a branch inside Apply.
+//
+// Everything in Apply is about a column: a read that reports, a compare-and-set that
+// makes the write safe against concurrent workers, and an equalFieldValues that decides
+// "already correct". None of that applies to a relationship. A link's correctness is
+// "is this member in the set", and its safety comes from the join table's uniqueness
+// constraint. Sharing one function would mean every one of those steps had a
+// link-shaped exception in it, and the exceptions are the part nobody reads.
+func (a *Applier) applyLink(ctx context.Context, p Proposal) (ApplyOutcome, error) {
+	// Step 1: re-validate at apply time, as the column path does. Cheap, and the
+	// alternative is applying a value today's rules would refuse. For a link the rule
+	// that can have changed is the link map itself -- a relationship can be withdrawn.
+	if err := ValidateLinkValue(p.TargetType, LinkKind(p.Field), p.NewValue); err != nil {
+		if markErr := a.markRejected(ctx, p, "link is no longer proposable"); markErr != nil {
+			return ApplyRejected, fmt.Errorf("link became invalid (%v) and the refusal could not be recorded: %w", err, markErr)
+		}
+		if auditErr := a.auditReject(ctx, p, err.Error()); auditErr != nil {
+			return ApplyRejected, auditErr
+		}
+		return ApplyRejected, ErrValueBecameInvalid
+	}
+
+	// Step 2: the member id, which validation has already proved is a positive int.
+	// It is parsed here rather than carried through the signature, so the value the
+	// vote agreed on is the value that is inserted -- no second source of truth.
+	entityID, err := strconv.Atoi(strings.TrimSpace(*p.NewValue))
+	if err != nil {
+		// Unreachable given the validation above. Treated as an error rather than
+		// ignored, because the alternative is a silent success on a parse failure.
+		return ApplyRejected, fmt.Errorf("link value %q did not parse after validation: %w", *p.NewValue, err)
+	}
+
+	added, err := a.targets.AddLink(ctx, p.TargetType, p.TargetID, LinkKind(p.Field), entityID)
+	if err != nil {
+		// A missing TARGET is the one error that is a normal outcome rather than a
+		// fault: the scene was deleted between the vote and the apply. It is rejected
+		// for the same reason the column path rejects a missing target -- the thing
+		// people agreed to no longer exists, and recording a rejection says the
+		// community refused a change, which is not what happened.
+		//
+		// The distinction is made by the STORE, not guessed at here: AddLink reports a
+		// missing target as a distinct error so a constraint failure cannot be
+		// mistaken for it.
+		if errors.Is(err, ErrLinkTargetMissing) {
+			if rejErr := a.rejectProposal(ctx, p, "target no longer exists"); rejErr != nil {
+				return ApplyTargetMissing, rejErr
+			}
+			return ApplyTargetMissing, nil
+		}
+		return ApplyTargetMissing, fmt.Errorf("adding %s to %s %d: %w", p.Field, p.TargetType, p.TargetID, err)
+	}
+
+	// Step 3: already there. The member was in the set before this apply, so the
+	// proposal's effect is already in place and there is nothing to write and nothing
+	// to audit -- which is what makes a re-applied link idempotent, exactly as a
+	// redundant column write is.
+	if !added {
+		return ApplyAlreadyCorrect, nil
+	}
+
+	// Step 4: exactly one audit row, by the worker whose INSERT landed. The same
+	// contract as the column path: the value IS written at this point, so a failure
+	// here propagates and the caller's transaction rolls the write back with it.
+	if err := a.auditApply(ctx, p); err != nil {
+		return ApplyWrote, fmt.Errorf("link was added but the audit row could not be appended: %w", err)
+	}
+	return ApplyWrote, nil
+}
+
 // the voters agreed -- so reporting it as a rejection would record a decision
 // nobody made and could put a live, correct value at risk of being clawed back.
 func (a *Applier) Apply(ctx context.Context, p Proposal) (ApplyOutcome, error) {
+	// A LINK IS A DIFFERENT OPERATION, and it is dispatched before any column read.
+	//
+	// THE ORDER IS THE REQUIREMENT. A link has no column, so ReadField would fail on
+	// it -- but failing there would report "field is not a mapped column", which is a
+	// confusing way to say "this is a relationship, and the relationship path is one
+	// line below". Worse, a dispatch placed after the read would mean every approved
+	// link proposal first tried to read a column that does not exist.
+	//
+	// So the two paths share NOTHING below this point: no read, no compare-and-set, no
+	// equalFieldValues. A link's idempotency comes from the join table's uniqueness
+	// constraint (see TargetStore.AddLink), which is a different mechanism from the
+	// column path's WHERE col IS ?, and pretending otherwise would mean one of the two
+	// is not actually idempotent.
+	if IsLinkField(p.TargetType, p.Field) {
+		return a.applyLink(ctx, p)
+	}
+
 	// The read is for REPORTING -- to distinguish a missing target, and to decide
 	// whether this is already-correct. It is NOT what makes the write safe: a
 	// value can change between this read and the write, and that is precisely the

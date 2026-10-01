@@ -217,6 +217,98 @@ func (s *CollabTargetStore) WriteFieldIfChanged(ctx context.Context, targetType 
 // goes to the audit row rather than here, because edit_proposals has no reason
 // column and adding one for this would mean a migration for a value that is
 // only ever read next to its audit entry.
+// AddLink inserts one row into a relationship join table.
+//
+// EVERY IDENTIFIER COMES FROM collab's link map, never from the caller's strings. The
+// table, the target's id column and the entity's id column are all looked up by
+// (targetType, kind), so an unknown pair fails BEFORE any SQL is built. That is the same
+// discipline the column path takes in collabColumnFor, and for the same reason: this is
+// the surface where a vote becomes a write on shared content, and an interpolated
+// caller-supplied string here would be SQL injection on an approved change.
+func (s *CollabTargetStore) AddLink(ctx context.Context, targetType string, targetID int, kind collab.LinkKind, entityID int) (bool, error) {
+	shape, err := collab.ValidateLink(targetType, kind)
+	if err != nil {
+		return false, err
+	}
+
+	// Both ids must be positive for the same reason a vocabulary TypeInt value must
+	// be: a 0 or negative id reaching an INSERT is either a constraint violation or,
+	// on a table without one, a row that points at nothing.
+	if targetID <= 0 {
+		return false, fmt.Errorf("adding %s to %s: target id %d is not addressable",
+			kind, targetType, targetID)
+	}
+	if entityID <= 0 {
+		return false, fmt.Errorf("adding %s to %s %d: entity id %d is not addressable",
+			kind, targetType, targetID, entityID)
+	}
+
+	// The target must EXIST, and this is checked rather than inferred from the
+	// foreign key. SQLite has foreign keys off by default in many builds, so a missing
+	// target would otherwise produce a join row pointing at nothing -- an orphaned link
+	// that reads as "this scene has this performer" and resolves to a deleted row. The
+	// check is a read the apply path would otherwise not have made.
+	exists, err := s.rowExists(ctx, targetType, targetID)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		// The SENTINEL, wrapped, so errors.Is finds it -- and the apply path's
+		// "reject with target no longer exists" branch is reachable only through this
+		// error and nothing else.
+		return false, fmt.Errorf("adding %s to %s %d: %w",
+			kind, targetType, targetID, collab.ErrLinkTargetMissing)
+	}
+
+	// INSERT OR IGNORE, and the reason is the CONCURRENCY story rather than the
+	// duplicate story. Two workers applying the same approved link both reach here; the
+	// join table's uniqueness constraint (on the pair) lets exactly one insert and the
+	// other's row count is 0. So the loser reports added=false, which the apply path
+	// maps to already-correct -- and one approved link produces one row and one audit
+	// row, not two of each.
+	//
+	// OR IGNORE rather than a read-then-write, because a read-then-write here would
+	// have the exact race the column path's compare-and-set was written to avoid: both
+	// workers read "not linked", both write, and the database is the only thing left
+	// to arbitrate. Let it arbitrate, and ask it what happened.
+	res, err := dbWrapper.Exec(ctx, fmt.Sprintf(
+		"INSERT OR IGNORE INTO %s (%s, %s) VALUES (?, ?)",
+		shape.Table, shape.IdColumn, shape.LinkColumn), targetID, entityID)
+	if err != nil {
+		return false, fmt.Errorf("adding %s to %s %d: %w", kind, targetType, targetID, err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		// Cannot tell whether the row landed. Reporting false would claim a no-op that
+		// may not have happened, so this is an error -- the same reasoning as
+		// WriteFieldIfChanged's.
+		return false, fmt.Errorf("adding %s to %s %d: cannot determine rows affected: %w",
+			kind, targetType, targetID, err)
+	}
+	return n > 0, nil
+}
+
+// rowExists reports whether the target row is present.
+//
+// ONE query, and not a SELECT of the field, because a link's target is not a field: a
+// scene with every column NULL still exists and can carry a link.
+func (s *CollabTargetStore) rowExists(ctx context.Context, targetType string, targetID int) (bool, error) {
+	table, err := targetTableFor(targetType)
+	if err != nil {
+		return false, err
+	}
+	var one int
+	err = dbWrapper.Get(ctx, &one, fmt.Sprintf("SELECT 1 FROM %s WHERE id = ?", table), targetID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking whether %s %d exists: %w", targetType, targetID, err)
+	}
+	return true, nil
+}
+
 func (s *CollabTargetStore) MarkRejected(ctx context.Context, proposalID int, deciderID int, reason string) error {
 	_ = reason
 	return s.proposals.SetStatus(ctx, proposalID, models.ProposalRejected, deciderID)

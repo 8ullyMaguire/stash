@@ -79,11 +79,7 @@ func NewProposer(store ProposalStore) *Proposer { return &Proposer{store: store}
 // not cost a transaction, and more importantly the sticky check must not run for
 // a field the author could never have proposed on anyway.
 func (p *Proposer) Create(ctx context.Context, req Proposal) (*Proposal, error) {
-	if _, ok := LookupField(req.TargetType, req.Field); !ok {
-		return nil, ErrFieldNotProposable
-	}
-
-	if err := ValidateValue(req.TargetType, req.Field, req.NewValue); err != nil {
+	if err := validateProposalField(req.TargetType, req.Field, req.NewValue); err != nil {
 		return nil, err
 	}
 
@@ -130,10 +126,7 @@ func (p *Proposer) Create(ctx context.Context, req Proposal) (*Proposal, error) 
 // creating a "replacement" for a proposal that does not exist would make the
 // caller believe a decision was made about a request that was never on record.
 func (p *Proposer) Supersede(ctx context.Context, req Proposal) (*Proposal, error) {
-	if _, ok := LookupField(req.TargetType, req.Field); !ok {
-		return nil, ErrFieldNotProposable
-	}
-	if err := ValidateValue(req.TargetType, req.Field, req.NewValue); err != nil {
+	if err := validateProposalField(req.TargetType, req.Field, req.NewValue); err != nil {
 		return nil, err
 	}
 
