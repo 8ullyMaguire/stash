@@ -3109,5 +3109,29 @@ go test -tags integration -count=1 ./...
 cd plugins/p2pdownloader && go test ./... -count=1
 ```
 
-Green on **both** gaming-pc and thinkcentre; green on one is not a pass.
+Green on **both** hosts; green on one is not a pass. The two are real machines with two
+checkouts, and the names are ssh **aliases**, not hostnames:
+
+| alias | hostname | checkout |
+|---|---|---|
+| `gaming-pc` | `cachyos-B450` | `~/code-local/go/stash` |
+| `thinkcentre` | `M720q` | `~/build/stash` (ext4 — never build on M720q's `~/code-local`, it is the NFS mergerfs mount) |
+
+**M720q IS a valid gate, with no standing exemption.** An earlier version of this plan
+carried a note that `pkg/scene/generate` fails there and must not be "fixed"; that was
+true on 2026-10-01 and stopped being true when `d67734bf1` rewrote five tests that were
+measuring the **local ffmpeg** rather than the code under test. M720q has ffmpeg 6.1.1
+where cachyos-B450 has 9.0.1, and `GOTOOLCHAIN=auto` fetches the 1.25.0 that `go.mod`
+pins, so neither difference blocks a run.
+
+**Measured on 2026-10-02 at `f03021801`, both hosts:**
+
+| gate | cachyos-B450 | M720q |
+|---|---|---|
+| `go build ./...` | clean | clean |
+| `go vet ./...` | clean | clean |
+| `gofmt -l internal/ pkg/` | clean | clean |
+| `go test ./...` | green | green |
+| `go test -tags integration ./...` | green | green |
+| `plugins/p2pdownloader` module | green | green |
 
