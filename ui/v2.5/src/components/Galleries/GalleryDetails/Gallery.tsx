@@ -20,6 +20,7 @@ import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
 import { Icon } from "src/components/Shared/Icon";
 import { Counter } from "src/components/Shared/Counter";
 import Mousetrap from "mousetrap";
+import { useScopedKeybinds } from "src/hooks/mousetrapScope";
 import { useGalleryLightbox } from "src/hooks/Lightbox/hooks";
 import { useToast } from "src/hooks/Toast";
 import { OrganizedButton } from "src/components/Scenes/SceneDetails/OrganizedButton";
@@ -384,21 +385,25 @@ export const GalleryPage: React.FC<IProps> = ({ gallery, add }) => {
   );
 
   // set up hotkeys
-  useEffect(() => {
-    Mousetrap.bind("a", () => setActiveTabKey("gallery-details-panel"));
-    Mousetrap.bind("c", () => setActiveTabKey("gallery-chapter-panel"));
-    Mousetrap.bind("e", () => setActiveTabKey("gallery-edit-panel"));
-    Mousetrap.bind("f", () => setActiveTabKey("gallery-file-info-panel"));
-    Mousetrap.bind(",", () => setCollapsed(!collapsed));
-
-    return () => {
-      Mousetrap.unbind("a");
-      Mousetrap.unbind("c");
-      Mousetrap.unbind("e");
-      Mousetrap.unbind("f");
-      Mousetrap.unbind(",");
-    };
-  });
+  // #2833: scoped, so this page takes a contended key from the list behind it
+  // while mounted, and the list gets it back on the way out. Unscoped,
+  // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+  // restoring it, so the list silently loses the key -- the reported
+  // "works every other time".
+  useScopedKeybinds(
+    {
+    // a
+    "a": (() => setActiveTabKey("gallery-details-panel")),
+    // c
+    "c": (() => setActiveTabKey("gallery-chapter-panel")),
+    // e
+    "e": (() => setActiveTabKey("gallery-edit-panel")),
+    // f
+    "f": (() => setActiveTabKey("gallery-file-info-panel")),
+    // ,
+    ",": (() => setCollapsed(!collapsed)),
+    }
+  );
 
   const title = galleryTitle(gallery);
 

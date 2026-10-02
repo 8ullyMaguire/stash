@@ -3,6 +3,7 @@ import cloneDeep from "lodash-es/cloneDeep";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useHistory, useLocation } from "react-router-dom";
 import Mousetrap from "mousetrap";
+import { bindScoped } from "src/hooks/mousetrapScope";
 import * as GQL from "src/core/generated-graphql";
 import { queryFindScenes, useFindScenes } from "src/core/StashService";
 import { ListFilterModel } from "src/models/list-filter/filter";
@@ -59,6 +60,21 @@ import { useZoomKeybinds } from "../List/ZoomSlider";
 import { FilteredListToolbar } from "../List/FilteredListToolbar";
 import { FilterTags } from "../List/FilterTags";
 import { SidebarFolderFilter } from "../List/Filters/FolderFilter";
+
+// #2833: a stable owner token for this component's `e` / `d d` pair.
+//
+// `bindScoped` identifies a handler by object identity, so a token recreated per render
+// would be a NEW owner every time and the stack would grow on every render -- the exact
+// unbounded growth `mousetrapScope.mutate.py`'s `rebind-always-appends` mutant models.
+// Created once per module instead.
+//
+// Module-level rather than per-instance: these eight lists are never mounted
+// simultaneously for the same key (one list is on screen at a time), so a `useRef` in
+// eight files would buy no observable difference. The trade-off is stated rather than
+// accidental, and `scopedShortcutReport` makes it checkable.
+const editDeleteKeys = { component: "list-edit-delete" };
+
+
 
 function renderMetadataByline(result: GQL.FindScenesQueryResult) {
   const duration = result?.data?.findScenes?.duration;
@@ -450,21 +466,31 @@ export const FilteredSceneList = PatchComponent(
     }, [showModal, selectedItems, onCloseEditDelete]);
 
     useEffect(() => {
-      Mousetrap.bind("e", () => {
-        if (hasSelection) {
-          onEdit?.();
-        }
-      });
-
-      Mousetrap.bind("d d", () => {
-        if (hasSelection) {
-          onDelete?.();
-        }
-      });
+      // #2833: scoped, so a subpage that binds `e` owns it while mounted and the
+      // list gets it back on the way out. Unscoped, `Mousetrap.unbind` installs a
+      // no-op over the previous owner and the list silently loses the key.
+      const unbindEdit = bindScoped(
+        "e",
+        () => {
+          if (hasSelection) {
+            onEdit?.();
+          }
+        },
+        editDeleteKeys
+      );
+      const unbindDelete = bindScoped(
+        "d d",
+        () => {
+          if (hasSelection) {
+            onDelete?.();
+          }
+        },
+        editDeleteKeys
+      );
 
       return () => {
-        Mousetrap.unbind("e");
-        Mousetrap.unbind("d d");
+        unbindEdit();
+        unbindDelete();
       };
     }, [hasSelection, onEdit, onDelete]);
 

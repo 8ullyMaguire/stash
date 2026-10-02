@@ -5,6 +5,7 @@ import { useHistory, Redirect, RouteComponentProps } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 import Mousetrap from "mousetrap";
+import { useScopedKeybinds } from "src/hooks/mousetrapScope";
 import * as GQL from "src/core/generated-graphql";
 import {
   useFindPerformer,
@@ -102,17 +103,21 @@ const PerformerTabs: React.FC<{
     baseURL: `/performers/${performer.id}`,
   });
 
-  useEffect(() => {
-    Mousetrap.bind("c", () => setTabKey("scenes"));
-    Mousetrap.bind("g", () => setTabKey("galleries"));
-    Mousetrap.bind("m", () => setTabKey("groups"));
-
-    return () => {
-      Mousetrap.unbind("c");
-      Mousetrap.unbind("g");
-      Mousetrap.unbind("m");
-    };
-  });
+  // #2833: scoped, so this page takes a contended key from the list behind it
+  // while mounted, and the list gets it back on the way out. Unscoped,
+  // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+  // restoring it, so the list silently loses the key -- the reported
+  // "works every other time".
+  useScopedKeybinds(
+    {
+    // c
+    "c": (() => setTabKey("scenes")),
+    // g
+    "g": (() => setTabKey("galleries")),
+    // m
+    "m": (() => setTabKey("groups")),
+    }
+  );
 
   return (
     <Tabs
@@ -321,17 +326,21 @@ const PerformerPage: React.FC<IProps> = PatchComponent(
     );
 
     // set up hotkeys
-    useEffect(() => {
-      Mousetrap.bind("e", () => toggleEditing());
-      Mousetrap.bind("f", () => setFavorite(!performer.favorite));
-      Mousetrap.bind(",", () => setCollapsed(!collapsed));
-
-      return () => {
-        Mousetrap.unbind("e");
-        Mousetrap.unbind("f");
-        Mousetrap.unbind(",");
-      };
-    });
+    // #2833: scoped, so this page takes a contended key from the list behind it
+    // while mounted, and the list gets it back on the way out. Unscoped,
+    // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+    // restoring it, so the list silently loses the key -- the reported
+    // "works every other time".
+    useScopedKeybinds(
+      {
+      // e
+      "e": (() => toggleEditing()),
+      // f
+      "f": (() => setFavorite(!performer.favorite)),
+      // ,
+      ",": (() => setCollapsed(!collapsed)),
+      }
+    );
 
     async function onSave(input: GQL.PerformerCreateInput) {
       await updatePerformer({

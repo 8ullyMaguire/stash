@@ -3,6 +3,7 @@ import { FormattedMessage, useIntl } from "react-intl";
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 import Mousetrap from "mousetrap";
+import { useScopedKeybinds } from "src/hooks/mousetrapScope";
 import * as GQL from "src/core/generated-graphql";
 import {
   useFindGroup,
@@ -240,19 +241,23 @@ const GroupPage: React.FC<IProps> = PatchComponent(
     });
 
     // set up hotkeys
-    useEffect(() => {
-      Mousetrap.bind("e", () => toggleEditing());
-      Mousetrap.bind("d d", () => {
-        setIsDeleteAlertOpen(true);
-      });
-      Mousetrap.bind(",", () => setCollapsed(!collapsed));
-
-      return () => {
-        Mousetrap.unbind("e");
-        Mousetrap.unbind("d d");
-        Mousetrap.unbind(",");
-      };
-    });
+    // #2833: scoped, so this page takes a contended key from the list behind it
+    // while mounted, and the list gets it back on the way out. Unscoped,
+    // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+    // restoring it, so the list silently loses the key -- the reported
+    // "works every other time".
+    useScopedKeybinds(
+      {
+      // e
+      "e": (() => toggleEditing()),
+      // d d
+      "d d": (() => {
+                setIsDeleteAlertOpen(true);
+              }),
+      // ,
+      ",": (() => setCollapsed(!collapsed)),
+      }
+    );
 
     useRatingKeybinds(
       true,

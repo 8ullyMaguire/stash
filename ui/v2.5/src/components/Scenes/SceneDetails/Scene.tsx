@@ -31,6 +31,7 @@ import { useToast } from "src/hooks/Toast";
 import SceneQueue, { isPlayable, QueuedScene } from "src/models/sceneQueue";
 import { ListFilterModel } from "src/models/list-filter/filter";
 import Mousetrap from "mousetrap";
+import { useScopedKeybinds } from "src/hooks/mousetrapScope";
 import { OrganizedButton } from "./OrganizedButton";
 import { useConfigurationContext } from "src/hooks/Config";
 import {
@@ -268,45 +269,49 @@ const ScenePage: React.FC<IProps> = PatchComponent("ScenePage", (props) => {
   );
 
   // set up hotkeys
-  useEffect(() => {
-    Mousetrap.bind("a", () => setActiveTabKey("scene-details-panel"));
-    Mousetrap.bind("q", () => setActiveTabKey("scene-queue-panel"));
-    Mousetrap.bind("e", () => setActiveTabKey("scene-edit-panel"));
-    Mousetrap.bind("k", () => setActiveTabKey("scene-markers-panel"));
-    Mousetrap.bind("i", () => setActiveTabKey("scene-file-info-panel"));
-    Mousetrap.bind("h", () => setActiveTabKey("scene-history-panel"));
-    Mousetrap.bind("o", () => {
-      onIncrementOClick();
-    });
-    Mousetrap.bind("p n", () => onQueueNext());
-    Mousetrap.bind("p p", () => onQueuePrevious());
-    Mousetrap.bind("p r", () => onQueueRandom());
-    Mousetrap.bind(",", () => setCollapsed(!collapsed));
-    Mousetrap.bind("d d", () => setIsDeleteAlertOpen(true));
-    Mousetrap.bind("c c", () => {
-      onGenerateScreenshot(getPlayerPosition());
-    });
-    Mousetrap.bind("c d", () => {
-      onGenerateScreenshot();
-    });
-
-    return () => {
-      Mousetrap.unbind("a");
-      Mousetrap.unbind("q");
-      Mousetrap.unbind("e");
-      Mousetrap.unbind("k");
-      Mousetrap.unbind("i");
-      Mousetrap.unbind("h");
-      Mousetrap.unbind("o");
-      Mousetrap.unbind("d d");
-      Mousetrap.unbind("p n");
-      Mousetrap.unbind("p p");
-      Mousetrap.unbind("p r");
-      Mousetrap.unbind(",");
-      Mousetrap.unbind("c c");
-      Mousetrap.unbind("c d");
-    };
-  });
+  // #2833: scoped, so this page takes a contended key from the list behind it
+  // while mounted, and the list gets it back on the way out. Unscoped,
+  // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+  // restoring it, so the list silently loses the key -- the reported
+  // "works every other time".
+  useScopedKeybinds(
+    {
+    // a
+    "a": (() => setActiveTabKey("scene-details-panel")),
+    // q
+    "q": (() => setActiveTabKey("scene-queue-panel")),
+    // e
+    "e": (() => setActiveTabKey("scene-edit-panel")),
+    // k
+    "k": (() => setActiveTabKey("scene-markers-panel")),
+    // i
+    "i": (() => setActiveTabKey("scene-file-info-panel")),
+    // h
+    "h": (() => setActiveTabKey("scene-history-panel")),
+    // o
+    "o": (() => {
+            onIncrementOClick();
+          }),
+    // p n
+    "p n": (() => onQueueNext()),
+    // p p
+    "p p": (() => onQueuePrevious()),
+    // p r
+    "p r": (() => onQueueRandom()),
+    // ,
+    ",": (() => setCollapsed(!collapsed)),
+    // d d
+    "d d": (() => setIsDeleteAlertOpen(true)),
+    // c c
+    "c c": (() => {
+            onGenerateScreenshot(getPlayerPosition());
+          }),
+    // c d
+    "c d": (() => {
+            onGenerateScreenshot();
+          }),
+    }
+  );
 
   async function onSave(input: GQL.SceneCreateInput) {
     await updateScene({
@@ -857,13 +862,17 @@ const SceneLoader: React.FC<RouteComponentProps<ISceneParams>> = ({
   }
 
   // set up hotkeys
-  useEffect(() => {
-    Mousetrap.bind(".", () => setHideScrubber((value) => !value));
-
-    return () => {
-      Mousetrap.unbind(".");
-    };
-  }, []);
+  // #2833: scoped, so this page takes a contended key from the list behind it
+  // while mounted, and the list gets it back on the way out. Unscoped,
+  // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+  // restoring it, so the list silently loses the key -- the reported
+  // "works every other time".
+  useScopedKeybinds(
+    {
+    // .
+    ".": (() => setHideScrubber((value) => !value)),
+    }
+  );
 
   useEffect(() => {
     async function getQueueFilterScenes(filter: ListFilterModel) {

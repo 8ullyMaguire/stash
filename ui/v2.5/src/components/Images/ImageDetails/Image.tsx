@@ -17,6 +17,7 @@ import { Icon } from "src/components/Shared/Icon";
 import { Counter } from "src/components/Shared/Counter";
 import { useToast } from "src/hooks/Toast";
 import * as Mousetrap from "mousetrap";
+import { useScopedKeybinds } from "src/hooks/mousetrapScope";
 import * as GQL from "src/core/generated-graphql";
 import { OCounterButton } from "src/components/Scenes/SceneDetails/OCounterButton";
 import { OrganizedButton } from "src/components/Scenes/SceneDetails/OrganizedButton";
@@ -284,21 +285,25 @@ const ImagePage: React.FC<IProps> = ({ image }) => {
   }
 
   // set up hotkeys
-  useEffect(() => {
-    Mousetrap.bind("a", () => setActiveTabKey("image-details-panel"));
-    Mousetrap.bind("e", () => setActiveTabKey("image-edit-panel"));
-    Mousetrap.bind("f", () => setActiveTabKey("image-file-info-panel"));
-    Mousetrap.bind("o", () => {
-      onIncrementClick();
-    });
-
-    return () => {
-      Mousetrap.unbind("a");
-      Mousetrap.unbind("e");
-      Mousetrap.unbind("f");
-      Mousetrap.unbind("o");
-    };
-  });
+  // #2833: scoped, so this page takes a contended key from the list behind it
+  // while mounted, and the list gets it back on the way out. Unscoped,
+  // `Mousetrap.unbind` installs a no-op over the previous owner rather than
+  // restoring it, so the list silently loses the key -- the reported
+  // "works every other time".
+  useScopedKeybinds(
+    {
+    // a
+    "a": (() => setActiveTabKey("image-details-panel")),
+    // e
+    "e": (() => setActiveTabKey("image-edit-panel")),
+    // f
+    "f": (() => setActiveTabKey("image-file-info-panel")),
+    // o
+    "o": (() => {
+            onIncrementClick();
+          }),
+    }
+  );
 
   const file = useMemo(
     () => (image.visual_files.length > 0 ? image.visual_files[0] : undefined),
