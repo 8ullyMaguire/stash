@@ -361,6 +361,13 @@ func (s *Manager) initStashForgeAuth() error {
 	s.LibraryAccessStore = sqlite.NewLibraryAccessStore()
 	s.LibraryStore = sqlite.NewLibraryStore()
 	s.ConsentStore = sqlite.NewConsentStore()
+
+	// Instance 1 is the only instance this build has -- the same assumption
+	// migration 117's seed row makes, and the same one the collab stores below
+	// already make. It is a FIELD rather than a per-call parameter because the
+	// ceiling is per-INSTANCE: an id a caller can vary is a requirement stated and
+	// then undermined, and §6a.11 says consent is revocable per instance.
+	s.AccessPolicyStore = sqlite.NewAccessPolicyStore(1)
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
 	s.AutoAcquireStore = sqlite.NewAutoAcquireStore()
 

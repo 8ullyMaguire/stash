@@ -169,8 +169,28 @@ type Manager struct {
 	// opted IN) is resolved through this store, so a nil one would leave the
 	// publish path unable to answer the question at all.
 	ConsentStore *sqlite.ConsentStore
-	Auth         *auth.SessionStore
-	AuthMode     auth.Mode
+
+	// AccessPolicyStore answers "may this user do X to content?" and owns the two
+	// switches behind it: the operator's ceiling (R062) and each user's revocable
+	// content consent (R026, §6a.11).
+	//
+	// THE SIXTH TIME, and the reason it is worth naming again is that this one is
+	// different in kind. The five before it were stores nothing constructed. This
+	// one was a store nothing constructed AND a domain model nothing reached:
+	// internal/collab/access_level.go was 231 lines with nine passing tests, and
+	// R025–R028 sat at `specified` for a whole milestone because DecideAccess took
+	// three inputs and two of them had nowhere to live. A complete model with no
+	// caller is not half-built work, it is INVISIBLE work -- nothing in a green
+	// suite distinguishes "the access model is wrong" from "the access model is
+	// unreachable", which is why TestStashForgeStoreConstructorsAreActuallyWired
+	// caught the constructor and only reached the model by asking.
+	//
+	// Always non-nil after init, because a nil one would leave every content path
+	// unable to answer the question at all, and the safe answer to "may this user
+	// see this" has to come from somewhere.
+	AccessPolicyStore *sqlite.AccessPolicyStore
+	Auth              *auth.SessionStore
+	AuthMode          auth.Mode
 
 	// StashForge collaboration surface. The collab stores are present on every
 	// instance, including a single-user one: a single-user instance still needs

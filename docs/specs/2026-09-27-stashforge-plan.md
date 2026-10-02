@@ -2509,29 +2509,86 @@ from a stranger's number and nothing notices for a week.
 
 ### Step 7.2 — Trust levels, and the opt-in that separates them (R025–R028, R062, R066)
 
-**New migration** `110_access_levels`.
+**DONE, and it took until 2026-10-02 to be true, for a reason worth recording.**
 
-The distinction that must not be blurred: §5.3's trust tier is **vote
-weighting**; this is **access**. A column for the latter must not be readable
-by the former's code, or reputation starts buying access.
+The domain model landed in M7 and its tests passed immediately:
+`internal/collab/access_level.go`, 231 lines, with `DecideAccess` answering three
+separate questions and `LevelFor` whose **signature is the §6a.10 firewall**. So the
+step read as finished. What it was missing was **reachability**: no migration
+mentioned an access level, and nothing outside `internal/collab` referenced
+`AccessLevel`, `LevelFor` or `Earned`. `DecideAccess` took three inputs and two of
+them had nowhere to live — the operator's ceiling (R062) and the per-user revocable
+content consent (R026, §6a.11). `consent_preferences` (migration 102) is about
+**metadata disclosure**, and reusing it would be §6a.11's exact conflation.
 
-Access levels are **earned from the audit log** (§4.2), not stored as a mutable
-number: a view over approved edits, verification consistency, ident solves,
-quests and preservation contributions. A user at level 4 has *also* consented,
-per instance, revocably (§6a.11) — and that consent is the one stored thing
-here, because a consent cannot be recomputed from a vote.
+**A complete domain model with no caller is not half-built work, it is INVISIBLE
+work.** Nothing in a green suite distinguishes "the access model is wrong" from "the
+access model is unreachable", which is how R025–R028 sat at `specified` for a full
+milestone with every test passing.
+
+**Migration `117_access_policy`** — two tables, because the ceiling is the operator's
+and the consent is the user's, and one table would let a single UPDATE express both
+happening atomically.
+
+| table | holds | default |
+|---|---|---|
+| `access_policy` | the instance's content ceiling (R062) | `0` = `LevelPublic` |
+| `content_consent` | one user's revocable content consent (R026) | `granted = 0` |
+
+**BOTH DEFAULTS GO TO THE SAFE DIRECTION, and the contrast with migration 116 is the
+design.** Curation defaults to `'propose'` because a safe feature must be reachable
+without configuration; the ceiling defaults to `LevelPublic` and consent to off
+because those defaults would otherwise **grant someone something**. An instance that
+never touched a setting is not a content-serving instance, and a user who earned
+Archivist is not automatically a content viewer — which is the entire point of consent
+being a separate switch.
+
+**Revocation is recorded, not deleted.** §6a.11 requires consent to be revocable, and
+a hard `DELETE` satisfies that while destroying the question a governance review asks:
+"when did this user withdraw?". So `revoked_at` is set and the row stays, and the
+migration's CHECK refuses a row claiming `granted = 1` together with a `revoked_at`.
+
+**`EarnedFor` counts audit rows and calls `LevelFor`; the thresholds stay in the
+domain.** §6a.11 says levels are earned from the audit log and does not fix the
+numbers, so hard-coding them into a query would create a second place to change them.
+Ident solves count **distinct targets**, because five solves of one scene is one
+contribution and a row count would let a user farm Archivist.
+
+**`Decide` takes no operator flag.** §6a.12 says a ceiling is a ceiling and never
+grants the operator anything the threshold excludes; the interface has nowhere to pass
+a bypass, which is the firewall held structurally rather than by discipline.
 
 **Verify:**
 
 ```bash
-GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestReputationNeverGrantsAnAccessLevel' -v
-GOFLAGS=-mod=mod go test ./internal/mesh/ -run 'TestLevelFourDoesNotEnableViewingOnItsOwn' -v
+GOFLAGS=-mod=mod go test ./internal/collab/ -run 'TestReputationNeverGrantsAnAccessLevel|TestLevelFourDoesNotEnableViewingOnItsOwn' -v
+GOFLAGS=-mod=mod go test -tags integration ./pkg/sqlite/ -run 'TestAccessPolicy|TestContentConsent|TestDecide|TestEarned|TestArchivist|TestTheAccessModel' -v
+GOFLAGS=-mod=mod python3 pkg/sqlite/mutate_access_policy.py
 ```
 
-Expected: both `--- PASS`. The first is the §6a.10 firewall as a test: a user
-with maximal reputation and no verification record stays at level 0. The
-second is the §6a.11 resolution as a test: level 4 with no consent gets
-`ErrConsentRequired`, not content.
+Expected: `--- PASS` for both domain tests; `ok` for the integration package; and
+**8 mutants, 0 survivors** from the mutation gate.
+
+**Two corrections to the version of this section written during M7**, both of which
+would have sent a reader to the wrong place:
+
+- the domain tests are in **`internal/collab`**, not `internal/mesh` (§6a.10–§6a.12 own
+  the access model, which is the same correction step 7.8's gate needed);
+- the migration is **`117_access_policy`** — `110` is the mesh serve budget.
+
+And one claim that reads correctly but is not what the code says: "a user with maximal
+reputation and no verification record stays at level **0**" is right, but the test
+covers a *Curator*-range user, and **level 5 (Steward) is currently unreachable**
+because `EarnedFor` passes `verificationConsistent = 0` — see below.
+
+**A KNOWN GAP, recorded rather than papered over.** `verificationConsistent` and
+`preservationContribs` are passed as `0` because both are derived quantities
+(consistency is a ratio against a user's own history; preservation is a property of
+what this instance stores) and inventing a formula in SQL would put an access level in
+the hands of a query nobody reviewed. The consequence is that **Steward cannot be
+earned**, and `TestArchivistRequiresBothSignalsNotEither` pins the level below it.
+The honest fix is to derive both properly. Until then this is R025–R028 `tested` with
+one unreachable level named, not `shipped`.
 
 ### Step 7.3 — Recommendations as a view (R010–R013, R014, R015, R061, R064, R065, R071, R073)
 
