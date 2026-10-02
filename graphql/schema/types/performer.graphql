@@ -93,6 +93,14 @@ input PerformerCreateInput {
   tag_ids: [ID!]
   "This should be a URL or a base64 encoded data URL"
   image: String
+  """
+  Image IDs to link to this performer, REPLACING any existing set (an empty list clears it).
+
+  This is the `performers_images` join, which is what `image_count` reads. It is NOT the
+  `image` field above: that one writes a single blob column serving `image_path`, and the two
+  are independent by design so no existing user's image is destroyed. stash#571.
+  """
+  images: [ID!]
   stash_ids: [StashIDInput!]
   # rating expressed as 1-100
   rating100: Int
@@ -134,6 +142,14 @@ input PerformerUpdateInput {
   tag_ids: [ID!]
   "This should be a URL or a base64 encoded data URL"
   image: String
+  """
+  Image IDs to link to this performer, REPLACING any existing set (an empty list clears it).
+
+  This is the `performers_images` join, which is what `image_count` reads. It is NOT the
+  `image` field above: that one writes a single blob column serving `image_path`, and the two
+  are independent by design so no existing user's image is destroyed. stash#571.
+  """
+  images: [ID!]
   stash_ids: [StashIDInput!]
   # rating expressed as 1-100
   rating100: Int

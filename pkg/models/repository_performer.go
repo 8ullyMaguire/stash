@@ -94,6 +94,13 @@ type PerformerWriter interface {
 	PerformerDestroyer
 
 	Merge(ctx context.Context, source []int, destination int) error
+
+	// SetImages REPLACES the set of image rows linked to a performer through
+	// `performers_images` -- the join that `image_count` reads. An empty (non-nil) slice clears
+	// the set. It is deliberately separate from UpdateImage, which writes the single blob
+	// column serving `image_path`; the two are independent so no existing image is destroyed.
+	// stash#571.
+	SetImages(ctx context.Context, performerID int, imageIDs []int) error
 }
 
 // PerformerReaderWriter provides all performer methods.

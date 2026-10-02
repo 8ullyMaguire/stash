@@ -473,6 +473,20 @@ func (_m *PerformerReaderWriter) HasImage(ctx context.Context, performerID int) 
 	return r0, r1
 }
 
+// SetImages provides a mock function with given fields: ctx, performerID, imageIDs
+func (_m *PerformerReaderWriter) SetImages(ctx context.Context, performerID int, imageIDs []int) error {
+	ret := _m.Called(ctx, performerID, imageIDs)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int, []int) error); ok {
+		r0 = rf(ctx, performerID, imageIDs)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Merge provides a mock function with given fields: ctx, source, destination
 func (_m *PerformerReaderWriter) Merge(ctx context.Context, source []int, destination int) error {
 	ret := _m.Called(ctx, source, destination)

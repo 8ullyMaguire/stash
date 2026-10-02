@@ -243,7 +243,11 @@ type PerformerCreateInput struct {
 	Favorite       *bool            `json:"favorite"`
 	TagIds         []string         `json:"tag_ids"`
 	// This should be a URL or a base64 encoded data URL
-	Image         *string        `json:"image"`
+	Image *string `json:"image"`
+	// Image IDs to link to this performer, REPLACING any existing set (an empty list clears
+	// it). This is the `performers_images` join that `image_count` reads, NOT the `Image` blob
+	// above -- the two are independent so no existing image is destroyed. stash#571.
+	Images        []string       `json:"images"`
 	StashIds      []StashIDInput `json:"stash_ids"`
 	Rating100     *int           `json:"rating100"`
 	Details       *string        `json:"details"`
@@ -284,7 +288,11 @@ type PerformerUpdateInput struct {
 	Favorite       *bool            `json:"favorite"`
 	TagIds         []string         `json:"tag_ids"`
 	// This should be a URL or a base64 encoded data URL
-	Image         *string        `json:"image"`
+	Image *string `json:"image"`
+	// Image IDs to link to this performer, REPLACING any existing set (an empty list clears
+	// it). This is the `performers_images` join that `image_count` reads, NOT the `Image` blob
+	// above -- the two are independent so no existing image is destroyed. stash#571.
+	Images        []string       `json:"images"`
 	StashIds      []StashIDInput `json:"stash_ids"`
 	Rating100     *int           `json:"rating100"`
 	Details       *string        `json:"details"`

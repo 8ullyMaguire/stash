@@ -353,6 +353,28 @@ func (qb *PerformerStore) UpdatePartial(ctx context.Context, id int, partial mod
 		}
 	}
 
+	if partial.ImageIDs != nil {
+		// Routed through SetImages rather than modifyJoins, because `performers_images` is
+		// oriented image -> performers: modifyJoins would ADD or REMOVE this performer from one
+		// image at a time and could not express "these are the performer's images now".
+		//
+		// Mode is honoured only for Set, which is the semantic this field was added with (see
+		// the goal note for stash#571: REPLACE, like alias_list / urls / tag_ids). Add and Remove
+		// are refused rather than silently treated as Set: a client asking to add an image to a
+		// performer's SET is asking for something this field does not model, and quietly
+		// replacing the whole set would delete images the client never mentioned.
+		switch partial.ImageIDs.Mode {
+		case models.RelationshipUpdateModeSet:
+			if err := qb.SetImages(ctx, id, partial.ImageIDs.IDs); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf(
+				"performer images: mode %v is not supported; images is a REPLACE field, so send "+
+					"the complete set (an empty list clears it)", partial.ImageIDs.Mode)
+		}
+	}
+
 	if partial.TagIDs != nil {
 		if err := performersTagsTableMgr.modifyJoins(ctx, id, partial.TagIDs.IDs, partial.TagIDs.Mode); err != nil {
 			return nil, err

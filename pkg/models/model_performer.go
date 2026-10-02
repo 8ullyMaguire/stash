@@ -91,8 +91,16 @@ type PerformerPartial struct {
 	Weight        OptionalInt
 	IgnoreAutoTag OptionalBool
 
-	Aliases  *UpdateStrings
-	TagIDs   *UpdateIDs
+	Aliases *UpdateStrings
+	TagIDs  *UpdateIDs
+	// ImageIDs links the performer to rows in the `images` table through `performers_images`.
+	// stash#571.
+	//
+	// This is the SECOND image system and is not the blob: `image` (the input) and `image_path`
+	// (the output) go to `performerImageBlobColumn`, while `image_count` reads this join. A
+	// partial field rather than a plain slice because absent must mean "do not touch" and
+	// present-but-empty must mean "clear" -- the same distinction `TagIDs` makes.
+	ImageIDs *UpdateIDs
 	StashIDs *UpdateStashIDs
 
 	CustomFields CustomFieldsInput

@@ -113,6 +113,20 @@ func (r *mutationResolver) PerformerCreate(ctx context.Context, input models.Per
 		return nil, fmt.Errorf("converting tag ids: %w", err)
 	}
 
+	// stash#571 -- `images` links EXISTING image rows to the new performer. Kept separate from
+	// `image` above, which writes the single blob column serving `image_path`: the two systems
+	// are independent by design, so setting one must not imply the other.
+	//
+	// On CREATE the field is inherently a SET -- there is nothing to replace -- so an absent
+	// list and an empty one mean the same thing here, and both leave the join untouched.
+	var imageIDs []int
+	if input.Images != nil {
+		imageIDs, err = stringslice.StringSliceToIntSlice(input.Images)
+		if err != nil {
+			return nil, fmt.Errorf("converting image ids: %w", err)
+		}
+	}
+
 	// Process the base 64 encoded image string
 	var imageData []byte
 	if input.Image != nil {
@@ -144,6 +158,13 @@ func (r *mutationResolver) PerformerCreate(ctx context.Context, input models.Per
 		// update image table
 		if len(imageData) > 0 {
 			if err := qb.UpdateImage(ctx, newPerformer.ID, imageData); err != nil {
+				return err
+			}
+		}
+
+		// and the performers_images join, which is what image_count reads
+		if len(imageIDs) > 0 {
+			if err := qb.SetImages(ctx, newPerformer.ID, imageIDs); err != nil {
 				return err
 			}
 		}
@@ -345,6 +366,19 @@ func performerPartialFromInput(input models.PerformerUpdateInput, translator cha
 	updatedPerformer.TagIDs, err = translator.updateIds(input.TagIds, "tag_ids")
 	if err != nil {
 		return nil, fmt.Errorf("converting tag ids: %w", err)
+	}
+
+	// stash#571 -- `images` links existing image rows through `performers_images`, the join
+	// `image_count` reads. Independent of the `image` blob column on purpose.
+	//
+	// `updateIds` is what carries the absent-vs-present distinction: absent leaves
+	// `ImageIDs` nil so the store does not touch the join, present (even empty) sets
+	// RelationshipUpdateModeSet so the store REPLACES. That is the semantic the field was
+	// specified with -- REPLACE, like alias_list / urls / tag_ids -- and an empty list clearing
+	// is the difference between "I removed the last image" and "I silently did nothing".
+	updatedPerformer.ImageIDs, err = translator.updateIds(input.Images, "images")
+	if err != nil {
+		return nil, fmt.Errorf("converting image ids: %w", err)
 	}
 
 	updatedPerformer.CustomFields = handleUpdateCustomFields(input.CustomFields)
