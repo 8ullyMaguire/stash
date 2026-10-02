@@ -18,11 +18,16 @@ func getStudioTagger(p *models.Studio, aliases []string, cache *match.Cache) []t
 		cache: cache,
 	}}
 
+	// #2507: the alias taggers here were missing `cache`, so a studio's canonical name used
+	// the path cache while its ALIASES re-parsed every path on every call. Found while
+	// enabling performer aliases -- the same omission in the parallel function, and it had
+	// gone unnoticed because a name-only assertion cannot see a nil cache.
 	for _, a := range aliases {
 		ret = append(ret, tagger{
-			ID:   p.ID,
-			Type: "studio",
-			Name: a,
+			ID:    p.ID,
+			Type:  "studio",
+			Name:  a,
+			cache: cache,
 		})
 	}
 
