@@ -289,6 +289,19 @@ type VideoFile struct {
 
 	Interactive      bool `json:"interactive"`
 	InteractiveSpeed *int `json:"interactive_speed"`
+
+	// #3530 - the window this scene takes from this file, in seconds.
+	//
+	// These live on VideoFile, not on a scene-file pair type, because no such type exists in
+	// the runtime model (Scene.Files is []VideoFile; the only SceneFile is the JSON EXPORT
+	// shape in pkg/models/jsonschema). That is sound ONLY because pkg/sqlite's GetFiles
+	// returns a FRESH copy per call — the same invariant the derived Duration below relies
+	// on. One file can back several scenes with different windows, so these fields describe
+	// this SCENE's use of the file and must never be cached or shared between scenes.
+	//
+	// nil means "no window": the scene uses the whole file.
+	StartTime *float64 `json:"start_time,omitempty"`
+	EndTime   *float64 `json:"end_time,omitempty"`
 }
 
 func (f VideoFile) GetWidth() int {

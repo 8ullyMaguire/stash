@@ -610,7 +610,19 @@ func (qb *SceneStore) getMany(ctx context.Context, q *goqu.SelectDataset) ([]*mo
 //
 // NULL/NULL yields no entry at all, so an untouched scene cannot be affected by arithmetic
 // it does not need — the guarantee that no existing scene's duration changes.
-func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]float64, error) {
+// #3530 - now returns the CLAMPED WINDOW itself, not just the length.
+//
+// It returned only a duration at first, and the play URL then had no way to learn where a scene
+// starts: the handler needs both ends to build -ss and -t. Returning the window means the clamp
+// below is the single place a window is made legal, so the duration the API reports and the
+// offset ffmpeg is given cannot drift apart — which is exactly the drift a second implementation
+// of the clamp would cause.
+type sceneFileRange struct {
+	start float64
+	end   float64 // clamped; 0 means "to the end of the file" only when start is also 0
+}
+
+func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]sceneFileRange, error) {
 	q := dialect.From(scenesFilesJoinTable).
 		Select(
 			scenesFilesJoinTable.Col(fileIDColumn),
@@ -668,7 +680,7 @@ func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]floa
 		}
 	}
 
-	ret := make(map[int]float64, len(rows))
+	ret := make(map[int]sceneFileRange, len(rows))
 	for _, r := range rows {
 		fileDur := fileDurations[r.FileID]
 
@@ -727,7 +739,7 @@ func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]floa
 			start = end
 		}
 
-		ret[r.FileID] = end - start
+		ret[r.FileID] = sceneFileRange{start: start, end: end}
 	}
 
 	return ret, nil
@@ -783,8 +795,17 @@ func (qb *SceneStore) GetFiles(ctx context.Context, id int) ([]*models.VideoFile
 			return nil, fmt.Errorf("expected file to be *file.VideoFile not %T", f)
 		}
 
+		// The window rides along on this per-scene copy of the file, so the handler can
+		// build -ss/-t without a second query. See models.VideoFile.StartTime for why
+		// putting it on VideoFile is sound (GetFiles returns a fresh copy per call).
 		if r, ok := ranges[int(ret[i].ID)]; ok {
-			ret[i].Duration = r
+			ret[i].Duration = r.end - r.start
+
+			// #3530 - nil means "no window". Copying the values out of the range struct
+			// rather than taking its address keeps the map's storage private.
+			start, end := r.start, r.end
+			ret[i].StartTime = &start
+			ret[i].EndTime = &end
 		}
 	}
 

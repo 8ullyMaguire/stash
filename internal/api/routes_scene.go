@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -144,6 +145,62 @@ func (rs sceneRoutes) StreamMKV(w http.ResponseWriter, r *http.Request) {
 	rs.streamTranscode(w, r, ffmpeg.StreamTypeMKV)
 }
 
+// #3530 - resolve the window a scene should play, letting an explicit query param win over the
+// stored one.
+//
+// Returned as (start, end) in SECONDS FROM THE START OF THE FILE, where end == 0 means "to the end
+// of the file" and is encoded downstream as the ABSENCE of -t.
+//
+// ## Why the param overrides the stored window
+//
+// The player's scrubber appends ?start= as the user seeks WITHIN a scene, so a backend that always
+// used the stored window would break seeking for every ranged scene. That is a worse bug than the
+// one being fixed -- the stored window is a default for the INITIAL request, not a lock on every
+// request. Only an ABSENT param falls back.
+//
+// ## Why nil is not collapsed to 0 at this boundary
+//
+// The stored window is nil when the scene was never ranged, whereas 0 is a meaningful offset (the
+// head of the file). They mean different things, and only the latter should produce -ss at all --
+// so the distinction is kept until makeStreamArgs, which decides.
+//
+// ## Why a malformed param falls back rather than zeroing
+//
+// The code this replaced was `ss, _ := strconv.ParseFloat(r.Form.Get("start"), 64)`, which turns
+// "abc" into 0 and seeks to the beginning of the file -- a silent wrong answer. Falling back to
+// the stored window is closer to what the client meant, and if there is no stored window the scene
+// plays whole rather than jumping to the head.
+//
+// One function rather than two so start and end cannot be resolved by different rules: a caller
+// that forgot one of a pair is a bug this shape makes impossible.
+func resolveSceneWindow(r *http.Request, f *models.VideoFile) (start, end float64) {
+	var qs url.Values
+	if r != nil {
+		// ParseForm has already been called by the caller; a second call is a no-op and
+		// returns the same values, so reading r.Form here cannot fail differently.
+		qs = r.URL.Query()
+	}
+
+	if f != nil && f.StartTime != nil {
+		start = *f.StartTime
+	}
+	if f != nil && f.EndTime != nil {
+		end = *f.EndTime
+	}
+
+	if v, err := strconv.ParseFloat(qs.Get("start"), 64); err == nil {
+		start = v
+	}
+	if v, err := strconv.ParseFloat(qs.Get("end"), 64); err == nil {
+		end = v
+	}
+
+	// An inverted window from the client is left for makeStreamArgs to drop. It is NOT
+	// normalised here, because doing so in two places is how the two drift apart -- the
+	// same reason sceneFileRanges is the only place a stored window is clamped.
+	return start, end
+}
+
 func (rs sceneRoutes) streamTranscode(w http.ResponseWriter, r *http.Request, streamType ffmpeg.StreamFormat) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
 
@@ -162,15 +219,22 @@ func (rs sceneRoutes) streamTranscode(w http.ResponseWriter, r *http.Request, st
 		logger.Warnf("[transcode] error parsing query form: %v", err)
 	}
 
-	startTime := r.Form.Get("start")
-	ss, _ := strconv.ParseFloat(startTime, 64)
 	resolution := r.Form.Get("resolution")
+
+	// #3530 - a ranged scene plays its WINDOW, not the whole file.
+	//
+	// The scene's stored window is the DEFAULT and a query param OVERRIDES it. That direction
+	// matters and is not arbitrary: the player's scrubber appends ?start= as the user seeks
+	// WITHIN a scene, so always ignoring query params would break seeking for every ranged
+	// scene -- a worse bug than the one being fixed. Only an ABSENT param falls back.
+	ss, se := resolveSceneWindow(r, f)
 
 	options := ffmpeg.TranscodeOptions{
 		StreamType: streamType,
 		VideoFile:  f,
 		Resolution: resolution,
 		StartTime:  ss,
+		EndTime:    se,
 	}
 
 	logger.Debugf("[transcode] streaming scene %d as %s", scene.ID, streamType.MimeType)

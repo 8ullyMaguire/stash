@@ -428,3 +428,112 @@ func TestTwoScenesSharingOneFileSeeDifferentDurations(t *testing.T) {
 			"video_files.duration is the FILE's length and stays true")
 	})
 }
+
+// #3530 - the window itself (not just the derived duration) has to reach models.VideoFile, or the
+// play URL cannot build -ss/-t without a second query per request.
+//
+// These assert the SHAPE of the carrier: nil for an unranged scene, and the CLAMPED window for a
+// ranged one. The clamp matters here specifically -- an unclamped end would hand ffmpeg an offset
+// past the end of the file.
+func TestTheWindowItselfReachesTheSceneFiles(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		unranged := mkRangeVideoFile(t, ctx, "window-unranged.mp4", 1800)
+		ranged := mkRangeVideoFile(t, ctx, "window-ranged.mp4", 1800)
+		overrun := mkRangeVideoFile(t, ctx, "window-overrun.mp4", 1800)
+
+		rangedScene := newSceneOver(t, ctx, ranged)
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = ?, end_time = ? WHERE scene_id = ?",
+			60.0, 300.0, rangedScene))
+
+		// 1600..2900 on an 1800s file: legal per the schema CHECKs, and clamped to 1600..1800.
+		overrunScene := newSceneOver(t, ctx, overrun)
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = ?, end_time = ? WHERE scene_id = ?",
+			1600.0, 2900.0, overrunScene))
+
+		unrangedScene := newSceneOver(t, ctx, unranged)
+
+		for _, tc := range []struct {
+			name       string
+			scene      int
+			wantStart  *float64
+			wantEnd    *float64
+			wantLength float64
+		}{
+			{"an unranged scene carries no window at all", unrangedScene, nil, nil, 1800},
+			{"a ranged scene carries both ends", rangedScene, f64(60), f64(300), 240},
+			{"an overrunning window is clamped to the file", overrunScene, f64(1600), f64(1800), 200},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				files, err := db.Scene.GetFiles(ctx, tc.scene)
+				require.NoError(t, err)
+				require.Len(t, files, 1)
+				f := files[0]
+
+				assert.Equal(t, tc.wantLength, f.Duration,
+					"the derived length must equal end-start after clamping")
+
+				if tc.wantStart == nil {
+					assert.Nil(t, f.StartTime,
+						"an unranged scene must report nil, not 0: 0 is the head of the file and "+
+							"the two mean different things to the play URL")
+					assert.Nil(t, f.EndTime,
+						"an unranged scene must report nil end, not the file's length")
+					return
+				}
+
+				require.NotNil(t, f.StartTime, "the window's start must reach the model")
+				require.NotNil(t, f.EndTime, "the window's end must reach the model")
+				assert.Equal(t, *tc.wantStart, *f.StartTime)
+				assert.Equal(t, *tc.wantEnd, *f.EndTime,
+					"the end must be the CLAMPED one (1800), not the stored 2900: handing "+
+						"ffmpeg an offset past the end of the file plays nothing")
+			})
+		}
+	})
+}
+
+// TestTwoScenesOfOneFileCarryDifferentWindows — the reason the window is on a per-scene COPY of
+// the file and not somewhere shared.
+//
+// One file, two scenes, different windows. If the carrier were shared or cached, the second
+// scene would report the first one's window and the play URL would seek to the wrong place for one
+// of them. This is the test that fails if someone "optimises" GetFiles into returning shared
+// pointers.
+func TestTwoScenesOfOneFileCarryDifferentWindows(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		shared := mkRangeVideoFile(t, ctx, "shared-window.mp4", 1800)
+
+		first := newSceneOver(t, ctx, shared)
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = ?, end_time = ? WHERE scene_id = ?",
+			0.0, 100.0, first))
+		second := newSceneOver(t, ctx, shared)
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = ?, end_time = ? WHERE scene_id = ?",
+			900.0, 1200.0, second))
+
+		firstFiles, err := db.Scene.GetFiles(ctx, first)
+		require.NoError(t, err)
+		secondFiles, err := db.Scene.GetFiles(ctx, second)
+		require.NoError(t, err)
+		require.Len(t, firstFiles, 1)
+		require.Len(t, secondFiles, 1)
+
+		// Read the FIRST one again after the second was loaded: if the two share storage,
+		// this value has changed underneath us.
+		assert.Equal(t, 0.0, *firstFiles[0].StartTime,
+			"the first scene's window must still be 0 after the second scene was loaded")
+		assert.Equal(t, 100.0, *firstFiles[0].EndTime,
+			"the first scene's window must still end at 100 after the second was loaded")
+		assert.Equal(t, 100.0, firstFiles[0].Duration)
+
+		assert.Equal(t, 900.0, *secondFiles[0].StartTime)
+		assert.Equal(t, 1200.0, *secondFiles[0].EndTime)
+		assert.Equal(t, 300.0, secondFiles[0].Duration)
+	})
+}
+
+// f64 is a pointer helper, so the table above reads as values.
+func f64(v float64) *float64 { return &v }
