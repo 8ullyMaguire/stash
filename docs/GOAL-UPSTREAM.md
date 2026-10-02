@@ -13,8 +13,10 @@ Nothing here assumes you were in this conversation.
 
 ## The goal, in one sentence
 
-Work through the 450 issues marked `planned` in `docs/UPSTREAM-ISSUES.md`,
-one at a time, until they are all done or the queue is empty.
+Work through the issues marked `planned` in `docs/UPSTREAM-ISSUES.md`, one at
+a time, until they are all done or the queue is empty. As of 2026-10-02 there are
+**84**; the header counts in both ledgers are reconciled against their tables by
+`docs/check-issue-ledgers.py`, so quote that number rather than this one.
 
 ---
 
@@ -26,7 +28,7 @@ one at a time, until they are all done or the queue is empty.
 | **Branch** | **`main`** — the soft fork. All issue work lands here. |
 | Base | `b6b09dd5f` = upstream `stashapp/stash` `develop` |
 | Not this branch | `stashforge` — the StashForge product work (governance, clustering, P2P plugin). Do not touch it. |
-| The roster | `docs/UPSTREAM-ISSUES.md` — 675 issues, 450 planned |
+| The roster | `docs/UPSTREAM-ISSUES.md` — 675 issues, 84 planned, 553 not planned, 38 closed |
 | The log | `docs/closed-issues.md` — one row per issue closed, with the test that proves it |
 
 **`main` is a soft fork.** The point is to be worth more than upstream: real
@@ -225,7 +227,7 @@ reason the second half of #7240 is a two-line change and not a rewrite.
 ## Where the numbers are
 
 - 675 open issues at `stashapp/stash`, fetched 2026-09-29.
-- **450 planned**, 225 not planned, every one with a reason in the roster.
+- **84 planned**, 553 not planned or deferred, every one with a reason in the roster.
 - 34 packages, all green, as the starting point.
 
 Re-fetch and the count will have moved; that is normal. The roster is a
