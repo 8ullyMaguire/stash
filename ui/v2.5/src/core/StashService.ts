@@ -3086,3 +3086,25 @@ export const useVote = () => GQL.useVoteMutation();
 export const useWithdraw = () => GQL.useWithdrawMutation();
 
 export const useModerate = () => GQL.useModerateMutation();
+
+// stash#837 — the issues panel.
+//
+// network-only, like every other hook here: this panel exists to tell the user what is
+// wrong with their library RIGHT NOW, and a cache-first panel is a panel that reports a
+// stale library while looking authoritative.
+//
+// The filter is passed through whole rather than assembled field by field. Its `resolved`
+// member is deliberately left undefined by the panel when the user has not touched the
+// toggle -- an explicit `resolved: false` means the same thing, and the difference is that
+// undefined lets the SERVER apply its own tested default rather than this file restating
+// it.
+export const useFindIssues = (variables: GQL.FindIssuesQueryVariables) =>
+  GQL.useFindIssuesQuery({ variables, fetchPolicy: "network-only" });
+
+// The badge. Separate from the list on purpose: a badge is "how many need attention",
+// never "how many this filter matched".
+export const useIssueCount = () =>
+  GQL.useIssueCountQuery({ fetchPolicy: "network-only" });
+
+export const useIssueResolve = () => GQL.useIssueResolveMutation();
+export const useIssueRestore = () => GQL.useIssueRestoreMutation();

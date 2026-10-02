@@ -77,6 +77,10 @@ const Tags = lazyComponent(() => import("./components/Tags/Tags"));
 // entity page, because a proposal is about a claim on shared content and the
 // claims span every entity type — filing them under scenes would make performers
 // and studios second-class.
+// stash#837: the issues panel. Lazy-loaded like every other panel here, so the issue
+// table's code is not in the initial bundle for the majority of users who never open it.
+const Issues = lazyComponent(() => import("./components/Issues/Issues"));
+
 const Proposals = lazyComponent(
   () => import("./components/Proposals/Proposals")
 );
@@ -274,6 +278,11 @@ export const App: React.FC = () => {
             <Route path="/performers" component={Performers} />
             <Route path="/tags" component={Tags} />
             <Route path="/proposals" component={Proposals} />
+            {/* After the lists and before /settings, matching the Proposals precedent: a
+                route with no nav entry. The panel is reached from a scan result or a
+                bookmark, and adding a permanent nav item for it would be a claim that it
+                is one of the things a user comes here to do -- it is not. */}
+            <Route path="/issues" component={Issues} />
             <Route path="/studios" component={Studios} />
             <Route path="/groups" component={Groups} />
             <Route path="/stats" component={Stats} />

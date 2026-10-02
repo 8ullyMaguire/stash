@@ -1,0 +1,54 @@
+# stash#837 — the issues panel's operations.
+#
+# The badge is a separate query from the list, on purpose. See IssueCount below.
+
+fragment IssueData on Issue {
+  id
+  file_id
+  domain
+  kind
+  details
+  detected_at
+  resolved
+  resolved_at
+}
+
+# A NIL issue_filter MEANS UNRESOLVED, not everything. Omitting the variable entirely is
+# how the panel asks for live findings, and the server decides that -- not this client.
+#
+# `resolved` is a declared variable rather than a hardcoded field so the "show dismissed"
+# toggle is a variable swap rather than a second operation. Two operations that differ only
+# in one boolean is two places for the panel's filters to drift.
+query FindIssues($issue_filter: IssueFilterType) {
+  findIssues(issue_filter: $issue_filter) {
+    count
+    issues {
+      ...IssueData
+    }
+  }
+}
+
+# The badge is NOT findIssues(...).count.
+#
+# The count on the list query is the count of WHAT WAS ASKED FOR, so reusing it would make
+# the badge mean "however many the current filter matched" -- and applying a filter would
+# silently change what the number claims to be. A badge is "how many things want your
+# attention", which is always the unresolved total.
+query IssueCount {
+  issueCount {
+    count
+  }
+}
+
+# Returns a Boolean, not the issue, so the panel refetches rather than patching a local
+# copy: resolving changes what the DEFAULT list contains, and a locally-spliced row would
+# leave the row on screen with no way to know the list it came from is now stale.
+mutation IssueResolve($id: ID!) {
+  issueResolve(id: $id)
+}
+
+# The undo. Deliberately a separate mutation and not a re-record: Record refuses to re-raise
+# a dismissed finding, and that refusal is what makes a dismissal mean something.
+mutation IssueRestore($id: ID!) {
+  issueRestore(id: $id)
+}

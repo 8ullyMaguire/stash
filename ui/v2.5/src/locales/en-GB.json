@@ -1825,5 +1825,32 @@
     },
     "buttons": {
         "cancel": "Cancel"
+    },
+    "issues": {
+        "title": "Issues",
+        "refresh": "Refresh",
+        "empty": "Nothing to report. Every file the scan has looked at is fine.",
+        "load_error": "The issues could not be loaded."
+    },
+    "issue": {
+        "file": "File {id}",
+        "resolve": "Dismiss",
+        "restore": "Undo",
+        "column": {
+            "kind": "Problem",
+            "details": "Details",
+            "detected": "First seen"
+        },
+        "filter": {
+            "kind": "Problem",
+            "any_kind": "Any",
+            "show_resolved": "Show dismissed"
+        },
+        "kind": {
+            "duplicate": "Duplicate",
+            "zero_size": "Zero bytes",
+            "zero_duration": "No duration",
+            "no_files": "Scan added nothing"
+        }
     }
 }
