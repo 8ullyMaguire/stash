@@ -599,6 +599,165 @@ func (qb *SceneStore) getMany(ctx context.Context, q *goqu.SelectDataset) ([]*mo
 	return ret, nil
 }
 
+// sceneFileRanges returns, per file id, the DURATION a scene should show for that file — the
+// file's own duration reduced by the scene's time range, or absent when the scene has no
+// range (the whole file).
+//
+// Returning an ABSENT entry rather than the file duration is deliberate: it lets the caller
+// leave a file untouched, which is what keeps `video_files.duration` true everywhere else.
+// A map with an entry for every file would be indistinguishable from "every file was
+// rewritten", which is the failure this shape is meant to make impossible.
+//
+// NULL/NULL yields no entry at all, so an untouched scene cannot be affected by arithmetic
+// it does not need — the guarantee that no existing scene's duration changes.
+func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]float64, error) {
+	q := dialect.From(scenesFilesJoinTable).
+		Select(
+			scenesFilesJoinTable.Col(fileIDColumn),
+			scenesFilesJoinTable.Col("start_time"),
+			scenesFilesJoinTable.Col("end_time"),
+		).
+		Where(scenesFilesJoinTable.Col(sceneIDColumn).Eq(id)).
+		// A row with no range at all is the whole file: leave it alone rather than
+		// computing `file - 0`, which is the same number by a different route and would
+		// make "was this scene ranged?" unanswerable from the result.
+		Where(goqu.Or(
+			scenesFilesJoinTable.Col("start_time").IsNotNull(),
+			scenesFilesJoinTable.Col("end_time").IsNotNull(),
+		))
+
+	var rows []struct {
+		FileID    int        `db:"file_id"`
+		StartTime null.Float `db:"start_time"`
+		EndTime   null.Float `db:"end_time"`
+	}
+
+	const single = false
+	if err := queryFunc(ctx, q, single, func(r *sqlx.Rows) error {
+		var row struct {
+			FileID    int        `db:"file_id"`
+			StartTime null.Float `db:"start_time"`
+			EndTime   null.Float `db:"end_time"`
+		}
+		if err := r.StructScan(&row); err != nil {
+			return err
+		}
+		rows = append(rows, row)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("getting time ranges for scene %d: %w", id, err)
+	}
+
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	// The file's own durations, so a NULL end can mean "to the end of the file".
+	fileDurations := make(map[int]float64, len(rows))
+	ids := make([]models.FileID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, models.FileID(r.FileID))
+	}
+	files, err := qb.repo.File.Find(ctx, ids...)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		if vf, ok := f.(*models.VideoFile); ok {
+			fileDurations[int(vf.ID)] = vf.Duration
+		}
+	}
+
+	ret := make(map[int]float64, len(rows))
+	for _, r := range rows {
+		fileDur := fileDurations[r.FileID]
+
+		// Same reduction as the SQL CASE in docs/ISSUE-3530-spec.md section 8: a NULL end
+		// is the file's length, a NULL start is the beginning.
+		//
+		// Note that an open-ended range on a file whose length ffprobe could not determine
+		// has NO computable duration: the end is unknown, not zero. It reports 0 because
+		// `fileDur` is 0 here, and that is the honest answer -- "this scene's length is not
+		// known" is what a 0 duration already means everywhere else in the schema.
+		// `video_files.duration` is NULL/0 for files still being written, partial downloads
+		// and containers ffprobe does not recognise, and a bounded range on such a file
+		// still works (the CLAMP note below explains why it must).
+		end := fileDur
+		if r.EndTime.Valid {
+			end = r.EndTime.Float64
+		}
+		start := 0.0
+		if r.StartTime.Valid {
+			start = r.StartTime.Float64
+		}
+
+		// CLAMP, for the one window shape the schema CANNOT refuse.
+		//
+		// The three CHECKs are `start >= 0`, `end >= 0` and `end > start`, and a CHECK may
+		// not reference another table -- so none of them can compare against
+		// video_files.duration. A window that runs OFF THE END of the file therefore
+		// satisfies all three and is legal to create through any store or API:
+		//
+		//     start 300, end NULL, file 2700s   -> a NEGATIVE duration
+		//     start 2600, end 2900, file 2700s  -> 300s for a file that stops at 2700
+		//
+		// Both are wrong, and a negative duration reaches sort order, `play_duration`
+		// arithmetic and the timeline the UI draws with nothing downstream checking a sign.
+		//
+		// ONE mechanism, not two. An earlier draft had `min(end, file)`, then `min(start, end)`,
+		// and then `max(end-start, 0)` — and a mutation sweep killed only 5 of 7, with the
+		// two survivors being exactly those last two guards. Each was masked by the other:
+		// with the start clamp in place `end - start` is never negative, so the `max(...,0)`
+		// arm was dead code; and with the `max` arm in place the start clamp was untestable.
+		// A guard that cannot be individually justified is not protection, it is a comment
+		// that looks like one. So the clamp is the start, and the arithmetic below is plain:
+		//
+		//     start = min(start, end)   end is already clamped to what the file has
+		//     duration = end - start    >= 0 by construction, so no second guard is needed
+		//
+		// and deleting this clamp is a mutant the tests kill.
+		//
+		// The `fileDur > 0` guard matters: `video_files.duration` is NULL/0 whenever ffprobe
+		// could not determine it, which is common for a partial or still-growing file. Without
+		// it, `min(end, 0)` would collapse a perfectly good range to nothing.
+		if fileDur > 0 && end > fileDur {
+			end = fileDur
+		}
+		if start > end {
+			start = end
+		}
+
+		ret[r.FileID] = end - start
+	}
+
+	return ret, nil
+}
+
+// GetFiles returns a scene's files, with each file's Duration adjusted to the scene's TIME
+// RANGE within it (migration 122, docs/ISSUE-3530-spec.md).
+//
+// ## WHY THIS IS THE ONE PLACE THAT MATTERS
+//
+// A scene has no duration field of its own: `type Scene` in
+// graphql/schema/types/scene.graphql carries `play_duration` (seconds WATCHED, not length)
+// and `files`. The length a user sees comes from the file — `SceneListTable.tsx:88` reads
+// `scene.files[0].duration`, and `SceneCard.tsx:518` likewise. So THIS is the chokepoint for
+// "how long is this scene", and it is not a scene-query column.
+//
+// ## WHY THE FILE ITSELF MUST NOT BE TOUCHED
+//
+// `video_files.duration` is TRUE: it is how long the file lasts. `FindFiles.duration`,
+// the scene detail page's file list and the player all read it, and a segment's file is
+// still the whole 45 minutes. So the range is applied to the freshly-loaded COPY here and
+// never written back — `FileStore.Find` builds a new object per call (`qb.find`, no cache),
+// so mutating `Duration` cannot leak into another scene that shares the same file.
+//
+// ## WHY NULL/NNULL IS EXACTLY RIGHT
+//
+// A row with no range is the whole file, and `COALESCE(end, file) - COALESCE(start, 0)`
+// reduces to `video_files.duration` in that case. Every pre-existing scene is NULL/NULL, so
+// no existing scene's duration changes — asserted in TestAScenesDurationIsUnchangedForEvery
+// ExistingScene.
 func (qb *SceneStore) GetFiles(ctx context.Context, id int) ([]*models.VideoFile, error) {
 	fileIDs, err := sceneRepository.files.get(ctx, id)
 	if err != nil {
@@ -611,12 +770,21 @@ func (qb *SceneStore) GetFiles(ctx context.Context, id int) ([]*models.VideoFile
 		return nil, err
 	}
 
+	ranges, err := qb.sceneFileRanges(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
 	ret := make([]*models.VideoFile, len(files))
 	for i, f := range files {
 		var ok bool
 		ret[i], ok = f.(*models.VideoFile)
 		if !ok {
 			return nil, fmt.Errorf("expected file to be *file.VideoFile not %T", f)
+		}
+
+		if r, ok := ranges[int(ret[i].ID)]; ok {
+			ret[i].Duration = r
 		}
 	}
 

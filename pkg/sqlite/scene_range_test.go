@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stashapp/stash/pkg/models"
 )
 
 // stash#3530 — a scene may name a TIME RANGE within its file.
@@ -231,5 +233,305 @@ func TestTwoScenesMayShareOneFile(t *testing.T) {
 			"UPDATE scenes_files SET start_time = 10, end_time = 40 WHERE file_id = ? AND scene_id = 1", fileID))
 		require.NoError(t, exec(t, ctx,
 			"UPDATE scenes_files SET start_time = 40, end_time = 70 WHERE file_id = ? AND scene_id = 2", fileID))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DERIVED DURATION — spec section 8. These drive the REAL GetFiles, because the
+// chokepoint is the thing being tested.
+//
+// A unit test of `sceneFileRanges` would prove the helper reduces a range correctly while
+// proving nothing about whether anything CALLS it — and "nothing calls it" is the whole risk
+// this change creates, exactly as #1790's T4 was earned by driving the real destroy paths.
+// ---------------------------------------------------------------------------
+
+// rangeVideoDuration returns the duration GetFiles reports for a scene's file 0, which is
+// what SceneListTable.tsx:88 and SceneCard.tsx:518 read.
+func rangeVideoDuration(t *testing.T, ctx context.Context, sceneID int) float64 {
+	t.Helper()
+	files, err := db.Scene.GetFiles(ctx, sceneID)
+	require.NoError(t, err)
+	require.NotEmpty(t, files, "the scene must have a file or this test proves nothing")
+	return files[0].Duration
+}
+
+// mkRangeVideo creates a real scene with a real video file of a known duration, through the
+// STORES rather than raw SQL, and returns the scene id.
+//
+// Built on the pattern in scene_test.go's createScene (File.Create then Scene.Create), and
+// for a measured reason: every scene in the fixture (1..32) ALREADY has a primary file, so
+// reusing one hits `UNIQUE constraint failed: scenes_files.scene_id` from
+// unique_index_scenes_files_on_primary -- the correct refusal, arriving where a test author
+// did not expect it. Creating the scene avoids depending on fixture numbering at all.
+//
+// Seconds is a parameter so the tests read in their own units ("a 45-minute file") instead
+// of carrying a magic number.
+func mkRangeVideo(t *testing.T, ctx context.Context, name string, seconds float64) int {
+	t.Helper()
+
+	f := &models.VideoFile{
+		BaseFile: &models.BaseFile{
+			Basename:       name,
+			ParentFolderID: folderIDs[folderIdxWithSceneFiles],
+		},
+		Duration:   seconds,
+		VideoCodec: "h264",
+		Format:     "mp4",
+		AudioCodec: "aac",
+		Width:      640,
+		Height:     480,
+		FrameRate:  30,
+		BitRate:    100000,
+	}
+	require.NoError(t, db.File.Create(ctx, f))
+
+	s := &models.Scene{}
+	require.NoError(t, db.Scene.Create(ctx, s, []models.FileID{f.ID}))
+
+	return s.ID
+}
+
+// mkFileIDForScene returns a scene's primary file id, via the real store rather than a
+// fixture constant, so the test never depends on which ids the fixture happened to use.
+func mkFileIDForScene(t *testing.T, ctx context.Context, sceneID int) int64 {
+	t.Helper()
+	files, err := db.Scene.GetFiles(ctx, sceneID)
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	return int64(files[0].ID)
+}
+
+// setRange writes the range for a scene's primary file.
+func setRange(t *testing.T, ctx context.Context, sceneID int, start, end interface{}) {
+	t.Helper()
+	require.NoError(t, exec(t, ctx,
+		"UPDATE scenes_files SET start_time = ?, end_time = ? WHERE scene_id = ? AND `primary` = 1",
+		start, end, sceneID))
+}
+
+// TestARangedSceneReportsItsRangeNotTheFilesLength — the feature's whole point.
+func TestARangedSceneReportsItsRangeNotTheFilesLength(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-bounded.mp4", 2700) // a 45-minute file
+		setRange(t, ctx, id, 10.0, 40.0)
+
+		assert.Equal(t, 30.0, rangeVideoDuration(t, ctx, id),
+			"a 30-second window inside a 45-minute file must report 30 seconds")
+	})
+}
+
+// TestAnUnrangedSceneStillReportsTheWholeFile — the no-regression half, and it is the one
+// that matters for every existing user's library.
+func TestAnUnrangedSceneStillReportsTheWholeFile(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-whole.mp4", 2700)
+		assert.Equal(t, 2700.0, rangeVideoDuration(t, ctx, id),
+			"a scene with no range is the whole file, and must keep saying so")
+	})
+}
+
+// TestAnOpenEndedRangeMeansTheEndOfTheFile — NULL end is not NULL duration.
+func TestAnOpenEndedRangeMeansTheEndOfTheFile(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-open-tail.mp4", 2700)
+		setRange(t, ctx, id, 2400.0, nil)
+		assert.Equal(t, 300.0, rangeVideoDuration(t, ctx, id),
+			"a start with no end means 'to the end of the file'")
+	})
+}
+
+func TestARangeStartingAtZeroIsTheHeadOfTheFile(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-open-head.mp4", 2700)
+		setRange(t, ctx, id, nil, 600.0)
+		assert.Equal(t, 600.0, rangeVideoDuration(t, ctx, id),
+			"an end with no start means 'from the beginning'")
+	})
+}
+
+// TestTheFileKeepsItsOwnDurationAfterBeingRanged — THE TWO-SIDED TEST.
+//
+// A scene's file is still the whole 45 minutes, and `video_files.duration` is true. If
+// GetFiles wrote the range back to the file row, this file would start reporting 30 seconds
+// for FindFiles, the scene detail page's file list, and the PLAYER — and every one of those
+// would be silently wrong, because nothing about them is scene-specific.
+//
+// The reflection of the #4320/#4326 lesson: a fix asserted only on the failure it prevents is
+// a fix that can break the thing it was protecting.
+func TestTheFileKeepsItsOwnDurationAfterBeingRanged(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-shared.mp4", 2700)
+		fid := mkFileIDForScene(t, ctx, id)
+		setRange(t, ctx, id, 10.0, 40.0)
+
+		// The scene sees the range...
+		assert.Equal(t, 30.0, rangeVideoDuration(t, ctx, id))
+
+		// ...and the FILE, read on its own through FileStore, still sees 2700.
+		f, err := db.File.Find(ctx, models.FileID(fid))
+		require.NoError(t, err)
+		require.Len(t, f, 1)
+		vf, ok := f[0].(*models.VideoFile)
+		require.True(t, ok, "expected a *models.VideoFile, got %T", f[0])
+		assert.Equal(t, 2700.0, vf.Duration,
+			"the range must be applied to the scene's COPY, never written back to the file: "+
+				"FindFiles, the file list and the player all read video_files.duration and all "+
+				"of them are right only while it stays the file's own length")
+
+		// And the row itself, read directly.
+		assert.Equal(t, 2700.0, scalar(t, ctx,
+			"SELECT COALESCE(duration, 0) FROM video_files WHERE file_id = ?", fid),
+			"the video_files row itself must be unchanged")
+	})
+}
+
+// TestTwoScenesSharingOneFileSeeDifferentDurations — the case the feature exists for, and
+// the one that FAILS if the range were ever stored on the file row.
+func TestTwoScenesSharingOneFileSeeDifferentDurations(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		fileDur := 2700.0
+
+		f := &models.VideoFile{
+			BaseFile: &models.BaseFile{
+				Basename:       "d-two-scenes.mp4",
+				ParentFolderID: folderIDs[folderIdxWithSceneFiles],
+			},
+			Duration:   fileDur,
+			VideoCodec: "h264",
+			Format:     "mp4",
+			AudioCodec: "aac",
+			Width:      640,
+			Height:     480,
+			FrameRate:  30,
+			BitRate:    100000,
+		}
+		require.NoError(t, db.File.Create(ctx, f))
+
+		// Two scenes over the SAME file. Create() takes the file as primary for each, so
+		// the second scene's row is a genuine second scenes_files entry for one file --
+		// the schema permits it (PRIMARY KEY is (scene_id, file_id)) and this is the only
+		// case where that matters.
+		first := &models.Scene{}
+		require.NoError(t, db.Scene.Create(ctx, first, []models.FileID{f.ID}))
+		second := &models.Scene{}
+		require.NoError(t, db.Scene.Create(ctx, second, []models.FileID{f.ID}))
+
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = 0, end_time = 300 WHERE scene_id = ?", first.ID))
+		require.NoError(t, exec(t, ctx,
+			"UPDATE scenes_files SET start_time = 300, end_time = 900 WHERE scene_id = ?", second.ID))
+
+		assert.Equal(t, 300.0, rangeVideoDuration(t, ctx, first.ID))
+		assert.Equal(t, 600.0, rangeVideoDuration(t, ctx, second.ID),
+			"the SAME file must report a different length per scene — which is the entire feature")
+
+		// And the file itself is untouched.
+		assert.Equal(t, fileDur, scalar(t, ctx,
+			"SELECT COALESCE(duration, 0) FROM video_files WHERE file_id = ?", f.ID),
+			"video_files.duration is the FILE's length and stays true")
+	})
+}
+
+// TestAStartBeyondTheEndOfTheFileReportsZeroNotMinus — the clamp's ONLY test, and the reason
+// the mutant that deletes it is killed.
+//
+// This case is REACHABLE WITHOUT BYPASSING ANYTHING, which is what makes it worth a test.
+// The schema's three CHECKs are `start_time >= 0`, `end_time >= 0` and `end_time > start_time`
+// -- and none of them can see `video_files.duration`, because a CHECK may not reference
+// another table. So `start_time = 300` on a 2700-second file with `end_time` NULL is a legal
+// row: it passes all three CHECKs, and any store, API or UI can create it by typing an
+// over-long start. It describes a window that runs off the end of the file.
+//
+// Without the clamp that row reports -100 seconds, and a negative duration propagates into
+// sort order, into `play_duration` arithmetic and into the timeline the UI draws -- silently,
+// because nothing downstream of this function validates a sign.
+//
+// The inverted and empty cases (`end < start`, `end = start`) are NOT tested here on purpose:
+// the schema refuses both, and pretending otherwise would mean rewriting the table inside a
+// test to defeat a guarantee that already holds. They are refused by
+// TestAnInvertedRangeIsRefused and TestAnEmptyRangeIsRefused, and this is the ONE window the
+// schema cannot refuse.
+func TestAStartBeyondTheEndOfTheFileReportsZeroNotMinus(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-overrun.mp4", 2700)
+		setRange(t, ctx, id, 2800.0, nil) // legal per all three CHECKs, runs off the end
+
+		assert.Equal(t, 0.0, rangeVideoDuration(t, ctx, id),
+			"a window starting past the end of the file must clamp to 0; a negative duration "+
+				"reaches sort order and the timeline unchecked, and nothing downstream validates a sign")
+	})
+}
+
+// TestAnOverrunningWindowWithAnEndStillClamps — the clamp with an EXPLICIT end, and the
+// arithmetic a reader is most likely to get wrong.
+//
+// Window 2600..2900 on a 2700-second file. Both endpoints satisfy all three CHECKs
+// (`start >= 0`, `end >= 0`, `end > start`), so the row is legal. The naive reduction gives
+// 2900 - 2600 = 300 seconds of duration for a file that ends at 2700 — the UI would show a
+// scene three minutes longer than the media it can possibly play. The clamp takes the end to
+// the file's end, so the answer is the 100 seconds that really exist.
+//
+// Asserting 300 here would be the "fix the test to match the code" mistake in its purest
+// form, so the expectation is written as the arithmetic that makes it obvious: the file's
+// length MINUS the start, never the window's own width.
+func TestAnOverrunningWindowWithAnEndStillClamps(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		const fileDur = 2700.0
+		id := mkRangeVideo(t, ctx, "d-overrun2.mp4", fileDur)
+		setRange(t, ctx, id, 2600.0, 2900.0) // end is legal and > start, but past the file's end
+
+		assert.Equal(t, 100.0, rangeVideoDuration(t, ctx, id),
+			"the window is clamped to the file's end, so the answer is fileDur-start = 100, "+
+				"NOT the window's own width of 300 -- which would describe 3 minutes of "+
+				"duration in a file that stops at 2700")
+	})
+}
+
+// TestARangeSurvivesAFileWithNoKnownDuration — the ONLY test for the `fileDur > 0` guard,
+// and the reason deleting it is a mutant that gets killed.
+//
+// video_files.duration is NULL or 0 whenever ffprobe could not determine it, which is the
+// normal state for a file still being written, a partial download, or one whose container
+// ffprobe does not recognise. A user can absolutely have such a file and mark a range on the
+// scene -- the range is metadata and does not need the duration to exist.
+//
+// Without the guard, `min(end, 0)` collapses every such range to nothing and the scene
+// reports 0 seconds, i.e. the feature silently stops working for an entire class of files.
+// With it, an unknown duration is treated as "the file has no known end", so the range is
+// reported as written and nothing is clamped away.
+//
+// The two-arg mkRangeVideo is used with a 0 duration to stand for "ffprobe failed", because
+// that is what the row looks like in the database -- the distinction between NULL and 0 does
+// not survive into the reduction, and pretending it does would test a branch that cannot
+// occur.
+func TestARangeSurvivesAFileWithNoKnownDuration(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-no-duration.mp4", 0)
+
+		// An end past the point the user wants, on a file whose length is unknown: the
+		// range is honoured rather than clamped to the unknown.
+		setRange(t, ctx, id, 10.0, 40.0)
+		assert.Equal(t, 30.0, rangeVideoDuration(t, ctx, id),
+			"a file with no known duration must not clamp a valid range away")
+
+		// And an OPEN-ENDED one has no computable answer at all: the end is unknown, not
+		// zero. It reports 0, which is exactly what a 0 duration means everywhere else in
+		// this schema. Asserting 30 here would require inventing an end the database does
+		// not have.
+		setRange(t, ctx, id, 10.0, nil)
+		assert.Equal(t, 0.0, rangeVideoDuration(t, ctx, id),
+			"no end and no file length means no computable duration; 0 is the schema's own "+
+				"way of saying 'not known'")
+	})
+}
+
+// TestTheSameRangeOnAFileWithADurationIsUnaffectedByTheUnknownDurationGuard — the other
+// side of it, so the guard cannot be widened into "never clamp".
+func TestTheSameRangeOnAFileWithADurationIsUnaffectedByTheUnknownDurationGuard(t *testing.T) {
+	sfTxn(t, func(ctx context.Context) {
+		id := mkRangeVideo(t, ctx, "d-has-duration.mp4", 2700)
+		setRange(t, ctx, id, 10.0, 40.0)
+		assert.Equal(t, 30.0, rangeVideoDuration(t, ctx, id),
+			"the guard must apply only to files whose duration is unknown, never to the rest")
 	})
 }

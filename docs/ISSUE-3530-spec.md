@@ -225,34 +225,127 @@ Measured while writing this, and the reason the plan is not a patch:
 - **The play URL carries a scene id only** (`internal/api/urlbuilders/scene.go:26`), so R4 is
   not optional and cannot be skipped as "the player already knows".
 
-## 8. The three duration sites, measured — because "duration is derived" is three edits
+## 8. The duration sites — RECOUNTED, because there are five and the important one is not a scene query
 
-R2 looks like one change and is three, and missing any of them produces a scene whose list
-row disagrees with its own detail page:
+§8 originally said "three sites", listing `scene.go:1135`, `1136` and `951`. **That was
+measured from the wrong question** — "which scene-query column carries a duration?" — and it
+missed the site users actually look at.
 
-| site | expression | what it must become |
-|---|---|---|
-| `pkg/sqlite/scene.go:1135` | `COALESCE(video_files.duration, 0) as duration` | the range, when one is set |
-| `pkg/sqlite/scene.go:1136` | `SUM(temp.duration) as duration` (aggregate/total view) | sums the range, not the file |
-| `pkg/sqlite/scene.go:951` | `COALESCE(SUM(video_files.duration), 0)` (`Duration()`, library total) | unchanged in aggregate terms: a segment's length is what counts |
+**A scene has NO duration field of its own.** Measured:
 
-**Line 1135 is the one that decides whether the feature works at all**, because it is the
-`duration` every scene row carries into the UI. With a range set and this untouched, the
-scene shows the WHOLE FILE's length — a 4-minute "scene" inside a 45-minute file — while the
-player, honouring R3, stops after the segment. The list and the player then disagree, which
-is the shape of bug users report as "the duration is wrong" and maintainers cannot reproduce.
+    type Scene @publicRead {     graphql/schema/types/scene.graphql:44
+      ...
+      play_duration: Float       <- seconds actually WATCHED, not length
+      files: [VideoFile!]!       <- the length lives on the FILE
+    }
 
-**The expression to use, and why it is written defensively:**
+`duration: Float` in that file is at line 4, on `type SceneFileType` — **per file**, not per
+scene. And the UI reads it straight off the file, bypassing any scene query at all:
 
-```sql
-CASE WHEN scenes_files.start_time IS NULL AND scenes_files.end_time IS NULL
-     THEN video_files.duration
-     ELSE COALESCE(scenes_files.end_time, video_files.duration)
-        - COALESCE(scenes_files.start_time, 0)
-END as duration
-```
+    SceneListTable.tsx:86   const file = scene.files.length > 0 ? scene.files[0] : undefined;
+    SceneListTable.tsx:88   return file?.duration && TextUtils.secondsToTimestamp(file.duration);
+    SceneCard.tsx:518       duration={file?.duration ?? undefined}
 
-`NULL` on BOTH ends must reduce to exactly `video_files.duration` — the identical float, so
-R2's "numerically identical" is satisfied by construction for every pre-existing scene and
-needs no backfill. **A backfill writing 0 or NULL into a duration column is how a migration
-silently turns every scene into a zero-length one.**
+So a scene's displayed length is `VideoFile.Duration` — `pkg/models/model_file.go:284` —
+and a **file is shared between scenes**, which is the whole point of #3530. A range cannot
+live on the file, because the same file means different lengths in different scenes.
+
+### The five sites, and what each one is for
+
+| # | site | what it feeds | needs the range? |
+|---|---|---|---|
+| 1 | `pkg/models/model_file.go:284` `VideoFile.Duration` | **what the user sees** — list, card, detail | **YES**, per scene |
+| 2 | `pkg/sqlite/scene.go:1135` `COALESCE(video_files.duration, 0) as duration` | `FindScenes.duration` — the **AGGREGATE** total, not per-scene | **NO** (see below) |
+| 3 | `pkg/sqlite/scene.go:951` `Duration()` — `SUM(video_files.duration)` over the library | library total | **YES** |
+| 4 | `pkg/sqlite/scene_filter.go:141` filter on `video_files.duration` | `duration` filter criterion | **NO** — see the trap |
+| 5 | `pkg/sqlite/file.go:962` the same expression for FILE queries | `FindFiles.duration` | **NO** — a file has no range |
+
+**Site 2 is the aggregate, and this is the finding that changes the design.** Look at
+`internal/api/resolver_query_find_scene.go:112`: `result.TotalDuration += f.Duration` — and
+the GraphQL field it fills is `FindScenesResult.duration`, documented as *"Total duration in
+seconds"* (`scene.graphql:232`). **There is no per-scene duration in `FindScenes` at all.**
+So `scene.go:1135` is a sum input, not a per-row value, and the spec's claim that "line 1135
+is the one that decides whether the feature works" was wrong.
+
+**Site 4 is a trap worth naming.** `floatIntCriterionHandler(sceneFilter.Duration,
+"video_files.duration", …)` filters on the FILE's length. A user filtering "under 5 minutes"
+after splitting a file into four 5-minute scenes gets the 45-minute file and sees nothing.
+**Filtering by the file's length is defensible — that is what the user is asking about when
+they sort by size** — but it must be a DELIBERATE choice recorded here, not an oversight. It
+is left unfiltered in this step and flagged in §6 as a known inconsistency, because changing
+filter semantics for every existing user is not a decision this issue gets to make silently.
+
+### The expression, and the rule it encodes
+
+    // sceneRangeDuration reduces NULL/NULL to exactly video_files.duration, which is what
+    // makes migration 122 a no-op for every pre-existing scene.
+    CASE WHEN scenes_files.start_time IS NULL AND scenes_files.end_time IS NULL
+         THEN video_files.duration
+         ELSE COALESCE(scenes_files.end_time, video_files.duration)
+            - COALESCE(scenes_files.start_time, 0)
+    END
+
+**Site 1 cannot use this expression**, because `VideoFile` is built from the FILE's tables
+and has no `scenes_files` row in scope — a file shared by two scenes is one row. So site 1
+needs the range applied where the scene→files association exists, and that query is the work
+of this step rather than a string substitution. **A file-level duration column is the wrong
+place for a scene-level answer, and that is precisely the trap this issue walks into.**
+
+### The cost of A, revisited now that this is measurable
+
+Under A, a range is not a file, so:
+
+- the scene's **screenshot** is whatever the file's thumbnail generator picked — usually
+  frame 0, which for a segment starting at 40s is the wrong image;
+- **duplicate detection** groups on the file's phash (spec §3's reason 4) — fixed by one
+  clause, still required;
+- **`video_files.duration` stays the file's**, so anything reading the file directly (site 5,
+  `FindFiles`, the scene detail page's file list) is correct and must NOT be changed. A file
+  genuinely does last as long as it lasts.
+
+**That last point is the strongest argument for A over B and it is only visible now:** with
+time ranges, `video_files.duration` remains TRUE — it is the file's duration — and only the
+scene-level views are adjusted. With segment files, every one of those reads would have to be
+reconciled with the fact that a "file" is now a slice of one.
+## 8a. What shipped for the derived duration, and what deliberately did not
+
+`SceneStore.GetFiles` now applies the range. That function is the chokepoint because the UI
+reads a scene's length straight off `scene.files[0].duration`, bypassing every scene query.
+
+Ten tests, and a mutation sweep of 8/8 killed — including the mutants that a comment in the
+code claims are impossible ("subtract backwards", "look the range up under the wrong key",
+"drop either clamp", "treat a NULL end as 0", "drop the unknown-duration guard"). A guard
+that cannot be individually killed is not protection.
+
+**Three things the tests found that the reasoning did not:**
+
+1. **The window may run off the end of the file, and the schema cannot refuse it.** The
+   CHECKs are `start >= 0`, `end >= 0`, `end > start` — and a CHECK may not reference another
+   table, so none of them can see `video_files.duration`. `start 300, end NULL` on a
+   2700-second file is a legal row, and the naive reduction is `-100`. Clamped.
+
+2. **A file whose length ffprobe could not determine would have had every range clamped to
+   nothing.** `video_files.duration` is 0 for files still being written, partial downloads and
+   unrecognised containers. `min(end, 0)` kills the feature for a whole class of files. Guarded
+   by `fileDur > 0`, with a two-sided test so the guard cannot widen into "never clamp".
+
+3. **Two of my own guards masked each other, so neither was testable.** `min(end, file)` then
+   `min(start, end)` then `max(end-start, 0)` — the sweep killed 5/7 and the two survivors
+   were exactly the redundant arms. Collapsed to ONE mechanism (`start = min(start, end)`,
+   then plain subtraction), because a guard that cannot be individually justified is a comment
+   that looks like one.
+
+**One test expectation was wrong and the code was right:** a `2600..2900` window on a 2700s
+file clamps to 100, not 0. Asserting 300 would have been "fix the test to match the code";
+asserting 0 was the same mistake one level up. It is now written as `fileDur - start` so the
+arithmetic is visible.
+
+### Still not done, so §8 is not complete
+
+- `scene.go:1135` / `1136` (`FindScenes.duration`, the **aggregate**) and `scene.go:951`
+  (`Duration()`, the library total) still sum `video_files.duration`. So the library's total
+  duration **double-counts** a file that has been split into scenes — three scenes of one
+  file each contributing the whole file's length. **This is a known, deliberate wrongness**
+  rather than an oversight, and it is the next step, not this one.
+- `scene_filter.go:141` filters on the file's length (see the trap above).
+- `file.go:962` (`FindFiles.duration`) is correct and must stay so: a file has no range.
