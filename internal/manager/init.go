@@ -368,6 +368,11 @@ func (s *Manager) initStashForgeAuth() error {
 	// ceiling is per-INSTANCE: an id a caller can vary is a requirement stated and
 	// then undermined, and §6a.11 says consent is revocable per instance.
 	s.AccessPolicyStore = sqlite.NewAccessPolicyStore(1)
+
+	// §6a.4's store. Constructed HERE and nowhere else, which is the whole of the
+	// comment on the field: the previous six were reachable and unwired, this one was
+	// neither reachable nor persisted.
+	s.DirectoryStore = sqlite.NewDirectoryStore()
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
 	s.AutoAcquireStore = sqlite.NewAutoAcquireStore()
 

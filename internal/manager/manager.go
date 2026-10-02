@@ -189,6 +189,23 @@ type Manager struct {
 	// unable to answer the question at all, and the safe answer to "may this user
 	// see this" has to come from somewhere.
 	AccessPolicyStore *sqlite.AccessPolicyStore
+
+	// DirectoryStore is §6a.4's claim-and-confirm and R045's network pricing: who
+	// asserted that a studio is what it says it is, and who independently said so.
+	//
+	// THE SEVENTH such field, and the SEVENTH time the same question applies -- with
+	// one difference worth stating. The previous six were stores nothing
+	// CONSTRUCTED, so grepping the constructor found them. This one was worse: it
+	// did not exist, and the model it serves -- internal/directory, 319 lines,
+	// thirteen exported symbols, every test green -- was imported by NOTHING. So
+	// there was no constructor to grep and no store to find.
+	//
+	// Which is why the guard for this one is a source-tree walk rather than a
+	// constructor grep: a guard that searches for one shape of defect is blind to
+	// every other shape, and "a domain package nothing reaches" is a different shape
+	// from "a store nothing builds". See
+	// TestDirectoryIsImportedByNonTestCode.
+	DirectoryStore *sqlite.DirectoryStore
 	Auth              *auth.SessionStore
 	AuthMode          auth.Mode
 
