@@ -488,6 +488,59 @@ $sceneTabWidth: 450px;
   padding-right: 15px;
 }
 
+// Related-content panel (#4326). Positioned absolute over the player's lower-left, and
+// `z-index` above the video so it is not hidden behind the video.js surface. It is a
+// sibling of the player, never a child: putting it inside the player would put a DOM
+// subtree into the element the video.js controls, which is the one change that could
+// interrupt playback.
+.related-content-panel {
+  background-color: rgba(0, 0, 0, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  bottom: 4rem;
+  color: #fff;
+  left: 1.5rem;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 0.5rem;
+  position: absolute;
+  width: 22rem;
+  z-index: 10;
+}
+
+.related-content-panel-header {
+  align-items: center;
+  display: flex;
+  font-weight: 500;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.related-content-panel-empty {
+  color: $text-muted;
+  padding: 0.5rem;
+}
+
+.related-content-panel-list {
+  margin-bottom: 0;
+}
+
+.related-content-panel-title {
+  display: block;
+}
+
+.related-content-panel-current {
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.related-content-panel-studio {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 .scene-player-no-file {
   align-items: center;
   background-color: #000;

@@ -1852,5 +1852,10 @@
             "zero_duration": "No duration",
             "no_files": "Scan added nothing"
         }
+    },
+    "related_content": {
+        "related_content": "Related content",
+        "empty": "Nothing related to show",
+        "now_playing": "Now playing"
     }
 }

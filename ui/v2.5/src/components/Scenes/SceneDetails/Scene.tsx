@@ -29,6 +29,10 @@ import { Icon } from "src/components/Shared/Icon";
 import { Counter } from "src/components/Shared/Counter";
 import { useToast } from "src/hooks/Toast";
 import SceneQueue, { isPlayable, QueuedScene } from "src/models/sceneQueue";
+
+// Static, not lazy: the panel is small, it sits beside the player rather than replacing it,
+// and a lazy boundary would defer the component that a `r` keypress needs to open (#4326).
+import RelatedContentPanel from "src/components/ScenePlayer/RelatedContentPanel";
 import { ListFilterModel } from "src/models/list-filter/filter";
 import Mousetrap from "mousetrap";
 import { useScopedKeybinds } from "src/hooks/mousetrapScope";
@@ -170,6 +174,13 @@ const ScenePageTabContent = PatchContainerComponent<IProps>(
 );
 
 const ScenePage: React.FC<IProps> = PatchComponent("ScenePage", (props) => {
+
+  // #4326: the related-content panel. Local state ONLY -- opening it must not navigate,
+  // because every scene change in this page goes through `history.replace` (Scene.tsx:942),
+  // so navigating while browsing would destroy the back history on every arrow key. It
+  // lives HERE rather than in SceneLoader because the `r` binding that toggles it is one of
+  // ScenePage's scoped keys, and SceneLoader is a separate component with its own scope.
+  const [relatedOpen, setRelatedOpen] = useState(false);
   const {
     scene,
     setTimestamp,
@@ -282,6 +293,10 @@ const ScenePage: React.FC<IProps> = PatchComponent("ScenePage", (props) => {
     "q": (() => setActiveTabKey("scene-queue-panel")),
     // e
     "e": (() => setActiveTabKey("scene-edit-panel")),
+    // r -- #4326: open/close the related-content panel. Verified unbound tree-wide before
+    // use; a collision would be invisible in review and would silently steal the key.
+    // Scoped like every key here, so the scene list gets `r` back on the way out.
+    "r": (() => setRelatedOpen((open) => !open)),
     // k
     "k": (() => setActiveTabKey("scene-markers-panel")),
     // i
@@ -632,6 +647,24 @@ const ScenePage: React.FC<IProps> = PatchComponent("ScenePage", (props) => {
               onLessScenes={onQueueLessScenes}
               onMoreScenes={onQueueMoreScenes}
             />
+
+        {/* #4326: related content during playback. Sibling of the queue viewer, NOT inside
+            the player: opening it must not remount or pause the current scene, and the
+            player is keyed `key="ScenePlayer"` with the scene as a prop precisely so it
+            survives this appearing. Browsing is local state; the ONE navigation happens in
+            onSceneChosen, delegating to the existing onQueueSceneClicked so autoPlay,
+            continue and newPage keep working. */}
+        {relatedOpen && (
+          <RelatedContentPanel
+            scenes={queueScenes}
+            currentSceneId={scene.id}
+            onSceneChosen={(sceneID: string) => {
+              setRelatedOpen(false);
+              onQueueSceneClicked(sceneID);
+            }}
+            onClose={() => setRelatedOpen(false)}
+          />
+        )}
           </Tab.Pane>
           <Tab.Pane eventKey="scene-markers-panel">
             <SceneMarkersPanel
@@ -824,6 +857,7 @@ const SceneLoader: React.FC<RouteComponentProps<ISceneParams>> = ({
   const [queueScenes, setQueueScenes] = useState<QueuedScene[]>([]);
 
   const [collapsed, setCollapsed] = useState(false);
+
   const [continuePlaylist, setContinuePlaylist] = useState(queryContinue);
   const [hideScrubber, setHideScrubber] = useState(
     !(configuration?.interface.showScrubber ?? true)
