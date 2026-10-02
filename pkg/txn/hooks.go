@@ -29,6 +29,22 @@ func hookManagerCtx(ctx context.Context) *hookManager {
 	return m
 }
 
+// HasHookManager reports whether ctx carries a transaction hook manager.
+//
+// #3001: the `Add*Hook` functions above dereference the result of `hookManagerCtx` with NO
+// nil guard, so calling one outside a transaction panics with a nil-pointer dereference.
+// That was measured, not assumed -- `pkg/file.Destroy` is reachable from 13 call sites
+// across four packages, and code that registers a hook from a helper cannot assume its
+// caller opened a transaction.
+//
+// The fix belongs here rather than at each call site: the nil is produced in this file, so
+// this is where the question of whether it is fatal gets answered. The existing four
+// functions keep their current behaviour (they are used inside transactions, where the
+// manager is always present) and callers that must tolerate its absence ask first.
+func HasHookManager(ctx context.Context) bool {
+	return hookManagerCtx(ctx) != nil
+}
+
 func executeHooks(ctx context.Context, hooks []TxnFunc) error {
 	// we need to return the first error
 	for _, h := range hooks {

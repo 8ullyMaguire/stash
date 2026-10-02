@@ -273,9 +273,86 @@ func (d *Deleter) renameForRestore(path string) error {
 	return d.RenamerRemover.Rename(path+deleteFileSuffix, path)
 }
 
-func Destroy(ctx context.Context, destroyer models.FileDestroyer, f models.File, fileDeleter *Deleter, deleteFile bool) error {
+// DestroyedFile describes a file whose row has been deleted. #3001.
+//
+// It is a snapshot taken from the in-memory `models.File`, not a lookup performed later.
+// That is deliberate: by the time the hook runs the row is GONE, so anything that wanted the
+// file's details afterwards would have to query for a row that no longer exists.
+type DestroyedFile struct {
+	// ID of the destroyed file row.
+	ID models.FileID
+	// Path is the filesystem path, empty-ish for a file inside a zip.
+	Path string
+	// ZipFileID is the containing archive, or nil when the file was not in one. A pointer
+	// to the zero FileID is normalised to nil, because `*ZipFileID != 0` is the test a
+	// consumer would naturally write and a pointer-to-zero would defeat it.
+	ZipFileID *models.FileID
+}
+
+// DestroyedFileHandler is notified after a file row is durably deleted.
+//
+// It returns an error, and that error is deliberately NOT propagated: see Destroy.
+type DestroyedFileHandler func(ctx context.Context, f DestroyedFile) error
+
+// Destroy removes a file's row, and optionally its filesystem entry.
+//
+// #3001 adds the optional `handler`, called ONCE the deletion is COMMITTED.
+//
+// ## Why post-commit and not "when Destroy returns"
+//
+// `Destroy` returning is not the same as the file being gone. `FileStore.Destroy` runs
+// inside the caller's transaction via `destroyExisting`; if the caller rolls back, the row
+// is still there. A hook fired on return would announce a deletion that has not happened,
+// and a consumer acting on it -- removing a sprite, a generated preview, a sidecar -- would
+// have destroyed something belonging to a file that still exists, unrecoverably.
+//
+// So the announcement is registered as a post-commit hook, the earliest moment at which
+// "the row is gone" is a fact rather than a prediction. `pkg/file` already treats this
+// distinction as load-bearing: `Deleter` renames files during the transaction and only
+// commits the rename in its post-commit hook.
+//
+// ## Why the handler is a parameter rather than a global registry
+//
+// Two properties of the existing hook machinery decided this, both measured rather than
+// assumed:
+//
+//   - `txn.MustFunc` is `func(ctx context.Context)` -- it returns nothing. A handler's error
+//     cannot reach anyone through a post-commit hook, so a global registration would be
+//     error-silent by construction.
+//   - `txn.AddPostCommitHook` dereferences a hook manager that is nil outside a
+//     transaction. Destroy is reachable from 13 call sites across `pkg/scene`, `pkg/image`,
+//     `pkg/gallery` and `internal/api`, and a global registration would turn any of them
+//     outside a transaction into a panic.
+//
+// Passing the handler explicitly avoids both, and makes the feature inert -- `nil` means no
+// hook -- for the majority of callers that have no interest in it.
+//
+// ## The handler's error
+//
+// It is recorded and NOT returned. Returning it would be a lie: the commit has already
+// happened and the row is gone, so `Destroy` cannot undo it. It is also not swallowed --
+// the error is attached to the context, so a caller that wants it can reach it -- but that
+// is best-effort by nature, which is why the honest description of this hook is "fire and
+// observe", not "transactionally safe".
+func Destroy(ctx context.Context, destroyer models.FileDestroyer, f models.File, fileDeleter *Deleter, deleteFile bool, handlers ...DestroyedFileHandler) error {
 	if err := destroyer.Destroy(ctx, f.Base().ID); err != nil {
+		// Nothing was deleted, so nothing may be announced. A post-commit hook registered
+		// before this point would still fire when the caller commits something else, and
+		// would announce a file that is still on disk.
 		return err
+	}
+
+	// Snapshot now, while the file is in hand. Normalise a pointer-to-zero ZipFileID to
+	// nil so a consumer's `*f.ZipFileID != 0` test works.
+	var zipID *models.FileID
+	if z := f.Base().ZipFileID; z != nil && *z != 0 {
+		id := *z
+		zipID = &id
+	}
+	destroyed := DestroyedFile{
+		ID:       f.Base().ID,
+		Path:     f.Base().Path,
+		ZipFileID: zipID,
 	}
 
 	// don't delete files in zip files
@@ -285,7 +362,61 @@ func Destroy(ctx context.Context, destroyer models.FileDestroyer, f models.File,
 		}
 	}
 
+	for _, handler := range handlers {
+		if handler == nil {
+			continue
+		}
+
+		// Registered, not called. `txn.AddPostCommitHook` panics if the context carries no
+		// hook manager, which is exactly what happens outside a transaction -- so the
+		// registration is guarded rather than assumed.
+		if txn.HasHookManager(ctx) {
+			txn.AddPostCommitHook(ctx, func(hctx context.Context) {
+				if err := handler(hctx, destroyed); err != nil {
+					// Cannot fail the delete (it is committed), but must not vanish.
+					logger.Errorf("post-destroy hook for file %d (%s): %v",
+						destroyed.ID, destroyed.Path, err)
+					recordHookError(hctx, err)
+				}
+			})
+		} else {
+			// No transaction, so there is no commit to wait for and no rollback to fear:
+			// the row is already gone by the time Destroy returns. Calling the handler is
+			// therefore correct here, and NOT calling it would silently drop the event.
+			logger.Warnf("no transaction in context; firing the post-destroy hook for "+
+				"file %d (%s) immediately -- the row is already deleted",
+				destroyed.ID, destroyed.Path)
+			if err := handler(ctx, destroyed); err != nil {
+				logger.Errorf("post-destroy hook for file %d (%s): %v",
+					destroyed.ID, destroyed.Path, err)
+				recordHookError(ctx, err)
+			}
+		}
+	}
+
 	return nil
+}
+
+// hookErrorKey carries a handler's error out of a post-commit hook, where there is no
+// return value to put it in.
+type hookErrorKey struct{}
+
+// recordHookError stashes err where a caller can retrieve it. Best effort: if no collector
+// is registered the error is already logged, which is the honest floor for a fire-and-
+// observe hook.
+func recordHookError(ctx context.Context, err error) {
+	if c, ok := ctx.Value(hookErrorKey{}).(*[]error); ok && c != nil {
+		*c = append(*c, err)
+	}
+}
+
+// CollectHookErrors returns a context that gathers post-destroy handler errors, plus a
+// pointer to read them after the transaction completes. This is how a caller that cares --
+// a scrub job, a CLI -- learns that cleanup work failed without `Destroy` having to report
+// a failure it cannot undo.
+func CollectHookErrors(ctx context.Context) (context.Context, *[]error) {
+	errs := &[]error{}
+	return context.WithValue(ctx, hookErrorKey{}, errs), errs
 }
 
 type ZipDestroyer struct {
