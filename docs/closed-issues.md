@@ -173,9 +173,7 @@ a test that exercises only the decider cannot see a guard in the deleter.** Two
 functions split for testability, and the split is also a seam the test has to
 cross deliberately.
 
-### stash#3849 — wrong order of images in galleries on identical files
-
-Fixed in `de1a30ac2` (`pkg/sqlite/image.go`, `setImageSortAndPagination`).
+| stash#3849 | Wrong order of images in galleries on identical files | Fixed in `de1a30ac2` (`pkg/sqlite/image.go`, `setImageSortAndPagination`).
 
 `images_files` is a many-to-many: one row per (image, file). An image present in two
 galleries owns two file rows sharing one `image_id` — the same bytes under two names,

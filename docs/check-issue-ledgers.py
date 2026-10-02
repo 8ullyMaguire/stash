@@ -29,11 +29,31 @@ LOG = DOCS / "closed-issues.md"
 # covers BOTH `not-planned` and `deferred` rows, which is the pre-existing
 # convention and not a discrepancy -- so the check sums them rather than
 # expecting the header to name a fourth category.
-HEAD = re.compile(r"(\d+) planned, (\d+) not planned, (\d+) closed")
+# The prose says "N not planned or deferred" -- the `or deferred` is deliberate (see the note
+# above) and the previous regex demanded a bare "not planned", so it matched nothing and this
+# check reported "the roster has no line to check against the table" against a roster that has
+# two perfectly good ones. The optional suffix is what the comment already described.
+HEAD = re.compile(r"(\d+) planned, (\d+) not planned(?: or deferred)?, (\d+) closed")
 HEAD_TOTAL = re.compile(
-    r"(\d+) planned, (\d+) not planned, (\d+) closed, (\d+) total")
+    r"(\d+) planned, (\d+) not planned(?: or deferred)?, (\d+) closed, (\d+) total")
 
 problems = []
+
+# A row whose verdict is `closed`/`done` must not sit inside a section headed `Planned`. It was
+# the cause of the header drift above: 34 such rows were left in the `Planned` sections while
+# the summary counted them as closed, and nothing reconciled the two. Section membership is
+# part of the verdict's meaning here -- the section is what says "this is the work queue".
+_section = None
+for _ln in roster_text_pre.splitlines() if (roster_text_pre := ROSTER.read_text()) else []:
+    if _ln.startswith("## "):
+        _section = _ln
+    elif re.match(r"^\| \d+ \|", _ln) and _ln.rsplit("|", 2)[1].strip() in ("closed", "done"):
+        if _section and _section.startswith("## Planned"):
+            problems.append(
+                f"stash#{_ln.split('|')[1].strip()} is "
+                f"{_ln.rsplit('|', 2)[1].strip()} but sits in the "
+                f"{_section.splitlines()[0]!r} section; move it to the Resolved section")
+
 
 roster_text = ROSTER.read_text()
 log_text = LOG.read_text()
@@ -49,6 +69,10 @@ roster_closed = {ln.split("|")[1].strip() for ln in rows
 log_closed = set(re.findall(r"^\| stash#(\d+) \|", log_text, re.M))
 
 actual_not = verdicts["not-planned"] + verdicts["deferred"]
+# `done` is a second spelling of "no longer open" that six rows use, so the header's
+# "N closed" has to count it. Excluding it is what let the summary sit at 30/37 while the
+# table held 31/32 and nothing failed.
+actual_closed = verdicts["closed"] + verdicts["done"]
 
 # --- the header must match the table ------------------------------------
 heads = list(HEAD.finditer(roster_text))
@@ -65,9 +89,9 @@ else:
         problems.append(f"the summary says {said_not} not planned, the table "
                         f"has {actual_not} (not-planned {verdicts['not-planned']}"
                         f" + deferred {verdicts['deferred']})")
-    if verdicts["closed"] != said_closed:
+    if actual_closed != said_closed:
         problems.append(f"the summary says {said_closed} closed, the table "
-                        f"has {verdicts['closed']}")
+                        f"has {actual_closed}")
 
 # Every tally that also states a total must agree with the table AND sum
 # right. These are separate lines from the summary and have drifted
@@ -75,9 +99,9 @@ else:
 for mt in HEAD_TOTAL.finditer(roster_text):
     p, n, cl, tot = (int(g) for g in mt.groups())
     where = "the tally after the rules table"
-    if (p, n, cl) != (verdicts["planned"], actual_not, verdicts["closed"]):
+    if (p, n, cl) != (verdicts["planned"], actual_not, actual_closed):
         problems.append(f"{where} says {p}/{n}/{cl}, the table has "
-                        f"{verdicts['planned']}/{actual_not}/{verdicts['closed']}")
+                        f"{verdicts['planned']}/{actual_not}/{actual_closed}")
     if p + n + cl != tot:
         problems.append(f"{where} says {tot} total but its parts sum to "
                         f"{p + n + cl}")
