@@ -17,6 +17,7 @@ type Database struct {
 	GalleryChapter *GalleryChapterReaderWriter
 	Image          *ImageReaderWriter
 	Group          *GroupReaderWriter
+	Issue          *IssueReaderWriter
 	Performer      *PerformerReaderWriter
 	Scene          *SceneReaderWriter
 	SceneMarker    *SceneMarkerReaderWriter
@@ -66,6 +67,7 @@ func NewDatabase() *Database {
 		GalleryChapter: &GalleryChapterReaderWriter{},
 		Image:          &ImageReaderWriter{},
 		Group:          &GroupReaderWriter{},
+		Issue:          &IssueReaderWriter{},
 		Performer:      &PerformerReaderWriter{},
 		Scene:          &SceneReaderWriter{},
 		SceneMarker:    &SceneMarkerReaderWriter{},
@@ -109,6 +111,7 @@ func (db *Database) Repository() models.Repository {
 		GalleryChapter: db.GalleryChapter,
 		Image:          db.Image,
 		Group:          db.Group,
+		Issue:          db.Issue,
 		Performer:      db.Performer,
 		Scene:          db.Scene,
 		SceneMarker:    db.SceneMarker,

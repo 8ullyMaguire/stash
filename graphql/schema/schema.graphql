@@ -77,6 +77,12 @@ type Query @requiresRole(role: "subscriber") {
     ids: [ID!]
   ): FindSceneMarkersResultType!
 
+  "A function which queries Issue objects. stash#837. A nil filter means UNRESOLVED, not everything."
+  findIssues(issue_filter: IssueFilterType, ids: [ID!]): FindIssuesResultType! @requiresRole(role: "subscriber")
+
+  "The unresolved-issue count, for the panel's badge. Always the UNRESOLVED total regardless of filters."
+  issueCount: IssueCountResultType! @requiresRole(role: "subscriber")
+
   findImage(id: ID, checksum: String): Image
 
   "A function which queries Scene objects"
@@ -357,6 +363,12 @@ type Mutation {
   sceneMarkerCreate(input: SceneMarkerCreateInput!): SceneMarker @requiresWriteRole(role: "steward")
   sceneMarkerUpdate(input: SceneMarkerUpdateInput!): SceneMarker @requiresWriteRole(role: "steward")
   bulkSceneMarkerUpdate(input: BulkSceneMarkerUpdateInput!): [SceneMarker!] @requiresWriteRole(role: "steward")
+  "stash#837: dismiss a finding. Idempotent."
+  issueResolve(id: ID!): Boolean! @requiresWriteRole(role: "steward")
+
+  "stash#837: undo a dismissal. Deliberately not a re-record: the scanner saying so again is not the user changing their mind."
+  issueRestore(id: ID!): Boolean! @requiresWriteRole(role: "steward")
+
   sceneMarkerDestroy(id: ID!): Boolean! @requiresWriteRole(role: "steward")
   sceneMarkersDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
 

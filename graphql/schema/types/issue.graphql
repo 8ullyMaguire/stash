@@ -1,0 +1,50 @@
+# stash#837 — "Log potential issues with files, show in a dedicated UI."
+#
+# WHY THE SCHEMA IS THE SOURCE OF TRUTH AND NOT THE HAND-WRITTEN REST ROUTES.
+#
+# internal/api/routes_issue.go exists and works, and it is NOT what the panel uses.
+# This UI has no REST convention at all: every list in it is an Apollo hook over a
+# generated query, and introducing the first fetch() into components/ is the kind of
+# thing that gets copied by the next feature. The GraphQL schema is the one place this
+# codebase already declares what a client may ask for, and generated-graphql.ts is
+# produced from it by `pnpm gql-gen`, so a field added here is a typed hook that cannot
+# drift from the server.
+#
+# So: REST is the layer that serves non-GraphQL callers and is a working reference;
+# GraphQL is what the panel uses. Both exist deliberately rather than by accident, and
+# the REST routes are tested independently.
+
+"A finding about the library that a human may want to look at. NOT an edit, NOT an event, NOT a rule: a duplicate, a zero-byte file, or a scan that found nothing -- facts about files that are already in the library."
+type Issue @requiresRole(role: "subscriber") {
+  id: ID!
+  "The file this concerns, or null for a library-level finding such as a scan that added nothing"
+  file_id: ID
+  "The machine-readable grouping axis: file, scan, metadata"
+  domain: String!
+  "The specific problem. Constrained only to be non-blank, so a new detector needs no migration."
+  kind: String!
+  "Human-facing prose. NOTHING parses this -- filter on domain and kind instead."
+  details: String!
+  detected_at: Time!
+  resolved: Boolean!
+  "When the finding was dismissed, or null if it is live"
+  resolved_at: Time
+}
+
+"The panel's filter. RESOLVED IS OPTIONAL AND DEFAULTS TO UNRESOLVED: omitting it asks for live findings only, sending false says the same thing explicitly, and sending true is the only way to see dismissals -- so a caller cannot accidentally be handed six months of them by forgetting a field."
+input IssueFilterType {
+  domain: String
+  kind: String
+  file_id: ID
+  resolved: Boolean
+}
+
+type FindIssuesResultType @requiresRole(role: "subscriber") {
+  count: Int!
+  issues: [Issue!]!
+}
+
+"The badge number. Separate from findIssues because the list is filterable and the badge must always be the UNRESOLVED total: rendering it as len(findIssues(...).issues) would make the badge mean 'however many this filter matched', which is not what a badge means."
+type IssueCountResultType @requiresRole(role: "subscriber") {
+  count: Int!
+}
