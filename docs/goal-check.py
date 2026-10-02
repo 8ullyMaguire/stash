@@ -140,6 +140,29 @@ def c2_issues_dispositioned():
     else:
         add("C2 issues dispositioned", "PASS", "no rows left `planned`")
 
+    # `planned` is NOT RETURNED and this function does NOT return here. That is the fix, and
+    # it is worth recording why the bug existed at all.
+    #
+    # An earlier version of this clause computed the reason check over `planned` -- rows still
+    # marked `planned` -- which is backwards. The goal's C2 accepts a row that is "closed with
+    # a test, OR ... deferred with a reason". A row still `planned` is a row with NO decision
+    # at all, so its `Why` is whatever the triage note happened to say and the reason clause
+    # has nothing meaningful to judge. The reason clause therefore only ever became REACHABLE
+    # once `planned` was empty -- that is, only after the first clause had already passed.
+    #
+    # The consequence was that the reason clause could never fire while the first clause
+    # failed, and since the goal is COMPLETE only when every clause passes, the clause was
+    # dead for the whole time it was needed. Demonstrated rather than argued: rewriting all
+    # 422 rows to `deferred` with an EMPTY reason column made this print
+    # "C2 issues dispositioned [ PASS ] no rows left `planned`" -- a green check on a roster
+    # that had been relabelled and not decided, which is the exact failure the clause's own
+    # comment says it exists to prevent ("Moving a row is not deciding it -- the goal says
+    # 'with a reason'").
+    #
+    # So the population is DISPOSITIONED rows: everything no longer `planned`. That is what
+    # the goal actually asks to be justified, and it is the population on which an empty
+    # reason is a real defect.
+
     # A RE-STATUS MUST CARRY A REASON, or moving 422 rows to `deferred` would pass
     # this clause in one edit.
     #
@@ -162,11 +185,14 @@ def c2_issues_dispositioned():
     #    anything.
     #  - NO REASON: the row parsed, and its `Why` is empty, a placeholder, or a bare
     #    rule tag. That IS a claim about the roster, and it is what this clause is for.
-    planned_nums = [n for n, _, _ in planned]
-    unparsed = [n for n in planned_nums if n not in wide]
+    # THE POPULATION IS DISPOSITIONED ROWS, not `planned` rows. See the block comment above:
+    # the first version used `planned`, which made the clause unreachable for the entire time
+    # the programme was incomplete -- and a check that cannot fire is not a check.
+    dispositioned_nums = [n for n in wide if n not in {p for p, _, _ in planned}]
+    unparsed = [n for n in dispositioned_nums if n not in wide]
 
     unreasoned = []
-    for n in planned_nums:
+    for n in dispositioned_nums:
         if n in unparsed:
             continue
         reason = reasons[n].strip()
