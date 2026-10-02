@@ -32,6 +32,25 @@ func (t *GeneratePreviewTask) GetDescription() string {
 func (t *GeneratePreviewTask) Start(ctx context.Context) {
 	videoChecksum := t.Scene.GetHash(t.fileNamingAlgorithm)
 
+	// #3530 - the preview must be sampled from INSIDE the scene's window, and that means the
+	// scene's files have to be loaded: the task previously probed the FILE directly and never
+	// looked at the scene, so it had no window to honour.
+	//
+	// LoadPrimaryFile returns the per-scene copy, whose Duration is the WINDOW's length (the
+	// derived-duration change) and whose StartTime/EndTime are the window itself. It is
+	// read-only here, so it does not need to be in a transaction.
+	window := generate.SceneWindow{}
+	var sceneDuration float64
+	if err := t.Scene.LoadPrimaryFile(context.TODO(), instance.Repository.File); err == nil {
+		if vf := t.Scene.Files.Primary(); vf != nil {
+			window = generate.WindowOf(vf)
+			// Prefer the window's length. Falling back to the probe's own figure covers a
+			// scene whose file is missing, and an unranged scene (window unset) where the two
+			// are the same number anyway.
+			sceneDuration = vf.Duration
+		}
+	}
+
 	if t.videoPreviewRequired() {
 		ffprobe := instance.FFProbe
 		videoFile, err := ffprobe.NewVideoFile(t.Scene.Path)
@@ -40,7 +59,15 @@ func (t *GeneratePreviewTask) Start(ctx context.Context) {
 			return
 		}
 
-		if err := t.generateVideo(videoChecksum, videoFile.VideoStreamDuration, videoFile.FrameRate); err != nil {
+		duration := videoFile.VideoStreamDuration
+		if sceneDuration > 0 {
+			duration = sceneDuration
+		}
+
+		// The window travels with the options, so the generator rebases its tile grid onto it.
+		t.Options.Window = window
+
+		if err := t.generateVideo(videoChecksum, duration, videoFile.FrameRate); err != nil {
 			logger.Errorf("error generating preview: %v", err)
 			logErrorOutput(err)
 			return

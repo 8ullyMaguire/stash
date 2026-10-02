@@ -33,6 +33,59 @@ type PreviewOptions struct {
 	Preset string
 
 	Audio bool
+	// Window is the scene's window (#3530). The zero value reproduces pre-#3530 behaviour
+	// exactly, so every unranged scene's preview is unchanged.
+	Window SceneWindow
+}
+
+// tilePlan is the grid of offsets a preview samples, already anchored on the scene's window.
+//
+// It exists as a VALUE so the decision "where does each tile come from" is made in one place and
+// is reachable from a test. Two mutation survivors forced this: the tests asserted
+// `rebaseExclude`/`startOf` directly, which proved the helpers correct and said nothing about
+// whether previewVideo CALLED them, so reverting either call site changed no result.
+//
+// An assertion about a helper is not an assertion about the code that runs.
+type tilePlan struct {
+	stepSize float64
+	offset   float64
+	window   SceneWindow
+}
+
+// time is the absolute file offset of tile i.
+func (p tilePlan) time(i int) float64 {
+	return p.offset + (float64(i) * p.stepSize)
+}
+
+// tilePlan is the whole grid decision for a preview of videoDuration seconds.
+//
+// videoDuration is the SCENE's length since #3530 (the derived duration), so the step size is
+// already right; what the window supplies is the ANCHOR.
+//
+// getStepSizeAndOffset returns a RELATIVE offset -- a proportion of videoDuration, which
+// getExcludeValue parses "5%" against. Correct as a proportion, wrong as a position, because each
+// tile time is an ABSOLUTE seek. Without the rebase every tile of a windowed scene comes from
+// before the scene begins.
+//
+// Rebased once, here, rather than per tile.
+func (g PreviewOptions) tilePlan(videoDuration float64) tilePlan {
+	stepSize, offset := g.getStepSizeAndOffset(videoDuration)
+	return tilePlan{
+		stepSize: stepSize,
+		offset:   g.Window.rebaseExclude(offset),
+		window:   g.Window,
+	}
+}
+
+// chunkTime is the absolute file offset of tile `i`.
+//
+// Extracted so the tile arithmetic can be tested WITHOUT running ffmpeg. The mutation sweep found
+// two survivors while it lived inline in the chunk loop: the tests covered the window helpers
+// (rebaseExclude, startOf) but nothing proved the loop actually CALLED them, so reverting either
+// call site changed no result. A helper the tests can reach is the difference between testing the
+// arithmetic and testing a copy of it.
+func chunkTime(offset, stepSize float64, i int) float64 {
+	return offset + (float64(i) * stepSize)
 }
 
 func getExcludeValue(videoDuration float64, v string) float64 {
@@ -92,7 +145,7 @@ func (g Generator) PreviewVideo(ctx context.Context, input string, videoDuration
 
 func (g *Generator) previewVideo(input string, videoDuration float64, options PreviewOptions, fallback bool, useVsync2 bool) generateFn {
 	// #2496 - generate a single preview video for videos shorter than segments * segment duration
-	if videoDuration < options.SegmentDuration*float64(options.Segments) {
+	if options.isSingleChunk(videoDuration) {
 		return g.previewVideoSingle(input, videoDuration, options, fallback, useVsync2)
 	}
 
@@ -106,7 +159,7 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 		// remove tmpFiles when done
 		defer func() { removeFiles(tmpFiles) }()
 
-		stepSize, offset := options.getStepSizeAndOffset(videoDuration)
+		plan := options.tilePlan(videoDuration)
 
 		segmentDuration := options.SegmentDuration
 		// TODO - move this out into calling function
@@ -124,10 +177,8 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 
 			tmpFiles = append(tmpFiles, chunkFile.Name())
 
-			time := offset + (float64(i) * stepSize)
-
 			chunkOptions := previewChunkOptions{
-				StartTime:  time,
+				StartTime:  plan.time(i),
 				Duration:   segmentDuration,
 				OutputPath: chunkFile.Name(),
 				Audio:      options.Audio,
@@ -172,15 +223,36 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 	}
 }
 
+// singleChunkPlan is the whole chunk decision for the single-clip path.
+//
+// Extracted for the same reason as tilePlan: the mutation sweep found a survivor because the tests
+// asserted `startOf()` -- the helper -- while nothing proved the single-chunk path USED it. There is
+// no grid here to rebase, so if this one field is wrong the preview of a short windowed scene is
+// footage from before the scene, and no other test would notice.
+func (g PreviewOptions) singleChunkPlan(videoDuration float64, outputPath string) previewChunkOptions {
+	return previewChunkOptions{
+		// Duration is already the window's length (videoDuration), so only the start was wrong.
+		StartTime:  g.Window.startOf(),
+		Duration:   videoDuration,
+		OutputPath: outputPath,
+		Audio:      g.Audio,
+		Preset:     g.Preset,
+	}
+}
+
+// isSingleChunk reports whether this preview is one continuous clip rather than a grid of tiles
+// (#2496: videos shorter than segments * segmentDuration).
+//
+// A named predicate because the single-chunk path has no grid to rebase, so the window's anchor
+// has to be applied inside it -- and a mutation sweep found that nothing tested whether the
+// single-chunk path even applied it. A predicate a test can call is what closes that.
+func (g PreviewOptions) isSingleChunk(videoDuration float64) bool {
+	return videoDuration < g.SegmentDuration*float64(g.Segments)
+}
+
 func (g *Generator) previewVideoSingle(input string, videoDuration float64, options PreviewOptions, fallback bool, useVsync2 bool) generateFn {
 	return func(lockCtx *fsutil.LockContext, tmpFn string) error {
-		chunkOptions := previewChunkOptions{
-			StartTime:  0,
-			Duration:   videoDuration,
-			OutputPath: tmpFn,
-			Audio:      options.Audio,
-			Preset:     options.Preset,
-		}
+		chunkOptions := options.singleChunkPlan(videoDuration, tmpFn)
 
 		return g.previewVideoChunk(lockCtx, input, chunkOptions, fallback, useVsync2)
 	}

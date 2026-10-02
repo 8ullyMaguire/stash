@@ -44,10 +44,19 @@ func (t *GenerateCoverTask) Start(ctx context.Context) {
 		return
 	}
 
-	var at float64
-	if t.ScreenshotAt == nil {
-		at = float64(videoFile.Duration) * 0.2
-	} else {
+	// #3530 - the default cover timestamp is a proportion of the scene, so it has to be
+	// rebased onto the window's start. videoFile.Duration is the WINDOW's length (the
+	// derived-duration change), and the seek that follows is ABSOLUTE, so 0.2 * length is not
+	// a position in the file.
+	//
+	// resolveScreenshotAt keeps the two rules separate: an explicit t.ScreenshotAt is a user
+	// instruction in file seconds and is used verbatim; only the default is window-relative.
+	window := generate.WindowOf(videoFile)
+	at := float64(videoFile.Duration) * 0.2
+	if window.Set {
+		at = window.At(0.2, videoFile.Duration)
+	}
+	if t.ScreenshotAt != nil {
 		at = *t.ScreenshotAt
 	}
 
@@ -66,7 +75,8 @@ func (t *GenerateCoverTask) Start(ctx context.Context) {
 	}
 
 	coverImageData, err := g.Screenshot(context.TODO(), videoFile.Path, videoFile.Width, videoFile.Duration, generate.ScreenshotOptions{
-		At: &at,
+		At:     &at,
+		Window: window,
 	})
 	if err != nil {
 		logger.Errorf("Error generating screenshot: %v", err)
