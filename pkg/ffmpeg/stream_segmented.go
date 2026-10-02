@@ -300,12 +300,78 @@ func (t StreamType) String() string {
 	return t.Name
 }
 
-func (t StreamType) FileDir(hash string, maxTranscodeSize int) string {
-	if maxTranscodeSize == 0 {
-		return fmt.Sprintf("%s_%s", hash, t)
-	} else {
-		return fmt.Sprintf("%s_%s_%d", hash, t, maxTranscodeSize)
+// #3530 - the segment cache key.
+//
+// The directory is keyed on the SCENE hash, which is derived from the FILE. That was harmless when
+// a scene WAS a file, but #3530 lets one file back several scenes with different windows, so two
+// such scenes share a directory and whichever is transcoded first populates segments the other
+// then serves -- silently, because the filenames and the playlist both look correct.
+//
+// The window is therefore part of the key.
+//
+// It is a struct with IsZero rather than two floats because `0-0` is a LEGAL window (the head of
+// the file, ending early) and must NOT collapse onto "no window" -- a scene of 0-4s of a 2-hour
+// file is nothing like the whole file, and sharing a cache directory with unranged scenes is the
+// exact bug being fixed here.
+//
+// An UNRANGED scene produces the empty key, so its directory name is UNCHANGED and no existing
+// cache is invalidated by this commit. That is the reason the empty case is spelled out rather than
+// left to fall out of a format string.
+type windowKey struct {
+	start float64
+	end   float64
+	set   bool
+}
+
+func windowKeyOf(vf *models.VideoFile) windowKey {
+	if vf == nil || (vf.StartTime == nil && vf.EndTime == nil) {
+		return windowKey{}
 	}
+	k := windowKey{set: true}
+	if vf.StartTime != nil {
+		k.start = *vf.StartTime
+	}
+	if vf.EndTime != nil {
+		k.end = *vf.EndTime
+	}
+	return k
+}
+
+// windowLength is the scene's window length in seconds, or 0 when unbounded.
+//
+// vf.Duration is ALREADY this value for a ranged scene -- GetFiles returns a per-scene copy
+// whose Duration is the derived window length. It is read here rather than recomputed so the
+// length used for the cache key, the -t, and the segment count cannot drift apart.
+func windowLength(vf *models.VideoFile) float64 {
+	k := windowKeyOf(vf)
+	if !k.set {
+		return 0
+	}
+	length := k.end - k.start
+	if k.end == 0 && vf != nil {
+		// An open-ended window runs to the end of the file. vf.Duration has been reduced to
+		// the window's length, and the start is known, so the file's length is recoverable.
+		length = vf.Duration
+	}
+	if length < 0 {
+		return 0
+	}
+	return length
+}
+
+func (t StreamType) FileDir(hash string, maxTranscodeSize int, window windowKey) string {
+	// The base name is built EXACTLY as it was before #3530 when there is no window, so an
+	// existing cache keeps working. The suffix is appended only when a window exists.
+	base := hash
+	if maxTranscodeSize == 0 {
+		base = fmt.Sprintf("%s_%s", hash, t)
+	} else {
+		base = fmt.Sprintf("%s_%s_%d", hash, t, maxTranscodeSize)
+	}
+	if !window.set {
+		return base
+	}
+	return fmt.Sprintf("%s_w%.3f-%.3f", base, window.start, window.end)
 }
 
 func HLSGetCodec(sm *StreamManager, name string) (codec VideoCodec) {
@@ -340,8 +406,30 @@ func (s *runningStream) makeStreamArgs(sm *StreamManager, segment int) Args {
 	args = sm.encoder.hwDeviceInit(args, codec, fullhw)
 	args = append(args, extraInputArgs...)
 
-	if segment > 0 {
-		args = args.Seek(float64(segment * segmentLength))
+	// #3530 - a ranged scene's segments are numbered from the WINDOW's start, so the seek is the
+	// window's start PLUS the segment's offset into it.
+	//
+	// The guard changed from `segment > 0` to `base != 0 || segment > 0`, and that is the whole
+	// point: segment 0 of a window starting at 60s must ALSO seek to 60. Under the old guard it
+	// did not, so the first segment came from the HEAD of the file -- 60s of footage before the
+	// scene even begins.
+	base := 0.0
+	if s.vf != nil && s.vf.StartTime != nil {
+		base = *s.vf.StartTime
+	}
+	if base != 0 || segment > 0 {
+		args = args.Seek(base + float64(segment*segmentLength))
+	}
+
+	// And the process must STOP at the window's end. Without this ffmpeg runs to the end of the
+	// FILE and writes the right segments into the right filenames, so the playlist looks correct
+	// and a player requesting one segment past the end gets real footage instead of a 404.
+	//
+	// -t is a DURATION measured from the CURRENT position, so it is the window's remaining
+	// length from this segment's start point -- not the window's total length. For segment 1 of
+	// a 60..66 window that is 66 - 62 = 4, not 6.
+	if length := windowLength(s.vf); length > 0 {
+		args = args.Duration(length - float64(segment*segmentLength))
 	}
 
 	args = args.Input(s.vf.Path)
@@ -454,7 +542,22 @@ func serveHLSManifest(sm *StreamManager, w http.ResponseWriter, r *http.Request,
 	fmt.Fprintf(&buf, "#EXT-X-TARGETDURATION:%d\n", segmentLength)
 	fmt.Fprint(&buf, "#EXT-X-PLAYLIST-TYPE:VOD\n")
 
-	leftover := probeResult.FileDuration
+	// #3530 - the playlist describes the SCENE, not the file.
+	//
+	// probeResult.FileDuration is the FILE's length, so an unranged scene is unaffected (the two
+	// are the same number) which is exactly why a regression here is invisible on ordinary
+	// content. vf.Duration is the WINDOW's length, because GetFiles returns a per-scene copy
+	// whose Duration is the derived window length -- the same value lastSegment already uses.
+	//
+	// Both sites must agree: the segment COUNT comes from lastSegment (vf.Duration) and the
+	// playlist LENGTH comes from here. If they disagree, the playlist advertises segments that
+	// ServeSegment then rejects with 400, or omits ones it would happily serve.
+	playlistDuration := probeResult.FileDuration
+	if length := windowLength(vf); length > 0 {
+		playlistDuration = length
+	}
+
+	leftover := playlistDuration
 	segment := 0
 
 	for leftover > 0 {
@@ -572,7 +675,14 @@ func serveDASHManifest(sm *StreamManager, w http.ResponseWriter, r *http.Request
 		urlQueryString = "?" + urlQuery.Encode()
 	}
 
-	mediaDuration := mpd.Duration(time.Duration(probeResult.FileDuration * float64(time.Second)))
+	// #3530 - as in serveHLSManifest: declare the SCENE's length, not the file's. See the note
+	// there for why vf.Duration is the right value and why an unranged scene hides the change.
+	manifestDuration := probeResult.FileDuration
+	if length := windowLength(vf); length > 0 {
+		manifestDuration = length
+	}
+
+	mediaDuration := mpd.Duration(time.Duration(manifestDuration * float64(time.Second)))
 	m := mpd.NewMPD(mpd.DASH_PROFILE_LIVE, mediaDuration.String(), "PT4.0S")
 
 	prefix := r.Header.Get("X-Forwarded-Prefix")
@@ -645,7 +755,7 @@ func (sm *StreamManager) ServeSegment(w http.ResponseWriter, r *http.Request, op
 		maxTranscodeSize = models.StreamingResolutionEnum(options.Resolution).GetMaxResolution()
 	}
 
-	dir := options.StreamType.FileDir(options.Hash, maxTranscodeSize)
+	dir := options.StreamType.FileDir(options.Hash, maxTranscodeSize, windowKeyOf(options.VideoFile))
 	outputDir := filepath.Join(sm.cacheDir, dir)
 
 	name := streamType.SegmentType.MakeFilename(segment)
