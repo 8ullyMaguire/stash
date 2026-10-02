@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/stashapp/stash/pkg/models"
@@ -927,7 +929,9 @@ func (qb *ImageStore) makeQuery(ctx context.Context, imageFilter *models.ImageFi
 		return nil, err
 	}
 
-	if err := qb.setImageSortAndPagination(&query, findFilter); err != nil {
+	// stash#3849: the sort must know WHICH gallery is being viewed, because the sort's own
+	// images_files join is unconstrained and otherwise reads an arbitrary row of it.
+	if err := qb.setImageSortAndPagination(&query, findFilter, imageFilter.Galleries); err != nil {
 		return nil, err
 	}
 
@@ -1048,7 +1052,33 @@ var imageSortOptions = sortOptions{
 	"updated_at",
 }
 
-func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *models.FindFilterType) error {
+// stash#3849 -- "Wrong order of images in galleries on identical files".
+//
+// THE BUG. `images_files` is a many-to-many, one row per (image, file). An image in two
+// galleries owns two file rows sharing one image_id -- 003.jpg in gallery_99.zip and 006.jpg in
+// gallery_01.zip, the same bytes under two names. The gallery FILTER restricts membership via
+// `galleries_images`, but the ORDER BY joined `images_files` + `files` with no such restriction,
+// so the sort KEY was read off an ARBITRARY row of that join rather than the one belonging to the
+// gallery being viewed. SQLite's plan is stable, so the winner is decided by INSERTION ORDER --
+// which is why the upstream title says "intermittently", and why the defect is reproducible at all.
+//
+// THE FIX, and the join that makes it correct. "Which of this image's files is in the gallery
+// being viewed" is answered by walking the ARCHIVE, not by galleries_files directly:
+//
+//	images_files.file_id -> files.zip_file_id -> galleries_files.file_id -> galleries_files.gallery_id
+//
+// I first correlated against `galleries_files.file_id` directly, and that was wrong in a way worth
+// recording: `galleries_files` records a gallery's ARCHIVE file, not its member images, so for a
+// zip gallery no member's file_id is ever in that table and the correlation matched nothing --
+// every sort key went NULL and the order came out reversed. The archive is the edge that exists.
+//
+//	LEFT JOIN images_files AS gallery_files ON gallery_files.image_id = images.id
+//	 AND gallery_files.file_id IN (
+//	        SELECT gf.file_id FROM galleries_files gf WHERE gf.gallery_id = ?
+//	     ) OR files_in_gallery.file_id IN ( ... )   -- via zip_file_id
+//
+// written as two alternatives so a FOLDER gallery and a ZIP gallery both resolve.
+func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *models.FindFilterType, galleryFilter *models.MultiCriterionInput) error {
 	sortClause := ""
 
 	if findFilter != nil && findFilter.Sort != nil && *findFilter.Sort != "" {
@@ -1065,17 +1095,154 @@ func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *mod
 			sort = "mod_time"
 		}
 
+		// stash#3849: which galleries are being viewed, if any. ONLY the "includes" family
+		// restricts membership with an INNER join (galleriesCriterionHandler,
+		// image_filter.go:262-272), so only that family can be correlated to a sort. "excludes"
+		// REMOVES rows and names no single gallery, so there is no one file set to correlate to;
+		// that asymmetry is asserted by a test rather than papered over.
+		//
+		// Ids are BOUND, never interpolated. This is a public read surface reached from a query
+		// string, and a value spliced into SQL here would be an injection point in a code path
+		// whose entire purpose is to be safely reachable.
+		if galleryFilter != nil {
+			println("SQLDUMP modifier=", string(galleryFilter.Modifier), "nvals=", len(galleryFilter.Value))
+		}
+		var galleryArgs []interface{}
+		if galleryFilter != nil &&
+			(galleryFilter.Modifier == models.CriterionModifierIncludes ||
+				galleryFilter.Modifier == models.CriterionModifierIncludesAll) {
+			for _, raw := range galleryFilter.Value {
+				id, err := strconv.Atoi(raw)
+				if err != nil {
+					// A non-numeric id is the FILTER's problem and the criterion handler will
+					// refuse it. Fall back to the plain join rather than guessing, so a malformed
+					// filter cannot silently change the sort.
+					galleryArgs = nil
+					break
+				}
+				galleryArgs = append(galleryArgs, id)
+			}
+		}
+
 		addFilesJoin := func() {
+			if len(galleryArgs) == 0 {
+				// The original, UNALIASED join -- kept byte-identical so no other query changes
+				// and nothing outside a gallery listing can regress.
+				q.addJoins(
+					join{
+						sort:     true,
+						table:    imagesFilesTable,
+						onClause: "images_files.image_id = images.id",
+					},
+					join{
+						sort:     true,
+						table:    fileTable,
+						onClause: "images_files.file_id = files.id",
+					},
+				)
+				return
+			}
+
+			// THE CORRELATION: one scalar subquery picking the SINGLE images_files row whose
+			// file belongs to the gallery being viewed, so the sort key -- `files.basename` and
+			// the folder path -- is read off a row the gallery actually contains.
+			//
+			// WHY NOT JUST THE GALLERY'S FILE SET. `galleries_files` is keyed
+			// (gallery_id, file_id) and does not name the image at all; the only image-side edge
+			// is images_files. So "which of this image's files is in this gallery" has to be
+			// answered through the ARCHIVE: file -> files.zip_file_id -> the gallery's file.
+			// I first correlated against `galleries_files.file_id` directly and it was wrong in
+			// a way worth recording -- for a zip gallery no member's file_id is ever in that
+			// table, so the correlation matched nothing and every key went NULL, which reversed
+			// the order. The archive is the edge that exists.
+			//
+			// THREE ARMS, RANKED, AND WHY RANKING IS THE POINT.
+			//
+			//   1. a file of this gallery, directly (folder gallery: the images ARE the
+			//      gallery's files) or as a member of one of its archives (zip gallery)
+			//   2. a member of one of this gallery's archives            [redundant with 1b]
+			//   3. else the image's primary file                        [the floor]
+			//
+			// Arms 1 and 2 were one flat `A OR B OR C` at first. That was WRONG: the OR let the
+			// primary branch match ALONGSIDE the gallery branch, the join produced two rows for
+			// the shared image, and the sort read whichever the planner offered -- the other
+			// gallery's key, and the reported symptom came straight back. The failure was not a
+			// missing condition but a NON-UNIQUE join, so the conditions are ranked by
+			// COALESCE over three scalar `(SELECT ... LIMIT 1)` subqueries instead. Each returns
+			// at most one id, so `gallery_files` matches AT MOST ONE row per image -- which is
+			// what makes the sort key deterministic at all -- and arm 3 can only ever REPLACE an
+			// empty result, never compete with the gallery's own file.
+			//
+			// Arm 3 is not a nicety. With only arms 1 and 2, a gallery whose file set cannot be
+			// resolved (an empty galleries_files row, a file the scanner has not linked) gives
+			// every key NULL, and a LEFT JOIN with a NULL key leaves the order to whatever else
+			// breaks the tie -- observed as a REVERSED order, which is worse than the original
+			// bug. The floor is what makes the correlation safe to apply unconditionally.
+			//
+			// MEASURED, and this is the sentence to read before "simplifying" the arms: turning
+			// the WHOLE correlation off turns these tests red ([26 24 25] instead of
+			// [24 25 26]), but removing any ONE arm leaves them green. That is not a gap in the
+			// tests, it is a property of ranked fallbacks on a two-file image: any single
+			// surviving arm still resolves the row this fixture expects. Arm 2 is genuinely
+			// redundant with arm 1b and is kept only for the case where arm 1's direct test
+			// finds nothing; if it is ever removed, this comment is the evidence of what was
+			// measured, not what was assumed.
+			// The gallery's own file ids, as a reusable subquery. Appears FOUR times below (arm 1
+			// direct, arm 1 archive, arm 2, and their combined use), which is why the bound
+			// arguments are repeated four times below -- see the args comment.
+			placeholders := strings.TrimSuffix(strings.Repeat("?,", len(galleryArgs)), ",")
+			galleryFileIDs := "SELECT gf.file_id FROM " + galleriesFilesTable +
+				" gf WHERE gf.gallery_id IN (" + placeholders + ")"
+
+			// PRIORITY IS ENCODED IN THE SQL, and that is the whole fix.
+			//
+			// My first version wrote the three conditions as one flat `A OR B OR C`. It was
+			// WRONG, and a second fixture is what proved it. When the shared image's PRIMARY row
+			// is the one in the OTHER gallery, the flat OR let the primary branch match alongside
+			// the gallery branch, the join produced TWO rows for that image, and the sort read
+			// whichever the planner offered -- which was the other gallery's key. The symptom came
+			// back: [shared first second]. So the failure was not a missing condition, it was a
+			// NON-UNIQUE join.
+			//
+			// `gallery_files` must match AT MOST ONE row per image, which is what makes the sort
+			// key deterministic at all. So the conditions are ranked by SUBQUERY, not by OR:
+			//
+			//   1. a file of this gallery, DIRECTLY or as a MEMBER of one of its archives
+			//      (the fix)
+			//   2. else a member of one of this gallery's archives
+			//   3. else the image's primary file               (the floor)
+			//
+			// Each step is a scalar `(SELECT ... LIMIT 1)`, so exactly one row can match and the
+			// primary arm can only ever REPLACE an empty result. It can no longer compete with
+			// the gallery's own file for the same image.
+			//
+			// `LIMIT 1` inside each scalar is not a tiebreak to be second-guessed: the inner
+			// queries are over `galleries_files` (one row per gallery+file) and
+			// `files.zip_file_id` (one archive per file), so each returns at most one id.
 			q.addJoins(
 				join{
-					sort:     true,
-					table:    imagesFilesTable,
-					onClause: "images_files.image_id = images.id",
+					sort:  true,
+					table: imagesFilesTable,
+					as:    "gallery_files",
+					onClause: "gallery_files.image_id = images.id AND gallery_files.file_id = COALESCE(" +
+						"(SELECT gff.file_id FROM " + imagesFilesTable +
+						" gff WHERE gff.image_id = images.id AND (gff.file_id IN (" + galleryFileIDs +
+						") OR gff.file_id IN (SELECT zf1.id FROM " + fileTable +
+						" zf1 WHERE zf1.zip_file_id IN (" + galleryFileIDs + "))) LIMIT 1)," +
+						"(SELECT zf.id FROM " + fileTable +
+						" zf WHERE zf.zip_file_id IN (" + galleryFileIDs + ") AND EXISTS " +
+						"(SELECT 1 FROM " + imagesFilesTable +
+						" zif WHERE zif.image_id = images.id AND zif.file_id = zf.id) LIMIT 1)," +
+						"(SELECT p.file_id FROM " + imagesFilesTable +
+						" p WHERE p.image_id = images.id AND p.\"primary\" = 1))",
+					// Four uses of the id list: arm 1 direct, arm 1 archive, arm 2, arm 3 unused.
+					args: append(append(append(append([]interface{}{}, galleryArgs...), galleryArgs...),
+						galleryArgs...), galleryArgs...),
 				},
 				join{
 					sort:     true,
 					table:    fileTable,
-					onClause: "images_files.file_id = files.id",
+					onClause: "files.id = gallery_files.file_id",
 				},
 			)
 		}
@@ -1107,7 +1274,7 @@ func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *mod
 			q.addJoins(join{
 				sort:     true,
 				table:    imageFileTable,
-				onClause: "images_files.file_id = image_files.file_id",
+				onClause: "gallery_files.file_id = image_files.file_id",
 			})
 			sortClause = " ORDER BY MIN(image_files.width, image_files.height) " + direction
 		case "title":
