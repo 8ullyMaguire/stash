@@ -16,16 +16,63 @@ spend a build lane on it.
 
 ## Status: 2 clauses outstanding
 
+Measured by `python3 docs/goal-check.py` and `python3 docs/check-issue-ledgers.py` after
+commit `65422cea9`. Re-run both before believing this table.
+
 | Clause | Verdict | What it says |
 |---|---|---|
 | C1 PRs decided | PASS | all 64 open PRs have a recorded decision |
-| **C2 issues dispositioned** | **FAIL** | **84 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused** |
+| **C2 issues dispositioned** | **FAIL** | **82 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused** |
 | C3 M5 tagged | PASS | `m5-p2p-downloader`, reachable from main |
 | C4 M7/M8 done | PASS | `m7-mesh`, `m8-relay-mesh` |
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
 | C7 suites | PASS | 60 packages unit, 1 integration |
-| **C8 backlog-17 ledger** | **FAIL** | **5 of 17 rows remain: #837, #1790, #2747, #3530, #4326** |
+| **C8 backlog-17 ledger** | **FAIL** | **3 of 17 rows remain: #2747, #3530, #4326** |
+
+`check-issue-ledgers.py`: **OK** — header, roster table and closed log agree (675 issues,
+34 closed, 34 log rows).
+
+## What moved since the last reading of this file
+
+**#1790 is DONE** (commits `62313ad60`, `1501fe43b`, `2974ed15a`; tag `stash-1790-done`).
+Generic external IDs: a source registry plus one polymorphic `external_ids` table. Proven
+generic by gallery — the one entity with no legacy `stash_ids` table — adopting external
+ids through the same code path with no migration. 26 tests and a 14/14 mutation gate
+(`docs/mutate_external_id.py`, exit 0).
+
+**#837 is DONE** and its API layer is verified, not assumed: 13 passing tests over
+`internal/api/routes_issue.go` + `resolver_issue.go` covering list, badge count,
+resolve, restore, 404 and 400.
+
+**Three `build:` dispositions were FALSE and are corrected** (commit `65422cea9`). Rows
+2747, 3530 and 4326 each claimed a build while their state said `open`. Measured with
+`git log --diff-filter=A`: 2747's `ExternalPlayerButton` came from upstream `3d1b949f4`
+(#679) and 3530's `stream_segmented.go` from upstream `05669f550` (#3274) — the features
+are present, but this fork did not build them, and no fork commit carries those numbers.
+**4326 is not built anywhere**: the only `Related*` components are upstream group/sub-group
+relations (#5105), unrelated to browsing content during playback.
+
+## The three that remain, and what each actually needs
+
+**#4326 — browse related content during video playback.** The one genuine implementation
+task of the three. Needs a panel that overlays the player and navigates without a route
+change, so playback is uninterrupted. No such component exists; nothing to correct.
+
+**#3530 — multiple scenes in a single file.** Note the trap: `pkg/ffmpeg/stream_segmented.go`
+looks like this feature and is not. It segments the HLS **video stream**; the issue asks for
+one file holding several **scenes**, and the model is still one scene per file row. That
+needs a data-model change (a scene gaining a byte/segment range within a file), so it needs
+its own spec before code — per the standing workflow, spec and plan first.
+
+**#2747 — Jellyfin-like external remote player.** The upstream button opens a scene in a
+local external player. The issue asks for a **remote** player, which the row's old
+"config-driven command template" note gestured at and which does not exist. Smaller than
+3530; needs a spec too.
+
+**C2 is a separate goal item** from the C8 programme: it concerns the 82 upstream `planned`
+rows in the roster, not the 17-row backlog. Dispositioning 82 rows is a documentation
+pass with a checker to satisfy, not code.
 
 ### "Merge all PRs" — already nothing to merge
 
