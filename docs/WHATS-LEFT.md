@@ -66,6 +66,8 @@ decision made and **partly built**:
 
     DONE  data model      migration 122, start_time/end_time on scenes_files (9871247b5)
     DONE  derived length  GetFiles applies the window; 10 tests, mutation 8/8 (726ef5bf4)
+    DONE  aggregates      5 sites use one SQL constant; no double-count; 4/4 sites proven
+                          by mutation (2be0d52e3, tag stash-3530-duration)
 
 **The measurement that chose the model:** `scenes_files` has `PRIMARY KEY (scene_id, file_id)`
 and only a NON-unique index on `file_id`, so the schema **already** permits many scenes per
@@ -80,14 +82,23 @@ called `scene.go:1135` the site that decides the feature; it actually feeds
 reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
 
 **#3530 remains, in this order:**
-1. **the aggregates** — `scene.go:1135`/`1136` and `951` still sum `video_files.duration`, so
-   a file split into scenes is **double-counted** in the library total. Deliberate for now.
-2. **duplicate detection** — `FindDuplicates` joins phash on `file_id`, so two scenes of one
-   file share it identically and `HAVING COUNT(DISTINCT scene_id) > 1` is already true. One
-   clause: `AND COUNT(DISTINCT file_id) > 1`. Test must be two-sided.
-3. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range.
-4. **detection** — needs an upstream discussion, not a guess.
-5. **any UI to set a range** — the columns are SQL/API-settable only today.
+1. **duplicate detection** — `FindDuplicates` joins phash on `file_id`, so two scenes of one
+   file share it identically and `HAVING COUNT(DISTINCT scene_id) > 1` is already true for
+   them. One clause: `AND COUNT(DISTINCT file_id) > 1`. Test must be two-sided.
+2. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range.
+3. **detection** — needs an upstream discussion, not a guess.
+4. **any UI to set a range** — the columns are SQL/API-settable only today.
+5. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
+   deliberate choice rather than an oversight.
+
+**#3530's own §8b finding worth carrying:** four of the five aggregate call sites were
+UNTESTED while the constant's own mutation sweep read 5/5 killed. **Sweeping the constant
+proves the rule; only calling it proves the wiring.** The per-site sweep that should have
+caught it was itself broken — `replace("SceneRangeDurationSQL", ..., 1)` hit the COMMENT above
+the `Sprintf` argument, and the sort assertions were POSITIONAL against lists that carry a
+mandatory `COALESCE(sort_name, name, id)` tiebreak, so a tie satisfied the assertion. Now
+differential (sort twice, windows swapped, order must change) with the entity names chosen to
+contradict the tiebreak. In the `test-driven-development` skill.
 
 **#3530's own spec §7 was wrong twice** (`ALTER TABLE ADD CONSTRAINT` — "invalid", then
 "verified and works"), both times because the `sqlite3` CLI is a NEWER SQLite than the pinned
