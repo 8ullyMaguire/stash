@@ -819,14 +819,18 @@ var tagSortOptions = sortOptions{
 }
 
 func (qb *TagStore) sortByScenesDuration(direction string) string {
+	// SceneRangeDurationSQL, not video_files.duration: ranking tags by their scenes' total
+	// duration would count each file's FULL length once per scene, so a tag on one long video
+	// split into ten scenes outranks a tag on the same video left whole. Bare table names
+	// match the joins below (measured: this site aliases neither).
 	return fmt.Sprintf(` ORDER BY (
-		SELECT COALESCE(SUM(video_files.duration), 0)
+		SELECT COALESCE(SUM(%s), 0)
 		FROM %s
 		LEFT JOIN %s ON %s.id = %s.%s
 		LEFT JOIN %s ON %s.%s = %s.id
 		LEFT JOIN video_files ON video_files.file_id = %s.file_id
 		WHERE %s.%s = %s.id
-	) %s`, scenesTagsTable, sceneTable, sceneTable, scenesTagsTable, sceneIDColumn, scenesFilesTable, scenesFilesTable, sceneIDColumn, sceneTable, scenesFilesTable, scenesTagsTable, tagIDColumn, tagTable, getSortDirection(direction))
+	) %s`, SceneRangeDurationSQL, scenesTagsTable, sceneTable, sceneTable, scenesTagsTable, sceneIDColumn, scenesFilesTable, scenesFilesTable, sceneIDColumn, sceneTable, scenesFilesTable, scenesTagsTable, tagIDColumn, tagTable, getSortDirection(direction))
 }
 
 func (qb *TagStore) sortByScenesSize(direction string) string {

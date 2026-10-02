@@ -796,11 +796,16 @@ func (qb *PerformerStore) sortByLastPlayedAt(direction string) string {
 
 // used for sorting by total scene duration
 var selectPerformerScenesDurationSQL = utils.StrFormat(
-	"SELECT COALESCE(SUM(video_files.duration), 0) FROM {performers_scenes} s "+
+	"SELECT COALESCE(SUM("+SceneRangeDurationSQL+"), 0) FROM {performers_scenes} s "+
 		"LEFT JOIN {scenes} ON {scenes}.id = s.{scene_id} "+
 		"LEFT JOIN {scenes_files} ON {scenes_files}.{scene_id} = {scenes}.id "+
 		"LEFT JOIN video_files ON video_files.file_id = {scenes_files}.file_id "+
 		"WHERE s.{performer_id} = {performers}.id",
+	// SceneRangeDurationSQL, not video_files.duration: sorting a performer by their scenes'
+	// total duration would rank them by each file's FULL length once per scene, so a
+	// performer with one long video split into ten scenes outranks one with the same video
+	// left whole. The fragment references scenes_files and video_files by bare name, which
+	// matches the joins above (measured: this site aliases neither).
 	map[string]interface{}{
 		"performer_id":      performerIDColumn,
 		"performers":        performerTable,

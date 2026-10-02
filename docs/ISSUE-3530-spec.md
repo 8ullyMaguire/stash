@@ -342,10 +342,71 @@ arithmetic is visible.
 
 ### Still not done, so §8 is not complete
 
-- `scene.go:1135` / `1136` (`FindScenes.duration`, the **aggregate**) and `scene.go:951`
-  (`Duration()`, the library total) still sum `video_files.duration`. So the library's total
-  duration **double-counts** a file that has been split into scenes — three scenes of one
-  file each contributing the whole file's length. **This is a known, deliberate wrongness**
-  rather than an oversight, and it is the next step, not this one.
 - `scene_filter.go:141` filters on the file's length (see the trap above).
 - `file.go:962` (`FindFiles.duration`) is correct and must stay so: a file has no range.
+
+## 8b. The aggregates — DONE, and the sweep that found four of five sites unwired
+
+Five sites summed `video_files.duration`, so a split file was counted once **per scene** —
+three scenes of one 45-minute file contributing 135 minutes. All five now use
+`sqlite.SceneRangeDurationSQL`, a single SQL constant (`scene_range_sql.go`):
+
+    scene.go:Duration()            the library total
+    scene.go:FindScenes `as duration`   summed into FindScenes.duration
+    performer.go selectPerformerScenesDurationSQL
+    studio.go    sortByScenesDuration
+    tag.go       sortByScenesDuration
+
+**Why one SQL constant rather than a Go helper:** four of the five are hand-written
+`ORDER BY` subqueries built with `fmt.Sprintf`, so a Go helper cannot reach them without
+first rewriting each into goqu. One exported string makes a fix one edit and makes the five
+*visibly* identical rather than accidentally so.
+
+**The Go reduction and the SQL constant are the same rule written twice, so
+`TestTheSQLFragmentAgreesWithTheGoImplementationOnEveryCase` drives 13 cases through both.**
+They are used for different things and a disagreement is silent in both directions: Go decides
+what a card reads, SQL decides what the library total says.
+
+### The SQL constant was WRONG on the first run, and the case table caught it
+
+My first draft clamped the computed *duration* against a sentinel instead of clamping the *end*
+against the file's length — so nothing was clamped: `2600..2900` on a 2700s file reported 300,
+and an open tail `2400..NULL` reported 2700 instead of 300. **4 of 11 cases failed.** The
+comment above the old expression described an intent it did not implement, which is the same
+failure as §7's SQLite/CLI divergence: a claim about an expression is not a measurement of it.
+
+### Two dead guards, found because a mutant SURVIVED rather than because a test failed
+
+1. `MIN(x, 999999999)` as a stand-in for `+Inf` was in the wrong arm, and `NULLIF(duration, 0)`
+   appeared twice — once in step 1, where `COALESCE(NULLIF(d,0),0)` and `COALESCE(d,0)` are
+   the **same value for every d**, so no test could ever distinguish them. Removed rather than
+   tested: a test that must contrive a case to kill a no-op is a test of the contrive.
+2. `MAX(0, …)` was also unreachable once `start = min(start, end)` is in place, since the
+   subtraction is then non-negative by construction. Collapsed to one mechanism.
+
+### The finding that mattered: FOUR OF FIVE CALL SITES WERE UNTESTED
+
+The constant's own sweep was 5/5 killed while two call sites could be reverted with no test
+noticing. **Sweeping the constant proves the rule; only calling it proves the wiring.**
+
+And the per-site sweep that should have caught it was itself broken — twice:
+
+- `replace("SceneRangeDurationSQL", "video_files.duration", 1)` hit the **comment** three lines
+  above the `Sprintf` argument. The code was never mutated, the mutant built cleanly, and the
+  test correctly passed — reported as "NOT DETECTED". A wide anchor's first occurrence being a
+  comment is the common case, because the comment is written first.
+- The sort assertions were **positional**, and every one of those three lists carries a
+  mandatory trailing `COALESCE(sort_name, name, id) ASC` tiebreak (measured: tag.go:894). With
+  both sides tied on the buggy 1800 the tiebreak happened to agree with the expected order, so
+  "the 1200s entity sorts first" proved nothing.
+
+Fixed by asserting **differentially** — sort twice, windows swapped, same entities, same
+library, and require the order to CHANGE, since a tie cannot reverse its own order — and by
+naming the entities so the tiebreak **contradicts** the expected order. Each case also needed
+its own transaction: one shared txn left earlier subtests' entities in the library while later
+ones sorted, landing in the same index band, so the test passed once and failed the next run.
+
+Also: `scene_filter.go:141` still filters on the file's length, and `models.Scene` still has no
+`Duration` field — so the per-row `as duration` column exists **only** to be summed, and
+`FindScenesResult.duration` is its sole observable. The compiler refusing `s.Duration` is the
+same fact §8's recount established by reading the schema.

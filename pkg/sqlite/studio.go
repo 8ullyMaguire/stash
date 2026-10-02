@@ -631,13 +631,18 @@ func (qb *StudioStore) QueryCount(ctx context.Context, studioFilter *models.Stud
 }
 
 func (qb *StudioStore) sortByScenesDuration(direction string) string {
+	// SceneRangeDurationSQL, not video_files.duration: ranking studios by their scenes'
+	// total duration would count each file's FULL length once per scene, so a studio with one
+	// long video split into ten scenes outranks one with the same video left whole. The
+	// fragment names scenes_files and video_files bare, matching the joins here (measured:
+	// this site aliases neither).
 	return fmt.Sprintf(` ORDER BY (
-		SELECT COALESCE(SUM(video_files.duration), 0)
+		SELECT COALESCE(SUM(%s), 0)
 		FROM %s
 		LEFT JOIN %s ON %s.%s = %s.id
 		LEFT JOIN video_files ON video_files.file_id = %s.file_id
 		WHERE %s.%s = %s.id
-	) %s`, sceneTable, scenesFilesTable, scenesFilesTable, sceneIDColumn, sceneTable, scenesFilesTable, sceneTable, studioIDColumn, studioTable, getSortDirection(direction))
+	) %s`, SceneRangeDurationSQL, sceneTable, scenesFilesTable, scenesFilesTable, sceneIDColumn, sceneTable, scenesFilesTable, sceneTable, studioIDColumn, studioTable, getSortDirection(direction))
 }
 
 func (qb *StudioStore) sortByScenesSize(direction string) string {

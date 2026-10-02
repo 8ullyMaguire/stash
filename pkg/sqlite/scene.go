@@ -1115,8 +1115,15 @@ func (qb *SceneStore) Duration(ctx context.Context) (float64, error) {
 	table := qb.table()
 	videoFileTable := videoFileTableMgr.table
 
+	// SceneRangeDurationSQL rather than video_files.duration: summing the FILE's length
+	// double-counts a file that has been split into scenes, since each of its scenes
+	// contributes the whole file. Proved by
+	// TestTheLibraryDurationDoesNotDoubleCountASplitFile.
+	//
+	// The SUM is raw SQL too, because the fragment is raw: goqu cannot parse a CASE
+	// expression out of a string it is handed, and would quote it into something invalid.
 	q := dialect.Select(
-		goqu.COALESCE(goqu.SUM(videoFileTable.Col("duration")), 0),
+		goqu.L("COALESCE(SUM("+SceneRangeDurationSQL+"), 0)"),
 	).From(table).InnerJoin(
 		scenesFilesJoinTable,
 		goqu.On(scenesFilesJoinTable.Col("scene_id").Eq(table.Col(idColumn))),
@@ -1300,7 +1307,14 @@ func (qb *SceneStore) queryGroupedFields(ctx context.Context, options models.Sce
 				onClause: "scenes_files.file_id = video_files.file_id",
 			},
 		)
-		query.addColumn("COALESCE(video_files.duration, 0) as duration")
+		// SceneRangeDurationSQL, not video_files.duration: this column is summed into
+		// FindScenes.duration, and a file split into scenes would contribute its full
+		// length once per scene. The resolver accumulates it per row
+		// (`result.TotalDuration += f.Duration`, resolver_query_find_scene.go:112) and
+		// reports it as "total duration", so the double count would be visible to users
+		// as a library total that exceeds the sum of the cards on screen.
+		// Proved by TestTheLibraryDurationDoesNotDoubleCountASplitFile.
+		query.addColumn(SceneRangeDurationSQL + " as duration")
 		aggregateQuery.addColumn("SUM(temp.duration) as duration")
 	}
 
