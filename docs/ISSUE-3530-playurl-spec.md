@@ -137,7 +137,7 @@ not a survivor, it is an invalid experiment — that happened twice this session
 - Screenshots/previews/sprite/VTT: all generated from the file at t=0 and would need their own
   range-aware ffmpeg calls. Not doing them here.
 - Detection and the range-editing UI remain open either way.
-## IMPLEMENTATION RECORD — 3 commits, and what is deliberately NOT done
+## IMPLEMENTATION RECORD — 4 commits (the 4th in ISSUE-3530-hls-spec.md)
 
     e1e0bb65a  (1) ffmpeg:  TranscodeOptions.EndTime, -ss + -t <end-start>   sweep 4/4
     5ea9bf3ad  (2) handler: window reaches the play URL, param precedence       sweep 8/8
@@ -160,7 +160,15 @@ Three findings the spec did not predict:
    rides on `models.VideoFile`, sound only because `GetFiles` returns a fresh copy per call — the
    same invariant the derived duration relies on.
 
-### NOT DONE: HLS and DASH manifests
+### DONE, LATER: HLS and DASH manifests (ecd659eb3, docs/ISSUE-3530-hls-spec.md)
+
+The gap described below was closed in a fourth commit. `lastSegment` turned out to be ALREADY
+correct for the wrong reason — it reads `vf.Duration`, which the derived-duration change made mean
+the WINDOW's length. The real work was the seek base, `-t`, the manifests' declared duration, and
+the segment cache key (a genuine bug: the key derives from the FILE, so two scenes of one file
+shared a cache directory).
+
+### (historical) NOT DONE at the time of the third commit: HLS and DASH manifests
 
 Measured, not assumed:
 
