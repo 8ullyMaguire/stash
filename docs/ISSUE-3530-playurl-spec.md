@@ -137,3 +137,42 @@ not a survivor, it is an invalid experiment — that happened twice this session
 - Screenshots/previews/sprite/VTT: all generated from the file at t=0 and would need their own
   range-aware ffmpeg calls. Not doing them here.
 - Detection and the range-editing UI remain open either way.
+## IMPLEMENTATION RECORD — 3 commits, and what is deliberately NOT done
+
+    e1e0bb65a  (1) ffmpeg:  TranscodeOptions.EndTime, -ss + -t <end-start>   sweep 4/4
+    5ea9bf3ad  (2) handler: window reaches the play URL, param precedence       sweep 8/8
+    eab18956f  (3) /stream: refuses a window rather than serving the whole file sweep 3/3
+
+Three findings the spec did not predict:
+
+1. **`?start=0` was being ignored**, found by mutation and not by reading. The scrubber sends 0
+   when the playhead is dragged home, so a ranged scene could not be rewound to its beginning.
+   `ParseFloat`'s `err == nil` is the only thing separating "explicit 0" from "no param", which
+   is exactly the branch a tidy-up edit deletes.
+
+2. **`RelatedVideoFiles.Primary()` panics by contract** when the relationship is unloaded. Every
+   route gets that for free via `SceneCtx`, but a helper called with a hand-built scene took the
+   process down — and a scene whose file is missing is #3526's normal 404 path, so it is a real
+   state. The guard lives in the helper, not the caller.
+
+3. **The scene-file window has no runtime model type.** `SceneFile` exists only in
+   pkg/models/jsonschema (the JSON export shape); `Scene.Files` is `[]*VideoFile`. So the window
+   rides on `models.VideoFile`, sound only because `GetFiles` returns a fresh copy per call — the
+   same invariant the derived duration relies on.
+
+### NOT DONE: HLS and DASH manifests
+
+Measured, not assumed:
+
+    serveHLSManifest   ffprobes the whole file, so the manifest declares the FILE's duration
+    streamSegment      caches segments on the scene hash ALONE
+
+Both need the window: the manifest must declare the window's length, and the segment cache key
+must include it or two scenes of one file share segments. A ranged scene therefore still plays
+whole over `.m3u8` and `.mpd` — which the player prefers, so this is the remaining gap in "the
+play URL honours the window".
+
+A second-order consequence worth writing down: the scene hash is derived from the file, so
+scenes sharing a file share a cache key. That was harmless when a scene WAS a file; #3530 makes it
+wrong. Fixing it is a cache-invalidation change, not a playback change, and is the reason this
+was left rather than squeezed in.

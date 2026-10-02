@@ -84,12 +84,18 @@ called `scene.go:1135` the site that decides the feature; it actually feeds
 reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
 
 **#3530 remains, in this order:**
-1. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range, so a
-   ranged scene currently plays the whole file. This is the last piece that makes the feature
-   usable rather than merely correct in the database.
-2. **detection** — needs an upstream discussion, not a guess.
-3. **any UI to set a range** — the columns are SQL/API-settable only today.
-4. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
+1. **the player + play URL** — DONE for `/stream.mp4|webm|mkv` (`-ss`/`-t`) and `/stream`
+   (307/409). **HLS + DASH manifests still play the whole file** (eab18956f, tag
+   stash-3530-playurl) — the manifest declares the FILE's duration and segments are cached on
+   the scene hash alone, so a ranged scene is wrong on the path the player prefers.
+2. **HLS/DASH manifests** — measured: `serveHLSManifest` ffprobes the whole file for its
+   duration, and `streamSegment` keys the segment cache on the scene hash alone. Both need the
+   window: the manifest must declare the window's length, and the cache key must include it or
+   two scenes of one file share segments. A bigger change than the two play-URL commits.
+3. **detection** — needs an upstream discussion, not a guess.
+4. **any UI to set a range** — the columns are SQL/API-settable only today.
+5. **screenshots/previews/sprite/VTT** — all generated from the file at t=0.
+6. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
    deliberate choice rather than an oversight.
 
 **#3530's duplicate-detection finding worth carrying:** three fixes were needed and the two that
