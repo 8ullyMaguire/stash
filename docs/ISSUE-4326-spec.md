@@ -167,3 +167,39 @@ that reads React state cannot see whether the video stopped.
   nothing listening), so provisioning one is out of scope — the same limit recorded for
   #2833. Every claim here is about the code and the registry under the shipped libraries.
   **Nobody has opened this panel in a browser, and the commit says so.**
+
+## 6. Implementation notes — what changed from this spec
+
+**The panel is mounted in `ScenePage`, not beside the player.** The spec said "a sibling of
+the player inside `scene-player-container`". Mounting it there is impossible: that container
+is inside `SceneLoader` (line 789), while the scoped keybind call that opens the panel is
+`ScenePage`'s (line 281), and those are separate components with separate scopes — `tsc`
+named the error rather than the build. So the panel sits in `ScenePage` beside the
+`QueueViewer`, which is semantically better anyway: it is a view of the queue. The spec's
+real intent — *never inside the player* — is preserved, and the stylesheet says why.
+
+**`docs/mutate_4326.py` reports three counts, not a percentage.** `SKIPPED` is not a kill,
+and a harness that folds it into "6/6" reports a number it did not measure. The summary
+prints `killed N/M` and lists survivors and skips separately, and exits 1 on either.
+
+**The harness takes a flock and traps SIGTERM** because a sibling #1790 sweep was killed
+mid-run and left a mutation applied to the working tree, which then failed an unrelated
+test and looked like a real bug.
+
+**Its filter audit failed on first run, and that was the audit working.** `node --test`
+prints `✔ <NAME> (<ms>)`, so the name is the FIRST token after the mark; taking the last
+token gave the duration and the audit reported all five witnesses missing while the suite
+was plainly green. A gate that cries wolf on correct data is worse than one that crashes.
+
+**All three verdict paths were proven able to fire**, because a gate that cannot report
+failure is decoration. Flipping the verdict condition made the real sweep print
+`killed 0/6`, `SURVIVED (6)`, exit 1; a mutant whose exact string was absent produced a
+`SKIP` and exit 1. The 6/6 was not printed by a harness incapable of printing anything
+else. Two earlier probes were too weak to prove anything — a neutered `slice(-1)`
+assertion and a mutant T3 legitimately covered — so they were discarded rather than
+reported as evidence.
+
+**The locale file was nearly rewritten.** Adding three keys with `json.dumps` reformatted
+1 807 lines for a 4-line change; `git diff --stat` caught it and the file was reverted and
+patched surgically to a 5-line diff. Locale files are edited with `patch`, not round-tripped
+through a parser.

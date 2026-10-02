@@ -1,0 +1,2 @@
+# Mutation-gate runtime locks (flock targets, not source).
+.mutate_*.lock
