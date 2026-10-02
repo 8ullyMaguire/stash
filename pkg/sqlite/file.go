@@ -367,6 +367,16 @@ func (qb *FileStore) Create(ctx context.Context, f models.File) error {
 	base := f.Base()
 	*base = *updated[0].Base()
 
+	// stash#837: detect AFTER the row is complete, so a detector reads the same file
+	// any later reader would -- including the extended video/image row written above
+	// and the fingerprints joined just before. A detector running before those would
+	// see a duration of 0 for every video and report the entire library as broken.
+	//
+	// Deliberately AFTER `*base = *updated[0].Base()`: detection needs the stored id,
+	// which only Find assigns. Returns nothing and cannot fail -- see
+	// detectFileIssues' doc comment for why a failed log must not fail an import.
+	detectFileIssues(ctx, f)
+
 	return nil
 }
 
@@ -395,6 +405,22 @@ func (qb *FileStore) Update(ctx context.Context, f models.File) error {
 	if err := FingerprintReaderWriter.replaceJoins(ctx, id, f.Base().Fingerprints); err != nil {
 		return err
 	}
+
+	// stash#837: detection on UPDATE as well as CREATE, and the reason is duplication.
+	//
+	// Create alone is detectably ASYMMETRIC, which a test caught: when file B arrives
+	// sharing file A's bytes, B is reported as a duplicate of A and A is not reported at
+	// all. The panel would then say "3 duplicates" about a library with 4 copies, and the
+	// number would change with scan order.
+	//
+	// A rescan reaches A through UPDATE, so re-detecting there is what makes the report
+	// symmetric. It also covers the ordinary case: a file that was fine at import and is
+	// truncated on disk by the next scan gets its finding.
+	//
+	// AFTER replaceJoins, deliberately -- the duplicate check reads files_fingerprints, so
+	// running before would compare against the fingerprints the file no longer has. Still
+	// returns nothing and still cannot fail: see detectFileIssues' doc comment.
+	detectFileIssues(ctx, f)
 
 	return nil
 }

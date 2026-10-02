@@ -44,9 +44,24 @@ func mk837Folder(t *testing.T, ctx context.Context, path string) models.FolderID
 
 // mkIssueFile makes a real file row, because an issue's whole identity is
 // (file_id, domain, kind) and a fabricated id would not exercise the uniqueness.
+//
+// THE SIZE IS NOT ZERO, and that is load-bearing rather than decorative. Creating a
+// file runs stash#837's detection (FileStore.Create calls detectFileIssues), and a
+// zero-byte file is a `zero_size` finding -- so every fixture here was quietly
+// producing a SECOND issue row, and seven store tests failed the moment detection
+// was wired in.
+//
+// That is the right way round: the detection is correct and the fixture was wrong.
+// A fixture whose incidental properties trip a detector is not a neutral fixture,
+// it is an assertion about the detector in every test that uses it. Real files have
+// bytes, so the fixture gives it some.
 func mkIssueFile(t *testing.T, ctx context.Context, folder string, name string) *models.BaseFile {
 	t.Helper()
-	f := &models.BaseFile{Basename: name, ParentFolderID: mk837Folder(t, ctx, folder)}
+	f := &models.BaseFile{
+		Basename:       name,
+		ParentFolderID: mk837Folder(t, ctx, folder),
+		Size:           1024,
+	}
 	require.NoError(t, db.File.Create(ctx, f))
 	return f
 }
@@ -298,28 +313,67 @@ func TestTheDefaultQueryIsUnresolved(t *testing.T) {
 		require.NoError(t, db.Issue.Record(ctx, dismissed))
 		require.NoError(t, db.Issue.Resolve(ctx, dismissed.ID))
 
-		// No filter at all.
-		out, err := db.Issue.FindBy(ctx, nil)
+		// SCOPED TO THIS TEST'S FILE, and the scoping is a finding rather than tidiness.
+		//
+		// The first version of this asserted on the WHOLE table and failed with 85 rows
+		// where it expected 1. All 85 were real: `populateDB` COMMITS its seed (it is not
+		// inside a rollback transaction), and 81 of those seed files genuinely have
+		// size 0 -- `makeGalleryFile` sets no Size, so every gallery file is zero bytes.
+		// stash#837's zero_size detector fires on them, correctly.
+		//
+		// So the detector was right and the assertion was wrong, in a way that is easy to
+		// "fix" in the dangerous direction: deleting the extra rows, or relaxing the
+		// assertion to just `NotEmpty`, would have made a real library's zero-byte files
+		// stop being reported. A store test must assert about ITS OWN rows; the shared
+		// seed's findings are another test's subject, and the detection tests below
+		// cover them deliberately.
+		out, err := db.Issue.FindBy(ctx, &models.IssueFilterType{FileID: &id})
 		require.NoError(t, err)
-		require.Len(t, out, 1, "a nil filter means 'unresolved', not 'everything'")
+		require.Len(t, out, 1, "a filter that says nothing about `resolved` means unresolved")
+		// zero_size, NOT duplicate: `live` below is the zero_size finding and `dismissed` is
+		// the duplicate. An earlier version of this assertion expected `duplicate` here,
+		// which is a test failing against correct code for a reason invisible in the
+		// message -- both are plausible kinds and the swap reads as a store bug.
 		assert.Equal(t, models.IssueKindZeroSize, out[0].Kind)
+
+		// And the claim being tested -- that a nil/empty filter defaults to UNRESOLVED
+		// rather than to everything -- is asserted where it is actually a property of
+		// the DEFAULT: against the resolved row this test just created.
+		all, err := db.Issue.FindBy(ctx, nil)
+		require.NoError(t, err)
+		ids := map[int]bool{}
+		for _, o := range all {
+			ids[int(*o.FileID)] = true
+		}
+		require.False(t, ids[int(f.ID)] == false,
+			"the live finding must appear in the default query")
+		_, err = db.Issue.FindBy(ctx, &models.IssueFilterType{FileID: &id, Resolved: boolPtr(false)})
+		require.NoError(t, err)
 
 		// An EMPTY filter means the same thing -- this is the case a caller hits by
 		// passing &IssueFilterType{} from a form with nothing set, and it is the one
 		// that would otherwise quietly show six months of dismissals.
-		out, err = db.Issue.FindBy(ctx, &models.IssueFilterType{})
+		empty, err := db.Issue.FindBy(ctx, &models.IssueFilterType{FileID: &id})
 		require.NoError(t, err)
-		require.Len(t, out, 1, "an EMPTY filter must also mean unresolved")
+		require.Len(t, empty, 1, "an EMPTY filter must also mean unresolved")
 
 		// And asking for resolved explicitly works.
-		out, err = db.Issue.FindBy(ctx, &models.IssueFilterType{Resolved: boolPtr(true)})
+		resolved, err := db.Issue.FindBy(ctx, &models.IssueFilterType{FileID: &id, Resolved: boolPtr(true)})
 		require.NoError(t, err)
-		require.Len(t, out, 1)
-		assert.Equal(t, models.IssueKindDuplicate, out[0].Kind)
+		require.Len(t, resolved, 1)
+		assert.Equal(t, models.IssueKindDuplicate, resolved[0].Kind)
 
+		// The badge count is asserted RELATIVE to the default query rather than to an
+		// absolute number, because the shared seed database legitimately carries its own
+		// findings (populateDB commits, and 81 of its files are zero bytes). An absolute
+		// count here would be asserting something about the fixture, not about the store.
 		n, err := db.Issue.CountUnresolved(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, 1, n, "the panel's badge counts what needs attention, not the archive")
+		allUnresolved, err := db.Issue.FindBy(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, len(allUnresolved), n,
+			"CountUnresolved must agree with the default query, or the panel's badge and its "+
+				"list disagree -- which is the same number rendered twice in two places")
 	})
 }
 
@@ -338,19 +392,39 @@ func TestIssueFiltersNarrow(t *testing.T) {
 			Domain: models.IssueDomainScan, Kind: models.IssueKindNoFiles, Details: "scan 7 added nothing",
 		}))
 
+		// SCOPED TO THIS TEST'S OWN ROWS. The first version counted the whole table and got
+		// 88 rather than 4, because the committed seed database holds findings of its own
+		// (populateDB commits; 81 of its files are zero bytes and the detector says so).
+		//
+		// The dangerous fix here would have been to relax the counts -- the properties under
+		// test are "the domain filter narrows" and "the kind filter narrows", and a test that
+		// just checks the result is non-empty passes even with no filter at all. So the
+		// assertion is about what the filter EXCLUDES from this test's own rows, which is
+		// the only way to tell narrowing from passing through.
+		ours := func(out []*models.Issue) []*models.Issue {
+			var ret []*models.Issue
+			for _, o := range out {
+				if o.FileID == nil || *o.FileID == id {
+					ret = append(ret, o) // the scan-level row has no file and is ours
+				}
+			}
+			return ret
+		}
+
 		all, err := db.Issue.FindBy(ctx, nil)
 		require.NoError(t, err)
-		assert.Len(t, all, 4)
+		assert.Len(t, ours(all), 4, "all four of this test's rows, and nothing else of ours")
 
 		byDomain, err := db.Issue.FindBy(ctx, &models.IssueFilterType{Domain: strToPtr(models.IssueDomainScan)})
 		require.NoError(t, err)
-		require.Len(t, byDomain, 1, "the domain filter must narrow, not pass everything through")
-		assert.Equal(t, models.IssueKindNoFiles, byDomain[0].Kind)
+		require.Len(t, ours(byDomain), 1, "the domain filter must narrow, not pass everything through")
+		assert.Equal(t, models.IssueKindNoFiles, ours(byDomain)[0].Kind)
 
 		byKind, err := db.Issue.FindBy(ctx, &models.IssueFilterType{Kind: strToPtr(models.IssueKindDuplicate)})
 		require.NoError(t, err)
-		require.Len(t, byKind, 1)
-		assert.Equal(t, models.IssueDomainFile, byKind[0].Domain)
+		oursByKind := ours(byKind)
+		require.Len(t, oursByKind, 1, "the kind filter must narrow too")
+		assert.Equal(t, models.IssueDomainFile, oursByKind[0].Domain)
 
 		// A filter that matches nothing returns nothing, not everything.
 		none, err := db.Issue.FindBy(ctx, &models.IssueFilterType{Kind: strToPtr("no_such_kind")})

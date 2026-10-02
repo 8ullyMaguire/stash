@@ -138,8 +138,15 @@ func TestTheUniqueIndexFires(t *testing.T) {
 // migration's ON DELETE CASCADE stated as a behaviour rather than a clause.
 func TestAnIssueDiesWithItsFile(t *testing.T) {
 	runWithRollbackTxn(t, "an issue dies with its file", func(t *testing.T, ctx context.Context) {
-		folderID := mkStash3849Folder(t, ctx, "/library/issues-837c")
-		f := &models.BaseFile{Basename: "c.jpg", ParentFolderID: folderID}
+		folderID := mk837Folder(t, ctx, "/library/issues-837c")
+		// SIZE 1024, SO DETECTION STAYS QUIET. This test counts this file's issue ROWS, and
+		// FileStore.Create runs stash#837's detection -- so a zero-byte fixture makes the
+		// detector record a `zero_size` row of its own, and the raw insert below then
+		// collides with it on the unique index. The detector would be RIGHT; the fixture is
+		// what has to move. Two earlier versions of this fixture had Size 0 and both failed
+		// for this reason, which is worth stating because "the insert was refused" reads like
+		// a schema bug and is not one.
+		f := &models.BaseFile{Basename: "c.jpg", ParentFolderID: folderID, Size: 1024}
 		require.NoError(t, db.File.Create(ctx, f))
 		require.NoError(t, insertIssueRaw(t, ctx, int(f.ID), "file", "zero_size", "", false))
 
