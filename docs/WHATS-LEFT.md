@@ -88,16 +88,22 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
    `/stream` (307/409), and HLS + DASH manifests (ecd659eb3, tag stash-3530-hls). The segment
    cache key now includes the window, which was a real bug: two scenes of one file shared a
    cache directory and served each other's segments.
-2. **screenshots/previews/sprite/VTT** — all generated from the file at t=0, so a ranged scene's
-   cover is the whole file's. Each needs its own range-aware ffmpeg call.
-3. **detection** — needs an upstream discussion, not a guess.
-4. **any UI to set a range** — the columns are SQL/API-settable only today.
+2. **the preview/webp cache key** — DONE for content (8f84c565f, tag stash-3530-cover: cover and
+   previews are sampled inside the window), but the FILENAME still keys on `scene.GetHash()`, which
+   derives from the file. Two scenes of one file share `generated/screens/<hash>.mp4` and now need
+   different previews. Separate commit on purpose: it changes a filename behind a URL, so
+   bookmarked/external preview URLs stop resolving and `migrate_screenshots.go` +
+   `ResolveGeneratedFile(preview, legacy)` both need extending.
+3. **sprite/VTT thumbs** — same window-awareness (tiled across the duration) but a different task
+   with its own cache. Not started.
+4. **detection** — needs an upstream discussion, not a guess.
+5. **any UI to set a range** — the columns are SQL/API-settable only today.
 
    Segment boundaries deliberately stay on absolute multiples of the FILE's 2s grid, so a window
    starting mid-segment has a short first segment. Real players tolerate it, and making the grid
    relative to the window would renumber every segment — out of scope, recorded so it reads as a
    decision rather than an oversight.
-5. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
+6. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
    deliberate choice rather than an oversight.
 
 **#3530's duplicate-detection finding worth carrying:** three fixes were needed and the two that
