@@ -95,6 +95,21 @@ def c2_issues_dispositioned():
         add("C2 issues dispositioned", "FAIL", "roster table parsed to ZERO rows -- refusing to call that PASS")
         return
 
+    # A WIDER parse for the reason column. The narrow regex above captures four
+    # columns; the reason is a fifth, so rows are re-read capturing everything.
+    wide = {}
+    for line in roster.read_text().splitlines():
+        m = re.match(r"^\|\s*(\d+)\s*\|", line)
+        if not m:
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        # ...| number | title | labels | status | reason |
+        if len(cells) >= 5:
+            wide[int(m.group(1))] = (cells[3], cells[4])
+    reasons = {n: r for n, (_, r) in wide.items()}
+    re_statused = [(n, "", st) for n, (st, _) in wide.items()
+                   if st in ("deferred", "not-planned", "closed")]
+
     closed = set()
     if closed_f.exists():
         closed = {int(x) for x in re.findall(r"^\| stash#(\d+) ", closed_f.read_text(), re.M)}
@@ -109,6 +124,34 @@ def c2_issues_dispositioned():
     else:
         add("C2 issues dispositioned", "PASS", "no rows left `planned`")
 
+    # A RE-STATUS MUST CARRY A REASON, or moving 422 rows to `deferred` would pass
+    # this clause in one edit.
+    #
+    # The goal document states the honest form of C2 directly: "closed with a test, or
+    # explicitly dispositioned with a reason. A row that sits `planned` forever has not
+    # been decided; a row moved to `deferred` with a reason has." This clause
+    # enforced only the FIRST half -- the re-status -- and never checked the reason
+    # the goal requires alongside it. The first clause capable of being satisfied by
+    # relabelling is the first clause that will be satisfied by relabelling.
+    #
+    # So the reason column is checked for a REASONABLE REASON: the roster has a column
+    # for it, and an empty or placeholder one means the row was moved rather than
+    # decided.
+    unreasoned = []
+    for n, t, st in planned + re_statused:
+        reason = reasons.get(n, "").strip()
+        if not reason:
+            unreasoned.append((n, "empty reason"))
+        elif len(reason) < 15:
+            unreasoned.append((n, f"{len(reason)}-char reason"))
+        elif re.search(r"\b(todo|later|maybe|eventually|revisit|no reason|n/a)\b", reason, re.I):
+            unreasoned.append((n, f"placeholder: {reason[:30]!r}"))
+    if unreasoned:
+        add("C2 issue reasons", "FAIL",
+            f"{len(unreasoned)} dispositioned row(s) have no real reason recorded: "
+            + "; ".join(f"#{n} ({why})" for n, why in unreasoned[:6])
+            + ". Moving a row is not deciding it -- the goal says 'with a reason'.")
+
 
 # ---------------------------------------------------------------------------
 # C3/C4 -- milestone tags on stashforge
@@ -122,10 +165,44 @@ def c3c4_tags():
         rc, out, _ = sh(f"git tag --list '{pattern}'")
         if rc != 0:
             add(clause, "UNKNOWN", f"git failed (rc={rc})")
-        elif not out:
+            continue
+        if not out:
             add(clause, "FAIL", f"no tag matching {pattern} exists on any branch")
-        else:
-            add(clause, "PASS", out.splitlines()[0])
+            continue
+
+        tag = out.splitlines()[0]
+        # A TAG MUST CARRY ITS VERIFICATION, or `git tag m8-anything` satisfies this
+        # clause.
+        #
+        # The clause is LABELLED "implemented, with their own verification passing" and
+        # was checking only that a tag exists. `m7-mesh` sets the standard to meet: its
+        # message names the steps it covers and what was proven. So the message must
+        # (a) be substantial and (b) reference verification -- a test, a gate, a suite,
+        # or a probe. A bare "done" does not pass.
+        #
+        # The tag is also checked for being REACHABLE from main, because a tag on a
+        # deleted branch would let a milestone be marked complete by a commit nothing
+        # can get to.
+        _, msg, _ = sh(f"git tag -l {tag} --format='%(contents)'")
+        body = msg.strip()
+        if len(body) < 40:
+            add(clause, "FAIL",
+                f"tag {tag} has a {len(body)}-char message. A milestone tag has to say "
+                f"what it covers and what was verified -- see m7-mesh.")
+            continue
+        if not re.search(r"\b(test|gate|suite|probe|verif|mutation|green|pass)\w*", body, re.I):
+            add(clause, "FAIL",
+                f"tag {tag} names no verification. The clause says 'with their own "
+                f"verification passing', so the tag message must say what was run: "
+                f"{body[:70]!r}")
+            continue
+        rc2, _, _ = sh(f"git merge-base --is-ancestor {tag}^{{commit}} main")
+        if rc2 != 0:
+            add(clause, "FAIL",
+                f"tag {tag} is not an ancestor of main, so the milestone it marks is not "
+                f"reachable from the branch that ships")
+            continue
+        add(clause, "PASS", f"{tag} ({len(body)}-char message, verification named, reachable from main)")
 
 
 # ---------------------------------------------------------------------------
@@ -160,12 +237,51 @@ def c5_requirements():
         return
     from collections import Counter
     counts = Counter((r.get("status") or "").strip() for r in rows)
-    pending = sum(v for k, v in counts.items() if k in ("specified",))
-    if pending:
+
+    # `specified` is the ONLY unbuilt status. Everything else -- shipped, tested,
+    # ignored, deferred -- records an outcome.
+    #
+    # `deferred` is accepted, and it is accepted ONLY with a reason, which is the
+    # whole point of having it. The goal document's own wording for C2 is "closed
+    # with a test, or explicitly dispositioned with a reason", and a `deferred` row
+    # with an empty note is a row that moved sideways: still unbuilt, now with a
+    # status that reads as progress. So an unreasoned `deferred` is a FAIL, not a
+    # PASS -- it is the cheapest possible way to make this clause green and the most
+    # misleading one.
+    #
+    # The reason must be substantive rather than a placeholder, because "later" and
+    # "TODO" are what a row says when it has not been decided. A minimum length is a
+    # crude proxy and is admitted as such: it cannot tell a good reason from padding,
+    # only from nothing.
+    unreasoned = []
+    for r in rows:
+        st = (r.get("status") or "").strip()
+        if st not in ("specified", "deferred"):
+            continue
+        note = (r.get("notes") or "").strip()
+        if st == "deferred" and len(note) < 40:
+            unreasoned.append((r.get("id", "?"), f"{st} with a {len(note)}-char note"))
+        if st == "deferred" and re.search(r"\b(todo|later|maybe|eventually|revisit)\b", note, re.I):
+            unreasoned.append((r.get("id", "?"), f"{st} with a placeholder note: {note[:40]!r}"))
+
+    if unreasoned:
         add("C5 requirements.csv", "FAIL",
-            f"{pending}/{len(rows)} rows still `specified` (unbuilt): " + str(dict(counts)))
+            f"{len(unreasoned)} deferred row(s) carry no real reason: "
+            + "; ".join(f"{i} ({why})" for i, why in unreasoned[:5])
+            + ". A deferred row must say WHY it is not being built now -- the same "
+              "rule the goal states for C2.")
+        return
+
+    pending = sum(v for k, v in counts.items() if k == "specified")
+    if pending:
+        ids = [r.get("id") for r in rows if (r.get("status") or "").strip() == "specified"]
+        add("C5 requirements.csv", "FAIL",
+            f"{pending}/{len(rows)} rows still `specified` (unbuilt): "
+            + ", ".join(ids[:12]) + (" ..." if len(ids) > 12 else "")
+            + "  -- build them or mark them `deferred` WITH a reason.")
     else:
-        add("C5 requirements.csv", "PASS", f"{len(rows)} rows, all built: {dict(counts)}")
+        add("C5 requirements.csv", "PASS",
+            f"{len(rows)} rows, all built or deferred-with-a-reason: {dict(counts)}")
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +431,8 @@ def c8_backlog_17():
         cells = [c.strip() for c in rest.split("|")]
         # ...| verified state | disposition | state |
         states[num] = cells[-2].strip('* ') if len(cells) >= 2 else "?"
-    bad = [n for n, s in states.items() if s not in ("done", "open", "skipped")]
+    bad = [n for n, s in states.items()
+           if s not in ("done", "open", "skipped", "in progress")]
     if bad:
         add("C8 backlog-17 ledger", "FAIL",
             f"{len(bad)} row(s) have no recognised state: {sorted(bad)[:5]}")
@@ -351,13 +468,45 @@ def c8_backlog_17():
             f"{len(extra)} ledger row(s) are not in the upstream Backlog: {sorted(extra)[:6]}")
         return
 
+    # EVIDENCE: every `done` row must name a commit, and every `skipped` row a reason.
+    #
+    # A ledger that can mark anything done without evidence is a to-do list with extra
+    # steps. The goal document says `done` means "built and proven", so a `done` row
+    # with no commit is claiming a proof it does not have.
+    #
+    # `in progress` is accepted as a recognised state but is NOT terminal: it is
+    # counted with `open`, because a half-built row and an unstarted row are both work
+    # that remains. Recognising it as a value keeps the "no recognised state" check
+    # meaningful without letting it become a parking space.
+    rows_by_num = {n: rest for n, rest in rows}
+    unproven = []
+    for n, state in states.items():
+        rest = rows_by_num.get(n, "")
+        cells = [c.strip() for c in rest.split("|")]
+        disposition = cells[-3] if len(cells) >= 3 else ""
+        if state == "done" and not re.search(r"\b[0-9a-f]{7,40}\b", disposition):
+            unproven.append(n)
+        if state == "skipped" and not disposition:
+            unproven.append(n)
+    if unproven:
+        add("C8 backlog-17 ledger", "FAIL",
+            f"{len(unproven)} row(s) claim done/skipped with no evidence in the "
+            f"disposition column (a commit for done, a reason for skipped): "
+            f"{sorted(unproven)[:6]}")
+        return
+
     done = sorted(n for n, s in states.items() if s == "done")
     skipped = sorted(n for n, s in states.items() if s == "skipped")
-    openish = sorted(n for n, s in states.items() if s == "open")
+    # `in progress` counts as remaining: it is not a terminal state, and treating it
+    # as done would let a row be parked there indefinitely while the clause reads green.
+    openish = sorted(n for n, s in states.items() if s in ("open", "in progress"))
     detail = (f"{len(states)} issues = {len(done)} done {done}, "
-              f"{len(openish)} open, {len(skipped)} skipped {skipped}")
-    if done:
-        add("C8 backlog-17 ledger", "FAIL", detail + " -- programme incomplete")
+              f"{len(openish)} open/in-progress, {len(skipped)} skipped {skipped}")
+    if openish:
+        add("C8 backlog-17 ledger", "FAIL",
+            detail + f" -- programme incomplete, {len(openish)} row(s) remain: "
+            + ", ".join(f"#{n}" for n in openish[:12])
+            + (" ..." if len(openish) > 12 else ""))
     else:
         add("C8 backlog-17 ledger", "PASS", detail)
 
