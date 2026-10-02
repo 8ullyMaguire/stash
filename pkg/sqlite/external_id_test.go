@@ -205,6 +205,24 @@ func TestT4EveryEntityDestroyPathRemovesExternalIDs(t *testing.T) {
 					},
 				},
 				{
+					// THROUGH `table`, NOT `repository`. This case is here because the
+					// first version of T4 named only tag and studio, and BOTH of those
+					// destroy via repository.destroyExisting -- so the suite was green
+					// while scene and gallery, which go through `table`, leaked their
+					// external ids. The gallery case in TestR4 is what caught it; this one
+					// is here so the `table` path is covered by T4 as well.
+					models.ExternalIDEntityGallery,
+					func(t *testing.T) int {
+						g := &models.Gallery{Title: "1790-t4-gallery", Code: "t4g"}
+						require.NoError(t, db.Gallery.Create(ctx, &models.CreateGalleryInput{Gallery: g}))
+						require.NotZero(t, g.ID, "Create must have assigned an id")
+						return g.ID
+					},
+					func(t *testing.T, id int) {
+						require.NoError(t, db.Gallery.Destroy(ctx, id))
+					},
+				},
+				{
 					models.ExternalIDEntityStudio,
 					func(t *testing.T) int {
 						st := &models.Studio{Name: "1790-t4", URLs: models.NewRelatedStrings([]string{"https://t4.example"})}
@@ -412,3 +430,87 @@ func TestEveryKnownEntityTypeHasASweepTable(t *testing.T) {
 
 func strPtr1790(s string) *string { return &s }
 func ptr1790(s string) *string    { return &s }
+
+// R4 (stash#1790) — a FIFTH entity adopts external IDs with no per-provider table and no
+// migration.
+//
+// GALLERY IS THE FIFTH ENTITY because it is the one that has no legacy `*_stash_ids` table
+// at all: scene, performer, studio and tag all do. So gallery is the only honest test of
+// whether the generic path is actually generic -- the other four could be working through
+// their old per-entity tables, and a test on them would pass either way.
+//
+// THIS IS THE TEST THAT R4 EXISTS TO REQUIRE. If the store had turned out to need a
+// gallery-specific table, this would have failed while the four-entity tests stayed green.
+func TestR4GalleryAdoptsExternalIDsThroughTheGenericPathOnly(t *testing.T) {
+	runWithRollbackTxn(t, "R4: gallery adopts external ids with no per-entity table",
+		func(t *testing.T, ctx context.Context) {
+			qb := newExternalIDStore()
+			s := mk1790Source(t, ctx, "r4-src")
+
+			// A SECOND source, so this is not just "gallery got a row" but "gallery can
+			// hold ids from several providers at once" -- the thing the four-column unique
+			// key exists to permit.
+			s2 := mk1790Source(t, ctx, "r4-src-2")
+
+			g := &models.Gallery{Title: "1790-r4", Code: "r4-code"}
+			require.NoError(t, db.Gallery.Create(ctx, &models.CreateGalleryInput{Gallery: g}))
+			require.NotZero(t, g.ID)
+
+			for _, src := range []*models.ExternalSource{s, s2} {
+				_, err := qb.Record(ctx, models.ExternalIDInput{
+					EntityType: models.ExternalIDEntityGallery, EntityID: g.ID,
+					SourceID: src.ID, ExternalID: "up-" + src.Name,
+				})
+				require.NoError(t, err,
+					"gallery must accept an id from %s through the SAME Record every "+
+						"other entity uses -- no gallery-specific method, no new table",
+					src.Name)
+			}
+
+			got, err := qb.FindByEntity(ctx, models.ExternalIDEntityGallery, g.ID)
+			require.NoError(t, err)
+			assert.Len(t, got, 2, "both providers' ids on one gallery")
+
+			// AND the destroy wiring covers gallery too, via repository.destroy.
+			require.NoError(t, db.Gallery.Destroy(ctx, g.ID))
+			after, err := qb.FindByEntity(ctx, models.ExternalIDEntityGallery, g.ID)
+			require.NoError(t, err)
+			assert.Empty(t, after,
+				"gallery's ids go with it. This is the same repository.destroy block that "+
+					"covers the other four, reached by table name rather than by a fifth "+
+					"hand-written call site")
+		})
+}
+
+// R4's OTHER HALF: adding an entity type must not need a migration, and the only evidence
+// is that a type this build has never heard of still records, reads and deletes.
+//
+// The tempting version of this test uses one of the five KNOWN types, which proves nothing
+// -- the store hard-codes nothing per type, so the test would pass whether or not the table
+// is generic. The entity type here is deliberately one the code has no constant for.
+func TestR4AnUnknownEntityTypeRecordsWithoutAMigration(t *testing.T) {
+	runWithRollbackTxn(t, "R4: an entity type the code has no constant for still works",
+		func(t *testing.T, ctx context.Context) {
+			const future = "movie" // a real upstream type with no store in this build yet
+			qb := newExternalIDStore()
+			s := mk1790Source(t, ctx, "r4-future")
+
+			// NOT a known type: IsKnownExternalIDEntityType says no, so the sweep and the
+			// destroy wiring cannot see it. Recording must still work -- that is the whole
+			// claim of a polymorphic table.
+			require.False(t, sqlite.IsKnownExternalIDEntityType(future))
+
+			_, err := qb.Record(ctx, models.ExternalIDInput{
+				EntityType: future, EntityID: 1,
+				SourceID: s.ID, ExternalID: "tt-1",
+			})
+			require.NoError(t, err,
+				"a type with no store in this build must still be recordable, or the table "+
+					"is not generic and every future entity needs a migration")
+
+			got, err := qb.FindByEntity(ctx, future, 1)
+			require.NoError(t, err)
+			require.Len(t, got, 1)
+			assert.Equal(t, "tt-1", got[0].ExternalID)
+		})
+}

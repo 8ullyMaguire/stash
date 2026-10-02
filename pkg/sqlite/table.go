@@ -120,6 +120,28 @@ func (t *table) destroyExisting(ctx context.Context, ids []int) error {
 }
 
 func (t *table) destroy(ctx context.Context, ids []int) error {
+	// stash#1790: external ids go FIRST. See the identical block in repository.destroy --
+	// this is a SECOND chokepoint, not a duplicate of the first.
+	//
+	// THE SAME GUARD HAS TO EXIST IN BOTH PLACES, and the R4 gallery test is what proved
+	// it. Scene, gallery, file, folder and image destroy through `table`; performer,
+	// studio and tag destroy through `repository`. Covering only repository left scene
+	// and gallery leaking their external ids, and BOTH of those stores were already
+	// "covered" by T4's table-driven cases -- which had passed, because T4 drove the tag
+	// and studio stores and both of those go the other way. A green test suite that
+	// missed half the entities, because the test happened to sample the other half.
+	//
+	// So this is a genuine reminder that a table-driven test only covers the cases it
+	// enumerates: it does not cover the entities its fixtures do not name, and one of
+	// them had a different delete path all along.
+	if entityType, ok := externalIDEntityTypeForTable[t.table.GetTable()]; ok {
+		for _, id := range ids {
+			if err := NewExternalIDStore().DestroyForEntity(ctx, entityType, id); err != nil {
+				return err
+			}
+		}
+	}
+
 	q := dialect.Delete(t.table).Where(t.idColumn.In(ids))
 
 	if _, err := exec(ctx, q); err != nil {

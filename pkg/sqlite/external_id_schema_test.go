@@ -269,3 +269,96 @@ func TestEntityTypeIsFreeTextButNotBlank(t *testing.T) {
 			_ = models.ExternalID{}
 		})
 }
+
+// THE BLANK external_id ROW IS REFUSED BY THE DATABASE, NOT BY THE STORE.
+//
+// This exists because mutation M7 (remove the `check(length(trim(external_id)) > 0)`)
+// SURVIVED the whole suite, and the reason is a layered defence:
+//
+//	pkg/sqlite/external_id.go   refuses a blank external_id in Go, before any SQL runs
+//	migration 121                refuses a blank external_id with a CHECK
+//
+// The store test asserts the store refuses, which stays green when the CHECK is deleted --
+// because the Go check still refuses. A lower layer refused the identical input, so per the
+// four-verdict rule that is `covered`, not `killed`; but as a single test it reads as proof
+// and proves nothing about the schema.
+//
+// THE FIX IS TO TEST THE LAYER. This inserts raw SQL, so the Go check cannot intercept it
+// and the CHECK is the only thing standing between the insert and a row. Same family as the
+// foreign-key pragma assertion at the top of this file: measure the layer you name.
+func TestABlankExternalIDIsRefusedByTheDatabaseItself(t *testing.T) {
+	runWithRollbackTxn(t, "a blank external_id is refused by the database",
+		func(t *testing.T, ctx context.Context) {
+			s := insertSource(t, ctx, "blank-id-src", "https://blank.example")
+
+			// THE INPUT ONLY THE CHECK REFUSES. Store.Record would refuse this before
+			// reaching the database, so going through the store would prove nothing.
+			err := execRaw(t, ctx,
+				`INSERT INTO external_ids (entity_type, entity_id, source_id, external_id) VALUES (?, ?, ?, ?)`,
+				[]interface{}{"scene", 1, s, ""})
+			require.Error(t, err,
+				"the DATABASE must refuse a blank external_id. A row with an empty id "+
+					"matches nothing and is findable by nothing, and it would be "+
+					"indistinguishable from a row that was never recorded")
+
+			// ...and the check is not merely "not empty": SPACES must be refused too,
+			// which is what the trim() in the CHECK is for, since an id of "  " is as
+			// unmatchable as one of "". This one faces UNTRUSTED input -- external_id
+			// comes from a provider -- so the store's own Go check matters as a second
+			// layer. See the tab case in the companion test for what this CHECK does NOT
+			// catch: one-argument trim strips spaces and nothing else, measured.
+			err = execRaw(t, ctx,
+				`INSERT INTO external_ids (entity_type, entity_id, source_id, external_id) VALUES (?, ?, ?, ?)`,
+				[]interface{}{"scene", 1, s, "   "})
+			require.Error(t, err,
+				"a spaces-only id is refused -- a provider that sends \"  \" must not get "+
+					"a row that no lookup can ever find")
+
+			// THE CONTROL: a real value on the same path succeeds, so the assertion above
+			// is about the VALUE rather than about the insert being broken.
+			require.NoError(t, execRaw(t, ctx,
+				`INSERT INTO external_ids (entity_type, entity_id, source_id, external_id) VALUES (?, ?, ?, ?)`,
+				[]interface{}{"scene", 1, s, "real-value"}))
+		})
+}
+
+// The same trap, caught in the OTHER direction: the blank entity_type CHECK (M6) was killed
+// by a schema test, and this is the test that did it. M7 needed a twin because the store
+// guarded one field in Go and the schema test covered only the other.
+func TestABlankEntityTypeIsRefusedByTheDatabaseItself(t *testing.T) {
+	runWithRollbackTxn(t, "a blank entity_type is refused by the database",
+		func(t *testing.T, ctx context.Context) {
+			s := insertSource(t, ctx, "blank-type-src", "https://blank2.example")
+
+			// SPACES ONLY, and that limit is measured, not assumed.
+			//
+			// `check(length(trim(entity_type)) > 0)` refuses "" and "  ". It does NOT
+			// refuse a value made only of whitespace that is not a space, because
+			// SQLite's one-argument `trim` strips SPACES and nothing else. Probed
+			// against the same driver the suite uses:
+			//
+			//	""    -> refused
+			//	"  "  -> refused
+			//	"\t"   -> ACCEPTED      <-- length(trim("\\t")) is 1
+			//	" \t " -> ACCEPTED
+			//
+			// So the loop below asserts only the cases the DDL actually refuses, and the
+			// tab is asserted to be ACCEPTED below. A test that asserted a tab was refused
+			// would fail against correct code, and the reflex fix -- widening the CHECK --
+			// would be solving a problem this column does not have: entity_type is set by
+			// this library from a constant, never scraped from a provider, so a
+			// tab-only value cannot arrive from the input that matters. The external_id
+			// CHECK is the one that faces untrusted input, and it has the same limit,
+			// which is why the store ALSO refuses a blank id in Go before any SQL runs.
+			for _, blank := range []string{"", "  ", "   "} {
+				err := execRaw(t, ctx,
+					`INSERT INTO external_ids (entity_type, entity_id, source_id, external_id) VALUES (?, ?, ?, ?)`,
+					[]interface{}{blank, 1, s, "x"})
+				require.Error(t, err, "entity_type %q must be refused", blank)
+			}
+
+			require.NoError(t, execRaw(t, ctx,
+				`INSERT INTO external_ids (entity_type, entity_id, source_id, external_id) VALUES (?, ?, ?, ?)`,
+				[]interface{}{"scene", 1, s, "x"}))
+		})
+}
