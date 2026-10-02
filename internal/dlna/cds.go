@@ -334,6 +334,28 @@ func (me *contentDirectoryService) handleBrowseDirectChildren(obj object, host s
 		objs = me.getRatingScenes(childPath(paths), host)
 	}
 
+	// stash#1580 -- see the folder list in getRootObjects.
+	if strings.HasPrefix(obj.Path, "recently-added/") {
+		objs = me.getRecentScenes(childPath(paths), obj.Path, host, recentFilterAdded)
+	}
+	if strings.HasPrefix(obj.Path, "recently-played/") {
+		objs = me.getRecentScenes(childPath(paths), obj.Path, host, recentFilterPlayed)
+	}
+	if strings.HasPrefix(obj.Path, "unplayed/") {
+		objs = me.getRecentScenes(childPath(paths), obj.Path, host, recentFilterUnplayed)
+	}
+	// The three containers themselves are leaves holding a query: browsing one returns its
+	// scenes directly rather than a further level of subfolders.
+	if obj.Path == "recently-added" {
+		objs = me.getRecentScenes(nil, obj.Path, host, recentFilterAdded)
+	}
+	if obj.Path == "recently-played" {
+		objs = me.getRecentScenes(nil, obj.Path, host, recentFilterPlayed)
+	}
+	if obj.Path == "unplayed" {
+		objs = me.getRecentScenes(nil, obj.Path, host, recentFilterUnplayed)
+	}
+
 	return makeBrowseResult(objs, me.updateIDString())
 }
 
@@ -435,6 +457,13 @@ func getRootObjects() []interface{} {
 	objs = append(objs, makeStorageFolder("studios", "studios", rootID))
 	objs = append(objs, makeStorageFolder("groups", "groups", rootID))
 	objs = append(objs, makeStorageFolder("rating", "rating", rootID))
+	// stash#1580 -- recently added / viewed / unplayed, as read-only virtual containers.
+	// They are folders holding a query rather than a parent of stored objects, so they cost
+	// nothing on disk and cannot be written to: nothing in the browse path accepts them as a
+	// parentID for anything but a scene listing.
+	objs = append(objs, makeStorageFolder("recently-added", "recently added", rootID))
+	objs = append(objs, makeStorageFolder("recently-played", "recently played", rootID))
+	objs = append(objs, makeStorageFolder("unplayed", "unplayed", rootID))
 
 	return objs
 }
@@ -723,6 +752,84 @@ func (me *contentDirectoryService) getRatingScenes(paths []string, host string) 
 	}
 
 	parentID := "rating/" + strings.Join(paths, "/")
+
+	page := getPageFromID(paths)
+	if page != nil {
+		return me.getPageVideos(sceneFilter, parentID, *page, host)
+	}
+
+	return me.getVideos(sceneFilter, parentID, host)
+}
+
+// stash#1580 -- "DLNA folders: recently added, viewed, unplayed".
+//
+// Three read-only virtual containers, each a folder holding a query rather than a parent of
+// stored objects. The alternative -- a fourth sub-level under `all` -- would be a deeper tree
+// for the same scenes, and DLNA clients vary in how many levels they will walk, so the
+// shallowest useful depth is the one that works.
+//
+// The three filters are deliberately DIFFERENT columns rather than one "recent" notion:
+//
+//	recently added   created_at     -- when the scan found it
+//	recently played  last_played_at  -- when someone watched it
+//	unplayed         play_count     -- whether anyone ever finished it
+//
+// "Unplayed" is NOT `play_count = 0`. A scene opened and abandoned has play_count 0 but
+// last_played_at set, and a scene watched to the end has play_count 1 and last_played_at set;
+// treating either as unplayed lists scenes the user has demonstrably seen. `IS_NULL` on
+// play_count asks the question the folder name asks -- has this ever been played at all --
+// which is the only reading under which the container is not a duplicate of "recently played".
+//
+// Both timestamps descend from NOW rather than being computed in Go, so a client that sits on
+// the folder open across midnight sees a different window than one that opened it earlier,
+// which is the behaviour a "recently" label implies.
+type recentFilterKind int
+
+const (
+	recentFilterAdded recentFilterKind = iota
+	recentFilterPlayed
+	recentFilterUnplayed
+)
+
+// recentWindow is how far back the two timestamp folders look. A fixed window rather than a
+// count limit: "recently added" on a TV should mean this week, not whichever 60 scenes happen
+// to sort highest, and a count limit silently changes meaning as the library grows.
+const recentWindow = "7 days ago"
+
+func recentSceneFilter(kind recentFilterKind) *models.SceneFilterType {
+	switch kind {
+	case recentFilterAdded:
+		return &models.SceneFilterType{
+			CreatedAt: &models.TimestampCriterionInput{
+				Modifier: models.CriterionModifierGreaterThan,
+				Value:    recentWindow,
+			},
+		}
+	case recentFilterPlayed:
+		return &models.SceneFilterType{
+			LastPlayedAt: &models.TimestampCriterionInput{
+				Modifier: models.CriterionModifierGreaterThan,
+				Value:    recentWindow,
+			},
+		}
+	case recentFilterUnplayed:
+		// `play_count` is NULL until a scene is played for the first time, so IS_NULL is
+		// "never played" rather than "played zero times".
+		return &models.SceneFilterType{
+			PlayCount: &models.IntCriterionInput{
+				Modifier: models.CriterionModifierIsNull,
+			},
+		}
+	default:
+		return &models.SceneFilterType{}
+	}
+}
+
+// getRecentScenes serves all three containers. `paths` is the child path, so the two-level
+// form is "recently-added/page/2" and is the same paging the `all` folder already does; the
+// one-level form is the container itself, which is a leaf.
+func (me *contentDirectoryService) getRecentScenes(paths []string, parentID string, host string, kind recentFilterKind) []interface{} {
+	sceneFilter := recentSceneFilter(kind)
 
 	page := getPageFromID(paths)
 	if page != nil {
