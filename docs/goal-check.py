@@ -116,7 +116,7 @@ def c2_issues_dispositioned():
         m = re.match(r"^\|\s*(\d+)\s*\|", line)
         if not m:
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = split_cells(line)
         # | number | Title | Why | Verdict |  ->  4 cells, verdict last.
         if len(cells) < 4:
             continue
@@ -484,6 +484,47 @@ def c7_suite():
         add("C7 integration suite", "PASS", f"integration suite: {npkg} package(s) green")
 
 
+# ---------------------------------------------------------------------------
+# markdown table cells
+# ---------------------------------------------------------------------------
+# `line.split("|")` IS NOT A TABLE PARSER, and this file has three places that
+# need one. A cell may contain an ESCAPED pipe -- backslash-pipe -- which markdown
+# renders as a literal pipe and which is exactly how a cell quotes a shell command or a
+# regex. A plain split does not know that: it cuts on the escaped pipe too, the row gains
+# a phantom column, and every later index is shifted by one.
+#
+# THAT IS NOT HYPOTHETICAL. Row 1790 in docs/ISSUES.md quotes
+# a grep of the form grep -rn "ExternalID<pipe>external_id" --include=*.go, so the naive
+# parse produced
+# SIX cells for a SIX-column row, put "in progress" where the checker looked for the
+# state, and made the evidence rule read a FRAGMENT of the verified-state cell -- so a
+# `done` row with a real commit in it was reported as having no evidence. The row was
+# correct; the parser was wrong, and the failure mode is a false accusation rather than
+# a loud crash.
+#
+# So: split on pipes that are NOT preceded by a backslash.
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")
+
+
+def split_cells(line):
+    """Split one markdown table row into cells, honouring backslash-pipe escapes.
+
+    The caller passes the REMAINDER of the row -- what is left after the regex consumed the
+    leading `| N |`. So the first cell returned is the TITLE, and the cells come back as
+    [title, labels, verified, disposition, state] plus a trailing empty one when the row
+    ends in `|`. The callers below index from the END (`cells[-2]` for the state,
+    `cells[-3]` for the disposition), which is what makes that trailing empty cell harmless
+    -- and what makes one extra column, from a stray pipe in a cell, shift BOTH of them.
+    """
+    s = line.strip()
+    s = s[1:] if s.startswith("|") else s
+    # THE TRAILING `|` IS NOT STRIPPED, deliberately. Callers index from the end --
+    # cells[-2] for the state, cells[-3] for the disposition -- which is only correct
+    # while the row's final empty field is present. Stripping it would make cells[-2] the
+    # DISPOSITION, so every row would read its own disposition as its state.
+    return [c.strip() for c in _CELL_SPLIT.split(s)]
+
+
 # C8 -- the 17-issue Backlog programme: every issue dispositioned, and every
 # `done` backed by a test that fails without the change.
 #
@@ -509,8 +550,12 @@ def c8_backlog_17():
 
     states = {}
     for num, rest in rows:
-        cells = [c.strip() for c in rest.split("|")]
+        cells = split_cells(rest)
         # ...| verified state | disposition | state |
+        # `strip('* ')` because rows write the state as `**done**`, `**skipped**` and so
+        # on. Kept from the original parse -- dropping it looks harmless and turns every
+        # bolded state into "unrecognised", which is a C8 failure that names the wrong
+        # thing entirely.
         states[num] = cells[-2].strip('* ') if len(cells) >= 2 else "?"
     bad = [n for n, s in states.items()
            if s not in ("done", "open", "skipped", "in progress", "partial")]
@@ -563,7 +608,7 @@ def c8_backlog_17():
     unproven = []
     for n, state in states.items():
         rest = rows_by_num.get(n, "")
-        cells = [c.strip() for c in rest.split("|")]
+        cells = split_cells(rest)
         disposition = cells[-3] if len(cells) >= 3 else ""
         # `done` is terminal and must be backed by a commit. `partial` is NOT
         # terminal -- it is counted with `open` below -- so it is held to no

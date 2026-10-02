@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 83 planned, 553 not planned or deferred, 39 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 82 planned, 553 not planned or deferred, 40 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**83 planned, 553 not planned or deferred, 39 closed, 675 total.** The 83 are the work queue: 79 upstream-marked plus 4 that are also in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**82 planned, 553 not planned or deferred, 40 closed, 675 total total.** The 83 are the work queue: 79 upstream-marked plus 4 that are also in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -124,13 +124,12 @@ These carry a label the maintainers themselves applied.
 | 3692 | Improve log settings | upstream-marked (help wanted) | planned |
 | 3333 | Saved Filters: Tag-item badge below toolbar not updating | upstream-marked (bug report) | planned |
 
-## Planned — by signal (5)
+## Planned — by signal (4)
 
 Ranked by discussion volume and age, among issues with no maintainer label.
 
 | # | Title | Why | Verdict |
 |---|---|---|---|
-| 1790 | Generalized support for external IDs | Kept `planned`, and NOT cut, because it is already tracked as real work: #1790 is one of the 17 in `docs/ISSUES.md`, the backlog this project is executing (goal clause C8). Cutting it here would contradict the ledger that commits to finishing it, and two ledgers disagreeing about the same issue is how a commitment quietly stops meaning anything. Its disposition belongs to the backlog row, which carries the verified state and the plan; this row records only that the two agree. `Generalized support for external IDs` | planned |
 | 2359 | [Meta] Update Stash to be inline with Stash-Box | Kept `planned`, and NOT cut, because it is already tracked as real work: #2359 is one of the 17 in `docs/ISSUES.md`, the backlog this project is executing (goal clause C8). Cutting it here would contradict the ledger that commits to finishing it, and two ledgers disagreeing about the same issue is how a commitment quietly stops meaning anything. Its disposition belongs to the backlog row, which carries the verified state and the plan; this row records only that the two agree. `[Meta] Update Stash to be inline with Stash-Box` | planned |
 
 | 5631 | `moveFiles` should optionally clean up empty directories | upstream feature request, **not a bug** — and the reporter says so: “The problem I want to solve isn't to remove the directories; just to clean up stash.” Measured against the code: `Mover` already tracks `foldersCreated` to remove a folder it **created** when the transaction rolls back (`pkg/file/move.go:174-188`), but it never removes a folder the move **emptied** — a different set, and there is no `deleteEmptyFolders`/`pruneEmpty` anywhere in the tree. `FolderStore.Destroy` is **DB-only** (`destroyExisting`, no filesystem call), which is the constraint that decides the design: a prune must remove the row AND the directory, or Clean gets *worse* — a missing directory with a surviving row is exactly what Clean exists to find. **Both proposals are wrong as written.** (a) a `move_files` flag recursing “up to the respective stash library root” lets one move delete a deep chain of folders the user deliberately keeps, and that recursive-delete semantic is not asked for by the failure mode described. (b) a Clean flag for “missing directories only” is much smaller — a subset selector over existing behaviour — but does **not** solve the stated problem, which is a folder that exists and is empty, not one that is missing. **My recommended shape (delegated to me by the owner 2026-09-30), recorded not implemented:** a `pruneEmptySourceFolders` flag on `move_files` that removes **only** the source folder the files actually left, only when it is empty afterwards, and **only that one folder — no recursion**, with the DB row and the directory removed together. Opt-in and off by default so it cannot surprise. Recursion is a separate decision needing its own blast-radius discussion. Not started: a new flag on a public mutation is schema change plus codegen plus resolver plus store, and the goal file says to record a subsystem-sized issue rather than half-build it. | planned |
@@ -781,7 +780,7 @@ to keep in mind when a failure looks order-dependent, not a current failure.
 enforces this (it was written after that invariant broke once).
 
 
-## Resolved — closed or done (35)
+## Resolved — closed or done (36)
 
 Every row here was `planned` when this roster was generated and has since been closed or
 implemented. They live here rather than in the `Planned` sections because a section headed
@@ -792,6 +791,7 @@ reconciles the top-of-file counts against the table AND fails on a resolved row 
 
 | # | Title | Verdict | Note |
 |---|---|---|---|
+| 1790 | Generalized support for external IDs | **Closed** in this project, not upstream. Implemented as a source REGISTRY plus one polymorphic `external_ids` table, with the four existing `*_stash_ids` tables left in place -- rewriting four tables holding every provider id existing users have is large, irreversible, and its failure mode is silent data loss, so the duplication is reduced rather than removed. See `docs/ISSUES.md` row 1790 for the verified state and `docs/ISSUE-1790-spec.md` for the design. | closed | 
 | 684 | Non-privileged user in Docker build | upstream-marked (bounty) | closed |
 | 2824 | Slow scanning with huge amounts of videos | upstream-marked (bug report) | closed |
 | 5683 | High CPU / looping read access when loading scene associated with remo | upstream-marked (bug report) | closed |
