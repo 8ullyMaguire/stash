@@ -163,6 +163,75 @@ func TestRejectedIsTerminalAndCannotBeResurrected(t *testing.T) {
 	})
 }
 
+// A DECIDED CLAIM CANNOT BE DECIDED AGAIN, AND THE STORE IS WHAT SAYS SO.
+//
+// Found by the mutation gate reporting `confirm-overwrites-a-decided-claim` as a
+// SURVIVOR against a fully green suite. The existing tests asserted
+// directory.ErrNotPending -- but only against internal/directory's Confirm, which
+// refuses to BUILD a decision for a claim that is not pending.
+//
+// The store is a SEPARATE ENTRY POINT and the domain's check does not reach it. So
+// removing the `AND state = pending_confirmation` from the store's own UPDATE made
+// a VERIFIED claim re-confirmable and a REJECTED one re-rejectable by anyone holding
+// a user id, and no test noticed -- because every test went through the domain, and
+// the domain was never asked.
+//
+// A domain check that can only be bypassed by not calling the domain is a
+// documentation, not a guard. This is the test for the guard.
+func TestADecidedClaimCannotBeDecidedAgain(t *testing.T) {
+	runWithRollbackTxn(t, "directory-decided-once", func(t *testing.T, ctx context.Context) {
+		claimer := accessUser(ctx, t, "sfDirOnceClaimer")
+		reviewer := accessUser(ctx, t, "sfDirOnceReviewer")
+		intruder := accessUser(ctx, t, "sfDirOnceIntruder")
+		store := sqlite.NewDirectoryStore()
+
+		claim, err := directory.File("studio", 700040, claimer)
+		require.NoError(t, err)
+		require.NoError(t, store.FileClaim(ctx, claim))
+
+		confirmed, err := directory.Confirm(claim, reviewer, true, time.Now())
+		require.NoError(t, err)
+		require.NoError(t, store.ConfirmClaim(ctx, confirmed, reviewer, time.Now()))
+
+		// A SECOND CONFIRMATION, by a DIFFERENT user, of a claim already verified.
+		// The domain would refuse to build this -- and the store must refuse it too,
+		// because the store can be called without the domain ever being asked.
+		err = store.ConfirmClaim(ctx, confirmed, intruder, time.Now())
+		require.ErrorIs(t, err, directory.ErrNotPending,
+			"the store's own pending guard, not the domain's. Without it a verified "+
+				"claim is re-confirmable by anyone with a user id, and the second "+
+				"confirmer overwrites the first")
+		assert.Contains(t, err.Error(), "verified",
+			"and the error says what the claim IS, so a caller can tell 'already "+
+				"decided' from 'no such claim' -- different problems")
+
+		// AND THE DECISION IS UNCHANGED, so the failed second write did not half
+		// apply: still the first confirmer, still verified.
+		got, err := store.ClaimFor(ctx, "studio", 700040)
+		require.NoError(t, err)
+		assert.Equal(t, directory.BadgeVerified, got.State)
+		assert.Equal(t, reviewer, got.ConfirmedBy,
+			"the original confirmer. A refused write that still overwrote the "+
+				"confirmer would be worse than no guard at all")
+
+		// AND REJECTION IS NOT A LOOSER PATH: a rejected claim is equally final.
+		claim2, err := directory.File("studio", 700041, claimer)
+		require.NoError(t, err)
+		require.NoError(t, store.FileClaim(ctx, claim2))
+		rejected, err := directory.Reject(claim2, reviewer, true, time.Now())
+		require.NoError(t, err)
+		require.NoError(t, store.RejectClaim(ctx, rejected, reviewer, time.Now()))
+
+		err = store.RejectClaim(ctx, rejected, intruder, time.Now())
+		require.ErrorIs(t, err, directory.ErrNotPending,
+			"a rejected claim is terminal and re-rejecting it is not a rarer path")
+		err = store.ConfirmClaim(ctx, rejected, intruder, time.Now())
+		require.ErrorIs(t, err, directory.ErrNotPending,
+			"and a rejected claim cannot be promoted to verified either, which is "+
+				"the resurrection the schema's CHECK also refuses")
+	})
+}
+
 // FOUR STATES, NOT THREE, AND THE SCHEMA ENUMERATES THEM.
 //
 // `claimed` is not `verified`, and collapsing them is how an unverified claim becomes
@@ -203,8 +272,36 @@ func TestTheSchemaEnumeratesExactlyFourStates(t *testing.T) {
 			require.NoError(t, err, "state %q must be storable", state)
 		}
 
+		// AND EVERY STATE PROMISES WHAT IT SAYS. Found by the mutation gate
+		// reporting `verified-without-a-confirmer` as a SURVIVOR: the suite inserted
+		// 'confirmed' and required it to fail, and never inserted a `verified` row
+		// MISSING its confirmer -- which is the badge nobody earned, and the whole
+		// thing §6a.4 exists to prevent.
+		//
+		// The store cannot produce it either: ConfirmClaim refuses a zero confirmer
+		// and the domain refuses a zero confirm. So like the two constraints in
+		// step 7.3c, this one is only reachable by writing the row directly.
+		var err error
+		err = curationExec(ctx, t,
+			"INSERT INTO directory_claims (entity_type, entity_id, claimed_by, state, decided_at) "+
+				"VALUES ('studio', 700025, ?, 'verified', CURRENT_TIMESTAMP)", user)
+		require.Error(t, err,
+			"a verified badge with no confirmer is a badge nobody earned. The "+
+				"verified branch requires a confirmer AND a decision time, so a row "+
+				"naming the state alone cannot be trusted")
+
+		// AND THE SAME FOR pending_confirmation WITH a confirmer, which is the
+		// mirror: a pending claim nobody has looked at cannot already have one.
+		err = curationExec(ctx, t,
+			"INSERT INTO directory_claims (entity_type, entity_id, claimed_by, state, confirmed_by) "+
+				"VALUES ('studio', 700026, ?, 'pending_confirmation', 999)", user)
+		require.Error(t, err,
+			"a pending claim has no confirmer by definition -- that is what "+
+				"'pending' means, and a row with one is a decision recorded as "+
+				"indecided")
+
 		// AND A FIFTH SPELLING IS REFUSED, which is the point of enumerating.
-		err := curationExec(ctx, t,
+		err = curationExec(ctx, t,
 			"INSERT INTO directory_claims (entity_type, entity_id, claimed_by, state) VALUES ('studio', 700024, ?, 'confirmed')", user)
 		require.Error(t, err,
 			"'confirmed' is not a state. A free-text state would let it coexist with "+

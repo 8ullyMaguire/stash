@@ -68,24 +68,49 @@ MUTANTS: list[tuple[str, pathlib.Path, str, str, str]] = [
         "units is EUR 45.00 and no float is involved anywhere in the path",
     ),
     (
-        "fifth-state-allowed",
+        # THE FOUR STATES ARE ENUMERATED ONCE, in the branches, BY SIDE EFFECT: each
+        # branch names its own state, so the set is closed without a separate
+        # IN (...) list. A fifth spelling therefore has to be added AS A BRANCH.
+        #
+        # NOTE THE HISTORY, because it is the useful part of this file. This mutant
+        # originally widened a SECOND, column-level CHECK, and it SURVIVED --
+        # correctly, as it turned out. Migration 118 stated the four states in TWO
+        # places, so widening one left the other refusing the row: correct and
+        # mutated code agreed for every input, and the mutant was unobservable
+        # rather than survived. Verified in `sqlite3 :memory:` rather than inferred.
+        #
+        # The schema now states them once, which is what makes this mutation
+        # expressible AND killable. A redundant constraint is not merely untidy: it
+        # is a second place for the next change to go, and this gate is the
+        # instrument that reports one of your two statements of a rule as dead.
+        "fifth-state-as-a-branch",
         MIGRATION,
-        "CHECK (`state` IN ('unclaimed', 'pending_confirmation', 'verified', 'rejected'))",
-        "CHECK (`state` IN ('unclaimed', 'pending_confirmation', 'verified', "
-        "'rejected', 'confirmed'))",
-        "TestTheSchemaEnumeratesExactlyFourStates -- 'confirmed' is not a "
-        "state; free text lets two spellings of one idea coexist",
+        "    OR (`state` = 'pending_confirmation' AND `confirmed_by` IS NULL)",
+        "    OR (`state` = 'pending_confirmation' AND `confirmed_by` IS NULL)\n"
+        "    OR (`state` = 'confirmed')",
+        "TestTheSchemaEnumeratesExactlyFourStates -- 'confirmed' is not a state. "
+        "Free text would let it coexist with 'verified' as two spellings of one idea",
     ),
     (
-        # THE TERMINAL-STATE BUG THAT THE FIRST TEST RUN CAUGHT.
+        # The other direction of the same enumeration: a branch that stops requiring
+        # what its state PROMISES lets a `verified` badge exist with nobody behind it,
+        # which is exactly the badge §6a.4 exists to keep earned.
+        "verified-without-a-confirmer",
+        MIGRATION,
+        "    (`state` = 'verified' AND `confirmed_by` IS NOT NULL AND `decided_at` IS NOT NULL\n"
+        "     AND `rejected_at` IS NULL)",
+        "    (`state` = 'verified' AND `rejected_at` IS NULL)",
+        "TestTheSchemaEnumeratesExactlyFourStates -- a VERIFIED claim has a "
+        "confirmer and a decision time; without both it is a badge nobody earned",
+    ),
+    (
+        # THE `rejected_at IS NULL` THAT THE FIRST TEST RUN CAUGHT.
         #
-        # This is the `rejected_at IS NULL` that was MISSING from the verified
-        # branch, and without it the one CHECK meant to make a rejection terminal
-        # permitted rejected -> verified by a bare UPDATE. The mutant here removes
-        # it again, so if the guard ever stops distinguishing the two the gate says
-        # so. It is listed because the bug was real, found by a test, and the
-        # reason it is worth keeping is that a fix nobody can re-break is a
-        # comment.
+        # This is the clause that was MISSING from the verified branch, and without
+        # it the one constraint meant to make a rejection terminal permitted
+        # rejected -> verified by a bare UPDATE: a resurrected row has a confirmer and
+        # a decision time, so the branch was satisfied anyway. Kept as a mutant
+        # because a fix nobody can re-break is a comment.
         "verified-ignores-rejection-history",
         MIGRATION,
         "    (`state` = 'verified' AND `confirmed_by` IS NOT NULL AND `decided_at` IS NOT NULL\n"
@@ -105,7 +130,12 @@ MUTANTS: list[tuple[str, pathlib.Path, str, str, str]] = [
         "cannot get past, and §6a.4's content is that it cannot",
     ),
     (
-        # The STORE's pending guard, which the first version did not have.
+        # The STORE's pending guard. Its absence was found by THIS gate reporting a
+        # survivor: the tests asserted directory.ErrNotPending only against the
+        # DOMAIN, which refuses to BUILD a decision for a decided claim, so removing
+        # the store's own `AND state = pending_confirmation` made a verified claim
+        # re-confirmable and no test noticed. A domain check that can only be
+        # bypassed by not calling the domain is a documentation, not a guard.
         "confirm-overwrites-a-decided-claim",
         STORE,
         "\" WHERE \"+claimsEntityTypeCol+\" = ? AND \"+claimsEntityIDCol+\" = ?\"+\n"
@@ -113,9 +143,8 @@ MUTANTS: list[tuple[str, pathlib.Path, str, str, str]] = [
         "\t\tstring(state), confirmer, at, c.EntityType, c.EntityID, string(directory.BadgePending))",
         "\" WHERE \"+claimsEntityTypeCol+\" = ? AND \"+claimsEntityIDCol+\" = ?\",\n"
         "\t\tstring(state), confirmer, at, c.EntityType, c.EntityID)",
-        "TestRejectedIsTerminalAndCannotBeResurrected / the pending guard -- a "
-        "domain check that can only be bypassed by not calling the domain is a "
-        "documentation, not a guard",
+        "TestADecidedClaimCannotBeDecidedAgain -- the store's own guard. Without it "
+        "a verified claim is re-confirmable by anyone with a user id",
     ),
 ]
 
@@ -141,7 +170,7 @@ SUITE_PATTERN = (
     "TestPricesAreStoredInMinorUnitsAndNegativeIsRefused|"
     "TestTheNetworkProfileAssemblesAndSortsDeterministically|"
     "TestPendingClaimsIsTheReviewQueue|TestDirectoryIsImportedByNonTestCode|"
-    "TestTheDirectoryGateNamesEveryDirectoryTest"
+    "TestADecidedClaimCannotBeDecidedAgain|TestTheDirectoryGateNamesEveryDirectoryTest"
 )
 
 # The test file whose function names must all appear in SUITE_PATTERN.

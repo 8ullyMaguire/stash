@@ -39,11 +39,32 @@ CREATE TABLE `directory_claims` (
   `claimed_by` integer NOT NULL CHECK (`claimed_by` > 0),
 
   -- FOUR STATES, NOT THREE. `claimed` is not `verified`, and collapsing them is how
-  -- an unverified claim becomes a trust signal -- so the CHECK enumerates all four
-  -- rather than allowing free text, which would let `confirmed` and `verified`
-  -- coexist as two spellings of one idea and neither mean anything.
+  -- an unverified claim becomes a trust signal.
+  --
+  -- AND THE FOUR ARE ENUMERATED EXACTLY ONCE -- in the four-branch CHECK at the
+  -- bottom of this table, not here as well.
+  --
+  -- This column CHECK WAS THERE FIRST, and the mutation gate proved it REDUNDANT.
+  -- Two mutants -- `fifth-state-allowed` and `state-enumerated-twice` -- both
+  -- SURVIVED, which took some checking to believe, because the test that inserts
+  -- 'confirmed' and requires it to fail was green throughout.
+  --
+  -- The reason, verified in `sqlite3 :memory:` rather than inferred: the four-branch
+  -- CHECK enumerates the same four states as a SIDE EFFECT of tying each one to its
+  -- confirmer and decision time, so it refuses 'confirmed' on its own. Widening or
+  -- removing this column's CHECK changed nothing observable -- the insert failed
+  -- either way, with the error naming the OTHER check.
+  --
+  -- One rule stated twice is a rule a future change must update twice, and the way
+  -- that goes wrong is exactly what this gate exists to catch. So it is stated once,
+  -- here, where the comment can explain why there are four of them.
+  --
+  -- A case variant ('VERIFIED') is refused too, which is worth stating because
+  -- SQLite's string CHECKs are case-SENSITIVE -- verified, not assumed. That is the
+  -- one place where stating the rule twice bought something, and it is not worth the
+  -- cost of a rule that can be updated in one place and not the other.
   `state` varchar(32) NOT NULL DEFAULT 'pending_confirmation'
-      CHECK (`state` IN ('unclaimed', 'pending_confirmation', 'verified', 'rejected')),
+      CHECK (length(`state`) > 0),
 
   -- The trusted user who confirmed or rejected it, 0/NULL while undecided.
   `confirmed_by` integer DEFAULT NULL CHECK (`confirmed_by` IS NULL OR `confirmed_by` > 0),
@@ -84,6 +105,18 @@ CREATE TABLE `directory_claims` (
   -- form would therefore reject every claim nobody has looked at yet. The rule being
   -- enforced is "a claim that HAS a confirmer was not confirmed by its claimer".
   CHECK (`confirmed_by` IS NULL OR `confirmed_by` <> `claimed_by`),
+
+  -- THE FOUR STATES ARE ENUMERATED HERE AND NOWHERE ELSE: `verified`, `rejected`,
+  -- `pending_confirmation`, `unclaimed`. Four, not three, because `claimed` is not
+  -- `verified` and collapsing them is how an unverified claim becomes a trust
+  -- signal; and enumerated rather than free text, because free text would let
+  -- `confirmed` and `verified` coexist as two spellings of one idea and leave a
+  -- reader guessing which means what.
+  --
+  -- This is an ENUMERATION by side effect: each branch names its own state, so the
+  -- set is closed without a separate IN (...) list. The `state` column's own CHECK
+  -- used to enumerate the same four, and the mutation gate showed the duplication
+  -- was not free -- see that column's comment.
 
   -- A VERIFIED claim has a confirmer and a decision time; a REJECTED one has a
   -- confirmer and a rejection time; a PENDING one has neither. Asserted here rather

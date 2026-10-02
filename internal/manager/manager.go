@@ -206,6 +206,20 @@ type Manager struct {
 	// from "a store nothing builds". See
 	// TestDirectoryIsImportedByNonTestCode.
 	DirectoryStore *sqlite.DirectoryStore
+
+	// DiscoveryStore is §6a.4's curated boards and §6a.7's composed feed (R015,
+	// R016, R017, R049).
+	//
+	// THE THIRD TIME, and the shape is different again from the first two. The
+	// collab and directory stores were packages nothing imported. This one was a
+	// package internal/acquisition DID import -- and used five other symbols from,
+	// while all 225 lines of feed.go went unreferenced. So the audit that found the
+	// first two could not see this one, and "is the package imported" has no
+	// opinion about a failure one level below the one it tests.
+	//
+	// It takes a *Database because SetBoard writes an ordering in two statements
+	// and needs them atomic; see NewDiscoveryStore.
+	DiscoveryStore *sqlite.DiscoveryStore
 	Auth              *auth.SessionStore
 	AuthMode          auth.Mode
 

@@ -373,6 +373,12 @@ func (s *Manager) initStashForgeAuth() error {
 	// comment on the field: the previous six were reachable and unwired, this one was
 	// neither reachable nor persisted.
 	s.DirectoryStore = sqlite.NewDirectoryStore()
+
+	// §6a.4's boards and §6a.7's feed. Takes the *Database because SetBoard's two
+	// statements -- clear the old positions, insert the new ones -- must be atomic:
+	// between them a reader sees a board with a hole in it, which is the one thing
+	// dense positions exist to prevent.
+	s.DiscoveryStore = sqlite.NewDiscoveryStore(s.Database)
 	s.InstanceModeStore = sqlite.NewInstanceModeStore()
 	s.AutoAcquireStore = sqlite.NewAutoAcquireStore()
 
