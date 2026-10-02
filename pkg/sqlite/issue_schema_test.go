@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 // stash#837: the issues log — schema tests.
 //
 // WHY THIS FILE EXISTS SEPARATELY FROM THE STORE TESTS

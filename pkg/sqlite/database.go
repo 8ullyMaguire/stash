@@ -78,6 +78,7 @@ type storeRepository struct {
 	Image          *ImageStore
 	Gallery        *GalleryStore
 	GalleryChapter *GalleryChapterStore
+	Issue          *IssueStore
 	Scene          *SceneStore
 	SceneMarker    *SceneMarkerStore
 	Performer      *PerformerStore
@@ -119,6 +120,7 @@ func NewDatabase() *Database {
 		Image:          NewImageStore(r),
 		Gallery:        galleryStore,
 		GalleryChapter: NewGalleryChapterStore(),
+		Issue:          NewIssueStore(),
 		Performer:      performerStore,
 		Studio:         studioStore,
 		Tag:            tagStore,
