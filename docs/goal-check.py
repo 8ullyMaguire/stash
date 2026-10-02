@@ -95,20 +95,36 @@ def c2_issues_dispositioned():
         add("C2 issues dispositioned", "FAIL", "roster table parsed to ZERO rows -- refusing to call that PASS")
         return
 
-    # A WIDER parse for the reason column. The narrow regex above captures four
-    # columns; the reason is a fifth, so rows are re-read capturing everything.
+    # THE REASON IS THE `Why` COLUMN, which is why this re-reads the row.
+    #
+    # The first version of this clause assumed a FIFTH column
+    # (`| # | title | labels | status | reason |`) because ISSUES.md -- the OTHER
+    # roster -- has one. UPSTREAM-ISSUES.md has four: `| # | Title | Why | Verdict |`.
+    # So `len(cells) >= 5` was never true, `reasons` was EMPTY, and the clause
+    # reported all 422 rows as having an empty reason -- a verdict about the ROSTER
+    # that was entirely an artefact of reading a column that does not exist.
+    #
+    # It failed loudly rather than passing quietly, which is the only reason this was
+    # caught in one run: 422 "empty reason" is not a plausible state of a file whose
+    # whole purpose is recording why each issue was kept.
+    #
+    # A roster-shape assumption is exactly the kind of thing that is cheap to state
+    # and expensive to be wrong about, so the column is now NAMED, and a row whose
+    # shape does not match is counted as unknown rather than as unreasoned.
     wide = {}
     for line in roster.read_text().splitlines():
         m = re.match(r"^\|\s*(\d+)\s*\|", line)
         if not m:
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        # ...| number | title | labels | status | reason |
-        if len(cells) >= 5:
-            wide[int(m.group(1))] = (cells[3], cells[4])
+        # | number | Title | Why | Verdict |  ->  4 cells, verdict last.
+        if len(cells) < 4:
+            continue
+        wide[int(m.group(1))] = (cells[3], cells[2])
     reasons = {n: r for n, (_, r) in wide.items()}
-    re_statused = [(n, "", st) for n, (st, _) in wide.items()
-                   if st in ("deferred", "not-planned", "closed")]
+    verdicts = {n: st for n, (st, _) in wide.items()}
+    re_statused = [(n, "", verdicts[n]) for n in verdicts
+                   if verdicts[n] in ("deferred", "not-planned", "closed")]
 
     closed = set()
     if closed_f.exists():
@@ -137,15 +153,54 @@ def c2_issues_dispositioned():
     # So the reason column is checked for a REASONABLE REASON: the roster has a column
     # for it, and an empty or placeholder one means the row was moved rather than
     # decided.
+    #
+    # TWO THINGS ARE DISTINGUISHED, because they are different failures:
+    #
+    #  - UNKNOWN SHAPE: the row did not parse into the four columns the roster uses.
+    #    That is a defect in the CHECKER or the file's format, never in the work, so
+    #    it is reported separately and must be fixed before the reason clause means
+    #    anything.
+    #  - NO REASON: the row parsed, and its `Why` is empty, a placeholder, or a bare
+    #    rule tag. That IS a claim about the roster, and it is what this clause is for.
+    planned_nums = [n for n, _, _ in planned]
+    unparsed = [n for n in planned_nums if n not in wide]
+
     unreasoned = []
-    for n, t, st in planned + re_statused:
-        reason = reasons.get(n, "").strip()
+    for n in planned_nums:
+        if n in unparsed:
+            continue
+        reason = reasons[n].strip()
         if not reason:
-            unreasoned.append((n, "empty reason"))
+            unreasoned.append((n, "empty Why"))
         elif len(reason) < 15:
-            unreasoned.append((n, f"{len(reason)}-char reason"))
-        elif re.search(r"\b(todo|later|maybe|eventually|revisit|no reason|n/a)\b", reason, re.I):
-            unreasoned.append((n, f"placeholder: {reason[:30]!r}"))
+            unreasoned.append((n, f"{len(reason)}-char Why"))
+        elif re.fullmatch(r"R\d+[^.]{0,45}", reason):
+            # A BARE RULE TAG. `R9/R10 lowest-signal feature request` says which
+            # rule kept the row and nothing about the issue itself, so 340 of these
+            # are the roster restating its own policy rather than reasoning about
+            # the work. The goal asks for a reason PER ROW.
+            unreasoned.append((n, f"bare rule tag, not a reason: {reason[:34]!r}"))
+        elif len(reason) < 120 and re.search(
+                r"\b(todo|later|maybe|eventually|revisit|no reason|n/a)\b", reason, re.I):
+            # PLACEHOLDER WORDS, BUT ONLY IN A SHORT REASON.
+            #
+            # The first version ran this over reasons of any length and flagged #2833,
+            # whose 2191-character Why contains the word "later" inside a genuine
+            # traced analysis -- the mechanism is confirmed from mousetrap's source and
+            # the fix is recorded-not-built. A 2191-char reason is not a placeholder
+            # whatever words it happens to contain.
+            #
+            # So the length gate applies to the PLACEHOLDER RULE, not just the empty
+            # check. A reason under 120 chars that says "later" is deferring without
+            # saying what; the same word inside a full analysis is prose.
+            unreasoned.append((n, f"placeholder in a short reason: {reason[:30]!r}"))
+
+    if unparsed:
+        add("C2 roster shape", "FAIL",
+            f"{len(unparsed)} planned row(s) did not parse into the roster's four "
+            f"columns (# | Title | Why | Verdict): "
+            + ", ".join(f"#{n}" for n in unparsed[:8])
+            + ". A checker that cannot parse its own roster cannot judge it.")
     if unreasoned:
         add("C2 issue reasons", "FAIL",
             f"{len(unreasoned)} dispositioned row(s) have no real reason recorded: "
