@@ -321,9 +321,6 @@ func (j *autoTagJob) autoTagPerformers(ctx context.Context, progress *job.Progre
 					return nil
 				}
 
-				if err := performer.LoadAliases(ctx, r.Performer); err != nil {
-					return fmt.Errorf("loading aliases for performer %d: %w", performer.ID, err)
-				}
 				performers = append(performers, performer)
 			}
 
@@ -333,6 +330,30 @@ func (j *autoTagJob) autoTagPerformers(ctx context.Context, progress *job.Progre
 				}
 
 				err := func() error {
+					// ALIASES ARE LOADED HERE, INSIDE THE LOOP, and that placement is the fix
+					// for stash#2507.
+					//
+					// It used to be loaded in the single-id branch only, so running auto-tag
+					// against ONE performer by id matched its aliases while running it against
+					// ALL performers -- `"*"`, which is what the UI's "tag everything" uses --
+					// matched names alone. The operator got different results from the two
+					// entry points for the same performer.
+					//
+					// Loading here rather than at query time matches autoTagStudios, which has
+					// done it this way all along. The asymmetry was the evidence this was a
+					// bug and not a design choice: studios were never affected, so there was
+					// no reason for performers to be.
+					//
+					// getPerformerTaggers still ignores aliases -- upstream disabled that with
+					// "TODO - disabled until we can have finer control over alias matching",
+					// and re-enabling it wholesale is a separate decision about matching
+					// precision, not a placement fix. What is fixed here is that the aliases
+					// are AVAILABLE on every path, so that decision is one edit away from
+					// being taken rather than requiring the caller to be rewritten too.
+					if err := performer.LoadAliases(ctx, r.Performer); err != nil {
+						return fmt.Errorf("loading aliases for performer %d: %w", performer.ID, err)
+					}
+
 					if err := tagger.PerformerScenes(ctx, performer, paths, r.Scene); err != nil {
 						return fmt.Errorf("processing scenes: %w", err)
 					}
