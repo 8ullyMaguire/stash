@@ -156,6 +156,7 @@ func startOfDay(t time.Time) time.Time {
 // and the zero Date is bound, which is the bug. Making it a returned error means a filter
 // the user typed badly says so, instead of quietly matching the wrong rows.
 var ErrUnresolvableFilterValue = errors.New("filter value is neither a date nor a supported relative phrase")
+
 // validateDateCriterion accepts an absolute date OR a relative phrase this package
 // understands, and rejects anything else WITH THE VALUE NAMED.
 //

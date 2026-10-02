@@ -6,9 +6,9 @@ import (
 )
 
 type SceneMarker struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title"`
-	Seconds    float64 `json:"seconds"`
+	ID         int      `json:"id"`
+	Title      string   `json:"title"`
+	Seconds    float64  `json:"seconds"`
 	EndSeconds *float64 `json:"end_seconds"`
 
 	// PrimaryTagID is the tag this marker is DISPLAYED AND SORTED BY -- two ORDER BY

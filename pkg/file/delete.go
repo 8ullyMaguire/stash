@@ -350,8 +350,8 @@ func Destroy(ctx context.Context, destroyer models.FileDestroyer, f models.File,
 		zipID = &id
 	}
 	destroyed := DestroyedFile{
-		ID:       f.Base().ID,
-		Path:     f.Base().Path,
+		ID:        f.Base().ID,
+		Path:      f.Base().Path,
 		ZipFileID: zipID,
 	}
 

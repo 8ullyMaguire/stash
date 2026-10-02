@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
 // #1253 -- a marker's tags, through a REAL database.
 //
 // The model-level tests in `pkg/models/scene_marker_tags_test.go` prove the field and loader
@@ -175,7 +176,7 @@ func createTagByName(ctx context.Context, t *testing.T, name string) int {
 
 	tag := models.CreateTagInput{
 		Tag: &models.Tag{
-			Name: name,
+			Name:        name,
 			Description: "created by TestSceneMarkerTagIDs",
 		},
 	}
