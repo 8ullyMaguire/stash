@@ -28,7 +28,7 @@ commit `65422cea9`. Re-run both before believing this table.
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
 | C7 suites | PASS | 60 packages unit, 1 integration |
-| **C8 backlog-17 ledger** | **FAIL** | **3 of 17 rows remain: #2747, #3530, #4326** |
+| **C8 backlog-17 ledger** | **FAIL** | **2 of 17 rows remain: #2747, #3530** (#4326 and #1790 blank-state but closed; verified by parsing the `state` column) |
 
 `check-issue-ledgers.py`: **OK** — header, roster table and closed log agree (675 issues,
 34 closed, 34 log rows).
@@ -61,9 +61,38 @@ change, so playback is uninterrupted. No such component exists; nothing to corre
 
 **#3530 — multiple scenes in a single file.** Note the trap: `pkg/ffmpeg/stream_segmented.go`
 looks like this feature and is not. It segments the HLS **video stream**; the issue asks for
-one file holding several **scenes**, and the model is still one scene per file row. That
-needs a data-model change (a scene gaining a byte/segment range within a file), so it needs
-its own spec before code — per the standing workflow, spec and plan first.
+one file holding several **scenes**. Spec + plan written (`docs/ISSUE-3530-{spec,plan}.md`),
+decision made and **partly built**:
+
+    DONE  data model      migration 122, start_time/end_time on scenes_files (9871247b5)
+    DONE  derived length  GetFiles applies the window; 10 tests, mutation 8/8 (726ef5bf4)
+
+**The measurement that chose the model:** `scenes_files` has `PRIMARY KEY (scene_id, file_id)`
+and only a NON-unique index on `file_id`, so the schema **already** permits many scenes per
+file. The referential half was never missing — only *which part of the file* was, so the
+change is two nullable floats rather than segment entities. Under segment-as-file, every
+`video_files.duration` read would need reconciling with "a file is now a slice of one"; under
+time ranges that column stays **true** and only scene-level views change.
+
+**The measurement that corrected the spec:** a scene has NO duration field of its own. §8
+called `scene.go:1135` the site that decides the feature; it actually feeds
+`FindScenes.duration`, an aggregate. The chokepoint is `SceneStore.GetFiles`, because the UI
+reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
+
+**#3530 remains, in this order:**
+1. **the aggregates** — `scene.go:1135`/`1136` and `951` still sum `video_files.duration`, so
+   a file split into scenes is **double-counted** in the library total. Deliberate for now.
+2. **duplicate detection** — `FindDuplicates` joins phash on `file_id`, so two scenes of one
+   file share it identically and `HAVING COUNT(DISTINCT scene_id) > 1` is already true. One
+   clause: `AND COUNT(DISTINCT file_id) > 1`. Test must be two-sided.
+3. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range.
+4. **detection** — needs an upstream discussion, not a guess.
+5. **any UI to set a range** — the columns are SQL/API-settable only today.
+
+**#3530's own spec §7 was wrong twice** (`ALTER TABLE ADD CONSTRAINT` — "invalid", then
+"verified and works"), both times because the `sqlite3` CLI is a NEWER SQLite than the pinned
+`go-sqlite3 v1.14.22`. The rebuild is required for the INDEXES, not the CHECKs, and the whole
+episode is in `db-migration-integrity` now.
 
 **#2747 — Jellyfin-like external remote player.** The upstream button opens a scene in a
 local external player. The issue asks for a **remote** player, which the row's old
