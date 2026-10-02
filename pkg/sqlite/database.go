@@ -40,7 +40,12 @@ const (
 // differs from this. Bump it in the same commit that adds a migration -- a
 // migration that lands without the bump is applied but then reported as a
 // version mismatch on every subsequent open.
-var appSchemaVersion uint = 120
+// 121 = external_ids + external_sources (stash#1790).
+//
+// BUMPED IN THE SAME COMMIT AS THE MIGRATION, always. database.go refuses to open otherwise
+// and the symptom is "the table is simply absent", which reads as a migration that did not
+// run rather than as a version that was not bumped.
+var appSchemaVersion uint = 121
 
 //go:embed migrations/*.sql
 var migrationsBox embed.FS

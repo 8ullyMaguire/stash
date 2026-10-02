@@ -39,7 +39,42 @@ func (r *repository) destroyExisting(ctx context.Context, ids []int) error {
 	return r.destroy(ctx, ids)
 }
 
+// externalIDEntityTypeForTable maps a table to the entity_type its external ids use.
+//
+// A REVERSE LOOKUP RATHER THAN A LIST OF ENTITY STORES, and the reason is the failure it
+// prevents. Every entity's Destroy funnels through repository.destroy, so ONE line here
+// covers all of them -- but only for tables listed below. That makes the list the whole
+// risk: an entity added to the five models constants but not here gets its rows deleted
+// with no error, and its external ids left behind forever. TestDestroyForEntityRemovesIDs
+// (T4) is the check on that, and it is table-driven over this map precisely so that
+// adding an entity type means adding a line HERE and having a test fail if you forget.
+var externalIDEntityTypeForTable = map[string]string{
+	"scenes":     models.ExternalIDEntityScene,
+	"performers": models.ExternalIDEntityPerformer,
+	"studios":    models.ExternalIDEntityStudio,
+	"tags":       models.ExternalIDEntityTag,
+	"galleries":  models.ExternalIDEntityGallery,
+}
+
 func (r *repository) destroy(ctx context.Context, ids []int) error {
+	// stash#1790: external ids go FIRST, and only if the entity delete is going to happen.
+	//
+	// ORDER MATTERS ONLY FOR READABILITY -- the enclosing transaction makes this atomic
+	// either way -- but putting it before the loop means a failure to find the entity is
+	// discovered before any ids are touched.
+	//
+	// WHY IT HAPPENS HERE AND NOT IN EACH STORE'S Destroy: five stores means five chances
+	// to add an entity and not wire this in, and the omission is invisible in review and
+	// silent in production. `external_ids.entity_id` has NO foreign key (spec 4.2), so
+	// nothing else will ever clean these rows up.
+	if entityType, ok := externalIDEntityTypeForTable[r.tableName]; ok {
+		for _, id := range ids {
+			if err := NewExternalIDStore().DestroyForEntity(ctx, entityType, id); err != nil {
+				return err
+			}
+		}
+	}
+
 	for _, id := range ids {
 		stmt := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", r.tableName, r.idColumn)
 		if _, err := dbWrapper.Exec(ctx, stmt, id); err != nil {
