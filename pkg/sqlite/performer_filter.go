@@ -24,6 +24,34 @@ func (qb *performerFilterHandler) validate() error {
 		return err
 	}
 
+	// #3450: a date criterion must be an absolute date or a relative phrase. Before
+	// this, an unparseable value became the zero Date and the filter silently
+	// returned the wrong rows.
+	if err := validateDateCriterion("birthdate", filter.Birthdate); err != nil {
+		return err
+	}
+
+	// #3450: a date criterion must be an absolute date or a relative phrase. Before
+	// this, an unparseable value became the zero Date and the filter silently
+	// returned the wrong rows.
+	if err := validateDateCriterion("death date", filter.DeathDate); err != nil {
+		return err
+	}
+
+	// #3450: a date criterion must be an absolute date or a relative phrase. Before
+	// this, an unparseable value became the zero Date and the filter silently
+	// returned the wrong rows.
+	if err := validateDateCriterion("career start", filter.CareerStart); err != nil {
+		return err
+	}
+
+	// #3450: a date criterion must be an absolute date or a relative phrase. Before
+	// this, an unparseable value became the zero Date and the filter silently
+	// returned the wrong rows.
+	if err := validateDateCriterion("career end", filter.CareerEnd); err != nil {
+		return err
+	}
+
 	if subFilter := filter.SubFilter(); subFilter != nil {
 		sqb := &performerFilterHandler{performerFilter: subFilter}
 		if err := sqb.validate(); err != nil {

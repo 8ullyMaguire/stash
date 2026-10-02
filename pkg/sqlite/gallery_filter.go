@@ -23,6 +23,13 @@ func (qb *galleryFilterHandler) validate() error {
 		return err
 	}
 
+	// #3450: a date criterion must be an absolute date or a relative phrase. Before
+	// this, an unparseable value became the zero Date and the filter silently
+	// returned the wrong rows.
+	if err := validateDateCriterion("date", galleryFilter.Date); err != nil {
+		return err
+	}
+
 	if subFilter := galleryFilter.SubFilter(); subFilter != nil {
 		sqb := &galleryFilterHandler{galleryFilter: subFilter}
 		if err := sqb.validate(); err != nil {

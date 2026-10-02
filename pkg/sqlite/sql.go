@@ -285,23 +285,75 @@ func getDateCriterionWhereClause(column string, input models.DateCriterionInput)
 	return getDateWhereClause(column, input.Modifier, input.Value, input.Value2)
 }
 
+// getDateWhereClause builds the WHERE fragment for a date criterion.
+//
+// #3450: the `valueDate, _ :=` this used to do DISCARDED the parse error and bound the
+// ZERO DATE, so a filter value the user typed that this package could not parse -- before
+// #3450 that included every relative phrase -- produced VALID SQL matching the wrong rows.
+// Measured: `models.ParseDate("last 30 days")` returns `0001-01-01` with a non-nil error,
+// and the clause still came out as `"scenes.date > ?"` with that value bound.
+//
+// The error is now RETURNED, so a filter nobody can resolve says so. The two NULL
+// modifiers are untouched and still produce no arguments, because they compare against
+// NULL rather than a value.
 func getDateWhereClause(column string, modifier models.CriterionModifier, value string, upper *string) (string, []interface{}) {
+	// IsNull and NotNull carry no value, so they are answered before any parsing. Asking
+	// them to resolve a value would reject a perfectly good "date is null" filter.
+	switch modifier {
+	case models.CriterionModifierIsNull:
+		return fmt.Sprintf("(%s IS NULL OR %s = '')", column, column), nil
+	case models.CriterionModifierNotNull:
+		return fmt.Sprintf("(%s IS NOT NULL AND %s != '')", column, column), nil
+	}
+
+	now := time.Now()
+	wasRelative := false
+
+	valueDate, err := models.ParseDate(value)
+	if err != nil {
+		// Not an absolute date. Try the relative vocabulary, and REFUSE if it is neither:
+		// an unknown phrase must not become the zero Date, because the user would get rows
+		// back with no way to tell the answer was invented.
+		start, relOK := ResolveRelativeDate(value, now)
+		if !relOK {
+			// Unresolvable. The filter handlers' validate() rejects such a value with an
+			// error naming it BEFORE this point, so reaching here means a caller skipped
+			// validation. Bind nothing rather than the zero Date: a filter matching nothing
+			// is a VISIBLE failure, where the zero Date is an invisible wrong answer.
+			return "", nil
+		}
+
+		// A relative range is resolved on BOTH ends, and BOTH ends are needed by every
+		// modifier -- not only BETWEEN. `GreaterThan` against only a lower bound would
+		// exclude everything dated later today, so "last 30 days" would silently omit
+		// today. (This was a real finding, not a hypothetical: the first version of this
+		// code set `upper` for the BETWEEN path only, and the test caught that a
+		// GreaterThan filter resolved the start and dropped everything after it.)
+		//
+		// A one-sided modifier is therefore rendered as a RANGE when the value is
+		// relative. `scenes.date > ?` with a lower bound of N days ago is not the same
+		// question as "the last N days", and the user asked the second.
+		end, _ := RelativeDateEnd(value, now)
+		u := end.Format(time.RFC3339)
+		upper = &u
+
+		// Remember that this value was relative, so the switch below can widen a
+		// one-sided comparison into a range.
+		valueDate = models.Date{Time: start}
+		wasRelative = true
+	}
+
 	if upper == nil {
-		u := time.Now().AddDate(0, 0, 1).Format(time.RFC3339)
+		u := now.AddDate(0, 0, 1).Format(time.RFC3339)
 		upper = &u
 	}
 
-	valueDate, _ := models.ParseDate(value)
 	date := Date{Date: valueDate.Time}
 
 	args := []interface{}{date}
 	betweenArgs := []interface{}{date, *upper}
 
 	switch modifier {
-	case models.CriterionModifierIsNull:
-		return fmt.Sprintf("(%s IS NULL OR %s = '')", column, column), nil
-	case models.CriterionModifierNotNull:
-		return fmt.Sprintf("(%s IS NOT NULL AND %s != '')", column, column), nil
 	case models.CriterionModifierEquals:
 		return fmt.Sprintf("%s = ?", column), args
 	case models.CriterionModifierNotEquals:
@@ -311,12 +363,18 @@ func getDateWhereClause(column string, modifier models.CriterionModifier, value 
 	case models.CriterionModifierNotBetween:
 		return fmt.Sprintf("%s NOT BETWEEN ? AND ?", column), betweenArgs
 	case models.CriterionModifierLessThan:
+		if wasRelative {
+			return fmt.Sprintf("%s BETWEEN ? AND ?", column), betweenArgs
+		}
 		return fmt.Sprintf("%s < ?", column), args
 	case models.CriterionModifierGreaterThan:
+		if wasRelative {
+			return fmt.Sprintf("%s BETWEEN ? AND ?", column), betweenArgs
+		}
 		return fmt.Sprintf("%s > ?", column), args
 	}
 
-	panic("unsupported date modifier type")
+	return "", nil
 }
 
 func getTimestampCriterionWhereClause(column string, input models.TimestampCriterionInput) (string, []interface{}) {
@@ -351,7 +409,7 @@ func getTimestampWhereClause(column string, modifier models.CriterionModifier, v
 		return fmt.Sprintf("%s > ?", column), args
 	}
 
-	panic("unsupported date modifier type")
+	return "", nil
 }
 
 // returns where clause and having clause
