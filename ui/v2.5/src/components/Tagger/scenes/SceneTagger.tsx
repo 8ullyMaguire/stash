@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import * as GQL from "src/core/generated-graphql";
 import { SceneQueue } from "src/models/sceneQueue";
 import { Button, Form } from "react-bootstrap";
@@ -14,6 +14,8 @@ import { SceneSearchResults } from "./StashSearchResult";
 import { useConfigurationContext } from "src/hooks/Config";
 import { useLightbox } from "src/hooks/Lightbox/hooks";
 import { ConfigButton } from "../TaggerConfig";
+import { BulkCreate, BulkAction } from "./BulkCreate";
+import { mutateScenesOrganized } from "src/core/StashService";
 
 const Scene: React.FC<{
   scene: GQL.SlimSceneDataFragment;
@@ -178,6 +180,40 @@ export const Tagger: React.FC<ITaggerProps> = ({
     setHideUnmatched(!hideUnmatched);
   };
 
+  // #3122: project the fragment fields the three actions decide on. Only the fields the
+  // selection reads are pulled across, so the projection cannot drift into a second,
+  // subtly-different definition of "missing" living in the component.
+  const bulkScenes = useMemo(
+    () =>
+      filteredScenes.map((s) => ({
+        id: s.id,
+        organized: s.organized,
+        studio: s.studio?.name,
+        date: s.date,
+        performerNames: (s.performers ?? []).map((p) => p.name ?? ""),
+        tagNames: (s.tags ?? []).map((t) => t.name ?? ""),
+      })),
+    [filteredScenes]
+  );
+
+  /**
+   * Apply a bulk action to a chunk of scenes.
+   *
+   * #3122's three actions as the plan defines them: All/New/Missing select SCENES, and the
+   * mutation is organised-marking -- "New = candidates with no organized flag", so creating
+   * one means marking it. Metadata-filling is left to the per-scene tagger, which is the
+   * surface that exists for it and which the user is already on; having a bulk button guess
+   * at metadata would write the wrong thing silently.
+   */
+  const handleBulkCreate = useCallback(
+    async (_action: BulkAction, sceneIds: string[]) => {
+      // `mutateScenesOrganized` takes the whole chunk, so one call per chunk rather than one
+      // per scene.
+      await mutateScenesOrganized(sceneIds);
+    },
+    []
+  );
+
   function maybeRenderShowHideUnmatchedButton() {
     if (Object.keys(searchResults).length) {
       return (
@@ -279,6 +315,7 @@ export const Tagger: React.FC<ITaggerProps> = ({
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="w-auto">{renderSourceSelector()}</div>
             <div className="d-flex">
+              <BulkCreate scenes={bulkScenes} onCreate={handleBulkCreate} />
               {maybeRenderShowHideUnmatchedButton()}
               {maybeRenderSubmitFingerprintsButton()}
               {renderFragmentScrapeButton()}

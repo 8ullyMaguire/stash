@@ -1449,6 +1449,16 @@
     "scene_date": "Date of Scene",
     "scene_id": "Scene ID",
     "scene_tags": "Scene Tags",
+    "scene_tagger": {
+      "bulk_create": {
+        "all": "Create All ({count})",
+        "confirm": "Apply",
+        "confirm_count": "{count, plural, one {# scene will be updated} other {# scenes will be updated}}:",
+        "confirm_title": "Confirm {action}",
+        "missing": "Create Missing ({count})",
+        "new": "Create New ({count})"
+      }
+    },
     "scene_updated_at": "Scene Updated At",
     "scenes": "Scenes",
     "scenes_updated_at": "Scene Updated At",

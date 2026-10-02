@@ -880,6 +880,32 @@ export const useSceneResetActivity = (
 export const useSceneGenerateScreenshot = () =>
   GQL.useSceneGenerateScreenshotMutation();
 
+/**
+ * Mark a batch of scenes organised. #3122.
+ *
+ * A standalone mutator rather than a hook, because `useScenesUpdate` binds its input array at
+ * hook time (`useScenesUpdate = (input) => useScenesUpdateMutation({variables: {input}})`),
+ * so it cannot take a fresh per-chunk list -- the caller would have to re-render to change
+ * what it sends. `mutateSceneSetPrimaryFile` is the existing precedent for a one-shot
+ * imperative write, so this follows it rather than inventing a third shape.
+ *
+ * The cache eviction is the same pair the `useScenesUpdate` hook evicts, and it is not
+ * optional: without it the tagger page keeps rendering the pre-update `organized` value, so
+ * the scene the user just created stays in the "New" list and looks like the button did
+ * nothing.
+ */
+export const mutateScenesOrganized = (ids: string[]) =>
+  client.mutate<GQL.ScenesUpdateMutation>({
+    mutation: GQL.ScenesUpdateDocument,
+    variables: {
+      input: ids.map((id) => ({ id, organized: true })),
+    },
+    update(cache) {
+      evictTypeFields(cache, sceneMutationImpactedTypeFields);
+      evictQueries(cache, sceneMutationImpactedQueries);
+    },
+  });
+
 export const mutateSceneSetPrimaryFile = (id: string, fileID: string) =>
   client.mutate<GQL.SceneUpdateMutation>({
     mutation: GQL.SceneUpdateDocument,
