@@ -256,6 +256,10 @@ func Initialize() (*Server, error) {
 	r.Mount("/tag", server.getTagRoutes())
 	r.Mount("/downloads", server.getDownloadsRoutes())
 	r.Mount("/plugin", server.getPluginRoutes())
+	// stash#837: the issues panel. Mounted before the static UI catch-all below, because
+	// chi matches in registration order and a route registered after a wildcard is
+	// unreachable -- a panel that 404s into the SPA looks like a frontend bug.
+	r.Mount("/issues", server.getIssueRoutes())
 
 	r.HandleFunc("/css", cssHandler(cfg))
 	r.HandleFunc("/javascript", javascriptHandler(cfg))

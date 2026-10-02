@@ -21,12 +21,17 @@ type Repository struct {
 	GalleryChapter GalleryChapterReaderWriter
 	Image          ImageReaderWriter
 	Group          GroupReaderWriter
-	Performer      PerformerReaderWriter
-	Scene          SceneReaderWriter
-	SceneMarker    SceneMarkerReaderWriter
-	Studio         StudioReaderWriter
-	Tag            TagReaderWriter
-	SavedFilter    SavedFilterReaderWriter
+	// stash#837: without this field the issues store is unreachable from any consumer
+	// that resolves its dependencies from the Repository rather than constructing a
+	// store directly -- the API layer, dlna, the scan task. A store that exists and is
+	// wired into sqlite.Database but not here is a store nothing can use.
+	Issue       IssueReaderWriter
+	Performer   PerformerReaderWriter
+	Scene       SceneReaderWriter
+	SceneMarker SceneMarkerReaderWriter
+	Studio      StudioReaderWriter
+	Tag         TagReaderWriter
+	SavedFilter SavedFilterReaderWriter
 }
 
 func (r *Repository) WithTxn(ctx context.Context, fn txn.TxnFunc) error {

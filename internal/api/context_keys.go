@@ -14,4 +14,6 @@ const (
 	downloadKey
 	imageKey
 	pluginKey
+	// stash#837
+	issueKey
 )

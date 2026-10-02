@@ -81,6 +81,11 @@ func (s *IssueStore) table() string { return issuesTable }
 //
 // `issue.ID` is populated on success, so a caller that wants to link to the row
 // afterwards does not have to query for it.
+// Compile-time proof that the store satisfies the contract the API layer is written
+// against. Without this the route struct's field type compiles fine against any type
+// and the mismatch only shows up as a nil-pointer panic at the first request.
+var _ models.IssueReaderWriter = (*IssueStore)(nil)
+
 func (qb *IssueStore) Record(ctx context.Context, issue *models.Issue) error {
 	// THE DISMISSAL POLICY, and the only read in the common path. A dismissed
 	// finding of the same identity is not re-raised, so the user's click means
@@ -180,6 +185,30 @@ func (qb *IssueStore) Resolve(ctx context.Context, id int) error {
 		Timestamp{Timestamp: time.Now()}, id)
 	if err != nil {
 		return fmt.Errorf("resolving issue %d: %w", id, err)
+	}
+	return nil
+}
+
+// Restore undoes a Resolve.
+//
+// EXISTS BECAUSE A DISMISSAL IS A DECISION AND DECISIONS ARE WRONG. Without it, "I
+// dismissed that by accident" is answered by editing the database, and the panel teaches
+// people that dismissals are permanent -- which is how a panel stops being trusted.
+//
+// IT IS NOT Record. Record refuses to re-raise a dismissed finding, which is the whole
+// point of a dismissal, so the only way back is an explicit statement from the user. That
+// asymmetry is deliberate and is the same reason Resolve exists rather than a DELETE.
+//
+// `AND resolved = true` so restoring an already-live row is a no-op rather than an error,
+// and so a second restore cannot overwrite resolved_at with a later instant -- the same
+// idempotence rule Resolve follows.
+func (qb *IssueStore) Restore(ctx context.Context, id int) error {
+	_, err := dbWrapper.Exec(ctx, `
+		UPDATE issues SET resolved = false, resolved_at = NULL
+		WHERE id = ? AND resolved = true`,
+		id)
+	if err != nil {
+		return fmt.Errorf("restoring issue %d: %w", id, err)
 	}
 	return nil
 }
