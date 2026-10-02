@@ -68,6 +68,8 @@ decision made and **partly built**:
     DONE  derived length  GetFiles applies the window; 10 tests, mutation 8/8 (726ef5bf4)
     DONE  aggregates      5 sites use one SQL constant; no double-count; 4/4 sites proven
                           by mutation (2be0d52e3, tag stash-3530-duration)
+    DONE  dup detection   split files no longer self-duplicate; both branches; 6/6 killed
+                          (a444dc6c8, tag stash-3530-dupes)
 
 **The measurement that chose the model:** `scenes_files` has `PRIMARY KEY (scene_id, file_id)`
 and only a NON-unique index on `file_id`, so the schema **already** permits many scenes per
@@ -82,14 +84,25 @@ called `scene.go:1135` the site that decides the feature; it actually feeds
 reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
 
 **#3530 remains, in this order:**
-1. **duplicate detection** — `FindDuplicates` joins phash on `file_id`, so two scenes of one
-   file share it identically and `HAVING COUNT(DISTINCT scene_id) > 1` is already true for
-   them. One clause: `AND COUNT(DISTINCT file_id) > 1`. Test must be two-sided.
-2. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range.
-3. **detection** — needs an upstream discussion, not a guess.
-4. **any UI to set a range** — the columns are SQL/API-settable only today.
-5. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
+1. **the player + play URL** — `/scene/<id>/stream` carries neither file id nor range, so a
+   ranged scene currently plays the whole file. This is the last piece that makes the feature
+   usable rather than merely correct in the database.
+2. **detection** — needs an upstream discussion, not a guess.
+3. **any UI to set a range** — the columns are SQL/API-settable only today.
+4. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
    deliberate choice rather than an oversight.
+
+**#3530's duplicate-detection finding worth carrying:** three fixes were needed and the two that
+failed did so invisibly. `HAVING COUNT(DISTINCT file_id) > 1` is insufficient (`GROUP_CONCAT`
+cannot split a group by file: three segments plus a copy came back `[33 34 35 36]`), and
+`GROUP BY phash, file_id` is insufficient the other way (the UI treats each group as an
+independent set, so a copy pair becomes two singletons and `COUNT(phash) > 1` drops both).
+What works is `GROUP BY phash` plus a WHERE gate on the phash occurring under >1 file_id.
+
+**A known limitation, stated not hidden:** a split file whose phash ALSO occurs on another file
+is reported as ONE group with that file. The segments are not duplicates *of each other* but of
+the other file, and `[][]*Scene` cannot express a per-pair relation — returning nothing would hide
+a real duplicate.
 
 **#3530's own §8b finding worth carrying:** four of the five aggregate call sites were
 UNTESTED while the constant's own mutation sweep read 5/5 killed. **Sweeping the constant
