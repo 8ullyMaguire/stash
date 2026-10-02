@@ -220,8 +220,8 @@ type Manager struct {
 	// It takes a *Database because SetBoard writes an ordering in two statements
 	// and needs them atomic; see NewDiscoveryStore.
 	DiscoveryStore *sqlite.DiscoveryStore
-	Auth              *auth.SessionStore
-	AuthMode          auth.Mode
+	Auth           *auth.SessionStore
+	AuthMode       auth.Mode
 
 	// StashForge collaboration surface. The collab stores are present on every
 	// instance, including a single-user one: a single-user instance still needs
