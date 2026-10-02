@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -105,11 +106,99 @@ func (rs sceneRoutes) Routes() chi.Router {
 
 func (rs sceneRoutes) StreamDirect(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
+
+	// #3530 - a ranged scene CANNOT be served from the file directly.
+	//
+	// StreamSceneDirect ends in `http.ServeFile(w, r, fp)`, which serves the WHOLE file. It has
+	// no notion of a time window, and the obvious workaround does not work either: an HTTP
+	// Range header addresses BYTES, and an MP4's byte offset for time T is not (T / duration)
+	// -- it depends on the container's variable-bitrate layout, so a time-to-byte guess lands
+	// mid-GOP and the player starts at the wrong frame with the wrong audio.
+	//
+	// So the two honest options are to transcode the window, or to say we cannot. Silently
+	// serving the whole file is the bug this fixes: a 60s scene of a 2-hour file plays 2 hours
+	// and nothing about the response indicates a problem.
+	//
+	//	transcoding available -> 307 to the same scene's /stream.mp4, which honours the window
+	//	transcoding disabled     -> 409, with the window in the body
+	//
+	// An unranged scene is unaffected and still serves directly -- that is the common case and
+	// it must keep working, including with transcoding off.
+	if isRangedScene(scene) {
+		if manager.GetInstance().StreamManager == nil {
+			http.Error(w,
+				fmt.Sprintf("scene %d is a window (%s) of its file, and serving a window directly "+
+					"is not possible: it would play the whole file. Enable transcoding to play it.",
+					scene.ID, describeWindow(scene)),
+				http.StatusConflict)
+			return
+		}
+
+		// 307, not 302: the method and body must be preserved, and a range is a property of
+		// the resource, not a temporary detour. Signed-URL credentials are carried across in
+		// the query, so the redirect target stays authorised.
+		target := *r.URL
+		target.Path += ".mp4"
+		http.Redirect(w, r, target.String(), http.StatusTemporaryRedirect)
+		return
+	}
+
 	ss := manager.SceneServer{
 		TxnManager:       rs.txnManager,
 		SceneCoverGetter: rs.sceneFinder,
 	}
 	ss.StreamSceneDirect(scene, w, r)
+}
+
+// #3530 - helpers for the direct-stream decision above.
+
+// isRangedScene reports whether the scene is a WINDOW of its file rather than the whole thing.
+// Either end being set makes it a window: a scene with only an end is the head of the file, which
+// is still not the whole file.
+//
+// nil means "no window", which is why this cannot be `StartTime != nil && *StartTime > 0` -- a
+// window starting at 0 is still a window.
+func isRangedScene(scene *models.Scene) bool {
+	pf := scenePrimaryFile(scene)
+	if pf == nil {
+		return false
+	}
+	return pf.StartTime != nil || pf.EndTime != nil
+}
+
+// scenePrimaryFile is Primary() WITHOUT the panic.
+//
+// RelatedVideoFiles.Primary() panics by contract when the relationship has not been loaded
+// ("relationship has not been loaded"), and a handler reached before the file is loaded would
+// take the process down rather than return a 500. Every other route gets this for free because
+// SceneCtx loads the files first, but these helpers are also called from tests with a hand-built
+// scene, so the check belongs HERE rather than being assumed by a caller.
+//
+// Measured: `TestASceneWithNoFileIsNotWindowed` panicked on `&models.Scene{ID: 7}` before this
+// existed. A missing file is #3526's normal 404 case, so "no file" is a state this code must
+// survive.
+func scenePrimaryFile(scene *models.Scene) *models.VideoFile {
+	if scene == nil || !scene.Files.PrimaryLoaded() {
+		return nil
+	}
+	return scene.Files.Primary()
+}
+
+// describeWindow renders a scene's window for an error body, so a user hitting the 409 can see
+// which window was refused rather than just "not possible".
+func describeWindow(scene *models.Scene) string {
+	pf := scenePrimaryFile(scene)
+	if pf == nil {
+		return "unknown"
+	}
+	switch {
+	case pf.StartTime != nil && pf.EndTime != nil:
+		return fmt.Sprintf("%.1fs-%.1fs", *pf.StartTime, *pf.EndTime)
+	case pf.StartTime != nil:
+		return fmt.Sprintf("from %.1fs", *pf.StartTime)
+	default:
+		return fmt.Sprintf("until %.1fs", *pf.EndTime)
+	}
 }
 
 func (rs sceneRoutes) StreamMp4(w http.ResponseWriter, r *http.Request) {
