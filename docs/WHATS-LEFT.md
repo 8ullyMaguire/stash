@@ -1,0 +1,158 @@
+# stash — what is left (measured 2026-10-02, `docs/goal-check.py`)
+
+**The predicate is the authority.** `python3 docs/goal-check.py` is the repo's own
+completion test; this file is a reading of it, not a substitute. Re-run it before
+believing anything here — the numbers move, and a number copied into a summary is
+not evidence.
+
+Repo `~/code-local/go/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
+Two remotes, both pushed: `origin` (GitHub), `forgejo`.
+
+**Host note:** this repo lives on **gaming-pc, which is this machine**
+(`cachyos-B450`). `ssh gaming-pc` returns to the same box, so there is no
+second-host gate for stash. `ssh thinkcentre` does **not** have this repo
+(`~/code-local/go/stash` does not exist there) — verified, not assumed. Do not
+spend a build lane on it.
+
+## Status: 2 clauses outstanding
+
+| Clause | Verdict | What it says |
+|---|---|---|
+| C1 PRs decided | PASS | all 64 open PRs have a recorded decision |
+| **C2 issues dispositioned** | **FAIL** | **84 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused** |
+| C3 M5 tagged | PASS | `m5-p2p-downloader`, reachable from main |
+| C4 M7/M8 done | PASS | `m7-mesh`, `m8-relay-mesh` |
+| C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
+| C6 branch convention | PASS | single-branch layout, nothing stranded |
+| C7 suites | PASS | 60 packages unit, 1 integration |
+| **C8 backlog-17 ledger** | **FAIL** | **5 of 17 rows remain: #837, #1790, #2747, #3530, #4326** |
+
+### "Merge all PRs" — already nothing to merge
+
+Verified live this session, not read from a note:
+
+- our fork `8ullyMaguire/stash`: **0 open PRs**, 0 open issues.
+- `gh pr list` returns nothing. The 7268-series PRs are **upstream** `stashapp/stash`,
+  not ours.
+- forgejo is reachable; `fj pr ls` is not a valid subcommand (`fj pr list` is) — a
+  stale habit from an earlier session, corrected.
+
+The real queue is C2's 84 rows plus C8's 5, not a merge backlog.
+
+## C8 — the five remaining rows, in build order
+
+Ordered by dependency, not by issue number. Each is a real feature request; none
+is a bug with a one-line fix.
+
+| # | Issue | Build | Done when |
+|---|---|---|---|
+| **837** | Log potential issues with files, show in a dedicated UI | new table + model + detection + panel | **partially built — see below** |
+| **1790** | Generalized support for external IDs | `ExternalID` with a source registry, migrating `StashIDs` | table + registry + migration, `StashIDs` reads through it |
+| **3530** | Support multiple scenes in a single file | segments, segment-aware duration and filters | segments table; duration sums the segments |
+| **2747** | Jellyfin-like external remote player | config-driven command template, detached, scrubbed env | a configured command runs detached and serves playback |
+| **4326** | Browse related content during video playback | overlay panel, no route change, playback uninterrupted | panel opens over playback; `<video>` is not reloaded |
+
+### #837 is halfway — the state to build from
+
+Landed and pushed:
+
+- `docs/ISSUE-837-spec.md`, `docs/ISSUE-837-plan.md` (spec + plan **before** code,
+  per the standing workflow).
+- `8b1082e85` — migration `120_issues`, `appSchemaVersion` 119→120, schema tests.
+- `3797a3ded` — `pkg/models/model_issue.go`, `pkg/sqlite/issue.go`, store tests.
+  **13/13 mutations killed.**
+
+**The design finding, so it is not re-derived:** refusing duplicate *dismissed*
+rows and allowing a *new* finding of the same kind are contradictory for a unique
+index. So the **index** keeps the live-row invariants (a live finding is unique, so
+two racing scans cannot both insert) and the **store** keeps the dismissal policy
+(`Record` skips a finding with a dismissed row of the same identity). Cost, stated
+in the migration rather than hidden: two racing scans *can* both insert a live
+duplicate, because the index only refuses a third row.
+
+**What remains for #837** (steps 4–8 of the plan):
+
+1. detection in the scan — four kinds (`duplicate`, `zero_duration`, `zero_size`,
+   `no_files`), each with a **negative** test, because a detector that fires on
+   everything produces a table nobody reads.
+2. `GET /issues` + `POST /issues/{id}/resolve`, and GraphQL for the panel.
+3. the `/issues` panel.
+4. close it: `docs/ISSUES.md` → done, `docs/closed-issues.md` row, roster row →
+   `closed`, then `check-issue-ledgers.py` → OK and `goal-check.py` → C8 green.
+
+## C2 — the 84 planned rows
+
+`docs/UPSTREAM-ISSUES.md` holds 675 rows: **84 planned, 553 not-planned or
+deferred, 38 closed**. Every row needs to move out of `planned` with a *reason*,
+which means closing it with a test or deferring it under a cited rule. C2 accepts
+"closed with a test, OR deferred with a reason" — so triage is a legitimate
+outcome for rows that genuinely do not belong in this fork.
+
+**This is the bulk of the remaining work and it is bookkeeping-shaped, not
+code-shaped.** The efficient order:
+
+1. Work the 5 C8 rows (real features, above).
+2. Sweep the remaining `planned` rows in batches: measure each, then either close
+   with a test or defer with a rule citation — one verdict per row, both files
+   updated together so they cannot disagree.
+3. Run `python3 docs/check-issue-ledgers.py` after every batch. It fails if the
+   roster says `closed` without a `closed-issues.md` row, which is the check that
+   catches a half-finished close.
+
+**The trap, measured twice in this project:** a row moved from `planned` to
+`done` with the commit in the wrong CSV cell is rejected by C8's *positional*
+evidence rule. Verified-column rows must **lead** with `**done** — commit ...`.
+Also: 34 rows were found sitting inside sections headed `Planned` while marked
+closed — the checker now fails on that, so the sections cannot lie again.
+
+## Ledger integrity, already repaired (2026-10-02)
+
+`04fa7dff6`. `docs/UPSTREAM-ISSUES.md` header said 90/554/30 while its own table
+held 84/553/32, and `check-issue-ledgers.py` said **OK** — for three separate
+reasons, all now fixed and all verified by mutation:
+
+- the header regex demanded a bare "not planned" while the prose deliberately says
+  "not planned or deferred";
+- it counted `closed` but never `done` (six rows use it);
+- nothing checked section membership.
+
+Both header counts and both section counts now reconcile to the table.
+
+## Commits this session
+
+| Hash | What |
+|---|---|
+| `de1a30ac2` | **#3849 fixed** — gallery sort correlated to the gallery being viewed |
+| `e47c5c5eb` | `closed-issues.md` row for #3849 |
+| `04fa7dff6` | ledger drift + the checker that missed it |
+| `8b1082e85` | #837 migration 120 + schema tests |
+| `3797a3ded` | #837 model + store (13/13 mutations killed) |
+
+## Reusable lessons from #3849, which shaped everything after
+
+1. **"Intermittently" usually means insertion order, not chance.** SQLite's plan
+   is stable, so a many-to-many whose far side is unconstrained picks the same
+   row every time — which is why it was reproducible.
+2. **The gallery's file set must be reached through `files.zip_file_id`.**
+   `galleries_files` records a gallery's *archive*, so correlating against it
+   directly matches nothing, NULLs every key and **reverses** the order — worse
+   than the bug.
+3. **A flat `A OR B OR C` is wrong where the alternatives are ranked.** The `OR`
+   made the join non-unique and the symptom returned verbatim; the failure was a
+   non-unique join, not a missing condition.
+4. **A characterisation test goes red when the bug is fixed** — so it is half a
+   test. Invert the assertion; then it is the specification.
+5. **A positive control that fails is the signal.** Two fixtures passed for the
+   wrong reason (no `files` rows, so `NotContains` was trivially true) and only the
+   control exposed it.
+6. **Assert the value the defect corrupts**, not an aggregate that happens to
+   agree — one fixture's expected order was the same whether the bug was present
+   or fixed, so every mutation survived.
+7. **A mutation that "survives" may never have been applied.** An anchor string
+   that also occurs in a doc comment means `replace(..., 1)` mutates the comment;
+   `-count=1` bypasses the result cache but not reliably the build cache. Both are
+   now in the `test-driven-development` skill. An ambiguous anchor is a harness
+   defect, not a finding.
+8. **`sqlite.Timestamp` is RFC3339 — second precision.** Every idempotence test
+   written against a timestamp is vacuous until the stored value is moved out of
+   the way first, and the test asserting that move must check its own premise.
