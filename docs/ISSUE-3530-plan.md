@@ -26,39 +26,24 @@ that was not bumped. That is the #1790 lesson and it is repeated here deliberate
 
 Create `pkg/sqlite/migrations/122_scene_time_range.up.sql`:
 
-```sql
--- stash#3530 -- multiple scenes in a single file: TIME RANGE ON THE LINK.
---
--- THE SCHEMA ALREADY ALLOWS MANY SCENES PER FILE. `scenes_files` has PRIMARY KEY
--- (scene_id, file_id) and only a NON-unique index on file_id, so two scene rows may already
--- reference one file row. The referential half of this issue is therefore NOT a schema
--- change; what does not exist anywhere -- no start/end on scenes_files, files or
--- video_files -- is WHICH PART OF THE FILE. That is what these two columns add.
---
--- BOTH NULLABLE, AND NULL MEANS "THE WHOLE FILE". Every pre-existing row has NULL here, so
--- the migration is a no-op for every current user and the derived duration reduces to
--- video_files.duration exactly -- same float, no backfill. A backfill writing 0 or NULL into
--- a duration is how a migration silently turns every scene into a zero-length one.
---
--- ADDITIVE AND REVERSIBLE BY DESIGN: dropping these two columns restores the previous
--- schema. See spec section 3 for why this is time ranges and not real segment files.
-ALTER TABLE `scenes_files` ADD COLUMN `start_time` float;
-ALTER TABLE `scenes_files` ADD COLUMN `end_time` float;
+**AS SHIPPED** (`pkg/sqlite/migrations/122_scene_time_range.up.sql`): a rebuild —
+`scenes_files_new` with the two columns and three NAMED constraints, an explicit
+`INSERT … SELECT … NULL, NULL`, `DROP TABLE`, `RENAME`, then both indexes recreated by hand.
+The CHECKs are named so a refusal identifies itself (`CHECK constraint failed:
+scenes_files_end_after_start`) instead of dumping raw SQL — which is what lets a test assert
+*which* constraint fired.
 
--- SQLite CHECKs are enforced, and these are the bad rows the store must refuse.
-ALTER TABLE `scenes_files` ADD CONSTRAINT `scenes_files_start_time_non_negative`
-  CHECK (`start_time` IS NULL OR `start_time` >= 0);
-ALTER TABLE `scenes_files` ADD CONSTRAINT `scenes_files_end_time_non_negative`
-  CHECK (`end_time` IS NULL OR `end_time` >= 0);
-ALTER TABLE `scenes_files` ADD CONSTRAINT `scenes_files_end_after_start`
-  CHECK (`end_time` IS NULL OR `start_time` IS NULL OR `end_time` > `start_time`);
-```
+Full SQL and the reasoning are in the migration's own header; it is read by every future
+migration author, so it carries the driver-version measurement rather than a reference to
+this document.
 
-**NO TABLE REBUILD IS NEEDED — measured, after I got it wrong in this plan first.**
+**A TABLE REBUILD IS REQUIRED — and I got this wrong TWICE in this plan before measuring it
+against the driver the app actually runs.**
 
-I wrote that `ALTER TABLE ... ADD CONSTRAINT` is not valid SQLite and that a rebuild would be
-required. **That is false on this host**, and the reason it looked plausible is that SQLite
-*did not error*, which is the more dangerous outcome:
+First draft: "`ALTER TABLE ... ADD CONSTRAINT` is not valid SQLite, so rebuild." Second
+draft: "no rebuild needed — I measured it and SQLite accepted it." **Both wrong, same cause:
+I measured the `sqlite3` CLI, which is a newer SQLite than the app's.** stash pins
+`go-sqlite3 v1.14.22`, bundled SQLite 3.45.1, and that build rejects the statement:
 
 ```
 $ sqlite3 :memory: "CREATE TABLE t (a int); ALTER TABLE t ADD CONSTRAINT c CHECK (a > 0);

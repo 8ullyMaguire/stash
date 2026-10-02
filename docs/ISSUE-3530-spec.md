@@ -201,6 +201,20 @@ guess. Step 1 below implements the *model* (R1, R2, R5), which is what R6 would 
 
 ## 7. Implementation notes
 
+**CORRECTION (2026-10-02, after implementing it).** An earlier draft of this spec claimed
+`ALTER TABLE ... ADD CONSTRAINT` is not valid SQLite and that a table rebuild would be
+required — and then a second draft claimed the opposite, that no rebuild is needed, because
+the `sqlite3` CLI accepted the statement. **Both were wrong for the same reason: the CLI is a
+newer SQLite than the app runs.** stash pins `go-sqlite3 v1.14.22` (bundled SQLite 3.45.1),
+where the statement fails with `near "CONSTRAINT": syntax error`, while the CLI and v1.14.52
+both accept it. `ALTER TABLE ... ADD COLUMN … CHECK` *is* accepted on the pinned version.
+
+**A rebuild is therefore required, and its real cost is the indexes:** `DROP TABLE` takes
+`index_scenes_files_file_id` and `unique_index_scenes_files_on_primary` with it, and the
+latter is what guarantees a scene has exactly one primary file. Migration 122 recreates both
+by hand and tests them. Recorded here because the wrong claim was written with the same
+confidence as the right ones, and the `sqlite3` CLI accepting a statement is not evidence.
+
 Measured while writing this, and the reason the plan is not a patch:
 
 - **The join table is `scenes_files`, not `files_scenes`** — grepping for the wrong name
