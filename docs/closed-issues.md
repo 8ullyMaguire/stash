@@ -173,6 +173,66 @@ a test that exercises only the decider cannot see a guard in the deleter.** Two
 functions split for testability, and the split is also a seam the test has to
 cross deliberately.
 
+| stash#837 | Log potential issues with files, show in a dedicated UI | Built 2026-10-02: migration `120_issues`, `models.Issue`, detection in the file-write path, GraphQL + REST surfaces, and the `/issues` panel. Commits `8b1082e85` `3797a3ded` `76982d8e0` `12e5059ec` `b80f102dc` `2c705e992`.
+
+**The design finding, and it took three attempts to find.** The spec asks for three things at once:
+
+1. the identical LIVE finding twice → refuse
+2. the identical finding, already DISMISSED → refuse
+3. a NEW finding of the same kind with new details → ALLOW
+
+**(2) and (3) are contradictory for a unique index.** Refusing duplicate dismissed rows means any two
+dismissed rows of a kind collide; allowing a new finding of that kind means they must not. No column
+list separates them, because the only thing telling a repeat from a new finding is `details` — and
+putting `details` in the key lets a live duplicate differing only in prose insert, breaking (1).
+
+**The split is by kind, not difficulty.** The **index** keeps the live-row invariants — a live finding
+is unique, so two racing scans cannot both insert one. The **store** keeps the dismissal policy,
+because "do not re-raise what the user dismissed" is a policy, and policies belong in code where a
+test can assert them. If it lived only in the index it would be a fact about the schema that no test
+could tell from an accident; if it lived only in code the uniqueness would be a race.
+
+**The cost, stated rather than hidden:** two racing scans *can* both insert a live duplicate, because
+the index only refuses a third row. A read-then-write check in `Record` would reintroduce the very race
+the index exists to remove.
+
+**Detection runs where the file row is written** — `FileStore.Create` after the row is complete, and
+`FileStore.Update` after `replaceJoins` — not as a sweep, because a sweep has to stat every file, which
+is the expensive thing the scan just avoided. `detectFileIssues` returns nothing and cannot fail: a
+failure to *log* a problem must not fail the scan that found it, or a zero-byte file becomes a failed
+import.
+
+**`Update` is not a second thing; it is the fix for an asymmetry a test caught.** On `Create` alone,
+when B arrives sharing A's bytes, B is reported as a duplicate and A is not — so the panel would say
+"3 duplicates" about 4 copies, and the number would change with scan order. A rescan reaches A through
+`Update`, so re-detecting there is what makes the report symmetric.
+
+**Four detectors, each with a negative test**, because a detector with only a positive test proves it
+fires and not that it fires only on its own subject. `zero_duration` uses `<= 0`, not `== 0`: a
+*negative* duration is what a broken container actually reports.
+
+**Both HTTP surfaces exist on purpose.** `internal/api/routes_issue.go` (REST) is complete and tested;
+the panel does not use it, because this UI has no REST convention — every list is an Apollo hook over
+a generated query. GraphQL is what the panel uses; REST serves non-GraphQL callers. The route file
+says which is which so the next reader does not have to guess.
+
+**Lessons that cost more than the fixes:**
+
+- *Seven store tests broke* the moment detection was wired into `Create`, all from zero-byte fixtures
+  tripping `zero_size`. The tempting fix — relax the counts — would have made a real library's
+  zero-byte files stop being reported. `populateDB` commits its seed and 81 of its files are zero bytes.
+- *The per-file `break` is not observable by counting rows*: two same-kind findings collapse into one
+  via `ON CONFLICT DO UPDATE`, so any count-based test is vacuous by construction.
+- *Nor is it observable as "which file is named"*: `Create` overwrites the caller's `BaseFile` with
+  `Find`'s read-back, and `appendFingerprintsUnique` (file.go:250) fills `Fingerprints` from a separate
+  query — so the detector iterates the *query's* row order. Also dedupes by type, so two candidate
+  matches need two distinct fingerprint types. That test failed against **correct** code three times.
+- *`sqlite.Timestamp` is RFC3339*, so any idempotence test written against a timestamp is vacuous until
+  the stored value is moved out of the way first — and the test asserting that move must check its own
+  premise.
+- *The UI's locale JSON has no trailing newline and 4-space indent*; a `json.dump` round-trip rewrote
+  all 1800 lines. Locale strings are inserted textually.
+
 | stash#3849 | Wrong order of images in galleries on identical files | Fixed in `de1a30ac2` (`pkg/sqlite/image.go`, `setImageSortAndPagination`).
 
 `images_files` is a many-to-many: one row per (image, file). An image present in two
