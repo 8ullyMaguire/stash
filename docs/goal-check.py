@@ -432,7 +432,7 @@ def c8_backlog_17():
         # ...| verified state | disposition | state |
         states[num] = cells[-2].strip('* ') if len(cells) >= 2 else "?"
     bad = [n for n, s in states.items()
-           if s not in ("done", "open", "skipped", "in progress")]
+           if s not in ("done", "open", "skipped", "in progress", "partial")]
     if bad:
         add("C8 backlog-17 ledger", "FAIL",
             f"{len(bad)} row(s) have no recognised state: {sorted(bad)[:5]}")
@@ -484,6 +484,10 @@ def c8_backlog_17():
         rest = rows_by_num.get(n, "")
         cells = [c.strip() for c in rest.split("|")]
         disposition = cells[-3] if len(cells) >= 3 else ""
+        # `done` is terminal and must be backed by a commit. `partial` is NOT
+        # terminal -- it is counted with `open` below -- so it is held to no
+        # evidence rule here, because requiring a commit for work that is
+        # genuinely half-finished would push the author to write `done`.
         if state == "done" and not re.search(r"\b[0-9a-f]{7,40}\b", disposition):
             unproven.append(n)
         if state == "skipped" and not disposition:
@@ -499,7 +503,8 @@ def c8_backlog_17():
     skipped = sorted(n for n, s in states.items() if s == "skipped")
     # `in progress` counts as remaining: it is not a terminal state, and treating it
     # as done would let a row be parked there indefinitely while the clause reads green.
-    openish = sorted(n for n, s in states.items() if s in ("open", "in progress"))
+    openish = sorted(n for n, s in states.items()
+                     if s in ("open", "in progress", "partial"))
     detail = (f"{len(states)} issues = {len(done)} done {done}, "
               f"{len(openish)} open/in-progress, {len(skipped)} skipped {skipped}")
     if openish:
