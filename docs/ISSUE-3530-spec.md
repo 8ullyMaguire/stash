@@ -410,3 +410,82 @@ Also: `scene_filter.go:141` still filters on the file's length, and `models.Scen
 `Duration` field — so the per-row `as duration` column exists **only** to be summed, and
 `FindScenesResult.duration` is its sole observable. The compiler refusing `s.Duration` is the
 same fact §8's recount established by reading the schema.
+
+## 9. Duplicate detection — DONE, with a documented limitation
+
+Migration 122 makes a file hold several scenes, and **the phash belongs to the FILE**. So two
+scenes over one file have an IDENTICAL hash and identical duration, and both branches of
+`FindDuplicates` reported every scene of a split file as a duplicate of every other one.
+
+Measured before the fix, one 1800s file split in two, one phash:
+
+    distance == 0 (SQL)          group [33 34]     <- the two segments of ONE file
+    distance == 10 (in-memory)   group [33 34]
+
+and the fixture's genuine pairs (`[1 31]`, `[2 32]`) alongside them, so a fix that merely
+suppressed duplicates would have passed.
+
+### Two mechanisms, because the two branches are different code
+
+**SQL branch** (`distance == 0`) — `GROUP BY phash` is kept and a WHERE clause gates on the
+phash occurring under more than one file_id:
+
+    a copy pair      one phash, two file_ids  -> kept
+    a split file     one phash, one file_id   -> dropped
+
+**In-memory branch** (`distance != 0`) — `utils.Phash` gained a `FileID`, and `FindDuplicates`
+skips a neighbour when it is the same file. Zero disables the check, so every existing caller
+behaves as before.
+
+The skip is on `FileID`, **not** on "distance == 0": a distance of 0 is also what two
+byte-identical COPIES produce, and those ARE duplicates.
+
+### THREE fixes were tried, and the two that fail fail invisibly
+
+1. `HAVING COUNT(DISTINCT file_id) > 1` added to the existing grouping. **Insufficient**: with
+   three segments of one file plus an untouched copy, the group is `[33 34 35 36]` — two
+   distinct file_ids, so the HAVING passes and the three same-file segments come along.
+   `GROUP_CONCAT` concatenates the rows a group holds and cannot split a group by file.
+2. `GROUP BY phash, file_id`. **Insufficient in the other direction**: the UI treats each group
+   as an INDEPENDENT duplicate set, so a copy pair is split into two singletons and
+   `COUNT(phash) > 1` discards BOTH. Measured: zero groups.
+3. `GROUP BY phash` + the WHERE gate. Works. Written as WHERE rather than an `INTERSECT` of two
+   subqueries, because an INTERSECT needs both arms to return the same columns, cannot see
+   `scene_id`/`file_size` past the set operation, and must be passed the query arguments twice
+   — the measured failure of that version was `no such column: scene_id`.
+
+### THE LIMITATION, stated rather than hidden
+
+A split file whose phash **also** occurs on another file is reported as ONE group containing
+the segments and that other file together. The segments are not duplicates *of each other* —
+they are duplicates *of the other file* — but `[][]*Scene` cannot express a per-pair relation,
+and returning nothing would hide a real duplicate. Showing four scenes and asking which to
+delete is the decision the user actually has to make.
+
+`TestASplitFileAndACopyOfItInTheSameLibrary` pins this behaviour rather than pretending the
+relation is per-pair.
+
+### A redundancy kept on purpose
+
+`AND COUNT(DISTINCT scene_id) > 1` in the SQL is **unfalsifiable by this suite** — deleting it
+changes nothing, because the real guard is 30 lines below in Go (`AppendUnique` +
+`if len(sceneIds) > 1`), and `GROUP_CONCAT(DISTINCT scene_id)` has already collapsed the rows
+to one value. It is kept because it makes the SQL correct on its own rather than silently
+dependent on a filter further down the file, and
+`TestOneSceneOverTwoFilesWithTheSamePhashIsNotADuplicatePair` is the record of that decision so
+the next sweep does not "clean it up".
+
+### Sweep: 6/6 killed
+
+    SQL: group by file_id too (fix #2)                  KILLED
+    SQL: drop the phash file-count gate                  KILLED
+    SQL: fake the file_id (both branches)                KILLED
+    SQL: fake the file_id (first occurrence only)        KILLED
+    in-memory: never skip same-file neighbours           KILLED
+    in-memory: skip ALL neighbours                       KILLED
+
+**Two of those first attempts were reported as SURVIVED when they had only failed to BUILD** —
+an escaped quote in the mutant broke the Go, the test binary never ran, and `FAIL` never
+appeared. `builds: True` is now asserted alongside the test result for the same reason the
+per-call-site sweep needed it: **a mutation that did not compile is not a survivor, it is an
+invalid experiment.**

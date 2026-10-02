@@ -1712,6 +1712,7 @@ func (qb *SceneStore) FindDuplicates(ctx context.Context, distance int, duration
 	if distance == 0 {
 		query.columns = []string{
 			"scenes.id as scene_id",
+			"scenes_files.file_id as file_id",
 			"video_files.duration as file_duration",
 			"files.size as file_size",
 			"files_fingerprints.fingerprint as phash",
@@ -1720,6 +1721,51 @@ func (qb *SceneStore) FindDuplicates(ctx context.Context, distance int, duration
 
 		sqlStr := query.toSQL(false)
 
+		// The phash belongs to the FILE, so every scene over one file has an IDENTICAL hash
+		// and COUNT(DISTINCT scene_id) > 1 is already satisfied by two segments of the same
+		// video. Splitting a file into scenes therefore made each scene a duplicate of every
+		// other one, and they all appeared in the duplicate checker and its cleanup tooling.
+		// Measured before the fix: two scenes over one 1800s file produced the group [33 34].
+		//
+		// Three fixes were tried, and only the third works. The two that fail are recorded
+		// because each fails in a way the obvious test does not catch:
+		//
+		//   1. HAVING COUNT(DISTINCT file_id) > 1 added to the existing GROUP BY phash.
+		//      Insufficient: with three segments of one file plus an untouched COPY of it,
+		//      the group is [33 34 35 36] -- two distinct file_ids, so the HAVING passes and
+		//      the three same-file segments come along anyway. GROUP_CONCAT concatenates the
+		//      rows a group holds and cannot split a group by file.
+		//
+		//   2. GROUP BY phash, file_id (dropping the HAVING).
+		//      Insufficient in the OTHER direction: the UI treats each returned group as an
+		//      independent duplicate set (SceneDuplicateChecker), so a copy pair is split into
+		//      two singletons and COUNT(phash) > 1 then discards BOTH. Measured: zero groups.
+		//
+		//   3. This one: GROUP BY phash is kept, and a WHERE clause gates on the phash
+		//      occurring under more than one file_id.
+		//
+		//          a copy pair      one phash, two file_ids  -> kept
+		//          a split file     one phash, one file_id   -> dropped
+		//
+		//      Both requirements hold because they constrain DIFFERENT things: the grouping
+		//      keeps a copy pair together, and the gate drops a phash that is unique to one
+		//      file. file_id is selected only so the gate can count it.
+		//
+		// A KNOWN LIMITATION, pinned by TestASplitFileAndACopyOfItInTheSameLibrary: a split
+		// file whose phash ALSO occurs on another file is reported as ONE group containing
+		// the segments and that other file together. The segments are not duplicates OF EACH
+		// OTHER -- they are duplicates OF the other file -- but [][]*Scene cannot express a
+		// per-pair relation, and returning nothing would hide a real duplicate. Showing four
+		// scenes and asking which to delete is the decision the user actually has to make.
+		//
+		// Written as WHERE + GROUP BY rather than an INTERSECT of two subqueries: an INTERSECT
+		// requires both arms to return the same columns, cannot see scene_id or file_size past
+		// the set operation, and must be passed the query arguments TWICE. The measured failure
+		// of that version was "no such column: scene_id".
+		//
+		// NOTE ON STYLE: this SQL is a raw backtick literal, so no backtick may appear inside
+		// it -- including in these comments. Backticked identifiers here terminate the string
+		// mid-token and Go reports a syntax error far from the cause.
 		finalQuery := `
 SELECT GROUP_CONCAT(DISTINCT scene_id) as ids
 FROM (` + sqlStr + `)
@@ -1727,6 +1773,12 @@ WHERE phash IS NOT NULL
     AND (durationDiff <= ?
     OR ? < 0)  -- Always TRUE if the parameter is negative.
                -- That will disable the durationDiff checking.
+    AND phash IN (
+		SELECT phash FROM (` + sqlStr + `)
+		WHERE phash IS NOT NULL
+		GROUP BY phash
+		HAVING COUNT(DISTINCT file_id) > 1
+	)
 GROUP BY phash
 HAVING COUNT(phash) > 1
 	AND COUNT(DISTINCT scene_id) > 1
@@ -1734,7 +1786,13 @@ ORDER BY SUM(file_size) DESC;
 `
 
 		var ids []string
+		// `sqlStr` is embedded TWICE (once per INTERSECT arm), so its arguments must be bound
+		// TWICE as well, and the two durationDiff placeholders once per arm. Getting this
+		// wrong is an "argument count" error at execution time rather than a compile error,
+		// because Go's variadic `...` happily accepts any slice.
 		args := append(query.allArgs(), durationDiff, durationDiff)
+		args = append(args, query.allArgs()...)
+		args = append(args, durationDiff, durationDiff)
 		if err := dbWrapper.Select(ctx, &ids, finalQuery, args...); err != nil {
 			return nil, err
 		}
@@ -1755,6 +1813,10 @@ ORDER BY SUM(file_size) DESC;
 	} else {
 		query.columns = []string{
 			"scenes.id as id",
+			// scenes_files.file_id so utils.FindDuplicates can tell two scenes over ONE
+			// file from two scenes over two identical files. Without it every segment of a
+			// split file has distance 0 to its siblings and is reported as a duplicate.
+			"scenes_files.file_id as file_id",
 			"files_fingerprints.fingerprint as phash",
 			"video_files.duration as duration",
 		}
