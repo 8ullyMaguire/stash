@@ -173,6 +173,50 @@ a test that exercises only the decider cannot see a guard in the deleter.** Two
 functions split for testability, and the split is also a seam the test has to
 cross deliberately.
 
+### stash#3849 — wrong order of images in galleries on identical files
+
+Fixed in `de1a30ac2` (`pkg/sqlite/image.go`, `setImageSortAndPagination`).
+
+`images_files` is a many-to-many: one row per (image, file). An image present in two
+galleries owns two file rows sharing one `image_id` — the same bytes under two names,
+possibly in folders whose paths order differently. The gallery FILTER restricted
+membership through `galleries_images`; the ORDER BY joined `images_files` + `files` with
+no such restriction, so the sort key came off an ARBITRARY row of that join.
+
+**Not random, which is the whole reason it was testable.** SQLite's plan is stable, so
+the winning row is decided by INSERTION ORDER. Hence "intermittently" in the report, and
+hence reproducible on demand.
+
+The fix correlates the sort's join to the gallery being viewed, but three things about it
+are worth the next reader's time:
+
+- **The gallery's own file set is reached through `files.zip_file_id`.** Correlating
+  against `galleries_files.file_id` directly is wrong: that table records a gallery's
+  ARCHIVE, so for a zip gallery no member's `file_id` is in it, the correlation matched
+  nothing, every key went NULL, and the order came out **reversed** — a worse symptom
+  than the bug.
+- **Ranked, not `OR`-ed.** The conditions began as one flat `A OR B OR C`. The `OR` let
+  the fallback match *alongside* the gallery row, the join went NON-UNIQUE, and the
+  symptom returned verbatim. They are `COALESCE`d scalar subqueries so at most one row
+  matches per image — which is what makes the key deterministic at all.
+- **The primary-file floor is not optional.** Without it an unresolvable gallery gives
+  every key NULL and a LEFT JOIN with a NULL key leaves the order to whatever else breaks
+  the tie. Measured: that is a reversed order.
+
+**The lesson, and it cost three fixtures to learn.** A characterisation test that pins a
+bug is only half a test: it goes green when the defect reproduces, so a *fix* turns it red
+and invites someone to relax it. The first version of this suite asserted the broken order
+and passed. Then the first *fix* passed it too — for the wrong reason, because the fixture
+created images with no `files` rows at all, so every path came back empty and
+`NotContains(out, "006.jpg")` was trivially true. The POSITIVE CONTROL failing is what
+exposed it. And the last fixture, which the arm-mutation run exposed, asserted only the
+final ORDER when the correct and the buggy answer were the same order: with the shared
+image named `004.jpg` behind `001/002`, both keys put it last. A test whose assertion is
+insensitive to the thing it is testing passes no matter what you change.
+
+Generalisable form: **assert the value the defect corrupts, not the aggregate a user
+happens to see.** Same family as the earlier "test measures the wrong layer" rule here.
+
 ## Not yet closed
 
 423 issues are marked `planned` in `docs/UPSTREAM-ISSUES.md`. The queue is the
