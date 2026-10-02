@@ -147,6 +147,14 @@ type TranscodeOptions struct {
 	VideoFile  *models.VideoFile
 	Resolution string
 	StartTime  float64
+	// #3530 EndTime is an END POINT in the source file, but it reaches ffmpeg as a
+	// DURATION (-t = EndTime - StartTime). 0 means "to the end of the file".
+	//
+	// Both halves of that sentence are load-bearing. Passing EndTime straight to -t seeks
+	// past the file, so the subtraction in makeStreamArgs is not incidental; and 0 has to
+	// mean "unbounded" rather than "zero seconds", because a scene from 60s to the end of
+	// the file is a real and common shape.
+	EndTime float64
 }
 
 func (o TranscodeOptions) FileGetCodec(sm *StreamManager, maxTranscodeSize int) (codec VideoCodec) {
@@ -207,6 +215,28 @@ func (o TranscodeOptions) makeStreamArgs(sm *StreamManager) Args {
 			args = args.NoAccurateSeek()
 		}
 		args = args.Seek(o.StartTime)
+	}
+
+	// #3530 - bound the output to the scene's window, so a ranged scene plays its window
+	// instead of the whole file.
+	//
+	// -t takes a LENGTH. The scene's EndTime is a point in the file, and -ss has already
+	// moved the read head to StartTime, so the length is the difference. Passing EndTime
+	// itself would seek EndTime seconds past StartTime: for a scene of 60..300 that is
+	// 360s instead of 240s, i.e. 60s of the WRONG part of the video.
+	//
+	// The guards, in the order they matter:
+	//
+	//   o.EndTime <= 0     no window end, so run to the end of the file
+	//   o.EndTime <= o.StartTime   the window is empty or inverted
+	//
+	// An inverted window is DROPPED rather than emitted, and that is deliberate: -t 0
+	// transcodes nothing and answers 200 with an empty body, which is precisely the
+	// failure #5683 fixed. Transcoding the rest of the file is wrong but watchable, whereas
+	// an empty 200 makes the client re-request in a loop. A client can legitimately send
+	// end <= start by racing a seek, so erroring here would be worse than ignoring it.
+	if o.EndTime > 0 && o.EndTime > o.StartTime {
+		args = args.Duration(o.EndTime - o.StartTime)
 	}
 
 	args = args.Input(o.VideoFile.Path)
