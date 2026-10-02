@@ -83,6 +83,23 @@ func Publishable(share collab.ShareChoice) bool {
 // that could write a field directly would make that statement untrue.
 type Syncer struct {
 	board *ident.Board
+
+	// peer is the READ direction's transport (R057). It is a field rather than a parameter
+	// because a Syncer represents one instance's sync relationship, and a pull that took the
+	// peer as an argument would let a caller mix transports and names freely -- pairing
+	// peer A's transport with peer B's identity is exactly the mistake that makes an entity's
+	// recorded Origin a lie.
+	peer Peer
+}
+
+// SetPeer wires the read transport. Returns the syncer so construction can be chained, and
+// does nothing if peer is nil, so a caller cannot leave the syncer in a state where Pull
+// reports an empty result rather than an error.
+func (s *Syncer) SetPeer(peer Peer) *Syncer {
+	if peer != nil {
+		s.peer = peer
+	}
+	return s
 }
 
 // NewSyncer wires a syncer to the proposal path.
@@ -214,7 +231,33 @@ type PublicEntity struct {
 	// Published is carried so a consumer can cache the fact it was published
 	// rather than re-asking. It is NOT the consent state -- consent is revocable
 	// and must be re-checked, so it is deliberately absent.
+	//
+	// For an entity that came from a PEER it is also NOT the peer's statement: Pull applies
+	// the LOCAL consent decision, so this field is always "would this instance publish it",
+	// never "did that instance publish it". See Syncer.Pull.
 	Published bool
+
+	// Origin is the instance an entity arrived from, empty for a local one.
+	//
+	// Added for R057's read direction. §6a.6 says an id across a node boundary is an
+	// (instance, local) PAIR, and PublicID is only the local half -- so a pulled entity that
+	// carried just the id would be indistinguishable from a local one, and two peers both
+	// using id 42 would collide. Requiring a non-empty Origin on a pull is what makes the
+	// collision impossible rather than merely unlikely.
+	Origin string
+}
+
+// QualifiedID is the (instance, local) pair as a single string, for callers that store an
+// identifier rather than keeping the two halves apart.
+//
+// The separator is a colon, which no instance name may contain -- an instance name is a host
+// or an operator-chosen label, and this rejects the ambiguous case rather than producing an id
+// two different peers could both claim.
+func (e PublicEntity) QualifiedID() string {
+	if e.Origin == "" {
+		return e.PublicID
+	}
+	return e.Origin + ":" + e.PublicID
 }
 
 // Query applies the public query's bounds.

@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stashapp/stash/internal/collab"
@@ -205,14 +209,32 @@ func TestAPublicEntityCarriesNoConsentState(t *testing.T) {
 
 // The structural half of the write-through: Syncer's only dependency is the ident
 // board, so there is no field writer for sync to reach.
+// The ALLOWED set, not just the required one. R057 added Pull and SetPeer and this test failed
+// on both -- correctly, because the guard could not tell a read from a write, only that the set
+// had grown. Asserting "every method is Push" would have meant deleting the read direction, or
+// weakening the guard to "Push is present", which proves nothing: a new field writer would pass.
+//
+// So the rule is now stated positively -- the only methods Syncer may expose are Push (the one
+// write-through) and the named read-side ones. Anything else fails with the reason, which is the
+// thing a future reader needs.
 func TestTheSyncerHasNoFieldWriter(t *testing.T) {
 	s := NewSyncer(ident.NewBoard(collab.NewProposer(newFakeStore())))
 	methods := methodNamesOf(s)
+
+	// Pull and SetPeer are the READ direction: Pull writes nothing and SetPeer only stores a
+	// transport. Neither can reach a field.
+	allowed := map[string]bool{"Push": true, "Pull": true, "SetPeer": true}
+
+	require.NotEmpty(t, methods, "reflection returned no methods, so this test proves nothing")
 	for _, m := range methods {
-		assert.Equal(t, "Push", m,
-			"Syncer exposes %q; anything that writes a field is a bypass of "+
-				"§6a.19's write-through rule", m)
+		assert.True(t, allowed[m],
+			"Syncer exposes %q, which is neither the proposal write-through nor a named "+
+				"read-side method; anything that writes a field is a bypass of §6a.19's "+
+				"write-through rule", m)
 	}
+	assert.Contains(t, methods, "Push",
+		"Push must remain: it is the write-through, and a guard that passed without it would "+
+			"be satisfied by a Syncer that cannot write at all")
 }
 
 // --- a minimal ProposalStore, so the syncer can be tested without a database ---
@@ -298,11 +320,98 @@ func fieldNamesOf(v any) []string {
 	return out
 }
 
+// methodNamesOf lists EVERY method declared on the named receiver type, exported or not,
+// by reading this package's own source.
+//
+// WHY NOT REFLECTION: reflect.Type.NumMethod() reports only the EXPORTED set, so the original
+// version of this guard was blind to an unexported method -- and an unexported
+// `setTitleDirectly` on Syncer is exactly the bypass the guard exists to prevent, since it is
+// callable from anywhere inside the package. I proved the hole rather than assuming it: adding
+// an unexported field-writer left the guard green. There is no reflect.VisibleMethods in the
+// stdlib (that is a package-internal helper), so the alternative is the parser.
+//
+// WHY A PARSER AND NOT A HARD-CODED LIST: a hard-coded list is what the guard already was, and
+// it only stays true if whoever adds a method remembers to update it. Reading the declaration
+// site means the guard's view cannot drift from the type's actual method set.
 func methodNamesOf(v any) []string {
 	t := reflect.TypeOf(v)
-	out := make([]string, 0, t.NumMethod())
-	for i := 0; i < t.NumMethod(); i++ {
-		out = append(out, t.Method(i).Name)
+	ptr := t.Kind() == reflect.Ptr
+	elem := t
+	if ptr {
+		elem = t.Elem()
+	}
+	// The receiver type is named by the concrete type; find its declaration in this package.
+	want := elem.Name()
+	if want == "" {
+		return nil
+	}
+
+	var out []string
+	for _, path := range packageFiles(t.PkgPath()) {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		out = append(out, parseMethodsOn(string(src), want)...)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// parseMethodsOn returns the names of methods declared with receiver `(r *T)` or `(r T)` where
+// T is typeName, skipping methods declared on other types in the same file.
+//
+// A line-based scan rather than go/ast because the whole question is "what does the compiler
+// think this type has", and the receiver clause is the only thing that decides it -- but a
+// naive `func (x *T)` scan would also catch a method inside a comment or a string, so the
+// receiver clause is anchored to the start of the declaration.
+func parseMethodsOn(src, typeName string) []string {
+	var out []string
+	recv := "*" + typeName
+	for _, line := range strings.Split(src, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "func (") {
+			continue
+		}
+		close := strings.Index(trimmed, ")")
+		if close < 0 {
+			continue
+		}
+		recvPart := trimmed[len("func ("):close]
+		// The receiver must be a pointer to exactly this type.
+		if !strings.HasSuffix(strings.TrimSpace(recvPart), recv) {
+			continue
+		}
+		rest := strings.TrimSpace(trimmed[close+1:])
+		open := strings.Index(rest, "(")
+		if open < 0 {
+			continue
+		}
+		name := strings.TrimSpace(rest[:open])
+		if name == "" || name == typeName {
+			continue // a constructor, not a method
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// packageFiles lists the .go files of this package, found from the test binary's own directory
+// so the test does not depend on the working directory.
+func packageFiles(pkgPath string) []string {
+	dir := "."
+	if pkgPath != "" {
+		dir = filepath.Base(pkgPath)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil
+	}
+	out := matches[:0]
+	for _, m := range matches {
+		if !strings.HasSuffix(m, "_test.go") {
+			out = append(out, m)
+		}
 	}
 	return out
 }
