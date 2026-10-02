@@ -11,6 +11,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/jmoiron/sqlx"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/sliceutil"
 	"github.com/stashapp/stash/pkg/utils"
 	"gopkg.in/guregu/null.v4"
 	"gopkg.in/guregu/null.v4/zero"
@@ -905,6 +906,79 @@ func (qb *PerformerStore) HasImage(ctx context.Context, performerID int) (bool, 
 
 func (qb *PerformerStore) UpdateImage(ctx context.Context, performerID int, image []byte) error {
 	return qb.blobJoinQueryBuilder.UpdateImage(ctx, performerID, performerImageBlobColumn, image)
+}
+
+// SetImages replaces the set of images linked to a performer through the `performers_images`
+// join table. stash#571.
+//
+// WHY A SEPARATE METHOD, and not a field on Create/UpdatePerformerInput
+//
+// A performer's image currently lives in a single-blob COLUMN, written by UpdateImage and read
+// by `performerResolver.ImagePath` via HasImage. The `images` TABLE plus the `performers_images`
+// join are a SECOND, independent system, read by `performerResolver.ImageCount` via
+// `image.CountByPerformerID`. Nothing in the API wrote the join, so `image_count` was 0 for
+// every performer whose image was set through the API -- correct only for autotagged rows,
+// which write the join from the filesystem side. This is the missing way in.
+//
+// # WHY THE BLOB IS DELIBERATELY NOT TOUCHED
+//
+// The two systems are not reconciled here, and that is the decision rather than an oversight.
+// Mirroring one into the other would delete the single image every existing user has, and the
+// goal file says to record a subsystem-sized issue rather than half-build it. So this is
+// additive in EFFECT even though it REPLACES within the join: a client that sets `images` has
+// not set `image_path`, and conflating the two is how the pair got confused in the first place.
+//
+// SEMANTICS: REPLACE, matching `alias_list`, `urls` and `tag_ids`.
+//
+// The field IS the new set. An empty slice clears; it is not "absent, do not touch". Absent is
+// expressed by the resolver not calling this at all, which is what `PerformerUpdateInput`'s
+// pointer-to-slice distinction gives us.
+func (qb *PerformerStore) SetImages(ctx context.Context, performerID int, imageIDs []int) error {
+	// `performers_images` is oriented IMAGE -> PERFORMERS, not the other way round:
+	// `imagesPerformersTableMgr.idColumn` is `image_id` and `.fkColumn` is `performer_id`, so
+	// `insertJoins(ctx, id, foreignIDs)` binds `id` to image_id and each foreign ID to
+	// performer_id. Every existing caller passes the IMAGE id first (image.go:280, :339, :377).
+	//
+	// The first version of this method passed (performerID, imageIDs), which produced
+	// `INSERT INTO performers_images (image_id, performer_id) VALUES (?, ?)` with the arguments
+	// SWAPPED -- the performer's id landed in image_id and an image id in performer_id, and the
+	// insert failed with FOREIGN KEY constraint failed. The table shape makes the mistake easy
+	// and the error message makes it look like referential integrity rather than argument order,
+	// so the arguments are spelled out in the comment above rather than left implicit.
+	//
+	// That is also why this is two operations and not one `replaceJoins`: replaceJoins replaces
+	// the rows for ONE idColumn value, i.e. it would replace an IMAGE's performers, not a
+	// performer's images. To replace the performer's set, every image must be touched, so:
+	//
+	//   1. drop the performer from the images it should no longer have;
+	//   2. add it to the images it should.
+	//
+	// `invert()` gives the performer's current image ids (idColumn becomes performer_id), and
+	// `NotIntersect` is the set difference -- both from the standard library of this package, so
+	// neither is a reimplementation of something that already exists.
+	byPerformer := imagesPerformersTableMgr.invert()
+
+	current, err := byPerformer.get(ctx, performerID)
+	if err != nil {
+		return err
+	}
+
+	// 1. Remove the performer from images not in the new set.
+	for _, imgID := range sliceutil.NotIntersect(current, imageIDs) {
+		if err := imagesPerformersTableMgr.destroyJoins(ctx, imgID, []int{performerID}); err != nil {
+			return err
+		}
+	}
+
+	// 2. Add the performer to the new set. `addJoins` skips ids already present, so re-setting
+	// an unchanged set is a no-op rather than a duplicate-key error.
+	for _, imgID := range imageIDs {
+		if err := imagesPerformersTableMgr.addJoins(ctx, imgID, []int{performerID}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (qb *PerformerStore) destroyImage(ctx context.Context, performerID int) error {
