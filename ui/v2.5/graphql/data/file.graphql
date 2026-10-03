@@ -10,6 +10,15 @@ fragment VideoFileData on VideoFile {
   size
   mod_time
   duration
+
+  #3530 - the window this SCENE takes from this file. Present on VideoFile rather than
+  # Scene because that is where it lives: one file can back several scenes with different
+  # windows, so "the scene's window" is not a single fact. The panel reads these to show and
+  # edit the range, and `duration` above is already the CLAMPED window length rather than the
+  # file's own length, so the two are read together and never mixed up.
+  start_time
+  end_time
+
   video_codec
   audio_codec
   width

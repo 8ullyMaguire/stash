@@ -3,7 +3,9 @@
         "anonymise": "Anonymize",
         "download_anonymised": "Download anonymized",
         "customise": "Customize",
-        "optimise_database": "Optimize Database"
+        "optimise_database": "Optimize Database",
+        "edit_range": "Edit Range",
+        "clear_range": "Clear Range"
     },
     "config": {
         "tools": {

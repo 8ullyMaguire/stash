@@ -20,6 +20,7 @@ import { TextField, URLField, URLsField } from "src/utils/field";
 import { StashIDPill } from "src/components/Shared/StashID";
 import { PatchComponent } from "../../../patch";
 import { FileSize } from "src/components/Shared/FileSize";
+import { SceneRangeForm } from "./SceneRangeForm";
 
 interface IFileInfoPanelProps {
   sceneID: string;
@@ -37,6 +38,55 @@ const FileInfoPanel: React.FC<IFileInfoPanelProps> = (
 ) => {
   const intl = useIntl();
   const history = useHistory();
+
+  // #3530 - the window this scene takes from its primary file, plus the form to change it.
+  //
+  // Rendered only for the primary file (see SceneRangeForm for why), and the row is always
+  // present even when there is no window, because a feature with no affordance is a feature
+  // nobody finds. "Whole file" is the state a scene with no window is in, so that is what it
+  // says -- rather than hiding the row until a window exists and leaving no way to create one.
+  const [editingRange, setEditingRange] = useState(false);
+
+  function renderRangeRow() {
+    const { start_time, end_time } = props.file;
+    const hasWindow = start_time !== null && start_time !== undefined;
+
+    return (
+      <>
+        <dt>
+          <FormattedMessage id="media_info.range" />
+        </dt>
+        <dd data-test-id="scene-range-value">
+          {hasWindow ? (
+            <>
+              {TextUtils.secondsToTimestamp(start_time)}
+              {" – "}
+              {end_time !== null && end_time !== undefined
+                ? TextUtils.secondsToTimestamp(end_time)
+                : intl.formatMessage({ id: "media_info.range_end_of_file" })}
+            </>
+          ) : (
+            <FormattedMessage id="media_info.range_whole_file" />
+          )}
+          <Button
+            className="edit-button"
+            onClick={() => setEditingRange(true)}
+            disabled={props.loading}
+            data-test-id="scene-range-edit"
+          >
+            <FormattedMessage id="actions.edit_range" />
+          </Button>
+        </dd>
+        {editingRange && (
+          <SceneRangeForm
+            sceneID={props.sceneID}
+            file={props.file}
+            onClose={() => setEditingRange(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   // TODO - generalise fingerprints
   const oshash = props.file.fingerprints.find((f) => f.type === "oshash");
@@ -99,6 +149,7 @@ const FileInfoPanel: React.FC<IFileInfoPanelProps> = (
           value={TextUtils.secondsToTimestamp(props.file.duration ?? 0)}
           truncate
         />
+        {props.primary && renderRangeRow()}
         <TextField
           id="dimensions"
           value={`${props.file.width} x ${props.file.height}`}
