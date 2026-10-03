@@ -380,6 +380,49 @@ BATCH = {
         "which makes the request not-planned rather than deferred.",
         "grep -n 'scene_count' ui/v2.5/src/components/Tags/TagCard.tsx | head -3",
     ),
+
+    # ---- batch 8; every evidence command run and observed to print. ----
+    7187: (
+        "closed",
+        "A scraper CAN return \"no images found\". marshalScrapedImages in "
+        "internal/api/scraped_content.go:79 walks the scraped content and type-switches on each "
+        "element: *models.ScrapedImage and models.ScrapedImage are appended to the result, and the "
+        "`:83` case explicitly `continue`s on nil because the GraphQL schema requires a non-nil list. "
+        "An empty result is therefore the natural output for a scrape that matched nothing, and the "
+        "comment at :83 shows the nil case was handled deliberately rather than left to panic. The "
+        "scrape mutation marshals through the same helper at :185.",
+        "grep -n 'marshalScrapedImages' internal/api/scraped_content.go | head -3",
+    ),
+    5178: (
+        "not-planned",
+        "A>B loop controls not working on Apple Touch devices is a consequence of the mobile UI being "
+        "deliberately disabled, not a touch-handling defect. ScenePlayer.tsx:614 sets "
+        "touchControls: {disabled: true} on every mobileUi() call, and :618 guards the whole call "
+        "with `if (!isSafari)` after :603 derives isSafari from UAParser -- so on Safari the mobile UI "
+        "options are never applied at all. Touch and desktop share the same control surface here, so "
+        "there is no separate loop-control path to repair; re-enabling touch controls would change "
+        "the player overlay globally on mobile.",
+        "grep -n 'disabled: true' ui/v2.5/src/components/ScenePlayer/ScenePlayer.tsx | head -2",
+    ),
+    4415: (
+        "not-planned",
+        "queryURL is a first-class scraper field, declared twice in "
+        "pkg/scraper/definition.go -- :151 QueryURL string with yaml:\"queryURL\" alongside :152 "
+        "QueryURLReplacements (yaml:\"queryURLReplace\"), and again at :176 for the per-field form. "
+        "So scrapers can already build a query URL and substitute into it from scraped values. What is "
+        "missing is validation that the substitutions resolved, which is a diagnostic improvement "
+        "rather than the capability the issue asks for.",
+        "grep -n 'QueryURL' pkg/scraper/definition.go | head -4",
+    ),
+    7209: (
+        "not-planned",
+        "Freeones career-length parsing. pkg/scraper/freeones.go:92 maps CareerLength into the scraped "
+        "performer, so the field IS carried; the report is that a value like \"2016-now\" fails to "
+        "parse into the structured career range. Upstream owns the freeones scraper, and this fork "
+        "does not patch site-specific scrapers locally -- each one diverges on the next upstream sync, "
+        "so a local fix would be reverted rather than merged. The blocker is upstream ownership, named.",
+        "grep -n 'CareerLength' pkg/scraper/freeones.go | head -2",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
