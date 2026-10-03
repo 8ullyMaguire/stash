@@ -342,10 +342,16 @@ func (s Scene) DisplayName() string {
 //
 // ## Which artefacts
 //
-// Preview and webp only, because those are the ones made window-aware in 8f84c565f. Sprite, VTT
-// thumbs and export deliberately keep the plain hash: they are NOT yet window-aware, and suffixing
-// them would rename files whose content has not changed. That is a pending piece of work, not an
-// oversight -- see docs/WHATS-LEFT.md.
+// Preview, webp AND sprite/VTT thumbs, because those are the ones made window-aware: previews in
+// 8f84c565f, sprite + VTT in af5ea1a83. The sprite routes and the sprite task both key on this,
+// and they must -- serving a windowed scene's sprite by the plain hash serves the *unwindowed*
+// sprite of another scene, at a URL that looks entirely correct.
+//
+// **Export deliberately keeps the plain hash**, and it is the one remaining exception. It is not
+// an oversight and not yet done: export writes a rendered file whose name a user may have recorded
+// elsewhere, and suffixing it would rename an artefact whose CONTENT is unchanged for any scene
+// whose window covers the whole file. That is a separate decision with its own migration question,
+// so it stays out until someone makes it deliberately.
 func GeneratedChecksum(s Scene, hashAlgorithm HashAlgorithm) string {
 	base := s.GetHash(hashAlgorithm)
 	if base == "" {

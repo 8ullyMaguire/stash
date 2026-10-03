@@ -456,13 +456,94 @@ func (qb *SceneStore) Update(ctx context.Context, updatedObject *models.Scene) e
 	}
 
 	if updatedObject.Files.Loaded() {
-		fileIDs := make([]models.FileID, len(updatedObject.Files.List()))
-		for i, f := range updatedObject.Files.List() {
-			fileIDs[i] = f.ID
-		}
-
-		if err := scenesFilesTableMgr.replaceJoins(ctx, updatedObject.ID, fileIDs); err != nil {
+		// #3530 -- this branch CANNOT use scenesFilesTableMgr.replaceJoins.
+		//
+		// `scenes_files` is a joinTable and #3530 put start_time/end_time ON that join
+		// table, which is the only place they can live: there is no per-scene-file type in
+		// the runtime model (Scene.Files is []VideoFile; the only SceneFile is the JSON
+		// EXPORT shape in pkg/models/jsonschema).
+		//
+		// replaceJoins is destroy-then-insert (table.go:264), and its INSERT carries the
+		// two id columns and nothing else. So the old rows go, the new rows come back with
+		// start_time/end_time NULL, and the window is GONE -- silently, because NULL is a
+		// legal value ("no window") and every CHECK still passes.
+		//
+		// MEASURED, not reasoned: pkg/sqlite/scene_window_preserved_test.go drives the
+		// store and a 60..240 window came back reporting 1800s. Nothing else caught it
+		// because every range test sets the window with raw SQL AFTER creating the scene and
+		// never updates the scene afterwards -- the window is only ever set, never
+		// edited-around.
+		//
+		// The fix is to make the replace SCOPED: only remove the rows whose file id is no
+		// longer in the list, and never touch a row that stays. That preserves the window
+		// per scene-file PAIR, which is the grain the window lives at -- two scenes of one
+		// file each keep their own range, which a per-file cache would destroy.
+		if err := qb.replaceSceneFiles(ctx, updatedObject.ID, updatedObject.Files.List()); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// replaceSceneFiles sets a scene's file set while preserving each remaining row's window.
+//
+// The generic relatedFilesTable.replaceJoins cannot be used for `scenes_files` -- see the call
+// site in Update. It is destroy-then-insert, and the INSERT carries only (scene_id, primary,
+// file_id), so a surviving row comes back with start_time/end_time NULL.
+//
+// This version is SCOPED, and the scoping is the whole point:
+//
+//   - it DELETEs only the rows whose file id is no longer attached;
+//   - it INSERTs only the ids that are genuinely new.
+//
+// A kept row is therefore never touched -- not deleted and re-inserted, not updated. That is
+// stronger than "insert-or-ignore", which would also preserve the row but would still depend on
+// an ON CONFLICT clause that relatedFilesTable.insertJoin does not have.
+func (qb *SceneStore) replaceSceneFiles(ctx context.Context, sceneID int, files []*models.VideoFile) error {
+	wanted := make([]models.FileID, len(files))
+	keep := make(map[models.FileID]bool, len(files))
+	for i, f := range files {
+		wanted[i] = f.ID
+		keep[f.ID] = true
+	}
+
+	existing, err := scenesFilesTableMgr.get(ctx, sceneID)
+	if err != nil {
+		return err
+	}
+
+	var drop []models.FileID
+	for _, id := range existing {
+		if !keep[id] {
+			drop = append(drop, id)
+		}
+	}
+
+	// `primary` belongs to the row, and the first file in the list is the primary one -- the
+	// convention relatedFilesTable.get() already encodes by ordering on `primary` DESC. A row
+	// that keeps its place keeps its flag; a newly inserted row gets it if it is first.
+	var add []models.FileID
+	seen := make(map[models.FileID]bool, len(existing))
+	for _, id := range existing {
+		seen[id] = true
+	}
+	for _, id := range wanted {
+		if !seen[id] {
+			add = append(add, id)
+		}
+	}
+
+	if len(drop) > 0 {
+		if err := scenesFilesTableMgr.destroyJoinsForScene(ctx, sceneID, drop); err != nil {
+			return fmt.Errorf("removing detached scene files: %w", err)
+		}
+	}
+
+	if len(add) > 0 {
+		const firstPrimary = true
+		if err := scenesFilesTableMgr.insertJoins(ctx, sceneID, firstPrimary, add); err != nil {
+			return fmt.Errorf("attaching scene files: %w", err)
 		}
 	}
 

@@ -862,6 +862,25 @@ func (t *relatedFilesTable) replaceJoins(ctx context.Context, id int, fileIDs []
 	return t.insertJoins(ctx, id, firstPrimary, fileIDs)
 }
 
+// destroyJoinsForScene removes specific (scene, file) pairs.
+//
+// relatedFilesTable.destroyJoins filters on file_id ALONE, which is correct for its callers --
+// they destroy a file everywhere it is referenced -- and catastrophically wrong here: two scenes
+// of one file is the case #3530 exists for, so deleting by file id would take the OTHER scene's
+// attachment with it. Hence a scene-scoped delete rather than the general helper.
+func (t *relatedFilesTable) destroyJoinsForScene(ctx context.Context, sceneID int, fileIDs []models.FileID) error {
+	q := dialect.Delete(t.table.table).Where(
+		t.idColumn.Eq(sceneID),
+		t.table.table.Col("file_id").In(fileIDs),
+	)
+
+	if _, err := exec(ctx, q); err != nil {
+		return fmt.Errorf("destroying file joins in %s: %w", t.table.table.GetTable(), err)
+	}
+
+	return nil
+}
+
 // destroyJoins destroys all entries in the table with the provided fileIDs
 func (t *relatedFilesTable) destroyJoins(ctx context.Context, fileIDs []models.FileID) error {
 	q := dialect.Delete(t.table.table).Where(t.table.table.Col("file_id").In(fileIDs))
