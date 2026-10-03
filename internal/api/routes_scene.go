@@ -84,6 +84,12 @@ func (rs sceneRoutes) Routes() chi.Router {
 		r.Get("/interactive_heatmap", rs.InteractiveHeatmap)
 		r.Get("/caption", rs.CaptionLang)
 
+		// stash#2747 -- POST, not GET: a URL cannot start a local program, so the request has to
+		// reach the server. It sits INSIDE this block so it inherits SceneCtx and cannot be
+		// reached by a browser following a link. See external_player.go for why the file path is
+		// never caller-supplied.
+		r.Post("/external_player", rs.ExternalPlayer)
+
 		r.Get("/scene_marker/{sceneMarkerId}/stream", rs.SceneMarkerStream)
 		r.Get("/scene_marker/{sceneMarkerId}/preview", rs.SceneMarkerPreview)
 		r.Get("/scene_marker/{sceneMarkerId}/screenshot", rs.SceneMarkerScreenshot)

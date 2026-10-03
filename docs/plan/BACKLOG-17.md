@@ -50,7 +50,7 @@ Findings, in the order the work should go. `?` means "not yet started".
 | 2337 | multiple users, configurable permissions | absent, large | [G](#g-2337) |
 | 2359 | Stash-Box parity | satisfied by pointing at the owner's Stash-Box | recorded below |
 | 2507 | performer alias in Auto Tag | absent | [H](#h-2507) |
-| 2747 | external remote player | absent | [I](#i-2747) |
+| 2747 | external remote player | done | [I](#i-2747) — command template, scrubbed env, window-aware; 7/7 mutation sweep |
 | 2833 | `e` shortcut collides with subpages | bug present | [J](#j-2833) |
 | 3001 | `File.Destroy.Post` hook | absent | [K](#k-3001) |
 | 3122 | Create All/New/Missing on tagger page | absent | [L](#l-3122) |
