@@ -94,9 +94,25 @@ type VideoFile implements BaseFile @requiresRole(role: "subscriber") {
   height: Int!
   duration: Float!
   video_codec: String!
-  audio_codec: String!
-  frame_rate: Float!
+  audio_codec: String
+  frame_rate: Float
   bit_rate: Int!
+
+  """
+  #3530 - the time THIS SCENE starts within this file, in seconds. null means the scene
+  uses the whole file. Exposed on the FILE rather than on Scene because that is where it
+  lives: there is no per-scene-file type in the runtime model, so one file backing two
+  scenes carries two different windows and "the scene's window" is not a single fact.
+  A scene with two files therefore shows two windows, which is the truth rather than a
+  convenient fiction.
+  """
+  start_time: Float
+  """
+  #3530 - the time this scene ends within this file, in seconds. null means the window is
+  open-ended: it runs to the end of the file. 0 is NOT the same as null and is not what
+  this returns -- a zero-length window is refused by the database CHECK.
+  """
+  end_time: Float
 
   scenes: [Scene!]!
 

@@ -127,6 +127,20 @@ func (_m *SceneReaderWriter) AssignFiles(ctx context.Context, sceneID int, fileI
 	return r0
 }
 
+// SetSceneRange provides a mock function with given fields: ctx, sceneID, fileID, start, end
+func (_m *SceneReaderWriter) SetSceneRange(ctx context.Context, sceneID int, fileID models.FileID, start, end *float64) error {
+	ret := _m.Called(ctx, sceneID, fileID, start, end)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID, *float64, *float64) error); ok {
+		r0 = rf(ctx, sceneID, fileID, start, end)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Count provides a mock function with given fields: ctx
 func (_m *SceneReaderWriter) Count(ctx context.Context) (int, error) {
 	ret := _m.Called(ctx)

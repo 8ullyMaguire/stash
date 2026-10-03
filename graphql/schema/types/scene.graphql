@@ -172,6 +172,26 @@ input SceneUpdateInput {
 
   primary_file_id: ID
 
+  """
+  #3530 - set the window this scene takes from `primary_file_id`. Both null CLEARS the
+  window and restores the whole file; `start_time: 0` with no `end_time` is a valid
+  open-ended window.
+
+  The window is written against a FILE, not against the scene, which is why this input
+  needs `primary_file_id`: there is no per-scene-file type in the runtime model, so a
+  scene with two files has two windows and one of them has to be named. The resolver
+  refuses an ambiguous window rather than guessing which file was meant -- guessing is
+  how two scenes of one file end up sharing a range.
+
+  Refused with a 400 naming the field, mirroring the database CHECKs (`start >= 0`,
+  `end > start`) and adding `end <= the file's duration`: a window cannot run past the end
+  of the file it is a window OF, and `GetFiles` clamps that on read, so accepting it would
+  save a number the reader then silently changes.
+  """
+  start_time: Float
+  "See `start_time`. Both must be sent to change a window; neither alone is meaningful."
+  end_time: Float
+
   custom_fields: CustomFieldsInput
 }
 

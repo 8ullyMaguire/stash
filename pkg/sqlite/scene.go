@@ -851,6 +851,58 @@ func (qb *SceneStore) sceneFileRanges(ctx context.Context, id int) (map[int]scen
 // reduces to `video_files.duration` in that case. Every pre-existing scene is NULL/NULL, so
 // no existing scene's duration changes — asserted in TestAScenesDurationIsUnchangedForEvery
 // ExistingScene.
+
+// SetSceneRange writes the window a scene takes from one of its files.
+//
+// # WHY THIS DOES NOT CLAMP
+//
+// sceneFileRanges clamps on READ, because values can arrive from outside the API -- hand-written
+// SQL, an older build, the JSON import path -- and a reader must cope with them. Clamping a WRITE
+// would be the opposite trade: it would save a number different from the one the caller asked for,
+// so a read-back would report something the caller never sent. So the write is verbatim, and the
+// API refuses an overrunning window instead (mutationResolver.validateSceneWindow). What is asked
+// for is what is saved; what is refused is refused rather than quietly adjusted.
+//
+// # WHY IT NAMES A FILE
+//
+// The window belongs to a (scene, file) pair. One file can back several scenes with different
+// windows -- the entire point of #3530 -- so "the scene's window" is not a fact about the scene,
+// and a write that picked a file for the caller would be a guess. Callers that cannot name one
+// must refuse rather than pick.
+func (qb *SceneStore) SetSceneRange(ctx context.Context, sceneID int, fileID models.FileID, start, end *float64) error {
+	// Assign rather than interpolate: these are caller-supplied floats, and a query builder exists
+	// precisely so that a value never becomes SQL text.
+	//
+	// `goqu.Record` is this package's idiom for an UPDATE's SET clause (see
+	// group_relationships.go and blob.go). A nil *float64 becomes SQL NULL, which is what clears
+	// a window -- the same value the reader treats as "no window". Note the Record takes the
+	// values as plain pointers, not goqu.Vals: Vals is a single-value wrapper, and using it here
+	// produced "too many arguments in call to goqu.V" rather than anything that worked.
+	q := dialect.Update(scenesFilesJoinTable).
+		Set(goqu.Record{
+			"start_time": start,
+			"end_time":   end,
+		}).
+		Where(
+			scenesFilesJoinTable.Col(sceneIDColumn).Eq(sceneID),
+			scenesFilesJoinTable.Col(fileIDColumn).Eq(fileID),
+		)
+
+	res, err := exec(ctx, q)
+	if err != nil {
+		return fmt.Errorf("setting range on scene %d file %d: %w", sceneID, fileID, err)
+	}
+
+	// A scene with no matching row is a caller error -- the file is not attached to the scene --
+	// and SQLite reports an UPDATE that matched nothing as success. Without this check the caller
+	// would believe it had set a window on a scene that has no such file, and the window would
+	// silently not exist.
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return fmt.Errorf("file %d is not attached to scene %d, so its range cannot be set", fileID, sceneID)
+	}
+	return nil
+}
+
 func (qb *SceneStore) GetFiles(ctx context.Context, id int) ([]*models.VideoFile, error) {
 	fileIDs, err := sceneRepository.files.get(ctx, id)
 	if err != nil {

@@ -144,6 +144,19 @@ type SceneWriter interface {
 	AddGalleryIDs(ctx context.Context, sceneID int, galleryIDs []int) error
 	AssignFiles(ctx context.Context, sceneID int, fileID []FileID) error
 
+	// #3530 - set the window a scene takes from one of its files.
+	//
+	// Takes the fileID explicitly because the window lives on the (scene, file) PAIR: one
+	// file can back two scenes with different windows, so "the scene's window" is not a
+	// fact about the scene. A caller that cannot name the file must not guess -- see
+	// mutationResolver.validateSceneWindow, which refuses rather than picking one.
+	//
+	// nil means "no window": the scene uses the whole file. Both nil clears an existing
+	// window. The store does NOT validate -- the database CHECKs and the API's field-naming
+	// messages do that, and duplicating a third copy here would only add a third thing to
+	// keep in sync.
+	SetSceneRange(ctx context.Context, sceneID int, fileID FileID, start, end *float64) error
+
 	OHistoryWriter
 	ViewHistoryWriter
 	SaveActivity(ctx context.Context, sceneID int, resumeTime *float64, playDuration *float64) (bool, error)

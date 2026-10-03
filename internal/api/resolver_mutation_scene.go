@@ -255,6 +255,116 @@ func scenePartialFromInput(input models.SceneUpdateInput, translator changesetTr
 	return &updatedScene, nil
 }
 
+// validateSceneWindow checks a window before it is written.
+//
+// # WHY THIS IS NOT THE DATABASE'S JOB ALONE
+//
+// The CHECKs on scenes_files are start >= 0, end >= 0, end > start. They are the last line and
+// they are correct, but a violation surfaces as the string "CHECK constraint failed:
+// scenes_files", which names no field and no value -- useless to the person who typed the
+// number. This mirrors them with messages that name the offending field and value, and adds
+// one case the CHECKs cannot express:
+//
+//   - a CHECK may not reference another table, so `end <= the file's duration` is NOT
+//     enforceable in the schema. SceneStore.GetFiles clamps an overrunning window on READ
+//     (sceneFileRanges), so accepting one would save a number the reader then silently
+//     changes -- the form would show 9999, the scene would report the real end. Refusing is
+//     strictly better than lying.
+//
+// The duplication is deliberate and is the same shape as the sprite plan: the database owns
+// correctness, this owns the message.
+//
+// # THE AMBIGUITY REFUSAL
+//
+// The window lives on a (scene, file) pair, so a window update has to name a file. When
+// `primary_file_id` is absent the scene's CURRENT primary is used, which is unambiguous for a
+// one-file scene and WRONG for a multi-file one -- there is no way to know which file was meant,
+// and guessing is precisely how two scenes of one file end up sharing a range. So it refuses.
+func (r *mutationResolver) validateSceneWindow(ctx context.Context, sceneID int, input models.SceneUpdateInput) error {
+	if input.StartTime == nil && input.EndTime == nil {
+		// Not part of this update. Distinct from "both null", which CLEARS the window --
+		// gqlgen gives an unsent field and an explicit null the same nil pointer, so the
+		// clearing case is handled by the caller that knows the field was sent.
+		return nil
+	}
+
+	var start, end *float64
+	if input.StartTime != nil {
+		v := *input.StartTime
+		start = &v
+	}
+	if input.EndTime != nil {
+		v := *input.EndTime
+		end = &v
+	}
+
+	if start != nil && *start < 0 {
+		return fmt.Errorf("start_time must not be negative, got %v", *start)
+	}
+	if end != nil && *end < 0 {
+		return fmt.Errorf("end_time must not be negative, got %v", *end)
+	}
+	// `end == start` is a zero-length window: the CHECK's `end > start` refuses it, and so
+	// does this, because a zero-length window has no frames and every derived artefact
+	// (sprite, preview) would be an empty grid.
+	if start != nil && end != nil && *end <= *start {
+		return fmt.Errorf("end_time (%v) must be greater than start_time (%v)", *end, *start)
+	}
+
+	// Resolve the file the window belongs to.
+	var fileID models.FileID
+	if input.PrimaryFileID != nil {
+		parsed, err := strconv.Atoi(*input.PrimaryFileID)
+		if err != nil {
+			return fmt.Errorf("converting primary_file_id: %w", err)
+		}
+		fileID = models.FileID(parsed)
+	} else {
+		scene, err := r.repository.Scene.Find(ctx, sceneID)
+		if err != nil {
+			return err
+		}
+		if scene == nil {
+			return fmt.Errorf("scene with id %d not found", sceneID)
+		}
+		if err := scene.LoadFiles(ctx, r.repository.Scene); err != nil {
+			return err
+		}
+		files := scene.Files.List()
+		if len(files) == 0 {
+			return errors.New("cannot set a range on a scene with no files")
+		}
+		if len(files) > 1 {
+			return fmt.Errorf(
+				"cannot set a range without primary_file_id: scene %d has %d files and the range belongs to one of them",
+				sceneID, len(files))
+		}
+		fileID = files[0].ID
+	}
+
+	files, err := r.repository.File.Find(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("file %d not found", fileID)
+	}
+	vf, ok := files[0].(*models.VideoFile)
+	if !ok {
+		return fmt.Errorf("file %d is not a video file, so it has no range", fileID)
+	}
+
+	// The check the schema cannot express.
+	if end != nil && *end > vf.Duration {
+		return fmt.Errorf("end_time (%v) is past the end of the file (%v seconds)", *end, vf.Duration)
+	}
+	if start != nil && *start > vf.Duration {
+		return fmt.Errorf("start_time (%v) is past the end of the file (%v seconds)", *start, vf.Duration)
+	}
+
+	return nil
+}
+
 func (r *mutationResolver) sceneUpdate(ctx context.Context, input models.SceneUpdateInput, translator changesetTranslator) (*models.Scene, error) {
 	sceneID, err := strconv.Atoi(input.ID)
 	if err != nil {
@@ -321,6 +431,16 @@ func (r *mutationResolver) sceneUpdate(ctx context.Context, input models.SceneUp
 		}
 	}
 
+	// #3530 -- validate the window BEFORE anything is written, and against the file the
+	// window will actually live on. See validateSceneWindow for why this is not the
+	// database's job alone.
+	windowSent := translator.hasField("start_time") || translator.hasField("end_time")
+	if windowSent {
+		if err := r.validateSceneWindow(ctx, sceneID, input); err != nil {
+			return nil, err
+		}
+	}
+
 	var customFields *models.CustomFieldsInput
 	if input.CustomFields != nil {
 		cfCopy := *input.CustomFields
@@ -347,7 +467,61 @@ func (r *mutationResolver) sceneUpdate(ctx context.Context, input models.SceneUp
 		}
 	}
 
+	// #3530 -- write the window LAST, after UpdatePartial.
+	//
+	// Order matters and it is not cosmetic. UpdatePartial rewrites the scene's file rows when
+	// the input carries a file list (SceneStore.Update's Files.Loaded() branch), which is
+	// exactly the path that used to ERASE a window -- fixed in b604926c0, but writing the
+	// window first would still race that rewrite for the reader. Writing last means the value
+	// that survives is the one just validated.
+	//
+	// The file is re-resolved rather than reused from validation because UpdatePartial may have
+	// changed which file is primary when the input set primary_file_id.
+	if windowSent {
+		if err := r.setSceneWindow(ctx, scene, input); err != nil {
+			return nil, err
+		}
+	}
+
 	return scene, nil
+}
+
+// setSceneWindow writes the validated window to the row it belongs to.
+//
+// `windowSent` is what makes "clear the window" expressible: gqlgen gives an ABSENT field and an
+// explicit `null` the same nil pointer, so `input.StartTime == nil` cannot tell "leave it alone"
+// from "remove it". The changeset translator can, and the caller has already used it to decide
+// that a window was part of this update at all.
+//
+// The file is resolved HERE rather than reusing validation's answer, because UpdatePartial may
+// have changed which file is primary when the input set primary_file_id -- and reading the
+// post-update scene is what makes the write land on the row the caller will then read back.
+func (r *mutationResolver) setSceneWindow(ctx context.Context, scene *models.Scene, input models.SceneUpdateInput) error {
+	fileID := scene.PrimaryFileID
+	if input.PrimaryFileID != nil {
+		parsed, err := strconv.Atoi(*input.PrimaryFileID)
+		if err != nil {
+			return fmt.Errorf("converting primary_file_id: %w", err)
+		}
+		id := models.FileID(parsed)
+		fileID = &id
+	}
+
+	// A nil PrimaryFileID means the scene has no primary file, which validateSceneWindow has
+	// already refused for a scene with no files -- but a scene whose primary was just CLEARED by
+	// this same input reaches here, so the check cannot be skipped.
+	if fileID == nil || *fileID == 0 {
+		return errors.New("cannot set a range: the scene has no primary file")
+	}
+
+	// Pass the pointers straight through. A nil here means NULL in the column, which is how a
+	// window is cleared and how an open-ended window is expressed -- the store does not clamp and
+	// does not second-guess, because validateSceneWindow has already refused everything the
+	// database would have rejected.
+	if err := r.repository.Scene.SetSceneRange(ctx, scene.ID, *fileID, input.StartTime, input.EndTime); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *mutationResolver) sceneUpdateCoverImage(ctx context.Context, s *models.Scene, coverImageData []byte) error {

@@ -229,7 +229,22 @@ type SceneUpdateInput struct {
 	PlayDuration  *float64       `json:"play_duration"`
 	PlayCount     *int           `json:"play_count"`
 	PrimaryFileID *string        `json:"primary_file_id"`
-	CustomFields  *CustomFieldsInput
+
+	// #3530 -- the window this scene takes from PrimaryFileID, in seconds.
+	//
+	// Pointers, so "not sent" is distinguishable from "sent as zero" -- which the window
+	// genuinely needs: `start_time: 0` with no end_time is a valid open-ended window from
+	// the head of the file, and BOTH nil is a valid "clear the window". A plain float64
+	// cannot tell those three cases apart.
+	//
+	// Why the window needs a FILE rather than being a scene field: there is no
+	// per-scene-file type in the runtime model, so one file backing two scenes carries two
+	// different windows. That is why this sits beside PrimaryFileID rather than being
+	// freestanding, and why the resolver refuses an ambiguous window instead of guessing.
+	StartTime *float64 `json:"start_time"`
+	EndTime   *float64 `json:"end_time"`
+
+	CustomFields *CustomFieldsInput
 }
 
 type SceneDestroyInput struct {
