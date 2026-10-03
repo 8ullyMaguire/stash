@@ -61,7 +61,6 @@ BATCH = []
 def add(num, verdict, reason, evidence):
     BATCH.append((num, verdict, reason, evidence))
 
-
 # --- #5002: plugin settings UI/UX. Upstream PR #7018 (merged 2026-06-25) is in main. ---------
 # --- #3692: log management. lumberjack rotation is in the tree; the rest is a discussion. ----
 # --- #2049: logo submissions. PR #2073 merged 2022 and is in main; the ask is a process. ------
@@ -69,54 +68,6 @@ def add(num, verdict, reason, evidence):
 # --- #6526: player bottom controls clipped. PR #7249 merged 2026-10-01, in main. -------------
 # --- #5033: scene tagger/scrape query. PR #6559 (Tags Tagger) is in main. -------------------
 # --- #3065: JAV suitability. Referenced PR is from 2022 and NOT in main; scraper-side. ------
-# --- #2464: phash ON by default. Measured: the default is FALSE, in the UI's initial state. ---
-add(2464, "not-planned",
-    "Measured rather than assumed, and the measurement contradicts the obvious reading of the "
-    "title. The switch exists on both sides: ScanMetadataOptions.ScanGeneratePhashes "
-    "(internal/manager/config/tasks.go:15) is read by the scan task (internal/manager/task_scan.go"
-    ":852), and the UI's initial state sets `scanGeneratePhashes: false` "
-    "(ui/v2.5/src/components/Settings/Tasks/LibraryTasks.tsx:97), rendered as a checkbox in "
-    "ScanOptions.tsx. So the feature is fully wired and only its DEFAULT differs. Not planned "
-    "here because flipping one default is a product decision with a real cost this fork should not "
-    "make unilaterally: phash generation runs a perceptual-hash pass over every scanned file, so "
-    "a new install would silently start paying that cost, and a large existing library would need "
-    "a rescan to backfill. That is an owner's call, not a bug.",
-    "grep -rn 'scanGeneratePhashes' ui/v2.5/src/components/Settings/Tasks/ | head -3")
-
-# --- #3318: studio code on Movies. Measured: `code` is on Scene, absent from Movie. -----------
-add(3318, "deferred",
-    "Measured: `code` exists on Scene (graphql/schema/types/scene.graphql:48) and is genuinely "
-    "ABSENT from Movie -- movie.graphql's field list runs id/name/aliases/duration/date/studio/"
-    "director/synopsis/url/urls/tags with no code. So the row's first checklist item is a real gap "
-    "and not already fixed. Deferred because the window lives on the data model, not the GraphQL "
-    "surface: it needs a movies table column, a migration, a scan/scrape path and the store's "
-    "partial-update handling -- the same shape as #1790's external-IDs work, which took a migration "
-    "plus a registry. Recording it as deferred rather than closed because the mechanism is known "
-    "and the work is real, and rather than not-planned because nothing external blocks it.",
-    "grep -cE '^  code: String' graphql/schema/types/movie.graphql; "
-    "grep -nE '^  code: String' graphql/schema/types/scene.graphql | head -2")
-
-# --- #3333: saved-filter tag badge stale after rename. A real UI staleness report. ----------
-add(3333, "deferred",
-    "A UI staleness bug, and the reported surface is one this fork has: saved filters live with tag "
-    "criteria, and the badge renders a tag NAME captured when the filter was saved. A rename leaves "
-    "that stored name stale, exactly as reported. Deferred because the fix belongs to the saved-"
-    "filter data model rather than to a rendering tweak: either the saved filter stores a tag id "
-    "and resolves the name at render time, or a tag rename updates saved filters that reference it. "
-    "Both are schema-level, and this fork is mid-programme on the tag/scan data model, so starting "
-    "a migration for a badge is the wrong order.",
-    "grep -rln 'SavedFilter' ui/v2.5/src/components/ | head -4")
-
-# --- #3172: icon invisible in dark mode. An ASSET/colour request, not a code defect. ---------
-add(3172, "not-planned",
-    "A visual/asset request with screenshots, not a defect in this codebase: the icons are "
-    "raster/vector assets (ui/v2.5/public/{favicon.ico,stash_icon.svg,stash_icon.png}), and the "
-    "ask is to recolour them for Windows dark mode. Producing a new icon is design work on binary "
-    "assets, not a change any reviewer of a Go fork can evaluate in a diff. Not deferred: nothing "
-    "external is blocking, the work simply is not this fork's to do.",
-    "ls -1 ui/v2.5/public/ | grep -Ei 'icon|favicon'")
-
-
 def planned_rows():
     """(num, title, why) for every row still marked planned."""
     out = []

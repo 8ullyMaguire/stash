@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 58 planned, 566 not planned or deferred, 51 closed or done (see `docs/closed-issues.md`).**
+**675 issues: 57 planned, 566 not planned or deferred, 52 closed or done (see `docs/closed-issues.md`).**
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**58 planned, 566 not planned or deferred, 51 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**57 planned, 566 not planned or deferred, 52 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -84,7 +84,6 @@ These carry a label the maintainers themselves applied.
 | 2765 | Lightbox image changes on rating/o-counter value change | upstream-marked (bug report) | planned |
 | 2464 | Change default setting of PHash generation to ON for Scans | Measured rather than assumed, and the measurement contradicts the obvious reading of the title. The switch exists on both sides: ScanMetadataOptions.ScanGeneratePhashes (internal/manager/config/tasks.go:15) is read by the scan task (internal/manager/task_scan.go:852), and the UI's initial state sets `scanGeneratePhashes: false` (ui/v2.5/src/components/Settings/Tasks/LibraryTasks.tsx:97), rendered as a checkbox in ScanOptions.tsx. So the feature is fully wired and only its DEFAULT differs. Not planned here because flipping one default is a product decision with a real cost this fork should not make unilaterally: phash generation runs a perceptual-hash pass over every scanned file, so a new install would silently start paying that cost, and a large existing library would need a rescan to backfill. That is an owner's call, not a bug. | not-planned |
 | 7239 | Hardware transcode: [InitHWSupport] Supported HW codecs [0] gives no a | upstream-marked (bug report) | planned |
-| 7238 | paths.funscript should use signed URLs when authentication is enabled | upstream-marked (bug report) | planned |
 | 7231 | Can't scrape any male or trans performers using freeones and all other | upstream-marked (bug report) | planned |
 | 7222 | Studios page extremely slow on large image libraries | upstream-marked (bug report) | planned |
 | 7217 | Scene preview videos play with 20-30s delay / choppy in Firefox on Lin | upstream-marked (bug report) | planned |
@@ -769,7 +768,7 @@ to keep in mind when a failure looks order-dependent, not a current failure.
 enforces this (it was written after that invariant broke once).
 
 
-## Resolved — closed or done (47)
+## Resolved — closed or done (52)
 | 7247 | VR videos get super bright and washed out when played in VR mode | **done** — fixed upstream by PR #7248 (commit `71932ef45`, "Fix: VR Player Colour Mapping"), merged upstream 2026-10-01 and carried into this fork by the upstream merge. Touches `ui/v2.5/src/@types/videojs-vr.d.ts` and `ScenePlayer/vrmode.ts`. **Factual, not a judgement:** upstream closed #7247 on 2026-10-01 citing that same PR. Settled by `docs/check_planned_upstream.py`, which queries live upstream state rather than assuming. | done |
 
 Every row here was `planned` when this roster was generated and has since been closed or
@@ -781,6 +780,7 @@ reconciles the top-of-file counts against the table AND fails on a resolved row 
 
 | # | Title | Verdict | Note |
 |---|---|---|---|
+| 7238 | paths.funscript should use signed URLs when authentication is enabled | Built and tested 2026-10-03: the funscript path is now signed. The scene page emitted nine URLs and `funscript` was the only credential-carrying one that put the API key in the query string, while `stream` and `caption` immediately beside it were signed -- so it was an omission rather than a decision. `internal/api/resolver_model_scene.go` now signs all three from one place (`scenePaths`), with the no-credentials branch still falling back to `?apikey=` exactly as the stream path always did. Six tests in `internal/api/funscript_signed_url_test.go` cover the signed branch, the credential-less branch, the missing-user error, per-scene scoping, and a sweep over all three URLs in both branches; all three negative controls were confirmed to FAIL against the unfixed line, so the tests detect the defect rather than merely passing on it. | closed |
 | 5002 | Plugin settings UI/UX | Upstream PR #7018 (merged 2026-06-25, 'Settings: collapsible, filterable, sorted plugin list') is already an ancestor of this branch, so the plugin panel's collapse/filter/sort behaviour arrived with the upstream merge rather than being built here. The issue stays open upstream because it is a UI/UX discussion thread with more than the one shipped slice, so this row records the shipped slice as met rather than claiming the whole thread is finished. | closed |
 | 6526 | Player bottom controls are clipped (fullscreen missing) + menus overla | PR #7249 ('Fix: Cap Portrait Video Wrapper Height', merged 2026-10-01) is an ancestor of main, so the portrait-orientation clipping half landed with the upstream merge. The row is closed on that evidence rather than on the issue being resolved upstream, which it is not. | closed |
 | 5033 | Scene Tagger/Scrape with.../Scrape query for stash-box parses comma se | PR #6559 ('FR: Tags Tagger', merged 2026-02-25) is an ancestor of main, so the tag-tagger capability this row asks for arrived with the upstream merge. The stash-box command-parsing subtlety in the title is scraper-side and not a fork change. | closed |

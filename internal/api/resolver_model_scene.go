@@ -8,6 +8,7 @@ import (
 	"github.com/stashapp/stash/internal/api/loaders"
 	"github.com/stashapp/stash/internal/api/urlbuilders"
 	"github.com/stashapp/stash/internal/manager"
+	"github.com/stashapp/stash/internal/manager/config"
 	"github.com/stashapp/stash/pkg/models"
 	"github.com/stashapp/stash/pkg/session"
 	"github.com/stashapp/stash/pkg/signedurl"
@@ -116,52 +117,108 @@ func (r *sceneResolver) Rating100(ctx context.Context, obj *models.Scene) (*int,
 func (r *sceneResolver) Paths(ctx context.Context, obj *models.Scene) (*ScenePathsType, error) {
 	baseURL, _ := ctx.Value(BaseURLCtxKey).(string)
 	config := manager.GetInstance().Config
-	builder := urlbuilders.NewSceneURLBuilder(baseURL, obj)
 
-	var streamPath string
-	var captionBasePath string
-	if config.HasCredentials() {
-		userID := session.GetCurrentUserID(ctx)
-		if userID == nil {
-			return nil, fmt.Errorf("user ID not found")
-		}
-
-		// Sign the stream prefix
-		streamURL := builder.GetStreamURL("")
-		streamURL.RawQuery = signedParams(config, *userID, signedurl.DerivePrefix(streamURL.Path)).Encode()
-		streamPath = streamURL.String()
-
-		// Sign the caption prefix
-		captionBase := builder.GetCaptionURL()
-		captionBasePath = captionBase + "?" + signedParams(config, *userID, builder.GetCaptionPath()).Encode()
-	} else {
-		apiKey := config.GetAPIKey()
-		streamURL := builder.GetStreamURL(apiKey)
-		streamPath = streamURL.String()
-		captionBasePath = builder.GetCaptionURL()
+	paths, err := scenePaths(ctx, config, urlbuilders.NewSceneURLBuilder(baseURL, obj), obj)
+	if err != nil {
+		return nil, err
 	}
 
 	// Web-only formats: use unsigned URLs (rely on cookie authentication)
-	screenshotPath := builder.GetScreenshotURL()
-	previewPath := builder.GetStreamPreviewURL()
-	webpPath := builder.GetStreamPreviewImageURL()
+	screenshotPath := paths.builder.GetScreenshotURL()
+	previewPath := paths.builder.GetStreamPreviewURL()
+	webpPath := paths.builder.GetStreamPreviewImageURL()
 	objHash := obj.GetHash(config.GetVideoFileNamingAlgorithm())
-	vttPath := builder.GetSpriteVTTURL(objHash)
-	spritePath := builder.GetSpriteURL(objHash)
-	funscriptPath := builder.GetFunscriptURL(config.GetAPIKey()).String()
-	interactiveHeatmap := builder.GetInteractiveHeatmapURL()
+	vttPath := paths.builder.GetSpriteVTTURL(objHash)
+	spritePath := paths.builder.GetSpriteURL(objHash)
+	interactiveHeatmap := paths.builder.GetInteractiveHeatmapURL()
 
 	return &ScenePathsType{
 		Screenshot:         &screenshotPath,
 		Preview:            &previewPath,
-		Stream:             &streamPath,
+		Stream:             &paths.stream,
 		Webp:               &webpPath,
 		Vtt:                &vttPath,
 		Sprite:             &spritePath,
-		Funscript:          &funscriptPath,
+		Funscript:          &paths.funscript,
 		InteractiveHeatmap: &interactiveHeatmap,
-		Caption:            &captionBasePath,
+		Caption:            &paths.caption,
 	}, nil
+}
+
+// signedScenePaths is the set of scene URLs that carry a credential.
+//
+// ## WHY THIS IS A SEPARATE FUNCTION
+//
+// #7238 fixed the funscript URL leaking `?apikey=` while the stream and caption URLs beside it were
+// signed. The fix was one line -- but the line lives in a resolver method that reads its config
+// through `manager.GetInstance()`, and that singleton PANICS when uninitialised with no test-only
+// setter (`internal/manager/manager.go:288`: `var instance *Manager`, assigned only in init.go).
+//
+// So the whole function was untestable from `internal/api`: a test could not reach the decision it
+// needed to check, and "the fix is obviously right" would have been the only available evidence.
+// Extracting the credential-carrying URLs into this pure function makes the #7238 decision
+// reachable by an ordinary test, and keeps the resolver a thin assembly of them.
+//
+// The alternative -- adding an exported `manager.SetInstance` for tests -- was rejected: it widens
+// the production API so a test can reach one branch, and a singleton setter is exactly the seam
+// through which a later test starts initialising global state for the whole package.
+type signedScenePaths struct {
+	stream    string
+	caption   string
+	funscript string
+
+	// builder is carried so the caller can finish the web-only paths without rebuilding it.
+	builder urlbuilders.SceneURLBuilder
+}
+
+// The config parameter is named `cfg`, not `config`: `config` is also the imported PACKAGE name
+// in this file, so a parameter of that name shadows it and every use of the package inside the
+// function body stops resolving.
+func scenePaths(ctx context.Context, cfg *config.Config, builder urlbuilders.SceneURLBuilder, obj *models.Scene) (signedScenePaths, error) {
+	var out signedScenePaths
+	out.builder = builder
+
+	if cfg.HasCredentials() {
+		userID := session.GetCurrentUserID(ctx)
+		if userID == nil {
+			return out, fmt.Errorf("user ID not found")
+		}
+
+		// Sign the stream prefix
+		streamURL := builder.GetStreamURL("")
+		streamURL.RawQuery = signedParams(cfg, *userID, signedurl.DerivePrefix(streamURL.Path)).Encode()
+		out.stream = streamURL.String()
+
+		// Sign the caption prefix
+		captionBase := builder.GetCaptionURL()
+		out.caption = captionBase + "?" + signedParams(cfg, *userID, builder.GetCaptionPath()).Encode()
+
+		// #7238 - sign the funscript prefix too.
+		//
+		// This was the ONE scene path that handed out `?apikey=` while the two beside it signed,
+		// and the apikey can rewrite the entire database. The reason it is a real bug rather than a
+		// style difference: the funscript URL is the one a CLIENT fetches -- the interactive-script
+		// and TheHandy integrations load it directly -- so it is precisely the URL most likely to
+		// end up in a third party's logs, a browser history, or a proxy's access log. Stream and
+		// caption were already signed for exactly that reason; funscript was simply missed.
+		//
+		// Signed, not dropped: the path is inside `/scene/{id}/`, so `authenticateSignedRequest`
+		// already accepts a signature here, and `DerivePrefix` reduces `/scene/1/funscript` to
+		// itself (three segments, no extension). So this needs no new auth path -- only the call.
+		funscriptURL := builder.GetFunscriptURL("")
+		funscriptURL.RawQuery = signedParams(cfg, *userID,
+			signedurl.DerivePrefix(funscriptURL.Path)).Encode()
+		out.funscript = funscriptURL.String()
+		return out, nil
+	}
+
+	// No credentials configured: there is nothing to sign against, and the instance is already
+	// reachable without auth on the LAN. This is the same fallback the stream path has always had.
+	apiKey := cfg.GetAPIKey()
+	out.stream = builder.GetStreamURL(apiKey).String()
+	out.caption = builder.GetCaptionURL()
+	out.funscript = builder.GetFunscriptURL(apiKey).String()
+	return out, nil
 }
 
 func (r *sceneResolver) SceneMarkers(ctx context.Context, obj *models.Scene) (ret []*models.SceneMarker, err error) {
