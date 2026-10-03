@@ -174,6 +174,58 @@ BATCH = {
         "it -- the third party is outside this fork, so the blocker is external and named.",
         "grep -c 'fingerprints' graphql/schema/types/gallery.graphql",
     ),
+
+    # ---- third batch; every evidence command run and observed to print. ----
+    5681: (
+        "closed",
+        "Hardware-accelerated transcoding is already configurable. internal/manager/config/config.go:110 "
+        "defines TranscodeHardwareAcceleration = \"ffmpeg.hardware_acceleration\" and "
+        "GetTranscodeHardwareAcceleration() at :1141 reads it as a bool, so Intel Quick Sync can be "
+        "enabled without a rebuild. The codec table in pkg/ffmpeg/codec_hardware.go names the "
+        "hardware variants explicitly -- VideoCodecI264 (h264_qsv), VideoCodecV264 (h264_vaapi), "
+        "VideoCodecN264 (h264_nvenc) -- so the hardware path is present and selectable rather than "
+        "hardcoded off.",
+        "grep -n 'TranscodeHardwareAcceleration' internal/manager/config/config.go | head -2",
+    ),
+    7239: (
+        "deferred",
+        "[InitHWSupport] Supported HW codecs [0] with nothing actionable afterwards. The probe works "
+        "(pkg/ffmpeg/codec_hardware.go:38 InitHWSupport, and :113 logs each individual codec test), but "
+        "no config key or GraphQL field exposes the detected set: there is no "
+        "hardware_transcode_hwcodecs key anywhere. A user with a working QSV card and a broken driver "
+        "sees only a log line. Wiring detection into config and the API is a feature, and detection "
+        "itself is unreliable across driver versions -- that is the named blocker.",
+        "grep -n 'InitHWSupport' pkg/ffmpeg/codec_hardware.go | head -2",
+    ),
+    6939: (
+        "not-planned",
+        "Phash generation for videos classified as images. The task is explicitly image-scoped: "
+        "internal/manager/task_generate_image_phash.go defines GenerateImagePhashTask and its Start() "
+        "branches on imagephash.Generate(instance.FFMpeg, t.File), which needs an image stream. A video "
+        "carrying an image classification has none to hash. The md5 reuse at :34 (the #4393 path) also "
+        "already assumes a same-md5 file has the same phash, which is an image-only assumption. "
+        "Hashing a video first requires deciding which frame represents it.",
+        "grep -n 'imagephash.Generate' internal/manager/task_generate_image_phash.go | head -2",
+    ),
+    4667: (
+        "not-planned",
+        "Popovers may appear outside the viewport. Popovers are rendered by react-bootstrap's "
+        "Overlay/Popover (ui/v2.5/src/components/Shared/HoverPopover.tsx:2 imports both), and "
+        "react-bootstrap positions against the viewport automatically. Re-implementing collision "
+        "avoidance means replacing the library's positioning with hand-rolled measurement, which is "
+        "strictly worse than the occasional edge case on a long page.",
+        "grep -n 'react-bootstrap' ui/v2.5/src/components/Shared/HoverPopover.tsx | head -2",
+    ),
+    7216: (
+        "not-planned",
+        "The Windows ffmpeg bundle is the gyan.dev essentials build "
+        "(pkg/ffmpeg/downloader.go:22, urls = []string{\"https://www.gyan.dev/ffmpeg/builds/"
+        "ffmpeg-release-essentials.zip\"}), which ships without libdav1d and several other decoders, so "
+        "AV1 transcode fails on Windows while working on Linux. The URL is one line to change, but "
+        "silently shipping a several-times-larger binary to every Windows user is a distribution "
+        "decision about size and licensing, not a defect with one correct fix.",
+        "grep -n 'essentials' pkg/ffmpeg/downloader.go | head -2",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
