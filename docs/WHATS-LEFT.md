@@ -22,7 +22,7 @@ commit `65422cea9`. Re-run both before believing this table.
 | Clause | Verdict | What it says |
 |---|---|---|
 | C1 PRs decided | PASS | all 64 open PRs have a recorded decision |
-| **C2 issues dispositioned** | **FAIL** | **80 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused** (was 82; #3530 moved to Resolved in `af5ea1a83`) |
+| **C2 issues dispositioned** | **FAIL** | **69 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused.** All 69 are R9 rows (`upstream-marked bug report`/`help wanted`/`bounty`), which R9 keeps **unconditionally** — so `planned` is their intended state, not an oversight, and disposing of them means per-issue measurement, not a label change. Settled this pass: 7 decided rows re-statused (`docs/restatus_upstream_planned.py`), #7247 closed factually, #4136 `not-planned` on measurement, #5731 `deferred` with its mechanism traced (`docs/apply_planned_verdicts.py`) |
 | C3 M5 tagged | PASS | `m5-p2p-downloader`, reachable from main |
 | C4 M7/M8 done | PASS | `m7-mesh`, `m8-relay-mesh` |
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |

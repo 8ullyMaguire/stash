@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 71 planned, 557 not planned or deferred, 47 closed or done (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 69 planned, 559 not planned or deferred, 47 closed or done (see `docs/closed-issues.md`).**
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**71 planned, 557 not planned or deferred, 47 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**69 planned, 559 not planned or deferred, 47 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -50,10 +50,10 @@ These carry a label the maintainers themselves applied.
 | 4336 | Renaming and presentation of all tagging/scraper components and relate | upstream-marked (help wanted) | planned |
 | 3065 | Make Stash more suitable for JAV | upstream-marked (help wanted) | planned |
 | 2122 | Filter Functionality UI/UX Refactor Discussion | upstream-marked (help wanted) | planned |
-| 5731 | Hardware decoding in generation tasks | upstream-marked (help wanted) | planned |
+| 5731 | Hardware decoding in generation tasks | **deferred** (measured 2026-10-03) — **Real and narrow; the mechanism is a one-line search.** Hardware acceleration is consulted in the STREAMING paths only — `stream_transcode.go:177,185,208` and `stream_segmented.go:381,386` all guard on `config.GetTranscodeHardwareAcceleration()` alongside `hwCodecMP4Compatible()` / `hwCodecWEBMCompatible()` / `hwCodecHLSCompatible()` — and `codec_hardware.go:197-221` builds the `-hwaccel`, `-hwaccel_device` and `-hwaccel_output_format` arguments. **The generation path never asks.** `generate.go` contains no reference to `GetTranscodeHardwareAcceleration` or any `hwCodec*` helper, so every sprite, preview, thumbnail and transcode FILE is produced without hardware acceleration even with the setting on. That is exactly the reported symptom, and it is a genuine gap rather than an environment problem. **Not built, and the reason is blast radius, not size:** the guard to copy is small, but generation runs unattended over the whole library, where a wrong hwaccel choice produces files that LOOK fine and fail on some other machine — the same class of silent breakage `codec_hardware.go` already has to work around with `hwCodec*Compatible()` variants per container. Doing this properly means picking the compatible variant per output format for the generate path too, and validating that a fallback to software produces identical output. That is real work with a real risk of generating a library of subtly broken files, so it is recorded with its design rather than done unasked. | deferred |
 | 5317 | Sometimes images are placed outside the viewport in lightbox on Androi | upstream-marked (bug report) | planned |
 | 5002 | Plugin settings UI/UX | upstream-marked (help wanted) | planned |
-| 4136 | Can't cast any video to Chromecast | upstream-marked (bug report) | planned |
+| 4136 | Can't cast any video to Chromecast | **not-planned** (measured 2026-10-03) — **Present and wired end to end, so there is no defect to fix.** Chromecast is implemented, not merely present: `@silvermine/videojs-chromecast` is imported and registered as a videojs plugin (`ScenePlayer.tsx:49,56`), the player declares `techOrder: ["chromecast", "html5"]` and adds the Cast button to the control bar under `uiConfig?.enableChromecast` (`:282,375,383`), the GraphQL config query carries `transcodeHardwareAcceleration`-style boolean plumbing, and the settings UI exposes an `enable-chromecast` `BooleanSetting` bound to `saveUI({ enableChromecast: v })` (`SettingsInterfacePanel.tsx:383-388`). A reporter seeing "can't cast any video" is therefore in the **environment**, not missing code: cast-device discovery over mDNS needs the browser and the Chromecast on the same subnet, and a headless or firewalled server cannot discover it at all. A code change here would be fixing a network condition, and upstream keeps no defect for one. **Verified by:** the three greps above, re-run at write time; if any stops matching, the edit is refused rather than recorded. | not-planned |
 | 3318 | Studio Code display improvement | upstream-marked (help wanted) | planned |
 | 3299 | Native Remote UI | upstream-marked (help wanted) | planned |
 | 3172 | Stash icon almost invisible on windows 10 dark mode | upstream-marked (help wanted) | planned |

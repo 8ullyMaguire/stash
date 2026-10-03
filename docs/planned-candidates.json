@@ -1,0 +1,334 @@
+{
+  "5317": {
+    "title": "Sometimes images are placed outside the viewport in lightbox on Androi",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "4136": {
+    "title": "Can't cast any video to Chromecast",
+    "hits": [
+      "chromecast(7)"
+    ],
+    "misses": []
+  },
+  "3171": {
+    "title": "Synology NAS and folders table",
+    "hits": [
+      "synology(32)"
+    ],
+    "misses": []
+  },
+  "7202": {
+    "title": "Tagger should not cut off vertical cover images (for the local scene)",
+    "hits": [
+      "tagger(53)",
+      "tag(484)",
+      "cover(183)"
+    ],
+    "misses": []
+  },
+  "7187": {
+    "title": "No way to return \"No images found\" from scraper script?",
+    "hits": [
+      "scraper(108)"
+    ],
+    "misses": []
+  },
+  "7173": {
+    "title": "Generate failing make previews",
+    "hits": [
+      "preview(91)"
+    ],
+    "misses": []
+  },
+  "7154": {
+    "title": "Lightbox back button behavior cause unsaved modal to show",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "6978": {
+    "title": "HEVC Video in MKV playback freezes when skipped to another part of the",
+    "hits": [],
+    "misses": []
+  },
+  "6897": {
+    "title": "Sub-Groups without scenes not displaying initial page-load properly",
+    "hits": [
+      "group(370)"
+    ],
+    "misses": []
+  },
+  "6526": {
+    "title": "Player bottom controls are clipped (fullscreen missing) + menus overla",
+    "hits": [],
+    "misses": []
+  },
+  "6456": {
+    "title": "bfcache not used because WebSocket connection is not closed",
+    "hits": [],
+    "misses": []
+  },
+  "6452": {
+    "title": "Tagger View Jumps Position",
+    "hits": [
+      "tagger(53)",
+      "tag(484)"
+    ],
+    "misses": []
+  },
+  "6246": {
+    "title": "Scene Tagger Navbar floats out of position",
+    "hits": [
+      "tagger(53)",
+      "tag(484)"
+    ],
+    "misses": []
+  },
+  "5178": {
+    "title": "A>B Loop Controls do not work on Apple Touch Devices",
+    "hits": [],
+    "misses": []
+  },
+  "5033": {
+    "title": "Scene Tagger/Scrape with.../Scrape query for stash-box parses comma se",
+    "hits": [
+      "tagger(53)",
+      "tag(484)"
+    ],
+    "misses": []
+  },
+  "4536": {
+    "title": "Casting the video never loads or plays while the casting is activated",
+    "hits": [],
+    "misses": []
+  },
+  "4415": {
+    "title": "Scrapers that build a queryURL",
+    "hits": [
+      "scraper(108)"
+    ],
+    "misses": []
+  },
+  "4163": {
+    "title": "Deleting a duplicated gallery makes all images of the remaining galler",
+    "hits": [
+      "gallery(265)"
+    ],
+    "misses": []
+  },
+  "3741": {
+    "title": "Scene detail screen loads full size thumbnails of all items in the que",
+    "hits": [
+      "thumbnail(80)"
+    ],
+    "misses": []
+  },
+  "3664": {
+    "title": "Long filenames cause cryptic deletion errors",
+    "hits": [],
+    "misses": []
+  },
+  "3426": {
+    "title": "Anamorphic videos previews are not normalized",
+    "hits": [
+      "preview(91)"
+    ],
+    "misses": []
+  },
+  "2765": {
+    "title": "Lightbox image changes on rating/o-counter value change",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "7239": {
+    "title": "Hardware transcode: [InitHWSupport] Supported HW codecs [0] gives no a",
+    "hits": [
+      "transcode(50)"
+    ],
+    "misses": []
+  },
+  "7238": {
+    "title": "paths.funscript should use signed URLs when authentication is enabled",
+    "hits": [
+      "path(530)"
+    ],
+    "misses": []
+  },
+  "7231": {
+    "title": "Can't scrape any male or trans performers using freeones and all other",
+    "hits": [
+      "freeones(2)",
+      "performer(354)"
+    ],
+    "misses": []
+  },
+  "7222": {
+    "title": "Studios page extremely slow on large image libraries",
+    "hits": [
+      "studio(326)"
+    ],
+    "misses": []
+  },
+  "7217": {
+    "title": "Scene preview videos play with 20-30s delay / choppy in Firefox on Lin",
+    "hits": [
+      "preview(91)"
+    ],
+    "misses": []
+  },
+  "7216": {
+    "title": "Windows FFmpeg download uses the \"essentials\" build, which has no libd",
+    "hits": [
+      "ffmpeg(69)"
+    ],
+    "misses": []
+  },
+  "7209": {
+    "title": "Freeones: `Could not parse career length 2016-now`",
+    "hits": [
+      "freeones(2)"
+    ],
+    "misses": []
+  },
+  "7149": {
+    "title": "Panning images in lightbox with the mouse wheel can result in navigati",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "7148": {
+    "title": "Drags that overshoot the image boundaries result in the lightbox/image",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "7147": {
+    "title": "Fast dragging motions in the lightbox/image-viewer navigate to the nex",
+    "hits": [
+      "lightbox(31)"
+    ],
+    "misses": []
+  },
+  "7145": {
+    "title": "Remote image downloader sends no User-Agent, causing HTTP 418",
+    "hits": [],
+    "misses": []
+  },
+  "7142": {
+    "title": "Scroll position is lost when navigating back to a list",
+    "hits": [],
+    "misses": []
+  },
+  "7135": {
+    "title": "Unmentioned/bugged max password length",
+    "hits": [],
+    "misses": []
+  },
+  "7133": {
+    "title": "Using \"excludes\" or \"is not\" with the disambiguation filter hides non-",
+    "hits": [
+      "filter(428)"
+    ],
+    "misses": []
+  },
+  "7130": {
+    "title": "App not responding on RClone drive - \"Loading ...\" forever",
+    "hits": [],
+    "misses": []
+  },
+  "7028": {
+    "title": "Inconsistent File Info shortcut on gallery/image pages conflicts with",
+    "hits": [
+      "gallery(265)"
+    ],
+    "misses": []
+  },
+  "6949": {
+    "title": "Animated Images using VideoFile in GQL",
+    "hits": [],
+    "misses": []
+  },
+  "6939": {
+    "title": "Phash Generation task does not generate for videos classified as image",
+    "hits": [],
+    "misses": []
+  },
+  "5979": {
+    "title": "Top navigation bar cut off on mobile devices with notch/floating islan",
+    "hits": [
+      "mobile(186)"
+    ],
+    "misses": []
+  },
+  "5953": {
+    "title": "Deleting a file while generating for it locks up scan/generate",
+    "hits": [],
+    "misses": []
+  },
+  "5758": {
+    "title": "Scene save activity causing re-queries for plugin",
+    "hits": [
+      "plugin(112)"
+    ],
+    "misses": []
+  },
+  "5430": {
+    "title": "Count Sub-tag scenes in the Tag View when \"Display subtag content\" is",
+    "hits": [
+      "tag(484)"
+    ],
+    "misses": []
+  },
+  "5111": {
+    "title": "GIF files in ZIP archives are images vs video",
+    "hits": [],
+    "misses": []
+  },
+  "5036": {
+    "title": "Rescanning windows on *nix paths breaks galleries",
+    "hits": [
+      "path(530)"
+    ],
+    "misses": []
+  },
+  "4815": {
+    "title": "Aliases not changed on performer scrape before alias uniqueness is tes",
+    "hits": [
+      "performer(354)"
+    ],
+    "misses": []
+  },
+  "4667": {
+    "title": "Popovers may appear outside the viewport",
+    "hits": [],
+    "misses": []
+  },
+  "4549": {
+    "title": "Video controls and filters do not reset on queue change",
+    "hits": [
+      "filter(428)"
+    ],
+    "misses": []
+  },
+  "4233": {
+    "title": "Rotation information is ignored for determining if a video is portrait",
+    "hits": [],
+    "misses": []
+  },
+  "3333": {
+    "title": "Saved Filters: Tag-item badge below toolbar not updating",
+    "hits": [
+      "tag(484)",
+      "filter(428)"
+    ],
+    "misses": []
+  }
+}
