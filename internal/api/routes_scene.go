@@ -426,7 +426,15 @@ func (rs sceneRoutes) Screenshot(w http.ResponseWriter, r *http.Request) {
 
 func (rs sceneRoutes) Preview(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
-	sceneHash := scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
+	// #3530 - GeneratedChecksum, not GetHash: the preview is generated from inside the scene's
+	// window, so two scenes of ONE file must not share a cache entry. An unranged scene's key is
+	// byte-identical to its hash, so nothing existing moves.
+	//
+	// The LEGACY half uses the same key deliberately. A suffixed checksum fails
+	// isValidGeneratedChecksum, so a windowed scene has no legacy path at all -- which is the
+	// right answer (there is no pre-#3530 preview of a window) and is what stops a windowed scene
+	// falling back onto another scene's file.
+	sceneHash := models.GeneratedChecksum(*scene, config.GetInstance().GetVideoFileNamingAlgorithm())
 	sp := manager.GetInstance().Paths.Scene
 	filepath := paths.ResolveGeneratedFile(sp.GetVideoPreviewPath(sceneHash), sp.GetLegacyVideoPreviewPath(sceneHash))
 
@@ -435,7 +443,8 @@ func (rs sceneRoutes) Preview(w http.ResponseWriter, r *http.Request) {
 
 func (rs sceneRoutes) Webp(w http.ResponseWriter, r *http.Request) {
 	scene := r.Context().Value(sceneKey).(*models.Scene)
-	sceneHash := scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
+	// #3530 - GeneratedChecksum, as in Preview. See there for why the legacy half shares the key.
+	sceneHash := models.GeneratedChecksum(*scene, config.GetInstance().GetVideoFileNamingAlgorithm())
 	sp := manager.GetInstance().Paths.Scene
 	filepath := paths.ResolveGeneratedFile(sp.GetWebpPreviewPath(sceneHash), sp.GetLegacyWebpPreviewPath(sceneHash))
 

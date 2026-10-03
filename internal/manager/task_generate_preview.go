@@ -30,8 +30,6 @@ func (t *GeneratePreviewTask) GetDescription() string {
 }
 
 func (t *GeneratePreviewTask) Start(ctx context.Context) {
-	videoChecksum := t.Scene.GetHash(t.fileNamingAlgorithm)
-
 	// #3530 - the preview must be sampled from INSIDE the scene's window, and that means the
 	// scene's files have to be loaded: the task previously probed the FILE directly and never
 	// looked at the scene, so it had no window to honour.
@@ -50,6 +48,18 @@ func (t *GeneratePreviewTask) Start(ctx context.Context) {
 			sceneDuration = vf.Duration
 		}
 	}
+
+	// #3530 - the cache key must be computed HERE, after the scene's files are loaded and not at
+	// the top of Start, because until they are loaded there is no window to put in it.
+	//
+	// That ordering is load-bearing. An earlier version computed videoChecksum first, so with this
+	// commit's routes in place the preview would be WRITTEN to the unwindowed path while the ROUTE
+	// looks for the windowed one -- and the file would be regenerated on every single request,
+	// forever, with no error anywhere.
+	//
+	// It sits outside both generation blocks because the webp uses it too and may run when the
+	// video preview is skipped (already generated).
+	videoChecksum := models.GeneratedChecksum(t.Scene, t.fileNamingAlgorithm)
 
 	if t.videoPreviewRequired() {
 		ffprobe := instance.FFProbe

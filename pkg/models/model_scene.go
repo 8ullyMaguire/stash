@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -260,6 +261,85 @@ func (s Scene) DisplayName() string {
 	}
 
 	return strconv.Itoa(s.ID)
+}
+
+// #3530 - the cache key for a scene's WINDOW-AWARE generated artefacts.
+//
+// GetHash answers "what file is this", and its answer must NOT depend on which window of that file
+// you are looking at -- so GetHash itself is left alone, deliberately. It has ~12 callers spanning
+// preview, sprite, VTT thumbs, funscript, export and scene markers, and folding a window into it
+// would rename generated files for export and marker paths and change URLs that are already
+// bookmarked.
+//
+// GeneratedChecksum is the opt-in variant, for the artefacts that ARE window-aware. It returns
+// GetHash() unchanged for an unranged scene -- which is the whole reason it is a separate function:
+// every scene in every existing installation is unranged, so nothing moves.
+//
+//	<checksum>_w<start>-<end>        e.g. d3adb33f_w60.000-300.000
+//
+// ## Why the suffix is on the CHECKSUM and not on the filename
+//
+// GetVideoPreviewPath is shardedJoin(Screenshots, checksum, checksum+".mp4"), and shardedJoin
+// derives the shard directory from the checksum. Appending to the filename would give two scenes of
+// one file different names inside ONE shared shard directory -- which fixes the collision but
+// leaves both scenes' files interleaved and defeats the sharding that keeps directories small.
+//
+// ## Why both ends
+//
+// A key naming only the start would collide for every window beginning at the same offset, which is
+// exactly what splitting a file produces. Three decimals because that is the precision used
+// elsewhere in #3530's seeking, and a preview regenerated at 60.0001 vs 60.0002 must be the same
+// key.
+//
+// ## An open-ended window
+//
+// Rendered with only its start. Its missing end is NOT written as 0, because that would collide
+// with a degenerate zero-length window -- and, more usefully, because "runs to the end of the file"
+// is a different fact from "ends at 0".
+//
+// ## Which artefacts
+//
+// Preview and webp only, because those are the ones made window-aware in 8f84c565f. Sprite, VTT
+// thumbs and export deliberately keep the plain hash: they are NOT yet window-aware, and suffixing
+// them would rename files whose content has not changed. That is a pending piece of work, not an
+// oversight -- see docs/WHATS-LEFT.md.
+func GeneratedChecksum(s Scene, hashAlgorithm HashAlgorithm) string {
+	base := s.GetHash(hashAlgorithm)
+	if base == "" {
+		return ""
+	}
+
+	start, end, ok := s.GeneratedWindow()
+	if !ok {
+		return base
+	}
+	if end <= 0 {
+		return fmt.Sprintf("%s_w%.3f", base, start)
+	}
+	return fmt.Sprintf("%s_w%.3f-%.3f", base, start, end)
+}
+
+// GeneratedWindow returns the primary file's window, and whether there is one.
+//
+// The window lives on models.VideoFile as StartTime/EndTime (there is no per-scene-file type in the
+// runtime model), and it is present only when GetFiles has run on this scene -- so a caller that has
+// not loaded the files gets "no window", which is the safe answer: it yields the plain hash rather
+// than a suffix on absent data.
+func (s Scene) GeneratedWindow() (start, end float64, ok bool) {
+	if !s.Files.PrimaryLoaded() {
+		return 0, 0, false
+	}
+	pf := s.Files.Primary()
+	if pf == nil || (pf.StartTime == nil && pf.EndTime == nil) {
+		return 0, 0, false
+	}
+	if pf.StartTime != nil {
+		start = *pf.StartTime
+	}
+	if pf.EndTime != nil {
+		end = *pf.EndTime
+	}
+	return start, end, true
 }
 
 // GetHash returns the hash of the scene, based on the hash algorithm provided. If
