@@ -63,66 +63,58 @@ def add(num, verdict, reason, evidence):
 
 
 # --- #5002: plugin settings UI/UX. Upstream PR #7018 (merged 2026-06-25) is in main. ---------
-add(5002, "closed",
-    "Upstream PR #7018 (merged 2026-06-25, 'Settings: collapsible, filterable, sorted plugin "
-    "list') is already an ancestor of this branch, so the plugin panel's collapse/filter/sort "
-    "behaviour arrived with the upstream merge rather than being built here. The issue stays open "
-    "upstream because it is a UI/UX discussion thread with more than the one shipped slice, so "
-    "this row records the shipped slice as met rather than claiming the whole thread is finished.",
-    "grep -rl 'Plugins' ui/v2.5/src/components/Settings/ | head -3")
-
 # --- #3692: log management. lumberjack rotation is in the tree; the rest is a discussion. ----
-add(3692, "closed",
-    "The rotation half of this scope-based thread is already in the tree: gopkg.in/natefinch/"
-    "lumberjack.v2 is a direct dependency (go.mod), internal/log/logger.go constructs a "
-    "lumberjack.Logger, and config carries logfile_max_size. That landed upstream in PR #5696 "
-    "(2025-11-18), which is an ancestor of main. The remaining checklist items (clear-from-UI, "
-    "delete-files-while-running, total-size cap) are the UI parts of the same thread and are "
-    "tracked there, so this row records the engine half as met.",
-    "grep -n 'lumberjack' go.mod internal/log/logger.go | head -3")
-
 # --- #2049: logo submissions. PR #2073 merged 2022 and is in main; the ask is a process. ------
-add(2049, "not-planned",
-    "This is a submissions PROCESS thread ('Request for Submissions: Stash Logo'), not a code "
-    "ask, and its only referenced PR (#2073, 'Desktop integration', merged 2022-02-03) is already "
-    "an ancestor of main. There is no artefact this fork can build: the deliverable is upstream "
-    "deciding on a logo. Cutting it is a decision about scope, not a deferral of work.",
-    # The evidence for this row is that the DELIVERABLE IS AN ASSET, not a behaviour: the icons a
-    # new logo would replace are all present, and this fork changed none of them.
-    "ls -1 ui/v2.5/public/ | grep -Ei 'icon|favicon'")
-
 # --- #2122: filter UI/UX refactor discussion. PR #3619 is in main; the rest is design. -------
-add(2122, "not-planned",
-    "A long UI/UX DISCUSSION thread rather than a defect, and the concrete slice it produced "
-    "(PR #3619, 'Improve studio/tag/performer filtering', merged 2023-05-25) is already an "
-    "ancestor of main. The remainder asks for a filter-authoring model this fork has no mandate "
-    "to design; upstream owns the filter language and R3 in this roster already excludes inventing "
-    "a new first-class object. Not-deferred: nothing external is blocking, the ask is simply not "
-    "this fork's decision to make.",
-    "git merge-base --is-ancestor $(git log --format=%H --all --grep='Improve studio/tag/performer filtering' | head -1) main && echo 'PR #3619 IS an ancestor of main'")
-
 # --- #6526: player bottom controls clipped. PR #7249 merged 2026-10-01, in main. -------------
-add(6526, "closed",
-    "PR #7249 ('Fix: Cap Portrait Video Wrapper Height', merged 2026-10-01) is an ancestor of "
-    "main, so the portrait-orientation clipping half landed with the upstream merge. The row is "
-    "closed on that evidence rather than on the issue being resolved upstream, which it is not.",
-    "sed -n '27,30p' ui/v2.5/src/components/ScenePlayer/styles.scss")
-
 # --- #5033: scene tagger/scrape query. PR #6559 (Tags Tagger) is in main. -------------------
-add(5033, "closed",
-    "PR #6559 ('FR: Tags Tagger', merged 2026-02-25) is an ancestor of main, so the tag-tagger "
-    "capability this row asks for arrived with the upstream merge. The stash-box command-parsing "
-    "subtlety in the title is scraper-side and not a fork change.",
-    "ls ui/v2.5/src/components/Tags/ | head -6")
-
 # --- #3065: JAV suitability. Referenced PR is from 2022 and NOT in main; scraper-side. ------
-add(3065, "deferred",
-    "The referenced PR (#1190, 'Add Studio Code and Director to JavLibrary_python', merged "
-    "2022-12-11) is NOT an ancestor of this branch, so the tree does not carry that change. The "
-    "ask is scraper-side rather than core: it is about what a scraper source returns, and scraper "
-    "content is vendored from stashapp/stash-box and community scraper repositories. Deferred "
-    "until that is updated upstream, which is outside this fork's control.",
-    "ls pkg/scraper/ | head -8")
+# --- #2464: phash ON by default. Measured: the default is FALSE, in the UI's initial state. ---
+add(2464, "not-planned",
+    "Measured rather than assumed, and the measurement contradicts the obvious reading of the "
+    "title. The switch exists on both sides: ScanMetadataOptions.ScanGeneratePhashes "
+    "(internal/manager/config/tasks.go:15) is read by the scan task (internal/manager/task_scan.go"
+    ":852), and the UI's initial state sets `scanGeneratePhashes: false` "
+    "(ui/v2.5/src/components/Settings/Tasks/LibraryTasks.tsx:97), rendered as a checkbox in "
+    "ScanOptions.tsx. So the feature is fully wired and only its DEFAULT differs. Not planned "
+    "here because flipping one default is a product decision with a real cost this fork should not "
+    "make unilaterally: phash generation runs a perceptual-hash pass over every scanned file, so "
+    "a new install would silently start paying that cost, and a large existing library would need "
+    "a rescan to backfill. That is an owner's call, not a bug.",
+    "grep -rn 'scanGeneratePhashes' ui/v2.5/src/components/Settings/Tasks/ | head -3")
+
+# --- #3318: studio code on Movies. Measured: `code` is on Scene, absent from Movie. -----------
+add(3318, "deferred",
+    "Measured: `code` exists on Scene (graphql/schema/types/scene.graphql:48) and is genuinely "
+    "ABSENT from Movie -- movie.graphql's field list runs id/name/aliases/duration/date/studio/"
+    "director/synopsis/url/urls/tags with no code. So the row's first checklist item is a real gap "
+    "and not already fixed. Deferred because the window lives on the data model, not the GraphQL "
+    "surface: it needs a movies table column, a migration, a scan/scrape path and the store's "
+    "partial-update handling -- the same shape as #1790's external-IDs work, which took a migration "
+    "plus a registry. Recording it as deferred rather than closed because the mechanism is known "
+    "and the work is real, and rather than not-planned because nothing external blocks it.",
+    "grep -cE '^  code: String' graphql/schema/types/movie.graphql; "
+    "grep -nE '^  code: String' graphql/schema/types/scene.graphql | head -2")
+
+# --- #3333: saved-filter tag badge stale after rename. A real UI staleness report. ----------
+add(3333, "deferred",
+    "A UI staleness bug, and the reported surface is one this fork has: saved filters live with tag "
+    "criteria, and the badge renders a tag NAME captured when the filter was saved. A rename leaves "
+    "that stored name stale, exactly as reported. Deferred because the fix belongs to the saved-"
+    "filter data model rather than to a rendering tweak: either the saved filter stores a tag id "
+    "and resolves the name at render time, or a tag rename updates saved filters that reference it. "
+    "Both are schema-level, and this fork is mid-programme on the tag/scan data model, so starting "
+    "a migration for a badge is the wrong order.",
+    "grep -rln 'SavedFilter' ui/v2.5/src/components/ | head -4")
+
+# --- #3172: icon invisible in dark mode. An ASSET/colour request, not a code defect. ---------
+add(3172, "not-planned",
+    "A visual/asset request with screenshots, not a defect in this codebase: the icons are "
+    "raster/vector assets (ui/v2.5/public/{favicon.ico,stash_icon.svg,stash_icon.png}), and the "
+    "ask is to recolour them for Windows dark mode. Producing a new icon is design work on binary "
+    "assets, not a change any reviewer of a Go fork can evaluate in a diff. Not deferred: nothing "
+    "external is blocking, the work simply is not this fork's to do.",
+    "ls -1 ui/v2.5/public/ | grep -Ei 'icon|favicon'")
 
 
 def planned_rows():
