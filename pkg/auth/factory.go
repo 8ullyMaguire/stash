@@ -82,13 +82,31 @@ type Factory struct {
 // typed nil returned as an interface is non-nil, so a caller doing
 // `if store == nil` would pass and then panic on first use; this keeps the
 // error path honest at the cost of one named variable.
-func (f *Factory) Build(cookieStore session.Store) (store session.Store, mode Mode, err error) {
+// Build assembles the session store for the resolved auth mode.
+//
+// ctx MUST carry a database reader when the mode has to be inferred (f.MultiUser is nil and
+// f.Users is set): resolveMode counts the rows in the users table, and every sqlite read goes
+// through getDBReader, which fails with a bare "not in transaction" when the context has neither a
+// transaction nor a dbKey.
+//
+// This was not theoretical. Startup called Build(context.Background()) indirectly -- resolveMode
+// did its own `context.Background()` -- and every fresh sqlite instance died at boot with:
+//
+//	StashForge auth: querying `SELECT COUNT(*) FROM users` [[]]: not in transaction
+//
+// after the migrations had already run, so the failure looked like a database problem rather than
+// a missing context value. The fix is here rather than at the call site because the requirement is
+// intrinsic to the query: any caller that infers the mode owes the count a reader.
+//
+// A caller that already knows the mode can set f.MultiUser and pass any context, including nil --
+// resolveMode returns before touching the database in that case.
+func (f *Factory) Build(ctx context.Context, cookieStore session.Store) (store session.Store, mode Mode, err error) {
 	// Named results, initialised to a true nil interface. Every return below
 	// either sets store to a real implementation or leaves it nil alongside a
 	// non-nil error.
 	var nilStore session.Store
 
-	resolvedMode, err := f.resolveMode()
+	resolvedMode, err := f.resolveMode(ctx)
 	if err != nil {
 		return nilStore, ModeSingleUser, err
 	}
@@ -144,7 +162,7 @@ func (f *Factory) Build(cookieStore session.Store) (store session.Store, mode Mo
 	return store, mode, nil
 }
 
-func (f *Factory) resolveMode() (Mode, error) {
+func (f *Factory) resolveMode(ctx context.Context) (Mode, error) {
 	if f.MultiUser != nil {
 		if *f.MultiUser {
 			return ModeMultiUser, nil
@@ -160,7 +178,7 @@ func (f *Factory) resolveMode() (Mode, error) {
 	// install, which stays single-user: promoting an instance to accounts
 	// without an explicit decision is how you lock someone out of their own
 	// library.
-	n, err := f.Users.Count(context.Background())
+	n, err := f.Users.Count(ctx)
 	if err != nil {
 		// A database read failure must NOT silently fall back to single-user.
 		// That would authenticate every visitor as the single legacy config

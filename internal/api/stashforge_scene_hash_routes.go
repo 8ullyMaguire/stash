@@ -51,7 +51,22 @@ import (
 // the gate could produce. That is a 404 for the same reason a missing row is.
 func sceneHashCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hash := chi.URLParam(r, "sceneHash")
+		// The URL is `/scene/<hash>_thumbs.vtt`: the hash and the suffix share ONE path segment, so
+		// chi hands the whole segment back as {sceneHash}. Strip the suffix before looking a scene
+		// up, and put the clean hash on the context for the handler to use.
+		//
+		// Without this the lookup ran against the literal string "<hash>_thumbs.vtt", matched no
+		// scene, and every sprite request 404'd -- a wrong value that still looked like a hash, so
+		// no test that only checked "is there a hash here" could have caught it.
+		raw := chi.URLParam(r, "media")
+		hash, media, ok := splitSceneHashMedia(raw)
+		if !ok {
+			logger.Debugf("stashforge: sprite path %q has no recognised media suffix", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), sceneMediaKey, media))
+
 		if hash == "" {
 			http.NotFound(w, r)
 			return

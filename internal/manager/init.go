@@ -433,7 +433,17 @@ func (s *Manager) initStashForgeAuth() error {
 		TOTP: s.TOTPStore,
 	}
 
-	store, mode, err := factory.Build(session.NewCookieStore(s.Config))
+	// The context MUST carry the database reader. factory.Build infers the auth mode by counting
+	// the users table (pkg/auth/factory.go, resolveMode), and every sqlite read resolves its reader
+	// from the context -- so a bare context.Background() here fails with "not in transaction" and
+	// takes the whole instance down at boot, after migrations have already run. WithDatabase is the
+	// same call pkg/models/repository.go and internal/manager/task_scan.go use for exactly this.
+	ctx, err := s.Database.WithDatabase(context.Background())
+	if err != nil {
+		return fmt.Errorf("StashForge auth: %w", err)
+	}
+
+	store, mode, err := factory.Build(ctx, session.NewCookieStore(s.Config))
 	if err != nil {
 		return fmt.Errorf("StashForge auth: %w", err)
 	}

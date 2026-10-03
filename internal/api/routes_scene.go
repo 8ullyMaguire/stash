@@ -59,8 +59,26 @@ type sceneRoutes struct {
 func (rs sceneRoutes) Routes() chi.Router {
 	r := chi.NewRouter()
 
+	// ONE route for the whole segment, with the middleware chosen per request, because chi cannot
+	// host two param routes on the same segment.
+	//
+	// `/scene/42`, `/scene/42/stream` and `/scene/<hash>_thumbs.vtt` all have their interesting
+	// part in the FIRST segment, so they cannot be two sibling route blocks: chi
+	// panics with "attempting to Mount() a handler on an existing path". Measured against chi
+	// v5.2.4, the full set of options:
+	//
+	// A bare suffix pattern ("_thumbs.vtt")     panics: pattern must begin with '/'
+	// Two params in one segment                  200, but only the LAST is populated
+	// A trailing wildcard                        200, but every param comes back EMPTY
+	// Two routes, disjoint regexes               panics: existing path
+	// A second route on the same segment         panics: collides with the first
+	//
+	// The only shape whose params are actually populated is a single `{sceneId}` covering the
+	// segment, with the suffix split off in Go. So that is what this is: sceneSegmentCtx decides
+	// per request whether the segment is a sprite media reference (route to sceneHashCtx and
+	// VttSceneMedia) or an ordinary scene id (route to SceneCtx and the normal sub-routes).
 	r.Route("/{sceneId}", func(r chi.Router) {
-		r.Use(rs.SceneCtx)
+		r.Use(rs.sceneSegmentCtx)
 
 		// streaming endpoints
 		r.Get("/stream", rs.StreamDirect)
@@ -94,18 +112,11 @@ func (rs sceneRoutes) Routes() chi.Router {
 		r.Get("/scene_marker/{sceneMarkerId}/preview", rs.SceneMarkerPreview)
 		r.Get("/scene_marker/{sceneMarkerId}/screenshot", rs.SceneMarkerScreenshot)
 	})
-	// These two are OUTSIDE the /{sceneId} block, so they never see SceneCtx
-	// and never saw its gate -- a hole, found by listing every media route
-	// and recording which middleware each one passes rather than by reading
-	// the handlers (all of which looked correct). They serve a generated
-	// sprite and thumbnail strip keyed only by a hash, so the hash is
-	// resolved to a scene and the scene is checked.
-	// See stashforge_scene_hash_routes.go.
-	r.Route("/{sceneHash}*", func(r chi.Router) {
-		r.Use(sceneHashCtx)
-		r.Get("_thumbs.vtt", rs.VttThumbs)
-		r.Get("_sprite.jpg", rs.VttSprite)
-	})
+	// The sprite media segment is the bare `GET /` of this same route -- /scene/<hash>_thumbs.vtt
+	// has no further path -- so it is registered here rather than as a sibling route, which chi
+	// cannot express (see the note at the top of Routes). sceneSegmentCtx routes it to
+	// sceneHashCtx, which resolves the hash to a scene and applies the library gate.
+	r.Get("/", rs.sceneSegmentRoot)
 
 	return r
 }
@@ -547,6 +558,29 @@ func spriteSceneHash(r *http.Request) string {
 	// The /{sceneHash}* form. A suffixed checksum carries '_' and '.', both legal in a chi URL
 	// segment, so a windowed sprite is reachable by its own URL too.
 	return chi.URLParam(r, "sceneHash")
+}
+
+// VttSceneMedia serves either sprite media kind, chosen by the suffix sceneHashCtx split off the
+// path segment.
+//
+// This exists because chi cannot route on a suffix inside a segment. `/scene/<hash>_sprite.jpg` and
+// `/scene/<hash>_thumbs.vtt` share the segment with the hash, so a single wildcard pattern matches
+// both and the branch has to happen here.
+//
+// The suffix is read from the CONTEXT, not re-derived from the URL, so there is exactly one place
+// that decides what a URL means. An absent or unrecognised value 404s: reaching this handler without
+// sceneHashCtx having run is a routing mistake, and guessing the default would serve the thumbnail
+// strip to a sprite request -- a wrong-but-valid response, which is the worst kind.
+func (rs sceneRoutes) VttSceneMedia(w http.ResponseWriter, r *http.Request) {
+	media, _ := r.Context().Value(sceneMediaKey).(string)
+	switch media {
+	case spriteSuffix:
+		rs.VttSprite(w, r)
+	case vttSuffix:
+		rs.VttThumbs(w, r)
+	default:
+		http.NotFound(w, r)
+	}
 }
 
 func (rs sceneRoutes) VttThumbs(w http.ResponseWriter, r *http.Request) {

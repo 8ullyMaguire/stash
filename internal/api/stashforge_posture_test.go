@@ -99,7 +99,7 @@ func TestCheckInstancePosture_RefusesThePosturesThatAreNotSafeToServe(t *testing
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := checkInstancePosture(tc.store, tc.scheme)
+			err := checkInstancePosture(context.Background(), tc.store, tc.scheme)
 			if tc.wantError == "" {
 				assert.NoError(t, err)
 				return
@@ -168,7 +168,7 @@ func TestCheckInstancePosture_FailsClosedOnAnUnreadableStore(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := checkInstancePosture(tc.store, "https")
+			err := checkInstancePosture(context.Background(), tc.store, "https")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.wantError)
 			// The underlying cause has to survive: an operator reading only
@@ -186,7 +186,7 @@ func TestCheckInstancePosture_FailsClosedOnAnUnreadableStore(t *testing.T) {
 // arrives last -- not by the more conservative of the two.
 func TestCheckInstancePosture_DoesNotConsultTheModeTwice(t *testing.T) {
 	store := &countingPostureStore{mode: collab.ModePublic, completed: true}
-	require.NoError(t, checkInstancePosture(store, "https"))
+	require.NoError(t, checkInstancePosture(context.Background(), store, "https"))
 	assert.Equal(t, 1, store.modeCalls, "the mode is read once, not re-confirmed")
 	assert.Equal(t, 1, store.completedCalls, "the wizard flag is read once")
 }

@@ -181,7 +181,12 @@ func Initialize() (*Server, error) {
 		hookExecutor:   pluginCache,
 	}
 
-	gqlSrv := gqlHandler.New(NewExecutableSchema(Config{Resolvers: resolver}))
+	// Directives MUST be supplied, even though all three are passthroughs. gqlgen's generated
+	// executor refuses a query whose directive has no implementation ("directive requiresRole is
+	// not implemented"), so omitting this made every @requiresRole-annotated query -- including
+	// systemStatus -- return an error. An annotation that is documentation only must not also be an
+	// outage. See access_directives.go for why these are passthroughs and not enforcement.
+	gqlSrv := gqlHandler.New(NewExecutableSchema(NewSchemaConfig(resolver)))
 	gqlSrv.SetRecoverFunc(recoverFunc)
 	gqlSrv.AddTransport(gqlTransport.Websocket{
 		Upgrader: websocket.Upgrader{
@@ -379,7 +384,16 @@ func (s *Server) Start() error {
 	// collab.RequiresTLS() said a public instance must not be served over plain
 	// HTTP, and it shipped in M4 step 4.1 with no production caller at all. A
 	// tested rule nobody calls is a comment.
-	if err := s.checkInstancePosture(s.scheme()); err != nil {
+	// WithDatabase, not context.Background(): the posture check reads instance_settings, and every
+	// sqlite read resolves its reader from the context. The same idiom as
+	// internal/manager/init.go's StashForge auth wiring, and for the same reason -- two separate
+	// startup paths, one missing-context bug each.
+	ctx, err := s.manager.Database.WithDatabase(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if err := s.checkInstancePosture(ctx, s.scheme()); err != nil {
 		return err
 	}
 
@@ -424,7 +438,7 @@ type instancePostureStore interface {
 // than defaulting to a posture nobody chose, because starting anyway makes a
 // transient database error a silent security downgrade that only a restart
 // reveals.
-func (s *Server) checkInstancePosture(scheme string) error {
+func (s *Server) checkInstancePosture(ctx context.Context, scheme string) error {
 	// The nil test is HERE, against the concrete pointer, and not on the
 	// interface. A nil *sqlite.InstanceModeStore assigned to an interface is a
 	// NON-nil interface holding a nil pointer, so `store == nil` in the callee
@@ -434,16 +448,21 @@ func (s *Server) checkInstancePosture(scheme string) error {
 	if s.manager == nil || s.manager.InstanceModeStore == nil {
 		return nil
 	}
-	return checkInstancePosture(s.manager.InstanceModeStore, scheme)
+	// ctx must carry the database reader. Every sqlite read resolves its reader from the context,
+	// so a bare context.Background() here fails with "not in transaction" and -- because this
+	// function FAILS CLOSED -- takes the instance down at boot instead of starting it. That is the
+	// correct failure direction for an unreadable store and the wrong one for a missing context
+	// value, which is why the two must not be confused: a boot log reading
+	// "cannot determine the instance mode ... not in transaction" is a bug in the caller, not a
+	// posture refusal.
+	return checkInstancePosture(ctx, s.manager.InstanceModeStore, scheme)
 }
 
 // checkInstancePosture is the testable core: given a store and a scheme, decide
 // whether this instance may serve. It takes a non-nil store -- the
 // "not a StashForge instance" case is decided by the caller, against the
 // concrete pointer, for the reason given above.
-func checkInstancePosture(store instancePostureStore, scheme string) error {
-	ctx := context.Background()
-
+func checkInstancePosture(ctx context.Context, store instancePostureStore, scheme string) error {
 	mode, err := store.Mode(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot determine the instance mode, refusing to start rather than guessing a posture: %w", err)

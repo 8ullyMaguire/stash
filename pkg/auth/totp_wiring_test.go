@@ -42,7 +42,7 @@ func buildInstance(t *testing.T, f *factoryFixture, totp *fakeTOTP) *auth.Sessio
 	fac.MultiUser = &force
 	fac.TOTP = totp
 
-	store, mode, err := fac.Build(newCookieStoreDouble())
+	store, mode, err := fac.Build(context.Background(), newCookieStoreDouble())
 	require.NoError(t, err)
 	require.Equal(t, auth.ModeMultiUser, mode)
 
@@ -148,7 +148,7 @@ func TestWiring_ANoTOTPStoreStillStartsAndPromptsNobody(t *testing.T) {
 	fac.MultiUser = &force
 	fac.TOTP = nil // an instance built before the 2FA table existed
 
-	store, mode, err := fac.Build(newCookieStoreDouble())
+	store, mode, err := fac.Build(context.Background(), newCookieStoreDouble())
 	require.NoError(t, err, "an instance with no 2FA store must still start, or the upgrade breaks every install")
 	require.Equal(t, auth.ModeMultiUser, mode)
 

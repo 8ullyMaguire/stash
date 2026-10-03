@@ -23,7 +23,7 @@ func TestFactory_LegacyInstallKeepsCookieStore(t *testing.T) {
 	// empty because no account has ever been created here.
 	cookie := newCookieStoreDouble()
 
-	store, mode, err := f.factory().Build(cookie)
+	store, mode, err := f.factory().Build(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, auth.ModeSingleUser, mode)
 	assert.Same(t, cookie, store,
@@ -37,7 +37,7 @@ func TestFactory_EmptyUserTableStaysSingleUser(t *testing.T) {
 	f := newFactoryFixture(t)
 	cookie := &session.HTTPAdapter{CookieName: "stash"}
 
-	store, mode, err := f.factory().Build(cookie)
+	store, mode, err := f.factory().Build(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, auth.ModeSingleUser, mode)
 	assert.Same(t, cookie, store)
@@ -50,7 +50,7 @@ func TestFactory_PopulatedUserTablePromotesToMultiUser(t *testing.T) {
 	f.users.add(&models.User{Username: "alice"}, "x")
 
 	cookie := &session.HTTPAdapter{CookieName: "stash"}
-	store, mode, err := f.factory().Build(cookie)
+	store, mode, err := f.factory().Build(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, auth.ModeMultiUser, mode)
 	assert.NotSame(t, session.Store(cookie), store, "the cookie store must be replaced")
@@ -68,7 +68,7 @@ func TestFactory_ExplicitOverrideWins(t *testing.T) {
 	fac.MultiUser = &off
 	cookie := newCookieStoreDouble()
 
-	_, mode, err := fac.Build(cookie)
+	_, mode, err := fac.Build(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, auth.ModeSingleUser, mode)
 }
@@ -103,7 +103,7 @@ func TestFactory_MissingDependencyIsAnErrorNotANoOp(t *testing.T) {
 			on := true
 			f.MultiUser = &on
 
-			store, _, err := f.Build(newCookieStoreDouble())
+			store, _, err := f.Build(context.Background(), newCookieStoreDouble())
 			require.Error(t, err, "a missing %s must be an error", tt.name)
 			assert.Contains(t, err.Error(), tt.want)
 
@@ -126,7 +126,7 @@ func TestFactory_DatabaseFailureDoesNotFallBackToSingleUser(t *testing.T) {
 	fixture := newFactoryFixture(t)
 	fixture.users.countErr = errors.New("disk gone")
 
-	_, mode, err := fixture.factory().Build(&session.HTTPAdapter{CookieName: "stash"})
+	_, mode, err := fixture.factory().Build(context.Background(), &session.HTTPAdapter{CookieName: "stash"})
 	require.Error(t, err)
 	assert.Equal(t, auth.ModeSingleUser, mode, "the mode is meaningless on error")
 }
@@ -140,7 +140,7 @@ func TestFactory_ForcedMultiUserWithNoUsersStillChecksDependencies(t *testing.T)
 	f.MultiUser = &on
 	f.Audit = nil
 
-	_, _, err := f.Build(&session.HTTPAdapter{CookieName: "stash"})
+	_, _, err := f.Build(context.Background(), &session.HTTPAdapter{CookieName: "stash"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Audit")
 }
@@ -152,7 +152,7 @@ func TestFactory_MultiUserStoreAuthenticates(t *testing.T) {
 	fixture := newFactoryFixture(t)
 	u := fixture.users.add(&models.User{Username: "alice"}, "alicepass")
 
-	store, mode, err := fixture.factory().Build(&session.HTTPAdapter{CookieName: "stash"})
+	store, mode, err := fixture.factory().Build(context.Background(), &session.HTTPAdapter{CookieName: "stash"})
 	require.NoError(t, err)
 	require.Equal(t, auth.ModeMultiUser, mode)
 
@@ -181,7 +181,7 @@ func TestFactory_MultiUserSessionRejectsUnknownCookie(t *testing.T) {
 	fixture := newFactoryFixture(t)
 	fixture.users.add(&models.User{Username: "alice"}, "alicepass")
 
-	store, _, err := fixture.factory().Build(&session.HTTPAdapter{CookieName: "stash"})
+	store, _, err := fixture.factory().Build(context.Background(), &session.HTTPAdapter{CookieName: "stash"})
 	require.NoError(t, err)
 
 	r := httptest.NewRequest("GET", "/", nil)

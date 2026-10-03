@@ -80,3 +80,7 @@ __pycache__/
 
 # mutation harness lock: a runtime artefact, not source
 plugins/p2pdownloader/.mutation-harness.lock
+
+# docs/boot-check.sh scratch: a throwaway sqlite database, a built binary and the cgo assembler
+# scratch. Not a build output of the project and must never reach a commit.
+.boot-check.*

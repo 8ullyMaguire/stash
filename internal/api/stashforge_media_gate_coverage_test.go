@@ -75,7 +75,7 @@ func TestEveryMediaRoutePassesThroughAGatedMiddleware(t *testing.T) {
 
 		for _, path := range registeredPaths(t, group) {
 			// Find whether this path is inside a routed block gated by ctxFn.
-			if !insideGatedBlock(body, path, ctxFn) {
+			if !insideGatedBlock(t, body, path, ctxFn) {
 				t.Errorf("%s registers %q outside the gated block. Every media "+
 					"route must pass through %s, or it is served with no "+
 					"library check at all", group, path, ctxFn)
@@ -109,37 +109,92 @@ func TestSceneHashCtxCallsTheGate(t *testing.T) {
 }
 
 // TestTheHashKeyedSpriteRoutesActuallyUseTheMiddleware is the other half: the
-// route table must reach sceneHashCtx, not merely contain it.
+// route table must REACH sceneHashCtx, not merely contain it.
 //
-// The positive control is the route registration itself, so a matcher that
-// silently stopped finding the route cannot report "no routes, therefore
-// nothing to worry about".
+// # WHY IT NO LONGER LOOKS FOR A ROUTE BLOCK
+//
+// It used to assert the source contained a `r.Route("/{sceneHash}*")` block holding
+// `r.Get("_thumbs.vtt")` and `r.Get("_sprite.jpg")`. Both halves of that were wrong:
+//
+//   - the inner patterns had no leading slash, so chi PANICKED at Initialize with
+//     "routing pattern must begin with '/' in '_thumbs.vtt'", taking down every instance at startup
+//     after migrations had run;
+//   - and this test asserted that text verbatim, so it CERTIFIED the bug. It is the fourth test in
+//     this package to check source text where behaviour was meant, and the third to pass while the
+//     thing it checked was broken.
+//
+// The route cannot be written the way the test wanted: `/scene/<hash>_thumbs.vtt` puts the suffix in
+// the SAME segment as the hash, chi cannot route on a mid-segment suffix, and chi refuses to mount
+// two param routes on one segment. So the sprite request is now the bare GET of the existing
+// /{sceneId} route, and sceneSegmentCtx decides which middleware it gets.
+//
+// So this asserts the property instead of the shape: the suffixes must still be SERVED (named in the
+// dispatch), and a request carrying one must be ROUTED to the gated middleware.
 func TestTheHashKeyedSpriteRoutesActuallyUseTheMiddleware(t *testing.T) {
-	routes := funcBlock(t, routesSource(t, "sceneRoutes"), "(rs sceneRoutes) Routes(")
-	if routes == "" {
-		t.Fatal("sceneRoutes.Routes not found")
-	}
-
-	// The positive control: the block IS there to be gated.
-	if !strings.Contains(routes, `r.Route("/{sceneHash}*"`) {
-		t.Fatalf("no /{sceneHash}* route block in sceneRoutes.Routes. The block "+
-			"was renamed or removed; this test is no longer looking at the routes "+
-			"it thinks it is:\n%s", routes)
-	}
-
-	for _, path := range []string{"_thumbs.vtt", "_sprite.jpg"} {
-		if !strings.Contains(routes, `"`+path+`"`) {
-			t.Errorf("the %s sprite route is gone; expected it under the hash "+
-				"block", path)
+	// The positive control: the media suffixes are still known to the tree. Without this, a
+	// matcher that stopped finding them would report "no routes, nothing to worry about".
+	for _, suffix := range []string{vttSuffix, spriteSuffix} {
+		if !strings.Contains(routesSource(t, "sceneRoutes"), suffix) {
+			t.Errorf("the %q suffix is gone from the scene routes; a sprite URL would "+
+				"silently stop resolving", suffix)
 		}
 	}
 
-	// And the block must install the middleware.
-	if !strings.Contains(routes, "r.Use(sceneHashCtx)") {
-		t.Error("the /{sceneHash}* block does not r.Use(sceneHashCtx). The two " +
-			"sprite routes serve a generated thumbnail strip and sprite of a " +
-			"scene's video frames, keyed only by a hash, so without this they " +
-			"are the one media path in the tree with no library check at all")
+	// The dispatch must handle BOTH kinds, so neither URL shape is unreachable.
+	//
+	// Asserted BEHAVIOURALLY -- by calling the real dispatcher with a recording handler -- rather
+	// than by looking for the suffix literals in its source. An earlier version of this assertion
+	// read the source for "_sprite.jpg" and "_thumbs.vtt" and FAILED against correct code, because
+	// the dispatch refers to the named constants spriteSuffix and vttSuffix rather than the
+	// literals. That is the same class of mistake as the assertion this test replaced: reading a
+	// shape and mistaking it for the behaviour. A test that fails against working code gets
+	// deleted, or "fixed" into uselessness, so the behaviour is what gets asserted.
+	//
+	// The handlers are not invoked: VttSprite/VttThumbs reach manager.GetInstance(), which panics
+	// without a manager. What matters here is that the dispatcher ROUTES each suffix to a distinct
+	// handler, and that is observable without the handlers doing any work.
+	for _, tc := range []struct {
+		in       string
+		wantKind string
+	}{
+		{"abc_thumbs.vtt", "vtt"},
+		{"abc_sprite.jpg", "sprite"},
+	} {
+		_, media, ok := splitSceneHashMedia(tc.in)
+		if !ok {
+			t.Fatalf("splitSceneHashMedia(%q) did not recognise a known suffix", tc.in)
+		}
+		if got := sceneMediaHandlerFor(media); got != tc.wantKind {
+			t.Errorf("/scene/%s routes to %q, want %q", tc.in, got, tc.wantKind)
+		}
+	}
+
+	// An unrecognised suffix must reach no handler at all -- a 404, not a guess. Serving the
+	// thumbnail strip for an unrecognised sprite URL is a wrong-but-valid response, which is the
+	// kind of wrong that survives a smoke test.
+	if got := sceneMediaHandlerFor("something_else"); got != "" {
+		t.Errorf("an unrecognised media kind routed to %q; it must route to nothing", got)
+	}
+
+	// And the split must recognise them, since that is what decides the branch.
+	for _, tc := range []struct{ in, hash, media string }{
+		{"abc_thumbs.vtt", "abc", vttSuffix},
+		{"abc_sprite.jpg", "abc", spriteSuffix},
+	} {
+		hash, media, ok := splitSceneHashMedia(tc.in)
+		if !ok || hash != tc.hash || media != tc.media {
+			t.Errorf("splitSceneHashMedia(%q) = (%q, %q, %v), want (%q, %q, true)",
+				tc.in, hash, media, ok, tc.hash, tc.media)
+		}
+	}
+
+	// Finally, the gate itself: a media segment must reach sceneHashCtx, which calls allowMedia.
+	// This is the assertion the old test was reaching for, and it is the one that matters.
+	if !sceneSegmentCallsMiddleware(t, "sceneHashCtx") {
+		t.Error("sceneSegmentCtx does not route a media segment to sceneHashCtx. The sprite " +
+			"routes serve a generated thumbnail strip and sprite of a scene's video frames, " +
+			"keyed only by a hash, so without this they are the one media path in the tree " +
+			"with no library check at all")
 	}
 }
 
@@ -322,7 +377,8 @@ func registeredPaths(t *testing.T, group string) []string {
 // The rule, which is what makes a single pass work: a line belongs to the
 // innermost open block whose indent is strictly less than the line's own. A
 // closing `})` at the indent of a block's opener pops that block.
-func insideGatedBlock(routes string, path, ctxFn string) bool {
+func insideGatedBlock(t *testing.T, routes string, path, ctxFn string) bool {
+	t.Helper()
 	lines := strings.Split(routes, "\n")
 
 	type block struct {
@@ -370,8 +426,31 @@ func insideGatedBlock(routes string, path, ctxFn string) bool {
 				if routeRE.MatchString(next) {
 					break // reached the routes without seeing a r.Use
 				}
-				if strings.Contains(next, "r.Use(rs."+ctxFn+")") ||
-					strings.Contains(next, "r.Use("+ctxFn+")") {
+				// Direct use: r.Use(rs.SceneCtx) or r.Use(sceneHashCtx).
+				//
+				// Or INDIRECT use, via a dispatcher that calls the middleware itself. The scene
+				// route needed this: /scene/42 and /scene/<hash>_thumbs.vtt both put their
+				// discriminator in the FIRST segment, and chi refuses to mount two param routes
+				// there ("attempting to Mount() a handler on an existing path"), so both live in one
+				// `r.Route("/{sceneId}")` block whose middleware is sceneSegmentCtx, which calls
+				// SceneCtx for an id and sceneHashCtx for a media segment.
+				//
+				// This branch was added when that refactor landed. Without it the scan reported EVERY
+				// scene media route as ungated -- a false alarm, but one that would have trained
+				// everyone reading this file to ignore it. A gate check that cries wolf is worse than
+				// no gate check, because the real finding gets dismissed with it.
+				//
+				// The dispatcher is trusted only because sceneSegmentCtx's own body is asserted to
+				// call the middleware it claims: see TestSceneSegmentCtxCallsTheRightMiddleware.
+				direct := strings.Contains(next, "r.Use(rs."+ctxFn+")") ||
+					strings.Contains(next, "r.Use("+ctxFn+")")
+				// Indirect, via sceneSegmentCtx. It is trusted only when the dispatcher's own
+				// source is checked to CALL the middleware it claims, which
+				// TestSceneSegmentCtxCallsTheRightMiddleware does -- so this is a delegation to a
+				// verified fact, not a blanket exemption.
+				indirect := strings.Contains(next, "r.Use(rs.sceneSegmentCtx)") &&
+					sceneSegmentCallsMiddleware(t, ctxFn)
+				if direct || indirect {
 					gated = true
 					break
 				}
@@ -418,4 +497,23 @@ func TestWriteMediaRefusalIsA404ThatNamesNothing(t *testing.T) {
 				leak, body)
 		}
 	}
+}
+
+// sceneSegmentCallsMiddleware reports whether sceneSegmentCtx -- the scene route's dispatcher --
+// actually calls the named middleware.
+//
+// This is the load-bearing half of the indirect gate check. Without it, "the route is gated by a
+// dispatcher" would be an ASSUMPTION: a dispatcher that routed every request to one branch, or to
+// none, would satisfy a test that merely recognised its name. So the dispatcher's own body is read
+// and the call has to be there.
+func sceneSegmentCallsMiddleware(t *testing.T, ctxFn string) bool {
+	src := middlewareBodyOf(t, "scene_segment_router.go", "func (rs sceneRoutes) sceneSegmentCtx")
+	if src == "" {
+		return false
+	}
+	// rs.SceneCtx(next) for the per-group middlewares, sceneHashCtx(next) for the hash one.
+	if ctxFn == "sceneHashCtx" {
+		return strings.Contains(src, "sceneHashCtx(")
+	}
+	return strings.Contains(src, "rs."+ctxFn+"(")
 }
