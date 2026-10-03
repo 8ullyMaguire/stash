@@ -88,14 +88,19 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
    `/stream` (307/409), and HLS + DASH manifests (ecd659eb3, tag stash-3530-hls). The segment
    cache key now includes the window, which was a real bug: two scenes of one file shared a
    cache directory and served each other's segments.
-2. **the preview/webp cache key** — DONE for content (8f84c565f, tag stash-3530-cover: cover and
-   previews are sampled inside the window), but the FILENAME still keys on `scene.GetHash()`, which
-   derives from the file. Two scenes of one file share `generated/screens/<hash>.mp4` and now need
-   different previews. Separate commit on purpose: it changes a filename behind a URL, so
-   bookmarked/external preview URLs stop resolving and `migrate_screenshots.go` +
-   `ResolveGeneratedFile(preview, legacy)` both need extending.
-3. **sprite/VTT thumbs** — same window-awareness (tiled across the duration) but a different task
-   with its own cache. Not started.
+2. **the preview/webp cache key** — DONE. `992e8da69`, tag `stash-3530-previewkey`. `GeneratedChecksum`
+   (an opt-in wrapper around `GetHash`, NOT a change to `GetHash`) appends `_w<start>-<end>` to the
+   checksum, so two scenes of one file get different previews. Unranged scenes keep their exact
+   filename. Sweep 6/6.
+3. **sprite/VTT thumbs** — SPEC WRITTEN, NOT IMPLEMENTED. `docs/ISSUE-3530-sprite-spec.md`.
+   Deliberately not a copy of the preview fix, for three reasons recorded in the spec:
+   - the VTT cues are a **contract with the player**, not a lookup key;
+   - `SlowSeek` works in FRAMES, so the window must be converted via `FrameRate`;
+   - `chunkCount` is snapped to a perfect square, so a window inside a long file gets a grid sized
+     for the file.
+   The spec's one open question — absolute vs window-relative cues — is **resolved by reading the
+   player** (`vtt-thumbnails.ts`: `time = percent * player.duration()`), so cues are relative to the
+   media element's timeline and window-relative is forced, not chosen.
 4. **detection** — needs an upstream discussion, not a guess.
 5. **any UI to set a range** — the columns are SQL/API-settable only today.
 
