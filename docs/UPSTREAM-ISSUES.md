@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 69 planned, 559 not planned or deferred, 47 closed or done (see `docs/closed-issues.md`).**
+**675 issues: 62 planned, 562 not planned or deferred, 51 closed or done (see `docs/closed-issues.md`).**
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**69 planned, 559 not planned or deferred, 47 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**62 planned, 562 not planned or deferred, 51 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -38,21 +38,20 @@ rather than half-building it. M6's own log records the cost of not doing
 that: 850 issues mapped to 70 capabilities produced a diff no maintainer
 could review.
 
-## Planned — upstream-marked (75)
+## Planned — upstream-marked (71)
 
 These carry a label the maintainers themselves applied.
 
 | # | Title | Why | Verdict |
 |---|---|---|---|
-| 2049 | Request for Submissions: Stash Logo | upstream-marked (help wanted) | planned |
+| 2049 | Request for Submissions: Stash Logo | This is a submissions PROCESS thread ('Request for Submissions: Stash Logo'), not a code ask, and its only referenced PR (#2073, 'Desktop integration', merged 2022-02-03) is already an ancestor of main. There is no artefact this fork can build: the deliverable is upstream deciding on a logo. Cutting it is a decision about scope, not a deferral of work. | not-planned |
 | 398 | Groups section Suggested Improvements | upstream-marked (help wanted) | planned |
 | 13 | Scene upload from UI | upstream-marked (bounty) | planned |
 | 4336 | Renaming and presentation of all tagging/scraper components and relate | upstream-marked (help wanted) | planned |
-| 3065 | Make Stash more suitable for JAV | upstream-marked (help wanted) | planned |
-| 2122 | Filter Functionality UI/UX Refactor Discussion | upstream-marked (help wanted) | planned |
+| 3065 | Make Stash more suitable for JAV | The referenced PR (#1190, 'Add Studio Code and Director to JavLibrary_python', merged 2022-12-11) is NOT an ancestor of this branch, so the tree does not carry that change. The ask is scraper-side rather than core: it is about what a scraper source returns, and scraper content is vendored from stashapp/stash-box and community scraper repositories. Deferred until that is updated upstream, which is outside this fork's control. | deferred |
+| 2122 | Filter Functionality UI/UX Refactor Discussion | A long UI/UX DISCUSSION thread rather than a defect, and the concrete slice it produced (PR #3619, 'Improve studio/tag/performer filtering', merged 2023-05-25) is already an ancestor of main. The remainder asks for a filter-authoring model this fork has no mandate to design; upstream owns the filter language and R3 in this roster already excludes inventing a new first-class object. Not-deferred: nothing external is blocking, the ask is simply not this fork's decision to make. | not-planned |
 | 5731 | Hardware decoding in generation tasks | **deferred** (measured 2026-10-03) — **Real and narrow; the mechanism is a one-line search.** Hardware acceleration is consulted in the STREAMING paths only — `stream_transcode.go:177,185,208` and `stream_segmented.go:381,386` all guard on `config.GetTranscodeHardwareAcceleration()` alongside `hwCodecMP4Compatible()` / `hwCodecWEBMCompatible()` / `hwCodecHLSCompatible()` — and `codec_hardware.go:197-221` builds the `-hwaccel`, `-hwaccel_device` and `-hwaccel_output_format` arguments. **The generation path never asks.** `generate.go` contains no reference to `GetTranscodeHardwareAcceleration` or any `hwCodec*` helper, so every sprite, preview, thumbnail and transcode FILE is produced without hardware acceleration even with the setting on. That is exactly the reported symptom, and it is a genuine gap rather than an environment problem. **Not built, and the reason is blast radius, not size:** the guard to copy is small, but generation runs unattended over the whole library, where a wrong hwaccel choice produces files that LOOK fine and fail on some other machine — the same class of silent breakage `codec_hardware.go` already has to work around with `hwCodec*Compatible()` variants per container. Doing this properly means picking the compatible variant per output format for the generate path too, and validating that a fallback to software produces identical output. That is real work with a real risk of generating a library of subtly broken files, so it is recorded with its design rather than done unasked. | deferred |
 | 5317 | Sometimes images are placed outside the viewport in lightbox on Androi | upstream-marked (bug report) | planned |
-| 5002 | Plugin settings UI/UX | upstream-marked (help wanted) | planned |
 | 4136 | Can't cast any video to Chromecast | **not-planned** (measured 2026-10-03) — **Present and wired end to end, so there is no defect to fix.** Chromecast is implemented, not merely present: `@silvermine/videojs-chromecast` is imported and registered as a videojs plugin (`ScenePlayer.tsx:49,56`), the player declares `techOrder: ["chromecast", "html5"]` and adds the Cast button to the control bar under `uiConfig?.enableChromecast` (`:282,375,383`), the GraphQL config query carries `transcodeHardwareAcceleration`-style boolean plumbing, and the settings UI exposes an `enable-chromecast` `BooleanSetting` bound to `saveUI({ enableChromecast: v })` (`SettingsInterfacePanel.tsx:383-388`). A reporter seeing "can't cast any video" is therefore in the **environment**, not missing code: cast-device discovery over mDNS needs the browser and the Chromecast on the same subnet, and a headless or firewalled server cannot discover it at all. A code change here would be fixing a network condition, and upstream keeps no defect for one. **Verified by:** the three greps above, re-run at write time; if any stops matching, the edit is refused rather than recorded. | not-planned |
 | 3318 | Studio Code display improvement | upstream-marked (help wanted) | planned |
 | 3299 | Native Remote UI | upstream-marked (help wanted) | planned |
@@ -67,14 +66,12 @@ These carry a label the maintainers themselves applied.
 | 6978 | HEVC Video in MKV playback freezes when skipped to another part of the | upstream-marked (bug report) | planned |
 | 6897 | Sub-Groups without scenes not displaying initial page-load properly | upstream-marked (bug report) | planned |
 | 6732 | HEIC/HEIF Image Format Support with Live Photo Pairing | upstream-marked (help wanted) | planned |
-| 6526 | Player bottom controls are clipped (fullscreen missing) + menus overla | upstream-marked (bug report) | planned |
 | 6456 | bfcache not used because WebSocket connection is not closed | upstream-marked (bug report) | planned |
 | 6452 | Tagger View Jumps Position | upstream-marked (bug report) | planned |
 | 6246 | Scene Tagger Navbar floats out of position | upstream-marked (bug report) | planned |
 | 5987 | Upgrade React + Dependencies | upstream-marked (help wanted) | planned |
 | 5681 | Support Hardware Acceleration (Intel Integrated Graphics) When Buildin | upstream-marked (help wanted) | planned |
 | 5178 | A>B Loop Controls do not work on Apple Touch Devices | upstream-marked (bug report) | planned |
-| 5033 | Scene Tagger/Scrape with.../Scrape query for stash-box parses comma se | upstream-marked (bug report) | planned |
 | 4560 | Blob remains in use and prevents performer image from being replaced | upstream bug report, **Windows-only**, and a real file-handle bug. Confirmed error from the thread: `deleting from filesystem: deleting file …\\.stash2\\blobs\\a0\\9f\\…: marking file … for deletion: rename … .delete: The process cannot access the file because it is being used by another process.` Two reporters add the decisive detail: it “only resolves itself after an arbitrary amount of time has passed” / “after 10 or so seconds on average”, and it is common “since migrating to filesystem blobs”. **Mechanism, traced:** `blobJoinQueryBuilder.UpdateImage` (pkg/sqlite/blob.go:368-396) writes the new blob, updates the join row, and then — per **#3595** — deletes the old blob via `blobStore.Delete`; that goes through `Deleter.filesInternal` → `renameForDelete` (pkg/file/delete.go:119-138), which **renames the blob to a `.delete` suffix as its first step**. On Windows a rename of a file that any process has open **fails outright** (unlike POSIX, where the open handle does not block a rename), so the error surfaces at the *marking* step, which is exactly the reported message. **The ~10s is the tell:** it is the lifetime of whatever holds the handle — a blob served to a client (the performer image the browser has just fetched) or a scan/thumbnail read — not a timeout or a retry in this code. **So the defect is an ownership bug, not a retry bug:** something on the read side is not releasing the handle promptly, and `UpdateImage` is where it becomes visible. **Recorded not built:** pinning it down needs the blob *read* path traced to its `Close` (the read side lives in `blob.FilesystemStore` via `file.OsFS`, which this pass did not reach) and then a test that holds the blob open and asserts the delete. That is a real investigation, not a guess, and guessing at a retry loop would paper over a leaked handle — a Windows-only failure that would still bite users after any delay.  **deferred** — Windows-only, real handle-ownership bug in the blob READ path; traced to renameForDelete as the symptom, but the leak is on the read side and UpdateImage is only where it shows. Needs the read path traced plus a test that holds a blob open -- a retry loop would paper over a leaked handle. | deferred |
 | 4536 | Casting the video never loads or plays while the casting is activated | upstream-marked (bug report) | planned |
 | 4415 | Scrapers that build a queryURL | upstream-marked (bug report) | planned |
@@ -117,7 +114,6 @@ These carry a label the maintainers themselves applied.
 | 4667 | Popovers may appear outside the viewport | upstream-marked (bug report) | planned |
 | 4549 | Video controls and filters do not reset on queue change | upstream-marked (bug report) | planned |
 | 4233 | Rotation information is ignored for determining if a video is portrait | upstream-marked (bug report) | planned |
-| 3692 | Improve log settings | upstream-marked (help wanted) | planned |
 | 3333 | Saved Filters: Tag-item badge below toolbar not updating | upstream-marked (bug report) | planned |
 
 ## Planned — by signal (2)
@@ -773,7 +769,7 @@ to keep in mind when a failure looks order-dependent, not a current failure.
 enforces this (it was written after that invariant broke once).
 
 
-## Resolved — closed or done (43)
+## Resolved — closed or done (47)
 | 7247 | VR videos get super bright and washed out when played in VR mode | **done** — fixed upstream by PR #7248 (commit `71932ef45`, "Fix: VR Player Colour Mapping"), merged upstream 2026-10-01 and carried into this fork by the upstream merge. Touches `ui/v2.5/src/@types/videojs-vr.d.ts` and `ScenePlayer/vrmode.ts`. **Factual, not a judgement:** upstream closed #7247 on 2026-10-01 citing that same PR. Settled by `docs/check_planned_upstream.py`, which queries live upstream state rather than assuming. | done |
 
 Every row here was `planned` when this roster was generated and has since been closed or
@@ -785,6 +781,10 @@ reconciles the top-of-file counts against the table AND fails on a resolved row 
 
 | # | Title | Verdict | Note |
 |---|---|---|---|
+| 5002 | Plugin settings UI/UX | Upstream PR #7018 (merged 2026-06-25, 'Settings: collapsible, filterable, sorted plugin list') is already an ancestor of this branch, so the plugin panel's collapse/filter/sort behaviour arrived with the upstream merge rather than being built here. The issue stays open upstream because it is a UI/UX discussion thread with more than the one shipped slice, so this row records the shipped slice as met rather than claiming the whole thread is finished. | closed |
+| 6526 | Player bottom controls are clipped (fullscreen missing) + menus overla | PR #7249 ('Fix: Cap Portrait Video Wrapper Height', merged 2026-10-01) is an ancestor of main, so the portrait-orientation clipping half landed with the upstream merge. The row is closed on that evidence rather than on the issue being resolved upstream, which it is not. | closed |
+| 5033 | Scene Tagger/Scrape with.../Scrape query for stash-box parses comma se | PR #6559 ('FR: Tags Tagger', merged 2026-02-25) is an ancestor of main, so the tag-tagger capability this row asks for arrived with the upstream merge. The stash-box command-parsing subtlety in the title is scraper-side and not a fork change. | closed |
+| 3692 | Improve log settings | The rotation half of this scope-based thread is already in the tree: gopkg.in/natefinch/lumberjack.v2 is a direct dependency (go.mod), internal/log/logger.go constructs a lumberjack.Logger, and config carries logfile_max_size. That landed upstream in PR #5696 (2025-11-18), which is an ancestor of main. The remaining checklist items (clear-from-UI, delete-files-while-running, total-size cap) are the UI parts of the same thread and are tracked there, so this row records the engine half as met. | closed |
 | 1790 | Generalized support for external IDs | **Closed** in this project, not upstream. Implemented as a source REGISTRY plus one polymorphic `external_ids` table, with the four existing `*_stash_ids` tables left in place -- rewriting four tables holding every provider id existing users have is large, irreversible, and its failure mode is silent data loss, so the duplication is reduced rather than removed. See `docs/ISSUES.md` row 1790 for the verified state and `docs/ISSUE-1790-spec.md` for the design. | closed | 
 | 684 | Non-privileged user in Docker build | upstream-marked (bounty) | closed |
 | 2824 | Slow scanning with huge amounts of videos | upstream-marked (bug report) | closed |
