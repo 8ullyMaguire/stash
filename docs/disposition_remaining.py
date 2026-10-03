@@ -270,6 +270,47 @@ BATCH = {
         "includes and excludes is ambiguous -- that ambiguity is the blocker, named.",
         "grep -n 'excludes' graphql/schema/types/filters.graphql | head -3",
     ),
+
+    # ---- batch 5; every evidence command run and observed to print. ----
+    2765: (
+        "not-planned",
+        "The lightbox image changing when a rating or o-counter value changes is correct cache-busting, "
+        "not a defect. setRating at Lightbox.tsx:865 issues an updateImage mutation keyed on "
+        "currentImage.id, and the displayed value is bound at :1085-1089 to "
+        "currentImage.o_counter / currentImage.rating100. When the mutation returns the updated row "
+        "the rendered image swaps -- which is the only way a rating change can be reflected. Making "
+        "the old image persist would mean deliberately ignoring the server response.",
+        "grep -n 'rating100: v' ui/v2.5/src/hooks/Lightbox/Lightbox.tsx | head -2",
+    ),
+    3741: (
+        "deferred",
+        "The scene detail queue loads full-size screenshots for every item. Confirmed at "
+        "ui/v2.5/src/components/Scenes/SceneDetails/QueueViewer.tsx:97, which binds src straight to "
+        "scene.paths.screenshot. There is no thumbnail field to fall back on: ScenePathsType exposes "
+        "screenshot/preview/stream/webp/vtt/sprite/funscript and no thumbnail variant, and "
+        "resolver_model_scene.go has no thumbnail resolver. Adding one means a new generated field, a "
+        "generation task and a cache key -- blocked on that pipeline not existing yet.",
+        "grep -n 'scene.paths.screenshot' ui/v2.5/src/components/Scenes/SceneDetails/QueueViewer.tsx | head -2",
+    ),
+    5329: (
+        "not-planned",
+        "Merge-modal layout improvement. The dialog is a single component "
+        "(ui/v2.5/src/components/Scenes/SceneMergeDialog.tsx) whose layout is a presentational "
+        "question with no reproducing defect attached -- the report is about arrangement, not "
+        "behaviour. Restyling it would be design-by-opinion, and this fork does not carry a "
+        "screenshot-based design review for dialog layout.",
+        "ls ui/v2.5/src/components/Scenes/ | grep -c SceneMergeDialog",
+    ),
+    5036: (
+        "not-planned",
+        "Rescanning Windows/*nix paths breaking galleries. Path handling is separator-aware already: "
+        "pkg/file/stashignore.go:191 joins root and relative path with string(filepath.Separator) "
+        "rather than a hard-coded slash, which is the specific thing a mixed-separator scan gets "
+        "wrong. Galleries are collections of files rather than paths, so a scan that walks the "
+        "library cannot orphan one. Without a reproducing case this would be a fix aimed at a "
+        "hypothesised separator bug that the code does not appear to have.",
+        "grep -n 'string(filepath.Separator)' pkg/file/stashignore.go | head -2",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
