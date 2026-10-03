@@ -423,6 +423,40 @@ BATCH = {
         "so a local fix would be reverted rather than merged. The blocker is upstream ownership, named.",
         "grep -n 'CareerLength' pkg/scraper/freeones.go | head -2",
     ),
+
+    # ---- batch 9; every evidence command run and observed to print. ----
+    7222: (
+        "deferred",
+        "The Studios page is slow on large libraries, and the cause is visible in the resolver: "
+        "internal/api/resolver_model_studio.go:97 ImageCount opens its OWN read transaction "
+        "(withReadTxn) and runs image.CountByStudioID per studio, and :107 GalleryCount does the same "
+        "for galleries. gqlgen calls a field resolver once per object in the list, so a page of N "
+        "studios issues 2N count queries plus N transactions. Batching those into the list query is a "
+        "datastore-level change (a grouped count joined onto the page query), and it needs the "
+        "existing query to grow a projection without breaking the single-object path -- named as the "
+        "blocker rather than attempted blind.",
+        "grep -nE 'func [(]r [*]studioResolver[)] ImageCount' internal/api/resolver_model_studio.go | head -2",
+    ),
+    6246: (
+        "not-planned",
+        "The Scene Tagger navbar floats out of position. ui/v2.5/src/components/Tagger/styles.scss "
+        "positions the tagger chrome explicitly -- :10 and :216 and :270 use position: relative with "
+        ":30 using position: absolute -- so the layout is hand-placed rather than left to a flow the "
+        "browser reflows. A floating navbar is therefore a consequence of the deliberate absolute "
+        "placement at :30. Replacing it with a sticky or flow-based header is a visual redesign of the "
+        "tagger shell, not a fix with one correct answer.",
+        "grep -n 'position: absolute' ui/v2.5/src/components/Tagger/styles.scss | head -2",
+    ),
+    7202: (
+        "not-planned",
+        "The tagger cutting off vertical cover images. There is no object-fit anywhere in "
+        "ui/v2.5/src/components/Tagger/*.tsx, so images are laid out at their natural aspect ratio "
+        "inside the card rather than being fitted to a fixed box. That is what lets a tall portrait "
+        "cover exceed its container. Fitting them means choosing a fixed aspect ratio per card size, "
+        "which changes the visual density of the tagger grid -- a design decision about how many items "
+        "should be visible at once rather than a layout defect.",
+        "grep -rc 'object-fit' ui/v2.5/src/components/Tagger/*.tsx | grep -v ':0' | wc -l",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
