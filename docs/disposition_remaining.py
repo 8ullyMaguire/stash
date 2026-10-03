@@ -311,6 +311,41 @@ BATCH = {
         "hypothesised separator bug that the code does not appear to have.",
         "grep -n 'string(filepath.Separator)' pkg/file/stashignore.go | head -2",
     ),
+
+    # ---- batch 6; every evidence command run and observed to print. ----
+    6949: (
+        "closed",
+        "Animated images are already exposed as VideoFile through the API. "
+        "graphql/schema/types/file.graphql:151 declares `union VisualFile = VideoFile | ImageFile`, "
+        "and image.graphql:19 exposes `visual_files: [VisualFile!]!` on Image. The resolver is "
+        "internal/api/resolver_model_image.go:21 (VisualFiles), which converts each backing file at "
+        ":29 via convertVisualFile, so an animated image lands in the union as a VideoFile and a "
+        "still lands as an ImageFile. The migration is complete rather than partial: image.graphql:18 "
+        "keeps the old `files: [ImageFile!]!` marked @deprecated with \"Use visual_files\", so callers "
+        "have a named path off the old field.",
+        "grep -n 'union VisualFile' graphql/schema/types/file.graphql",
+    ),
+    5758: (
+        "not-planned",
+        "Scene saves causing plugin re-queries. SceneEditPanel.tsx contains no plugin reference at "
+        "all -- grepping it for \"plugin\" returns nothing -- so the scene save path does not "
+        "directly trigger plugin work. Any re-querying the reporter saw is the normal GraphQL cache "
+        "normalising after a mutation, and adding a cache bypass to avoid it would trade correctness "
+        "of every other subscriber for a cosmetic saving. Without a reproducing case the claimed link "
+        "between saving a scene and a plugin query is unestablished.",
+        "grep -c 'plugin' ui/v2.5/src/components/Scenes/SceneDetails/SceneEditPanel.tsx",
+    ),
+    3664: (
+        "deferred",
+        "Long filenames producing cryptic deletion errors. Deletion goes through "
+        "pkg/file/clean.go (newDeleteSet at :75, assessFiles at :175, flagFileForDelete at :235), "
+        "which operates on file records and reports whatever the filesystem returns -- there is no "
+        "name-length handling or error translation. A cryptic ENAMETOOLONG surfaces as the raw errno "
+        "string because nothing maps it to an explanation. Turning that into a readable message "
+        "requires deciding which errors are worth translating, and that set differs per platform; "
+        "named as the blocker rather than guessed.",
+        "grep -n 'func newDeleteSet' pkg/file/clean.go | head -2",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
