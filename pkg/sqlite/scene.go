@@ -812,6 +812,43 @@ func (qb *SceneStore) GetFiles(ctx context.Context, id int) ([]*models.VideoFile
 	return ret, nil
 }
 
+// GetPrimaryFile returns a scene's PRIMARY file, with the scene's time range applied -- the window
+// carried on StartTime/EndTime and the derived Duration, exactly as GetFiles does.
+//
+// # WHY THIS EXISTS, AND WHY IT IS NOT A CHANGE TO LoadPrimaryFile
+//
+// The window lives on `scenes_files`, which is a SCENE's relationship to a file. FileStore.Find
+// looks a file up by id and does not join that table at all, so it CANNOT report a window: there is
+// no scene id in scope. Measured, not assumed -- pkg/sqlite/scene_window_loader_test.go drives both
+// loaders over one ranged scene and asserts that LoadPrimaryFile reports the file's own 1800s and
+// nil StartTime where GetFiles reports 60..300 and 240s.
+//
+// So LoadPrimaryFile is left alone. It answers "what is this file", and folding a scene's window into
+// it would be exactly the mistake the preview key spec refused (#3530-previewkey: GetHash must not
+// depend on which window of the file you are looking at). The same separation applies to the loader.
+//
+// What this adds is the WINDOW-AWARE half, for callers that need the scene's view of its file rather
+// than the file's -- the cover and the preview already had one, by calling GetFiles and taking the
+// primary from its result, and the sprite generator needs the same thing. primaryFileID is the
+// caller's, because the scene carries it (`scene.PrimaryFileID`) and a store cannot see the scene.
+//
+// A scene with no primary file yields (nil, nil), matching LoadPrimaryFile, so a caller can use
+// either without a second nil check.
+func (qb *SceneStore) GetPrimaryFile(ctx context.Context, id int, primaryFileID models.FileID) (*models.VideoFile, error) {
+	files, err := qb.GetFiles(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range files {
+		if f.ID == primaryFileID {
+			return f, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (qb *SceneStore) GetManyFileIDs(ctx context.Context, ids []int) ([][]models.FileID, error) {
 	const primaryOnly = false
 	return sceneRepository.files.getMany(ctx, ids, primaryOnly)

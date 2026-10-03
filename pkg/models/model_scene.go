@@ -138,6 +138,49 @@ func (s *Scene) LoadPrimaryFile(ctx context.Context, l FileGetter) error {
 	})
 }
 
+// LoadPrimaryFileWithWindow is LoadPrimaryFile for a caller that needs the SCENE's view of its
+// primary file rather than the file's.
+//
+// #3530. LoadPrimaryFile goes through FileStore.Find, which looks the file up by id and does not
+// join `scenes_files` -- so it cannot report a window even when the row has one. MEASURED, not
+// assumed: pkg/sqlite/scene_window_loader_test.go drives both loaders over one ranged scene and
+// finds LoadPrimaryFile reporting the file's own duration and a nil StartTime where GetFiles
+// reports the clamped window.
+//
+// So a task that reads the window MUST NOT use LoadPrimaryFile, and the difference is invisible from
+// the model side: both return a *VideoFile with the same Path, and a windowed scene comes back
+// looking exactly like an unranged one. That is the shape of the bug #3530's sprite work found --
+// every arithmetic test green, and a sprite of the wrong footage.
+//
+// This loader is therefore separate rather than a flag: LoadPrimaryFile's answer stays "what is this
+// file", which is the right answer for a caller that has no scene scope, and this one is "what is
+// this scene's primary file", which is the right answer for a generator. It is the same separation
+// the preview key draws between GetHash and GeneratedChecksum.
+func (s *Scene) LoadPrimaryFileWithWindow(ctx context.Context, l ScenePrimaryFileLoader) error {
+	if s.PrimaryFileID == nil {
+		// Match LoadPrimaryFile: no primary file loads as "loaded, and there is none". Calling
+		// loadPrimary here rather than returning early keeps `primaryLoaded` true, so a later
+		// Files.Primary() does not panic on an unloaded relationship.
+		return s.Files.loadPrimary(func() (*VideoFile, error) { return nil, nil })
+	}
+
+	return s.Files.loadPrimary(func() (*VideoFile, error) {
+		return l.GetPrimaryFile(ctx, s.ID, *s.PrimaryFileID)
+	})
+}
+
+// ScenePrimaryFileLoader is what LoadPrimaryFileWithWindow needs: a store that can apply a scene's
+// window to the scene's primary file.
+//
+// It is part of SceneReader rather than a loose interface argument for two reasons: the store
+// satisfying it becomes a compile-time fact rather than a runtime assertion, and adding it breaks
+// every mock of SceneReader LOUDLY -- which is what should happen when a reader grows a method,
+// rather than a mock quietly satisfying it and a test then asserting against a stub that returns
+// nothing.
+type ScenePrimaryFileLoader interface {
+	GetPrimaryFile(ctx context.Context, sceneID int, primaryFileID FileID) (*VideoFile, error)
+}
+
 func (s *Scene) LoadGalleryIDs(ctx context.Context, l GalleryIDLoader) error {
 	return s.GalleryIDs.load(func() ([]int, error) {
 		return l.GetGalleryIDs(ctx, s.ID)

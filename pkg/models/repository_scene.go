@@ -106,6 +106,12 @@ type SceneReader interface {
 	StashIDLoader
 	VideoFileLoader
 	CustomFieldsReader
+	// #3530 - the window-aware primary-file read. VideoFileLoader's GetFiles already reports a
+	// scene's window, but LoadPrimaryFile does not go through it (it uses FileIDLoader's Find,
+	// which cannot see `scenes_files`), so a caller needing the window needs this. Declared here
+	// rather than as a loose interface argument so that the store satisfying it is a compile-time
+	// fact, and so that adding it to SceneReader breaks every mock loudly instead of silently.
+	ScenePrimaryFileLoader
 
 	All(ctx context.Context) ([]*Scene, error)
 	Wall(ctx context.Context, q *string) ([]*Scene, error)

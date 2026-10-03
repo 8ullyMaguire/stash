@@ -823,6 +823,34 @@ func (_m *SceneReaderWriter) GetFiles(ctx context.Context, relatedID int) ([]*mo
 	return r0, r1
 }
 
+// GetPrimaryFile provides a mock function with given fields: ctx, sceneID, primaryFileID
+//
+// #3530 - hand-written to match the mockery v2.10.0 shape used throughout this file. mockery
+// regenerates from .mockery.yml, which has not been run for this method, and a hand-written stub
+// that returns zero values is indistinguishable from a correct one at every call site that does not
+// set an expectation -- so the tests that use it name what they expect explicitly.
+func (_m *SceneReaderWriter) GetPrimaryFile(ctx context.Context, sceneID int, primaryFileID models.FileID) (*models.VideoFile, error) {
+	ret := _m.Called(ctx, sceneID, primaryFileID)
+
+	var r0 *models.VideoFile
+	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID) *models.VideoFile); ok {
+		r0 = rf(ctx, sceneID, primaryFileID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*models.VideoFile)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int, models.FileID) error); ok {
+		r1 = rf(ctx, sceneID, primaryFileID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetGalleryIDs provides a mock function with given fields: ctx, relatedID
 func (_m *SceneReaderWriter) GetGalleryIDs(ctx context.Context, relatedID int) ([]int, error) {
 	ret := _m.Called(ctx, relatedID)

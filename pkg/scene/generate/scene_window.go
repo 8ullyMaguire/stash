@@ -86,6 +86,26 @@ func (w SceneWindow) startOf() float64 {
 	return w.Start
 }
 
+// endOf is the window's end, or the file's duration when there is no window or no end.
+//
+// An open-ended window runs to the end of the file, which is knowledge the caller has and this type
+// cannot infer -- the same contract as At's `length`.
+func (w SceneWindow) endOf(fileDuration float64) float64 {
+	if !w.Set || w.End <= 0 {
+		return fileDuration
+	}
+	return w.End
+}
+
+// Length is how long the window runs, given the file's own duration.
+//
+// The `length` argument is the file's duration because an open-ended window has no end of its own.
+// An unranged window's length IS the file's duration, which is why the two cases need one
+// expression: there is no window to lengthen.
+func (w SceneWindow) Length(fileDuration float64) float64 {
+	return w.endOf(fileDuration) - w.startOf()
+}
+
 // rebaseExclude shifts a RELATIVE offset (a proportion of the window's length) onto the window.
 //
 // getStepSizeAndOffset works in proportions of videoDuration, which #3530 made the window's

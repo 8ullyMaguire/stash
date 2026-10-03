@@ -525,14 +525,26 @@ func (rs sceneRoutes) VttChapter(w http.ResponseWriter, r *http.Request) {
 	utils.ServeStaticContent(w, r, []byte(vtt))
 }
 
-func (rs sceneRoutes) VttThumbs(w http.ResponseWriter, r *http.Request) {
+// #3530 - the sprite and its VTT are generated from INSIDE the scene's window, so the key is
+// GeneratedChecksum, exactly as in Preview. The scene on the context has its files loaded by
+// SceneCtx (and by sceneHashCtx's resolver path), so the window is available here.
+//
+// The two halves share the key deliberately: a suffixed checksum fails isValidGeneratedChecksum and
+// therefore has no legacy path at all, which is the right answer -- there is no pre-#3530 sprite of
+// a window -- and is what stops a windowed scene falling back onto the UNWINDOWED sprite, which is
+// a sprite of the wrong footage and would look entirely correct.
+func spriteSceneHash(r *http.Request) string {
 	scene, ok := r.Context().Value(sceneKey).(*models.Scene)
-	var sceneHash string
 	if ok && scene != nil {
-		sceneHash = scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
-	} else {
-		sceneHash = chi.URLParam(r, "sceneHash")
+		return models.GeneratedChecksum(*scene, config.GetInstance().GetVideoFileNamingAlgorithm())
 	}
+	// The /{sceneHash}* form. A suffixed checksum carries '_' and '.', both legal in a chi URL
+	// segment, so a windowed sprite is reachable by its own URL too.
+	return chi.URLParam(r, "sceneHash")
+}
+
+func (rs sceneRoutes) VttThumbs(w http.ResponseWriter, r *http.Request) {
+	sceneHash := spriteSceneHash(r)
 	sp := manager.GetInstance().Paths.Scene
 	filepath := paths.ResolveGeneratedFile(sp.GetSpriteVttFilePath(sceneHash), sp.GetLegacySpriteVttFilePath(sceneHash))
 
@@ -541,13 +553,7 @@ func (rs sceneRoutes) VttThumbs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rs sceneRoutes) VttSprite(w http.ResponseWriter, r *http.Request) {
-	scene, ok := r.Context().Value(sceneKey).(*models.Scene)
-	var sceneHash string
-	if ok && scene != nil {
-		sceneHash = scene.GetHash(config.GetInstance().GetVideoFileNamingAlgorithm())
-	} else {
-		sceneHash = chi.URLParam(r, "sceneHash")
-	}
+	sceneHash := spriteSceneHash(r)
 	sp := manager.GetInstance().Paths.Scene
 	filepath := paths.ResolveGeneratedFile(sp.GetSpriteImageFilePath(sceneHash), sp.GetLegacySpriteImageFilePath(sceneHash))
 

@@ -437,7 +437,13 @@ func (j *GenerateJob) queueSceneJobs(ctx context.Context, g *generate.Generator,
 			fileNamingAlgorithm: j.fileNamingAlgo,
 		}
 
-		if task.required() {
+		// #3530 - the queue check keys on the SAME window-aware checksum Start will write to. It
+		// cannot call windowAndKey(): queueSceneJobs runs outside the task, and loading the primary
+		// file per scene here would double every load in the generate pipeline. So the key is
+		// computed from the scene as this pipeline already has it -- and this pipeline loads files
+		// (task_generate.go:150 and :325) before calling in, which is what makes the window
+		// available here.
+		if task.spriteRequired(models.GeneratedChecksum(task.Scene, task.fileNamingAlgorithm)) {
 			j.totals.sprites++
 			j.totals.tasks++
 			queue <- task

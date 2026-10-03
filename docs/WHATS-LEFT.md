@@ -92,15 +92,45 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
    (an opt-in wrapper around `GetHash`, NOT a change to `GetHash`) appends `_w<start>-<end>` to the
    checksum, so two scenes of one file get different previews. Unranged scenes keep their exact
    filename. Sweep 6/6.
-3. **sprite/VTT thumbs** — SPEC WRITTEN, NOT IMPLEMENTED. `docs/ISSUE-3530-sprite-spec.md`.
+3. **sprite/VTT thumbs** — DONE. Tag `stash-3530-sprite`. Spec `docs/ISSUE-3530-sprite-spec.md`.
    Deliberately not a copy of the preview fix, for three reasons recorded in the spec:
    - the VTT cues are a **contract with the player**, not a lookup key;
    - `SlowSeek` works in FRAMES, so the window must be converted via `FrameRate`;
    - `chunkCount` is snapped to a perfect square, so a window inside a long file gets a grid sized
      for the file.
+
    The spec's one open question — absolute vs window-relative cues — is **resolved by reading the
    player** (`vtt-thumbnails.ts`: `time = percent * player.duration()`), so cues are relative to the
    media element's timeline and window-relative is forced, not chosen.
+
+   What the implementation turned out to need, beyond the spec's four mutations:
+   - **`SpritePlan`** (`pkg/scene/generate/sprite_window.go`) so the tile loop, the frame loop and
+     the VTT writer all read one decision. The spec's own note — "reverting the CALL in
+     `previewVideo` changed no result" — is why the plan is a value the loops destructure rather
+     than helpers they call.
+   - **`SpriteNeedsFrameSeek` as a free function.** The caller must decide *before* the plan exists,
+     because choosing frame seeking triggers a frame RECOUNT and the plan carries the recounted
+     count. My first version made it a method, the caller built a throwaway plan to ask it, and that
+     plan was built from `videoFile.FrameRate` (the probe's figure, **0 when ffprobe cannot read it**)
+     while the real plan used `generator.FrameRate` (resolved). Two rates for one decision; the
+     windowed arm reads the rate directly, so a windowed short file with an unreadable rate was
+     judged frameless and wrongly refused frame seeking. Fixed by making it free, calling it once,
+     and moving `configure()` above the decision — safe because `calculateFrameRate` reads
+     `NbFrames`/`VideoStreamDuration` and never `videoFile.FrameCount`.
+   - **`LoadPrimaryFileWithWindow` on the sprite task**, because `LoadPrimaryFile` goes through
+     `FileStore.Find`, which does not select `start_time`/`end_time` **at all** — MEASURED in
+     `pkg/sqlite/scene_window_loader_test.go`, not assumed. It reports no window whatever the row
+     says, so the grid comes out tiled across the whole file with every arithmetic test green.
+   - **the sprite routes key on `GeneratedChecksum`.** Serving by the plain hash serves the
+     *unwindowed* sprite of another scene, at a URL that looks entirely correct.
+   - **MUTATION SWEEP 12/12 killed** (`docs/mutate_3530_sprite.py`, exit 0). Four from the spec, and
+     eight found while writing it. Two harness defects were fixed rather than accepted: a mutant
+     that fails to COMPILE was being counted as a cover (M3's first form left `firstFrame`
+     declared and not used), and an interrupted sweep left a mutation on disk, which the next run's
+     baseline reported as a source regression. The harness now reports `SKIP` for a non-compiling
+     mutant, exits non-zero on any survivor **or any skip**, and restores from an in-memory
+     snapshot on interrupt. Proven to report a survivor and exit 1 by adding a probe mutant the
+     suite genuinely does not catch.
 4. **detection** — needs an upstream discussion, not a guess.
 5. **any UI to set a range** — the columns are SQL/API-settable only today.
 
