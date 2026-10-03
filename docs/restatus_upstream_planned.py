@@ -84,9 +84,14 @@ def split_row(line: str):
     """
     lead = line[: line.index("|")]
     body = line.strip().strip("|")
-    trail = line[len(line.rstrip().rstrip("|")) :]
     cells = [c.strip() for c in body.split("|")]
-    return lead, cells, trail
+    # Deliberately NOT preserving any trailing whitespace/pipes: an earlier version sliced
+    # `line[len(line.rstrip().rstrip("|")):]` to keep them, then re-appended a pipe, producing
+    # `| verdict ||` on six rows. `check-issue-ledgers.py` parses with rsplit("|", 2) and read
+    # the empty cell between those pipes as an UNRECOGNISED verdict -- so the edit silently
+    # de-validated six already-decided rows. Markdown tables have no meaningful trailing
+    # whitespace, so nothing is lost by dropping it.
+    return lead, cells, ""
 
 
 def main() -> int:
