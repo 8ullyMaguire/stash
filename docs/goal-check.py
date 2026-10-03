@@ -409,14 +409,28 @@ def c6_branch_convention():
         # And `refs/preserved/*` is not a valid pathspec for a ref anyway: the
         # exclusion is done here by passing the real ref NAMES, since a glob that
         # matches no path excludes nothing.
-        _, allrefs, _ = sh("git for-each-ref --format='%(refname)'")
+        # Remote-tracking refs are EXCLUDED, and they are not a stylistic exclusion.
+        #
+        # `refs/remotes/*` is where a fetched remote's history lives. Those commits are
+        # maximally reachable -- `git log upstream/develop` prints them -- they are simply not
+        # on `main`, which is the only ref this clause compares against. Counting them reports
+        # "stranded" for work that is one `git log` away from being found.
+        #
+        # This bit for real: adding an `upstream` remote to a soft fork made this clause report
+        # 87 stranded commits, which were the entire upstream project history plus this fork's
+        # own merged work. Red for a change that only made things MORE reachable.
+        #
+        # What the clause is actually for: a LOCAL branch that is neither main nor a pinned
+        # recovery ref, holding commits no remote has. That is real work at risk of being lost,
+        # and it is what this now checks.
+        _, allrefs, _ = sh("git for-each-ref --format='%(refname)' refs/heads")
         _, pres, _ = sh("git for-each-ref --format='%(refname)' refs/preserved")
         skip = set(pres.split())
         stranded = []
         for ref in allrefs.split():
-            if ref == "main" or ref in skip:
+            if ref == "refs/heads/main" or ref in skip:
                 continue
-            _, out, _ = sh(f"git rev-list --oneline {ref} --not main")
+            _, out, _ = sh(f"git log --oneline {ref} --not main")
             if out.strip():
                 stranded.extend(out.splitlines())
         n = len(stranded)
