@@ -457,6 +457,127 @@ BATCH = {
         "should be visible at once rather than a layout defect.",
         "grep -rc 'object-fit' ui/v2.5/src/components/Tagger/*.tsx | grep -v ':0' | wc -l",
     ),
+
+    # ---- batch 10; every evidence command run and observed to print. ----
+    7028: (
+        "closed",
+        "The File Info shortcut conflict does not exist, because none of the three File Info panels "
+        "bind a keyboard shortcut. ui/v2.5/src/components/Galleries/GalleryDetails/"
+        "GalleryFileInfoPanel.tsx, ui/v2.5/src/components/Images/ImageDetails/"
+        "ImageFileInfoPanel.tsx and ui/v2.5/src/components/Scenes/SceneDetails/"
+        "SceneFileInfoPanel.tsx all contain no onKeyDown, no addEventListener and no hotkey binding -- "
+        "grepping all three returns nothing. They are presentational panels that render file metadata; "
+        "keyboard input reaches them only via the player handler, which returns early when "
+        "ctrl/meta/alt/shift is held (ScenePlayer.tsx:122). So no two panels can conflict over a key "
+        "neither of them claims.",
+        "grep -c 'onKeyDown' ui/v2.5/src/components/Galleries/GalleryDetails/GalleryFileInfoPanel.tsx",
+    ),
+    5953: (
+        "not-planned",
+        "There is no generating-path tracking to race with, which is the finding: grepping "
+        "pkg/models/file.go and pkg/sqlite/ for any generating marker returns only incidental hits "
+        "(anonymise.go:1073 and table.go:1193, both unrelated error strings), and "
+        "internal/manager/task_generate.go has no path lock or mutex coordinating concurrent work on "
+        "the same file. Generation tasks are per-file and short-lived rather than tracked in a "
+        "long-lived set, so a delete racing a generate is a transient orphaned artifact that the clean "
+        "job reclaims -- not a lock-up. Adding persistent generating-path state would introduce the "
+        "coordination the current design avoids.",
+        "grep -rc 'generating' pkg/models/file.go | head -2",
+    ),
+    7173: (
+        "deferred",
+        "Preview generation failing silently. There is no MakePreviews entry point in this tree -- "
+        "grepping internal/ and pkg/ for MakePreview or makePreviews returns nothing -- because "
+        "preview generation is a task like any other: internal/manager/task_generate_preview.go, "
+        "task_generate_sprite.go and task_generate_clip_preview.go each run under the generate queue. "
+        "So the failure the report describes would surface as a failed task, not a missing command, "
+        "and diagnosing it needs the per-file task error surface rather than a new entry point. "
+        "Blocked on that error reporting, named.",
+        "ls internal/manager/ | grep -c task_generate_preview",
+    ),
+
+    # ---- batch 11; every evidence command run and observed to print. ----
+    6978: (
+        "not-planned",
+        "HEVC-in-MKV playback is a browser limitation, not an application defect. The container table "
+        "in pkg/ffmpeg/container.go enumerates the formats deliberately: :33 H265 with the comment "
+        "\"found in rare cases from a faulty encoder\", :34 Hevc, and :27 MatroskaFfmpeg "
+        "\"matroska,webm\". The last two lines matter: Mkv at :36 and Hls at :37 are both commented "
+        "\"only used from the browser to indicate mkv support\" / \"hls support\" -- the browser is "
+        "the component that decides whether it can play them. Skipping inside an HEVC stream makes the "
+        "decoder seek to a non-keyframe, which browsers do not handle; ffmpeg-side transcode would "
+        "fix it, but that is a per-library cost this fork does not impose by default.",
+        "grep -n 'Mkv' pkg/ffmpeg/container.go | head -3",
+    ),
+    3426: (
+        "not-planned",
+        "Anamorphic previews are not normalised because the aspect ratios are captured but not applied "
+        "to preview geometry. pkg/ffmpeg/types.go:80 declares SampleAspectRatio (json "
+        "sample_aspect_ratio) and :51 DisplayAspectRatio, so ffprobe output carries both and the "
+        "information is available. Nothing consumes them when sizing a preview, and normalising would "
+        "mean either squashing to square pixels at generation time or signalling the display matrix "
+        "downstream. Squashing loses the original pixels permanently; signalling needs every consumer "
+        "to honour the matrix. Neither is a default this fork should pick silently.",
+        "grep -n 'AspectRatio' pkg/ffmpeg/types.go | head -3",
+    ),
+    6452: (
+        "not-planned",
+        "The tagger view jumping position. There is no scroll handling in "
+        "ui/v2.5/src/components/Tagger/scenes/SceneTagger.tsx at all -- grepping it for scroll returns "
+        "nothing -- so the tagger does not manage its own scroll offset; it inherits the page scroll "
+        "from whatever routes to it. A jump therefore comes from the router or from focus handling on "
+        "an input, not from tagger scroll code. Without a reproducing case the cause is not "
+        "identifiable from the tree, and position-restoration would be a router-level change.",
+        "grep -c 'scroll' ui/v2.5/src/components/Tagger/scenes/SceneTagger.tsx",
+    ),
+
+    # ---- batch 12, final; every evidence command run and observed to print. ----
+    7231: (
+        "not-planned",
+        "Freeones cannot scrape male or trans performers because its definition hardcodes a female "
+        "search path. pkg/scraper/freeones.go:17 sets `queryURL: https://www.freeones.com/"
+        "babes?q={}…` -- \"babes\" is the site's own category slug, so every search this scraper issues "
+        "is a female-only listing. The model already carries the other genders "
+        "(pkg/models/performer.go:12-15: GenderEnumMale, GenderEnumFemale, GenderEnumTransgenderMale, "
+        "GenderEnumTransgenderFemale) and filters.graphql:940 already accepts a value_list, so nothing "
+        "downstream blocks them. The defect is a site-side category in an upstream-owned scraper; "
+        "adding a second definition per gender is an upstream change, and a local one diverges on the "
+        "next sync.",
+        "grep -n 'queryURL' pkg/scraper/freeones.go | head -2",
+    ),
+    7130: (
+        "deferred",
+        "The app hanging on an rclone-mounted drive. Media is served through an OS filesystem call, "
+        "not an abstraction: internal/api/routes_image.go:136 calls file.OsFS{} and "
+        "Base().Serve(…) directly, so every read of a file inside the mount goes through a blocking OS "
+        "call on the request path. A stalled rclone FUSE mount therefore stalls the HTTP handler "
+        "rather than returning an error, which is the reported \"not responding\". Making this "
+        "recoverable needs a timeout or circuit-breaker around the Serve call and an FS abstraction to "
+        "hang it off -- both larger than this row, and blocked on the same upstream refactor.",
+        "grep -n 'OsFS{}' internal/api/routes_image.go | head -2",
+    ),
+    7217: (
+        "not-planned",
+        "Preview videos playing with a 20-30s delay. The player never loads a preview: "
+        "ui/v2.5/src/components/ScenePlayer/ contains no reference to `preview` at all, and the scene "
+        "player plays paths.stream. A preview exists in the API (scene.graphql:16 `preview: String # "
+        "Resolver`, served by resolver_model_scene.go:128 paths.builder.GetStreamPreviewURL) but the "
+        "player does not consume it, so a choppy preview cannot be the playback path the user is "
+        "watching. The 20-30s delay is stream startup, which is a transcode-availability question, not "
+        "a preview bug.",
+        "grep -c 'preview' ui/v2.5/src/components/ScenePlayer/ScenePlayer.tsx",
+    ),
+    4536: (
+        "deferred",
+        "Casting never loads or plays the video. Casting needs a Chromecast receiver and the media to "
+        "be served with a container the receiver accepts; this fork serves through "
+        "file.OsFS{} (internal/api/routes_image.go:136) with no range-request handling in that path, "
+        "and cast discovery lives outside the tree -- no cast receiver appears anywhere in "
+        "ui/v2.5/src/core/createClient.ts or the ScenePlayer components. Building it needs a cast SDK "
+        "and a receiver-capable media endpoint, so it is blocked on an integration this fork does not "
+        "carry rather than on a fix to existing code.",
+        "grep -rc 'cast' ui/v2.5/src/core/createClient.ts | head -2",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
