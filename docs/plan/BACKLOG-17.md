@@ -55,7 +55,7 @@ Findings, in the order the work should go. `?` means "not yet started".
 | 3001 | `File.Destroy.Post` hook | absent | [K](#k-3001) |
 | 3122 | Create All/New/Missing on tagger page | absent | [L](#l-3122) |
 | 3450 | relative date filters | absent | [M](#m-3450) |
-| 3530 | multiple scenes in one file | absent | [N](#n-3530) |
+| 3530 | multiple scenes in one file | present (`af5ea1a83`) — window-aware; detection + UI still open | [N](#n-3530) |
 | 4326 | related content during playback | absent | [O](#o-4326) |
 
 ### Not built, and why
@@ -462,7 +462,7 @@ go test ./pkg/sqlite/ -run TestRelativeDate -v   # incl. a DST boundary
 
 ## N. #3530 — multiple scenes in one file
 
-**Verified state.** Absent. The data model is one scene per file row.
+**Verified state.** PRESENT as of `af5ea1a83` (tag `stash-3530-sprite`), with two parts of the original work still open. The data model is no longer one scene per file row: `scenes_files` carries `start_time`/`end_time` and every consumer of the scene's length is window-aware — player and play URL, preview/webp cache key, HLS/DASH manifests, and (this commit) sprite + VTT thumbnails. **Unwired detection remains:** nothing splits a multi-scene file into scenes, and there is no UI to set a range, so the columns are SQL/API-settable only.
 
 **Work.** This is a deep change and the riskiest item. A file that contains two
 concatenated scenes is currently one scene whose duration is wrong. Add a
@@ -474,8 +474,9 @@ the UI, and picking late means a migration that duplicates data.
 **Proves it.**
 
 ```bash
-go test ./pkg/sqlite/ -run TestMultiSceneFile -v
-go test ./pkg/file/ -run TestSegmentDuration -v
+go test ./pkg/scene/generate/ -run 'Sprite|Window|Vtt|Cue' -v
+go test ./internal/manager/ -run 'TestThe' -v
+python3 docs/mutate_3530_sprite.py     # 12/12 killed, exit 0
 ```
 
 ---

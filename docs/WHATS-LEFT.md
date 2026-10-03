@@ -28,7 +28,7 @@ commit `65422cea9`. Re-run both before believing this table.
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
 | C7 suites | PASS | 60 packages unit, 1 integration |
-| **C8 backlog-17 ledger** | **FAIL** | **2 of 17 rows remain: #2747, #3530** (#4326 and #1790 blank-state but closed; verified by parsing the `state` column) |
+| **C8 backlog-17 ledger** | **FAIL** | **1 of 17 rows remains: #2747** — #3530 went `done` in `af5ea1a83` (its `done` row carries the commit as evidence, which is what the clause requires). #4326 and #1790 blank-state but closed; verified by parsing the `state` column |
 
 `check-issue-ledgers.py`: **OK** — header, roster table and closed log agree (675 issues,
 34 closed, 34 log rows).
