@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 81 planned, 553 not planned or deferred, 41 closed (see `docs/closed-issues.md`).** This file is the input to
+**675 issues: 80 planned, 553 not planned or deferred, 42 closed (see `docs/closed-issues.md`).** This file is the input to
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**81 planned, 553 not planned or deferred, 41 closed, 675 total total.** The 82 are the work queue: 79 upstream-marked plus 3 that are also in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**80 planned, 553 not planned or deferred, 42 closed, 675 total total.** The 81 are the work queue: 78 upstream-marked plus 3 that are also in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -38,7 +38,7 @@ rather than half-building it. M6's own log records the cost of not doing
 that: 850 issues mapped to 70 capabilities produced a diff no maintainer
 could review.
 
-## Planned — upstream-marked (79)
+## Planned — upstream-marked (78)
 
 These carry a label the maintainers themselves applied.
 
@@ -49,7 +49,6 @@ These carry a label the maintainers themselves applied.
 | 398 | Groups section Suggested Improvements | upstream-marked (help wanted) | planned |
 | 13 | Scene upload from UI | upstream-marked (bounty) | planned |
 | 4336 | Renaming and presentation of all tagging/scraper components and relate | upstream-marked (help wanted) | planned |
-| 3530 | Support multiple scenes in a single file | upstream-marked (bounty) | planned |
 | 3065 | Make Stash more suitable for JAV | upstream-marked (help wanted) | planned |
 | 2122 | Filter Functionality UI/UX Refactor Discussion | upstream-marked (help wanted) | planned |
 | 5731 | Hardware decoding in generation tasks | upstream-marked (help wanted) | planned |
@@ -779,7 +778,7 @@ to keep in mind when a failure looks order-dependent, not a current failure.
 enforces this (it was written after that invariant broke once).
 
 
-## Resolved — closed or done (37)
+## Resolved — closed or done (38)
 
 Every row here was `planned` when this roster was generated and has since been closed or
 implemented. They live here rather than in the `Planned` sections because a section headed
@@ -827,3 +826,4 @@ reconciles the top-of-file counts against the table AND fails on a resolved row 
 | 6577 | No way to prevent .webm files from being categorized as videos/scenes instead of images |**done** — commit `b88f3d221`, and the row was WRONG TWICE. It was `deferred` under R7 ("one issue implies a whole subsystem") but upstream stash#6577 (v0.30.1) is a BUG REPORT, so R9 keeps it unconditionally -- it was never a subsystem request. And the Title column contained the string "6577": nothing in the roster could have said what the issue was. THE BEHAVIOUR WAS ALREADY CORRECT, which is why it closes rather than builds: `webm` IS in `defaultVideoExtensions` (config.go:327), `shouldCleanFile` tests `useAsVideo` BEFORE `useAsImage`, and `shouldCleanVideoFile` is the branch that consults `videoExcludeRegex` -- the reporter's `\.webm$`. So the exclusion fires and the file IS cleaned. The remaining complaint (the file also shows under Images) is the dual classification their own config asked for. THE FIRST TEST PINNED NOTHING: `shouldCleanVideoFile` has two routes to "clean this video" and the fixture set both, so disabling EITHER left it green and only disabling BOTH turned it red. Fixed to one test per route (regex with the library flag off; library flag with no exclusions). Also pinned `webm`'s membership in the default video extensions, which nothing asserted and which the whole case rests on. KNOWN SURVIVOR, recorded in the test file: swapping the useAsVideo/useAsImage branch order still leaves the suite green, because the file is not in both extension lists under this config -- closing that needs a both-lists file, which is the reporter's production setup. 4 tests green, full `go test ./...` 0 failures, 6 of 7 mutants killed | done |
 | 837 | Log potential issues with files and show in dedicated information hub | **built and closed 2026-10-02.** Table, model, detection, GraphQL, REST and the `/issues` panel, all with tests; see the `docs/ISSUES.md` row for the design finding (the spec's three requirements are mutually exclusive for a unique index, so uniqueness stays in the index and the dismissal rule is store policy). Commits `8b1082e85` `3797a3ded` `76982d8e0` `12e5059ec` `b80f102dc` `2c705e992` | closed |
 | 4326 | Ability to browse related content during video playback without leaving the player | Built: `RelatedContentPanel` on the scene page, opened with `r`, listing the QUEUE rather than a new recommender, because the app already answers what-is-next via `queueNext`/`queuePrevious`. Mounted as a SIBLING of the player, never a child, so playback continues while it is open. Browsing is local state only; the single navigation delegates to the existing `onQueueSceneClicked`, because `Scene.tsx:942` routes every scene change through `history.replace` -- navigating while browsing would DESTROY the back history. Tests 5 via `node --test`; `docs/mutate_4326.py` 6/6 killed. Commits `ca1308812`, `7bf3ec5cf`. This row previously sat `planned` with a `build:` disposition claiming no route change, which the code contradicts. Not browser-verified: no configured instance on this host. | closed |
+| 3530 | Support multiple scenes in a single file | Now DONE — implemented and verified in `af5ea1a83` (tag `stash-3530-sprite`); `scenes_files.start_time`/`end_time` carry the window and every consumer of a scene's length is window-aware (player + play URL, preview/webp cache key, HLS/DASH manifests, sprite + VTT thumbnails). Sprite/VTT was the last piece: `SpritePlan` (`pkg/scene/generate/sprite_window.go`) so the tile loop, frame loop and VTT writer read ONE decision — all three previously read the file's duration, tiling a sprite across the whole file for a windowed scene with every arithmetic test green. Sweep 12/12 killed (`docs/mutate_3530_sprite.py`, exit 0); unit + integration both 61 pkgs green. **Two parts remain deliberately open and are NOT claimed here:** *detection* (splitting a multi-scene file needs an upstream discussion, not a guess) and *any UI to set a range* (the columns are SQL/API-settable only, so no user can create one of these windows from the app yet) | done |
