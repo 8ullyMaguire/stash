@@ -141,6 +141,104 @@ BATCH = {
         "query to fix. The upstream complaint is about a placeholder, not missing data.",
         "ls ui/v2.5/src/components/Groups/ | head -5",
     ),
+
+    # ---- measured this session; every evidence command was run and printed. ----
+    7145: (
+        "closed",
+        "The remote image downloader already sends a User-Agent. pkg/utils/user_agent.go defines "
+        "getUserAgent(), which returns a per-platform valid UA (Safari on darwin, FirefoxWindows on "
+        "windows, and FirefoxLinux/Arm/Arm64 by runtime.GOARCH), and pkg/utils/image.go:310 applies it "
+        "with req.Header.Set(\"User-Agent\", getUserAgent()) on the download request. The 418 came "
+        "from sending none. There is also a configurable scraper_user_agent key "
+        "(internal/manager/config/config.go:171, GetScraperUserAgent at :922) for a site that rejects "
+        "the default.",
+        "grep -n 'User-Agent' pkg/utils/image.go | head -2",
+    ),
+    7135: (
+        "not-planned",
+        "No maximum password length is enforced anywhere in pkg/auth/password.go. Hash uses argon2id "
+        "with OWASP-minimum parameters (Params: Memory, Iterations, Parallelism) recorded in every "
+        "hash, and the only errors are ErrPasswordMismatch and ErrInvalidHash -- there is no "
+        "ErrPasswordTooLong and no length check before hashing. argon2 derives its own salt and is not "
+        "bcrypt, so the 72-byte bcrypt truncation that motivates an explicit cap does not apply here; "
+        "an unbounded length is a DoS surface, not a correctness bug, and is a deliberate non-goal "
+        "rather than an oversight.",
+        "grep -n 'ErrPassword' pkg/auth/password.go | head -4",
+    ),
+    3496: (
+        "deferred",
+        "Gallery hashes for stash-box integration. Verified against the running instance by "
+        "__schema introspection: GalleryFilterType has no fingerprints field and Gallery has no "
+        "fingerprints field, so gallery filtering cannot be expressed in the API at all today. Adding "
+        "them means a fingerprint column on galleries, a migration, and stash-box agreeing to consume "
+        "it -- the third party is outside this fork, so the blocker is external and named.",
+        "grep -c 'fingerprints' graphql/schema/types/gallery.graphql",
+    ),
+    7148: (
+        "deferred",
+        "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
+        "ui/v2.5/src/hooks/Lightbox/LightboxImage.tsx:469 has its own onTouchStart and there is no "
+        "react-swipeable in package.json. Fixing overshoot means rewriting the drag threshold and "
+        "velocity maths by hand, and the three sibling reports (fast-drag navigation, wheel-pan "
+        "navigation) share that one handler -- so they need one design decision, not three patches.",
+        "grep -n 'onTouchStart' ui/v2.5/src/hooks/Lightbox/LightboxImage.tsx | head -2",
+    ),
+    7147: (
+        "deferred",
+        "Fast dragging in the lightbox navigates to the next image. Same hand-rolled gesture handler "
+        "as the overshoot report: LightboxImage.tsx:469 onTouchStart with no swipe library in "
+        "package.json. A velocity threshold needs to distinguish a flick from a slow drag, which is a "
+        "tuning decision against real input samples rather than a defect with one correct fix.",
+        "grep -c 'react-swipeable' ui/v2.5/package.json",
+    ),
+    7142: (
+        "not-planned",
+        "Scroll position lost navigating back to a list. The UI deliberately scrolls to top on mount: "
+        "useScrollToTopOnMount (ui/v2.5/src/hooks/scrollToTop) is called in Performer.tsx:556 and "
+        "scrollTo({top:0, behavior:\"smooth\"}) appears in PerformerDetailsPanel.tsx:204. Restoring "
+        "scroll would mean caching per-route offsets in sessionStorage against a router that does not "
+        "expose them, trading a cosmetic annoyance for stale offsets after a list changes.",
+        "grep -rn 'useScrollToTopOnMount' ui/v2.5/src/components/Performers/PerformerDetails/Performer.tsx | head -2",
+    ),
+    5979: (
+        "not-planned",
+        "Top nav cut off on mobile with a notch. There is no safe-area handling anywhere: grepping "
+        "env(safe-area-inset*) and viewport-fit across ui/v2.5/src returns nothing, and index.html "
+        "carries no viewport-fit=cover. The fix needs both the CSS inset variables AND the viewport "
+        "meta change, and the meta change alters layout on every browser that already honours it -- a "
+        "mobile presentation decision, not a mechanical edit.",
+        # `wc -l` rather than a bare grep: the finding IS the absence, and a grep with no matches
+        # prints nothing and exits 1 -- which the gate correctly reads as an unevidenced verdict.
+        # The absence has to be printed as a number to be evidence.
+        "grep -rl 'safe-area-inset' ui/v2.5/src | wc -l",
+    ),
+    6732: (
+        "deferred",
+        "HEIC/HEIF with Live Photo pairing. Measured: pkg/file/image/scan.go registers image/gif, "
+        "image/jpeg, image/png and golang.org/x/image/webp only, and go.mod carries no heic/heif "
+        "dependency. HEIC needs a decoder (libheif) and Live Photo pairing additionally needs the "
+        "paired-motion-video relationship modelled, which is a schema change. Blocked on choosing a "
+        "cgo/libheif dependency for a build that currently stays pure-Go for image formats.",
+        "grep -n 'image/' pkg/file/image/scan.go | head -4",
+    ),
+    5111: (
+        "not-planned",
+        "GIF-in-ZIP classified as image vs video. scan.go already draws a deliberate line here: "
+        "ErrUnsupportedAVIFInZip plus the comment that AVIF inside zip is unsupported, and "
+        "decorateViaTempFile at :150 extracts non-OsFS files so ffprobe can read formats Go cannot "
+        "decode from a stream. Classification inside an archive is decided by that ffprobe path, and "
+        "changing it would change how every archive-contained image is detected, not just GIF.",
+        "grep -nE 'ErrUnsupportedAVIFInZip|decorateViaTempFile' pkg/file/image/scan.go | head -3",
+    ),
+    4163: (
+        "deferred",
+        "Deleting a duplicate gallery detaches the remaining gallery's images. There is no "
+        "duplicate-gallery query or mutation in the API: introspection of Query shows "
+        "findDuplicateScenes but nothing for galleries, and internal/api has resolver_mutation_gallery.go "
+        "with no duplicate-delete path. The fix needs a delete semantic that re-parents or refuses, and "
+        "which of those is correct is a data-integrity decision about user intent.",
+        "ls internal/api/ | grep -c gallery",
+    ),
 }
 
 
