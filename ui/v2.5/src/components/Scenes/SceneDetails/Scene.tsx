@@ -96,10 +96,19 @@ const SceneVideoFilterPanel = lazyComponent(
   () => import("./SceneVideoFilterPanel")
 );
 
+// The generated `VideoFileDataFragment` types `frame_rate` as `Maybe<Float>`, i.e.
+// `number | null | undefined` -- nullable in the schema, not merely optional. This prop was
+// declared `frameRate?: number`, which is the narrower `number | undefined`, so passing
+// `file?.frame_rate` straight through was a TS2322 error.
+//
+// The body already treats it correctly: `if (frameRate)` is false for both null and undefined, and
+// `frameRate ?? 0` inside the branch is defensive. So the fix is to widen the TYPE to match what
+// the schema actually delivers, not to add `?? undefined` at the call site -- the call site is
+// correct and the declaration was the thing that was wrong.
 const VideoFrameRateResolution: React.FC<{
   width?: number;
   height?: number;
-  frameRate?: number;
+  frameRate?: number | null;
 }> = ({ width, height, frameRate }) => {
   const intl = useIntl();
 
