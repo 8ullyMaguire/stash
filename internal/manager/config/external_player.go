@@ -75,6 +75,25 @@ const (
 	ExternalPlayerEnabled     = "external_player.enabled"
 	ExternalPlayerCommand     = "external_player.command"
 	ExternalPlayerURLTemplate = "external_player.url_template"
+
+	// ExternalPlayerToken authorises a REMOTE player to register and wait (#2747).
+	//
+	// A separate credential from the session store, deliberately. This endpoint starts programs
+	// and hands out media URLs, so the operator must be able to revoke it WITHOUT logging
+	// themselves -- and out of every other device -- by editing one config value.
+	//
+	// There is exactly one token, not one per user. The threat is "a program on the LAN", and a
+	// per-user token needs an issuance endpoint and a revocation list to be worth anything; an
+	// operator who wants no remote players sets no token, which is the same switch as
+	// `enabled`.
+	ExternalPlayerToken = "external_player.token"
+
+	// ExternalPlayerBaseURL is the externally reachable root, e.g. https://stash.lan:9999.
+	//
+	// Needed because the dispatched URLs are fetched by ANOTHER MACHINE, and a URL built from
+	// the server's own bind address (`http://127.0.0.1:9999`) resolves on the player's machine
+	// to the player's own loopback -- a player that fetches nothing, with no error anywhere.
+	ExternalPlayerBaseURL = "external_player.base_url"
 )
 
 // externalPlayerEnvAllowlist is the ONLY environment a spawned player receives.
@@ -148,6 +167,21 @@ func (i *Config) GetExternalPlayerCommand() string {
 
 func (i *Config) GetExternalPlayerURLTemplate() string {
 	return strings.TrimSpace(i.getString(ExternalPlayerURLTemplate))
+}
+
+// GetExternalPlayerToken is the shared secret a remote player presents to register (#2747).
+//
+// Trimmed on read, because a token copied out of a config file or a shell often arrives with a
+// trailing newline, and comparing it verbatim makes an operator who has done nothing wrong
+// unable to connect. The stored value is left alone -- trimming what is stored would silently
+// rewrite an operator's secret.
+func (i *Config) GetExternalPlayerToken() string {
+	return strings.TrimSpace(i.getString(ExternalPlayerToken))
+}
+
+// GetExternalPlayerBaseURL is the externally reachable root for dispatched media URLs (#2747).
+func (i *Config) GetExternalPlayerBaseURL() string {
+	return strings.TrimSpace(i.getString(ExternalPlayerBaseURL))
 }
 
 // scrubbedPlayerEnv builds the child's environment from the allowlist.

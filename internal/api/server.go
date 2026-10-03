@@ -260,6 +260,9 @@ func Initialize() (*Server, error) {
 	// chi matches in registration order and a route registered after a wildcard is
 	// unreachable -- a panel that 404s into the SPA looks like a frontend bug.
 	r.Mount("/issues", server.getIssueRoutes())
+	// stash#2747: the remote player protocol. Same ordering rule as /issues above -- a player
+	// that cannot register because the SPA caught its handshake looks like a player bug.
+	r.Mount("/external_player", server.getRemotePlayerRoutes())
 
 	r.HandleFunc("/css", cssHandler(cfg))
 	r.HandleFunc("/javascript", javascriptHandler(cfg))
