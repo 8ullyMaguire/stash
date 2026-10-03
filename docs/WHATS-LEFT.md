@@ -132,7 +132,7 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
      snapshot on interrupt. Proven to report a survivor and exit 1 by adding a probe mutant the
      suite genuinely does not catch.
 4. **detection** — needs an upstream discussion, not a guess.
-5. **any UI to set a range** — the columns are SQL/API-settable only today.
+5. **any UI to set a range** — SPEC WRITTEN, NOT YET BUILT. `docs/ISSUE-3530-range-ui-spec.md`. The GraphQL `VideoFile` type does not carry `start_time`/`end_time` at all and `SceneUpdateInput` has no field for them, so there is nothing for a component to read or write. The spec designs the schema, the mutation input, the API validation that mirrors the CHECKs, and the form. Its §3 records the constraint that shapes the design: the window lives on `VideoFile`, not `Scene`, so a mutation must name the file — "the scene's window" is not a fact about a scene that may have several. **A PRECONDITION was found and fixed first** (`b604926c0`): a scene rename silently erased the window, because `relatedFilesTable.replaceJoins` is destroy-then-insert and `scenes_files` now carries the window columns. Setting a range through the UI would have been undone by the next title edit. Sweep 2/2 (`docs/mutate_3530_preserve.py`).
 
    Segment boundaries deliberately stay on absolute multiples of the FILE's 2s grid, so a window
    starting mid-segment has a short first segment. Real players tolerate it, and making the grid
@@ -140,6 +140,8 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
    decision rather than an oversight.
 6. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
    deliberate choice rather than an oversight.
+
+**#3530's window-erasure finding worth carrying (`b604926c0`):** a range column added to a JOIN table is erased by every `replaceJoins` on that table, silently, because the destroy half loses the columns the insert half does not carry. It is silent because NULL is a legal value ("no window") and the CHECKs still pass — so the failure mode is a scene quietly reverting to the whole file with no error anywhere. Three transferable points: (a) adding data columns to a join table means auditing every `replaceJoins` caller; (b) the existing range tests could not see it because they set the window *after* creating the scene and never updated it again — the window was only ever set, never edited-around; (c) `relatedFilesTable.destroyJoins` filters on `file_id` ALONE, which is right for its callers and wrong for a per-scene delete, because two scenes of one file is the whole point of #3530.
 
 **#3530's duplicate-detection finding worth carrying:** three fixes were needed and the two that
 failed did so invisibly. `HAVING COUNT(DISTINCT file_id) > 1` is insufficient (`GROUP_CONCAT`
