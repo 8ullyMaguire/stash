@@ -1367,7 +1367,8 @@
         "uninstall": "Uninstall",
         "unknown": "<unknown>",
         "update": "Update",
-        "version": "Version"
+        "version": "Version",
+        "matched_via": "Matches {match}"
     },
     "pagination": {
         "current_total": "{current} of {total}",
