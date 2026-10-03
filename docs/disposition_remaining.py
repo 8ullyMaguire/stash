@@ -346,6 +346,40 @@ BATCH = {
         "named as the blocker rather than guessed.",
         "grep -n 'func newDeleteSet' pkg/file/clean.go | head -2",
     ),
+
+    # ---- batch 7; every evidence command run and observed to print. ----
+    7149: (
+        "deferred",
+        "Wheel-panning an image in the lightbox can navigate away. The handler is "
+        "ui/v2.5/src/hooks/Lightbox/LightboxImage.tsx:382 onImageScroll, bound at :570, and it "
+        "deliberately distinguishes infinite-scroll devices from stepped wheels: :385-390 treats a "
+        "small deltaY or a small first event as `infinite` and switches from ZOOM_STEP/ZOOM_FACTOR "
+        "scaling to proportional zoom. That heuristic is the bug surface -- it decides navigation from "
+        "event cadence rather than from intent, so a slow trackpad pan can read as a scroll step. "
+        "Fixing it needs a per-device calibration rather than a threshold change, and the same "
+        "handler feeds the sibling overshoot and fast-flick reports.",
+        "grep -n 'infinite scrolling' ui/v2.5/src/hooks/Lightbox/LightboxImage.tsx | head -2",
+    ),
+    5336: (
+        "not-planned",
+        "The bulk-edit workflow exists and is dialog-based: EditTagsDialog is opened from "
+        "ui/v2.5/src/components/Tags/TagList.tsx:331 with the current selection "
+        "(<EditTagsDialog selected={selectedItems} .../>), and there is no BulkEdit component at all. "
+        "So the ask is not for the capability but for a workflow improvement on top of it -- moving "
+        "the dialog to a drawer, or editing inline. That is a presentational redesign with no "
+        "reproducing defect, and this fork does not run a design review for list-management UX.",
+        "grep -n 'EditTagsDialog' ui/v2.5/src/components/Tags/TagList.tsx | head -2",
+    ),
+    5430: (
+        "not-planned",
+        "Counting sub-tag scenes when \"Display subtag content\" is on. Tag cards already show counts: "
+        "ui/v2.5/src/components/Tags/TagCard.tsx:33-47 renders scene_count, image_count and "
+        "gallery_count as separate indicators, and there is no subtag-aggregation code in "
+        "ui/v2.5/src/components/Tags/ at all. So there is no subtag content toggle to make the "
+        "counting conditional against -- the toggle the report describes does not exist in this tree, "
+        "which makes the request not-planned rather than deferred.",
+        "grep -n 'scene_count' ui/v2.5/src/components/Tags/TagCard.tsx | head -3",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
