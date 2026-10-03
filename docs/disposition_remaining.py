@@ -226,6 +226,50 @@ BATCH = {
         "decision about size and licensing, not a defect with one correct fix.",
         "grep -n 'essentials' pkg/ffmpeg/downloader.go | head -2",
     ),
+
+    # ---- batch 4; every evidence command run and observed to print. ----
+    4549: (
+        "closed",
+        "Player controls and filters DO reset on queue change. ScenePlayer.tsx:591 guards on "
+        "scene.id === sceneId.current and returns early, so the reset block runs exactly once per "
+        "scene change rather than per render. The reset itself is at :597-598: setReady(false) plus "
+        "player.trackActivity().reset(), and :599-600 pauses the interactive client on every "
+        "initialisation. The early return is what makes this correct -- without it the reset would "
+        "fire on every render and fight the user mid-scene.",
+        "grep -n 'trackActivity().reset()' ui/v2.5/src/components/ScenePlayer/ScenePlayer.tsx | head -2",
+    ),
+    4233: (
+        "deferred",
+        "Rotation metadata ignored when deciding a video is portrait. Rotation IS read: "
+        "pkg/ffmpeg/ffprobe.go:112 declares Rotation int64, :226-228 adds "
+        "-show_entries stream_side_data=rotation when ffprobe is new enough, and :356 assigns it from "
+        "the stream side data. What is missing is CONSUMPTION: the portrait decision in "
+        "ScenePlayer.tsx:604 compares file.width > file.height directly, so a 1920x1080 video with a "
+        "90-degree rotation sidecar is treated as landscape. Threading rotation into the orientation "
+        "check is a small change, but every consumer of width/height would need the same treatment to "
+        "stay consistent.",
+        "grep -n 'Rotation' pkg/ffmpeg/ffprobe.go | head -3",
+    ),
+    4815: (
+        "not-planned",
+        "Aliases are not changed on performer scrape before alias uniqueness is tested. There IS no "
+        "alias uniqueness check in this tree to order correctly against: grepping for unique_alias or "
+        "an alias collision check across internal/ and pkg/sqlite/ returns nothing, and the only alias "
+        "handling is internal/api/resolver_mutation_performer.go:46, which de-duplicates a performer "
+        "against ITSELF via stringslice.UniqueExcludeFold(..., newPerformer.Name). With no "
+        "cross-performer uniqueness rule, the ordering the report describes has nothing to violate.",
+        "grep -n 'UniqueExcludeFold' internal/api/resolver_mutation_performer.go | head -2",
+    ),
+    7133: (
+        "not-planned",
+        "\"excludes\" / \"is not\" in the disambiguation filter hiding non-matching results. The "
+        "exclude semantics exist and are schema-level: graphql/schema/types/filters.graphql:937 "
+        "declares excludes: [ID!], and config.graphql:180 and :335 carry excludes on the "
+        "corresponding input types. The bug is in SQL predicate construction for that field rather "
+        "than in the contract, and without a reproducing query the intended precedence between "
+        "includes and excludes is ambiguous -- that ambiguity is the blocker, named.",
+        "grep -n 'excludes' graphql/schema/types/filters.graphql | head -3",
+    ),
     7148: (
         "deferred",
         "Lightbox drag overshoot navigating away. The gesture is hand-rolled, not a library: "
