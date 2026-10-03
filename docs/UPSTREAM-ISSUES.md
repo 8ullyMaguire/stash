@@ -1,7 +1,7 @@
 # Upstream issues — the soft-fork work list
 
 **Generated 2026-09-29** from `stashapp/stash` via the GitHub API.
-**675 issues: 57 planned, 566 not planned or deferred, 52 closed or done (see `docs/closed-issues.md`).**
+**675 issues: 56 planned, 567 not planned or deferred, 52 closed or done (see `docs/closed-issues.md`).**
 `/goal continue solving open issues from stash repo`; see `docs/GOAL-UPSTREAM.md`.
 
 Every issue in the repository appears exactly once below, with a verdict
@@ -22,7 +22,7 @@ and the reason for it. The counts reconcile to 674 or the generator fails.
 | R10 | 460 | lowest-signal feature requests, cut — each carries the reason it was cut, so this is a decision rather than a re-status |
 
 
-**57 planned, 566 not planned or deferred, 52 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
+**56 planned, 567 not planned or deferred, 52 closed or done, 675 total.** The 71 are the work queue, all 71 purely upstream-reported: none is also a row in `docs/ISSUES.md`, so no row is `planned` while another ledger disagrees.
 
 
 ## How to read `planned`
@@ -38,7 +38,7 @@ rather than half-building it. M6's own log records the cost of not doing
 that: 850 issues mapped to 70 capabilities produced a diff no maintainer
 could review.
 
-## Planned — upstream-marked (71)
+## Planned — upstream-marked (70)
 
 These carry a label the maintainers themselves applied.
 
@@ -56,7 +56,7 @@ These carry a label the maintainers themselves applied.
 | 3318 | Studio Code display improvement | Measured: `code` exists on Scene (graphql/schema/types/scene.graphql:48) and is genuinely ABSENT from Movie -- movie.graphql's field list runs id/name/aliases/duration/date/studio/director/synopsis/url/urls/tags with no code. So the row's first checklist item is a real gap and not already fixed. Deferred because the window lives on the data model, not the GraphQL surface: it needs a movies table column, a migration, a scan/scrape path and the store's partial-update handling -- the same shape as #1790's external-IDs work, which took a migration plus a registry. Recording it as deferred rather than closed because the mechanism is known and the work is real, and rather than not-planned because nothing external blocks it. | deferred |
 | 3299 | Native Remote UI | upstream-marked (help wanted) | planned |
 | 3172 | Stash icon almost invisible on windows 10 dark mode | A visual/asset request with screenshots, not a defect in this codebase: the icons are raster/vector assets (ui/v2.5/public/{favicon.ico,stash_icon.svg,stash_icon.png}), and the ask is to recolour them for Windows dark mode. Producing a new icon is design work on binary assets, not a change any reviewer of a Go fork can evaluate in a diff. Not deferred: nothing external is blocking, the work simply is not this fork's to do. | not-planned |
-| 3171 | Synology NAS and folders table | upstream-marked (bug report) | planned |
+| 3171 | Synology NAS and folders table | No code change is wanted here, and the reason is that the capability ALREADY EXISTS: `.stashignore` (pkg/file/stashignore.go) implements gitignore-syntax exclusion honoured by the scan walk (pkg/file/walk.go), so a user writes `@eaDir/` at their library root and the folder tree stops being walked. The reporter asked for 'no way for the user to turn this off' and the way exists but is undocumented in the issue thread. Not-planned rather than closed because nothing was built for this row -- what was done is a TEST proving the existing mechanism works on Synology's exact folder name, which is not an ordinary name since it leads with `@` and could plausibly have been anchored or globbed by the matcher. The test builds the reported shape (a video, @eaDir beside it, one subdirectory per video inside, and a nested `sub/@eaDir`) and asserts both `@eaDir/` and `@eaDir` exclude it while the real videos beside it are still scanned. Deliberately NOT done: hard-coding an `@eaDir` special case into the scanner, which would bake one vendor's NAS metadata into the scan path for every user forever, when the user-facing mechanism already covers it. | not-planned |
 | 1961 | Performers sub-page and performer cards include objects from other studios | upstream bug report. **Most of it is already fixed in this fork; the remainder is measured and recorded, deliberately not built.** Measured against the tree: the studio criterion is registered in the performer list model (`list-filter/performers.ts:103`), `PerformerFilterType.Studios` exists (`pkg/models/performer.go:188`) and is implemented (`pkg/sqlite/performer_filter.go:212` → `studiosCriterionHandler`, already covered by `performer_test.go` with `NotNull`/`IsNull`), the GraphQL query carries `performer_filter` and the resolver passes it to `Performer.Query()`, and `StudioPerformersPanel` injects the studio via `useStudioFilterHook` which the list applies through `queryResultProps.filterHook`. So **which performers appear is already studio-scoped.** Both upstream PRs (#3813, #3880) were closed UNMERGED — #3813's author wrote “I’ve made a horrible mess in the performer resolver… I’m sure there must be a smarter way to pass the originating performer id through”, and #3880’s “a parallel set of counts” was closed too. **The remaining gap is the CARD, not the list:** `PerformerCard` renders `performer.scene_count` / `image_count` / `gallery_count`, which are **lifetime totals** off the performer row, not scoped by `performer_filter`. A performer with 10 scenes at Studio A and 3 at Studio B therefore shows **10 in both panels** — while the badge link is studio-scoped (`extraCriteria.scenes`), so the number and the list you land on **disagree**. Same for the card image (`performer.image_path` is a single unfilterable field). **Shape of a fix, delegated to me by the owner 2026-09-30 and recorded not built:** compute *filtered* counts is what died twice upstream and needs a query per card, which is the cost that killed both PRs. The defensible cheap shape is to **not show a lifetime total in a scoped context** — hide the count badges when the list is studio-scoped. Not chosen silently: it removes a feature from studio panels, which is a UX decision and a change to what gets built, so it is recorded here for the owner rather than done unasked.  **not-planned** — list already studio-scoped; only the CARD's lifetime counts are wrong, and the cheap fix (hide badges when scoped) is a UX decision -- two upstream PRs (#3813, #3880) died on the per-card query cost. Recorded, not built. | not-planned |
 | 647 | Add keyboard shortcuts to focus selector fields | upstream-marked (help wanted) | planned |
 | 7202 | Tagger should not cut off vertical cover images (for the local scene) | upstream-marked (bug report) | planned |
@@ -768,7 +768,7 @@ to keep in mind when a failure looks order-dependent, not a current failure.
 enforces this (it was written after that invariant broke once).
 
 
-## Resolved — closed or done (52)
+## Resolved — closed or done (48)
 | 7247 | VR videos get super bright and washed out when played in VR mode | **done** — fixed upstream by PR #7248 (commit `71932ef45`, "Fix: VR Player Colour Mapping"), merged upstream 2026-10-01 and carried into this fork by the upstream merge. Touches `ui/v2.5/src/@types/videojs-vr.d.ts` and `ScenePlayer/vrmode.ts`. **Factual, not a judgement:** upstream closed #7247 on 2026-10-01 citing that same PR. Settled by `docs/check_planned_upstream.py`, which queries live upstream state rather than assuming. | done |
 
 Every row here was `planned` when this roster was generated and has since been closed or
