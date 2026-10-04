@@ -2,7 +2,7 @@
 
 **Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## Status: schema + store + 21 tests done and proven; GraphQL, UI, model loading, ledgers remaining
+## Status: schema, store and GraphQL done and proven. UI, destroy paths and ledgers remain
 
 Last commit `dd391abc3`. Nine of #2359's seventeen were already built upstream; six are now built
 here (#1351 excluded, see below).
@@ -127,10 +127,10 @@ Separator is comma-**and-space**, because that is what this app's UI and importe
 | S5 | alias ownership | #422, #2341 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
 | S6 | nationality | #1922 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
 | S10 | body marks | *(none)* | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
-| L1 | **store tests** — the seven features, each with a test that fails without the fix | | | | | | ⬜ |
-| L2 | **GraphQL** types, queries, mutations, and wiring into `PerformerReader`/`StudioReader`/`SceneReader` | | | | | | ⬜ |
+| ~~L1~~ | ~~**store tests**~~ — **DONE** `dd391abc3`: 21 subtests, mutation-checked | | | | | ✅ |
+| ~~L2~~ | ~~**GraphQL**~~ — **DONE** `91dcfd73b`. 6 output fields, 6 input fields, `allNationalities`, `bodyMarkCreate`/`Destroy`, 17 resolver tests | | | | | ✅ |
 | L3 | **UI** — studio codes field, director field, per-scene alias, body-mark editor, nationality selector | | | | | | ⬜ |
-| L4 | **model fields** on `Studio`/`Scene`/`Performer` (`RelatedStrings` idiom) | | | | | | ⬜ |
+| ~~L4~~ | ~~**model fields**~~ — **DONE** `092a279c8`: `RelatedStrings` on Studio.Codes / Scene.Directors / Tattoo+PiercingLocations, plus `RelatedNationalities` | | | | | ✅ |
 | L5 | **destroy paths** — deleting a performer must remove body marks and alias ownership. 13 tables reference `performers`; migration 121's rule is that a general table cannot use a foreign key, so cleanup must be explicit and **tested on row counts** | | | | | | ⬜ |
 | L6 | **ledgers** — own roster rows in `docs/UPSTREAM-ISSUES.md` with verdict + proving test; `docs/ISSUES.md` #2359 `skipped`→`done`; one `docs/closed-issues.md` row per sub-feature | | | | | | ⬜ |
 | L7 | **full re-verification** — `verify-all.sh` six gates, Playwright 71/0, mutation 3/3, fresh clone | | | | | | ⬜ |
@@ -160,3 +160,34 @@ programme were sitting in files whose *names* say what they do
 (`36_tags_description`, `47_scene_urls`, `74_tag_stash_ids`), and none of them would match a
 grep for the feature name in the current language's idiom. And when a design decision rests on
 "this does not exist", the check that settles it is `git log -S`, not a search.
+
+## L2 lessons: the four failures that no unit test could see
+
+The GraphQL layer exposed a failure class worth carrying forward. **All four bugs returned HTTP 200,
+wrote nothing, and logged nothing.**
+
+1. **`directors: [String!]!` on a non-bulk input.** Seeding failed with HTTP 422 "must be defined".
+   An accidentally-required input field is valid Go and valid schema; it only breaks clients that
+   *omit* the field, which is every existing client.
+2. **Codes written only if aliases were also sent** — `StudioStore.UpdatePartial` nested the codes
+   block inside `if input.Aliases != nil`.
+3. **Tattoos written only if `alias_list` was also sent** — the *same mistake* in
+   `PerformerUpdate`, inside `if translator.hasField("alias_list")`. Two instances of one error is
+   why the third fix was a systematic sweep of every parity assignment against its nearest enclosing
+   guard, not a third spot fix.
+4. **Scene directors and the performer fields were never wired at all** — in the schema, the model,
+   the partial and the store, and the mutation never assigned them. Accepted and discarded.
+
+**What caught them:** the e2e seed's round-trip assertion, and only that. Every other suite exercises
+one field at a time — unit tests call the resolver, integration tests call the store, resolver tests
+assert the resolver reached the mock. None sends a mutation with ONE field and reads back what the
+DATABASE holds, which is the only path where a field gated behind another field is visible.
+
+Lesson to keep: **a field that is wired to a resolver but never assigned in its mutation passes every
+test in this repo.** Round-trip through the database, not through the same layer that wrote.
+
+Two smaller ones: `getUpdateInputMap` panics (nil deref) outside a live GraphQL operation, so
+`BodyMarkCreate` must not build a `changesetTranslator` — it has no optional fields and does not need
+one; and `performer_body_marks` PK (performer_id, kind, location) makes `bodyMarkCreate`
+non-idempotent, so the seed tolerates exactly that one UNIQUE error and still aborts on everything
+else.
