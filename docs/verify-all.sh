@@ -47,6 +47,10 @@ say "boot check"
 bash docs/boot-check.sh 2>&1 | tail -8
 check "${PIPESTATUS[0]}" "boot-check"
 
+say "ledger structure"
+python3 docs/ledger-check.py
+check "${PIPESTATUS[0]}" "ledger-check"
+
 say "RESULT"
 [ "$rc" -eq 0 ] && echo "GO/BOOT VERIFICATION PASSED" || echo "GO/BOOT VERIFICATION FAILED"
 # Do NOT delete $TMPDIR on the way out. It is a shared, caller-overridable path
