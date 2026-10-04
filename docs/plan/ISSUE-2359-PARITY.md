@@ -2,7 +2,10 @@
 
 **Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## Status: schema done and proven, store layer written, GraphQL + UI + ledgers remaining
+## Status: schema + store + 21 tests done and proven; GraphQL, UI, model loading, ledgers remaining
+
+Last commit `dd391abc3`. Nine of #2359's seventeen were already built upstream; six are now built
+here (#1351 excluded, see below).
 
 #2359 is an **umbrella issue** — `[Meta] Update Stash to be inline with Stash-Box`, 2022-03-03 —
 listing 17 capabilities, each numbered by a sub-issue, plus one with no number (tattoo & piercing
@@ -62,6 +65,27 @@ each new table, each added column, that `merged_into_id` is absent, and the back
 correctness asserted by direct query, not inferred from exit 0: a performer seeded with
 `tattoos='left arm, right shoulder, ankle'` yields **3** rows.
 `go build ./pkg/...` clean.
+
+Store layer committed in `dd391abc3`: **21 subtests pass**, full
+`go test -tags integration ./pkg/sqlite/` green, `go build ./...` clean, 61 unit packages green.
+Mutation-checked — `SetCodes` replaceJoins→insertJoins is KILLED, and the draft-2 back-fill bug is
+measured at **0 rows** against the shipped version's **3**.
+
+### Three real bugs the tests found (all fixed)
+
+1. **The nationality list was empty.** Migration 125 created `nationalities` and nothing ever
+   inserted a row — as unusable as the free-text column it replaces, and it fails *silently*:
+   every read returns empty, nothing errors, the only symptom is an empty dropdown. Now seeded
+   with 107 entries by the migration itself, two with a NULL `code` (Basque, Kurdish).
+2. **`SetNationalities` rejected a duplicate in the input**, returning `UNIQUE constraint failed`.
+   A bad contract for a setter: a UI multi-select can hand back a repeated value. Now de-duplicated.
+3. **`SELECT *` on a join failed at runtime, not compile time** — the extra `performer_id` column
+   had no field to receive it and StructScan rejects unknown columns. Now an explicit column list.
+
+Plus two the harness forced: parity models needed `db:"snake_case"` tags (no global `NameMapper`
+exists), and the count helper must accept `int64` as well as `string`/`[]byte` — `QuerySQL` is built
+on `rows.SliceScan()` and this driver is not consistent, so a single-form assertion fails on *some*
+queries, which reads as a product bug.
 
 ## Four decisions forced by something already in the tree
 
