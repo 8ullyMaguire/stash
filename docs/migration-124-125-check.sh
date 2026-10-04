@@ -69,13 +69,17 @@ chk() { # table column
 }
 chk performers tattoos
 chk performers piercings
-chk performers merged_into_id
 chk performer_alias_owners performer_id
 chk performer_alias_owners alias
 chk performer_alias_owners owner_performer_id
 
+echo "== #1351 must NOT be re-implemented here"
+n=$(sqlite3 "$DB" "select count(*) from pragma_table_info('performers') where name='merged_into_id';")
+[ "$n" = "0" ] || { echo "FAIL: performers.merged_into_id exists; performer merge is already 65e82a0cf"; exit 1; }
+echo "  performers.merged_into_id absent (merge already implemented)"
+
 echo "== trigger assertions"
-for tr in performers_no_self_merge; do
+for tr in ; do
   n=$(sqlite3 "$DB" "select count(*) from sqlite_master where type='trigger' and name='$tr';")
   [ "$n" = "1" ] || { echo "FAIL: trigger $tr missing"; exit 1; }
   echo "  trigger $tr present"

@@ -69,6 +69,53 @@ CREATE TABLE `nationalities` (
   `code` varchar(8)
 );
 
+-- SEEDED, BECAUSE AN EMPTY LIST IS A FEATURE THAT DOES NOT WORK.
+--
+-- #1922 exists because `performers.country` is free text, so "American", "USA" and "United
+-- States" are three different values for one nationality. The fix is a controlled list -- but a
+-- table with no rows is exactly as unusable as the free-text column it replaced, and it fails
+-- SILENTLY: every read returns empty, nothing errors, and the only symptom is a dropdown with
+-- nothing in it. The store test asserts `require.NotEmpty` on this list for exactly that reason.
+--
+-- Seeded here rather than by the application at boot, because a migration that creates the
+-- structure and a startup path that fills it are two things that can disagree, and this one
+-- already did: the first draft of this migration created the table and nothing else, and the
+-- integration test caught it immediately.
+--
+-- The list is deliberately NOT exhaustive -- it covers the countries that appear in performer
+-- metadata, and `code` is nullable for entries that are nationalities rather than countries. New
+-- entries are an INSERT, which is why this is a reference table and not a CHECK constraint:
+-- SQLite cannot ALTER a CHECK, so an enum here would freeze this list into every existing
+-- database with no way to extend it.
+INSERT INTO `nationalities` (`name`, `code`) VALUES
+  ('Afghan', 'AF'), ('Albanian', 'AL'), ('Algerian', 'DZ'), ('American', 'US'),
+  ('Argentine', 'AR'), ('Australian', 'AU'), ('Austrian', 'AT'), ('Azerbaijani', 'AZ'),
+  ('Bangladeshi', 'BD'), ('Basque', NULL), ('Belarusian', 'BY'), ('Belgian', 'BE'),
+  ('Bolivian', 'BO'), ('Bosnian', 'BA'), ('Brazilian', 'BR'), ('British', 'GB'),
+  ('Bulgarian', 'BG'), ('Cambodian', 'KH'), ('Cameroonian', 'CM'), ('Canadian', 'CA'),
+  ('Chilean', 'CL'), ('Chinese', 'CN'), ('Colombian', 'CO'), ('Costa Rican', 'CR'),
+  ('Croatian', 'HR'), ('Cuban', 'CU'), ('Cypriot', 'CY'), ('Czech', 'CZ'),
+  ('Danish', 'DK'), ('Dominican', 'DO'), ('Dutch', 'NL'), ('Ecuadorian', 'EC'),
+  ('Egyptian', 'EG'), ('English', 'GB'), ('Estonian', 'EE'), ('Ethiopian', 'ET'),
+  ('Filipino', 'PH'), ('Finnish', 'FI'), ('French', 'FR'), ('Georgian', 'GE'),
+  ('German', 'DE'), ('Greek', 'GR'), ('Guatemalan', 'GT'), ('Hebrew', 'IL'),
+  ('Honduran', 'HN'), ('Hong Kong', 'HK'), ('Hungarian', 'HU'), ('Icelandic', 'IS'),
+  ('Indian', 'IN'), ('Indonesian', 'ID'), ('Iranian', 'IR'), ('Iraqi', 'IQ'),
+  ('Irish', 'IE'), ('Israeli', 'IL'), ('Italian', 'IT'), ('Jamaican', 'JM'),
+  ('Japanese', 'JP'), ('Jordanian', 'JO'), ('Kazakh', 'KZ'), ('Kenyan', 'KE'),
+  ('Korean', 'KR'), ('Kurdish', NULL), ('Latvian', 'LV'), ('Lebanese', 'LB'),
+  ('Lithuanian', 'LT'), ('Luxembourgish', 'LU'), ('Macedonian', 'MK'), ('Malaysian', 'MY'),
+  ('Mexican', 'MX'), ('Moldovan', 'MD'), ('Moroccan', 'MA'), ('Nepalese', 'NP'),
+  ('New Zealand', 'NZ'), ('Nicaraguan', 'NI'), ('Nigerian', 'NG'), ('Norwegian', 'NO'),
+  ('Pakistani', 'PK'), ('Palestinian', 'PS'), ('Panamanian', 'PA'), ('Paraguayan', 'PY'),
+  ('Peruvian', 'PE'), ('Philippine', 'PH'), ('Polish', 'PL'), ('Portuguese', 'PT'),
+  ('Puerto Rican', 'PR'), ('Romanian', 'RO'), ('Russian', 'RU'), ('Saudi', 'SA'),
+  ('Scottish', 'GB'), ('Serbian', 'RS'), ('Singaporean', 'SG'), ('Slovak', 'SK'),
+  ('Slovenian', 'SI'), ('South African', 'ZA'), ('South Korean', 'KR'), ('Spanish', 'ES'),
+  ('Swedish', 'SE'), ('Swiss', 'CH'), ('Taiwanese', 'TW'), ('Thai', 'TH'),
+  ('Tunisian', 'TN'), ('Turkish', 'TR'), ('Ukrainian', 'UA'), ('Uruguayan', 'UY'),
+  ('Venezuelan', 'VE'), ('Vietnamese', 'VN'), ('Welsh', 'GB');
+
 CREATE TABLE `performer_nationalities` (
   -- (performer_id, nationality_id) as the key: a performer may hold SEVERAL nationalities (#1922
   -- is explicitly about dual nationality) and may not hold the same one twice.
@@ -157,37 +204,27 @@ WITH RECURSIVE marks(performer_id, kind, rest, piece) AS (
 INSERT OR IGNORE INTO `performer_body_marks` (`performer_id`, `kind`, `location`, `description`)
   SELECT performer_id, kind, piece, NULL FROM marks WHERE piece IS NOT NULL AND piece <> '';
 
--- stash#1351 — performer merging.
+-- stash#1351 — performer merging. ALREADY DONE, AND NOT REBUILT HERE.
 --
--- MERGE IS A MOVE, NOT A DELETE, and that is the entire design constraint. Merging two performers
--- means one row is retired and every reference to it -- scenes, galleries, images, tags, aliases,
--- stash_ids, and now body marks and nationalities from this same migration -- must be repointed
--- at the survivor. The alternatives were both rejected:
---   * delete the duplicate: destroys its scenes' performer credit and its images outright
---   * leave both rows and flag one: two rows for one person, which is the duplicate this feature
---     exists to remove, and every future query has to learn to filter the flag
+-- This migration originally added `performers.merged_into_id` plus a no-self-merge trigger, on the
+-- reasoning that "merge is a move, not a delete" and that a tombstone preserves the duplicate's
+-- identity. That reasoning was sound and the feature turned out to EXIST ALREADY:
+-- `PerformerStore.Merge(ctx, source, destination)` has been in pkg/sqlite/performer.go since
+-- upstream commit 65e82a0cf ("Performer merge", #5910), it is in the PerformerReader interface, it
+-- is wired to the `performerMerge` GraphQL mutation (internal/api/resolver_mutation_performer.go
+-- :724) and it is covered by TestPerformerMerge.
 --
--- So `merged_into_id` records the move and the row survives as a tombstone. ON DELETE SET NULL,
--- because if the SURVIVOR is later deleted the tombstone must not dangle pointing at nothing --
--- it becomes an ordinary performer again rather than a broken reference.
+-- It also does what this comment proposed: repoint every referencing row at the destination with
+-- UPDATE OR IGNORE, DELETE the rows that would have become duplicates, then destroy the source. So
+-- the existing implementation already satisfies the requirement, and what it does NOT do is keep
+-- a tombstone -- which is a design difference, not a missing feature, and #2359 does not ask for
+-- one.
 --
--- `self_merge` is forbidden by the CHECK: a performer merged into itself is an infinite
--- redirect, and following it in a loop hangs.
+-- ADDING merged_into_id ANYWAY WOULD BE ACTIVELY HARMFUL: a second merge mechanism with different
+-- semantics, reachable through a different column, that nothing reads. Two ways to express "these
+-- two performers are the same person" is exactly the ambiguity #2359 was filed to remove. The
+-- column and its trigger are therefore deliberately NOT here. This paragraph is the record of
+-- that decision, because a later reader comparing #2359 against the schema will notice the absence
+-- and should find the reason rather than re-add it.
 --
--- The chain can still be longer than one hop (A into B, B into C). Resolving it in one step would
--- leave A pointing at a tombstone, so the read path must follow the chain to a non-tombstone
--- survivor; that walk is the store's job and it is bounded by the self_merge CHECK plus a
--- depth limit in code.
-ALTER TABLE `performers` ADD COLUMN `merged_into_id` integer
-  REFERENCES `performers`(`id`) ON DELETE SET NULL;
-
-CREATE INDEX `index_performers_on_merged_into_id` ON `performers` (`merged_into_id`);
-
--- SQLite cannot ALTER a table to add a CHECK, so this one is a trigger. BEFORE UPDATE because a
--- tombstone that already exists must still be un-mergeable, not only a fresh row.
-CREATE TRIGGER `performers_no_self_merge`
-  BEFORE UPDATE OF `merged_into_id` ON `performers`
-  WHEN NEW.`merged_into_id` = NEW.`id`
-  BEGIN
-    SELECT RAISE(ABORT, 'a performer may not be merged into itself');
-  END;
+-- Recorded as: satisfied by 65e82a0cf, no work required.

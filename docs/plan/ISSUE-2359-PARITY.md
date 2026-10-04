@@ -1,134 +1,138 @@
-# stash#2359 — Stash-Box parity: build plan and verified inventory
+# stash#2359 — Stash-Box parity: progress and what is left
 
-**Measured 2026-10-04 at `cdfdc1338`, on `~/work/lane-2/stash`.**
+**Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## What #2359 actually is
+## Status: schema done and proven, store layer written, GraphQL + UI + ledgers remaining
 
-An **umbrella issue**, not a feature. `[Meta] Update Stash to be inline with Stash-Box`
-(stashapp/stash#2359, filed 2022-03-03, 2 comments) lists seventeen capabilities that the
-Stash-Box instance already has, each numbered by a sub-issue, plus one entry with no issue
-number at all. It was declined twice — `BACKLOG-17` and `GOAL-SOFT-FORK` both recorded
-"satisfied by pointing at the owner's existing Stash-Box instance; duplicating the fields
-locally would maintain a second implementation of a codebase that already exists".
+#2359 is an **umbrella issue** — `[Meta] Update Stash to be inline with Stash-Box`, 2022-03-03 —
+listing 17 capabilities, each numbered by a sub-issue, plus one with no number (tattoo & piercing
+structure). It was declined twice as "satisfied by pointing at the owner's Stash-Box instance;
+duplicating the fields locally would maintain a second implementation of a codebase that already
+exists". That reason described a **StashDB endpoint**, which delivers a document shape over the
+wire but nothing to the rest of the app. `GOAL-SOFT-FORK` widened this branch on 2026-10-01 to
+welcome new functionality, which retires the objection. The owner directed building all
+buildable sub-features, including re-opening the R9/R10 cuts.
 
-That reason described a **StashDB endpoint**, and an endpoint delivers a document shape over
-the wire. It does not deliver it to the rest of the app: you cannot sort or filter a local
-scene by director, cannot answer "what is this performer called *in this scene*", and cannot
-ask "which performers have a mark in a given location" without a network round trip per
-question. `GOAL-SOFT-FORK` widened this branch on 2026-10-01 to "new functionality is
-welcome; upstream-mergeable is not the bar", which retires the objection. The owner directed
-implementation of all buildable sub-features, including re-opening the R9/R10 cuts.
+## ⚠️ The inventory kept shrinking — read this before estimating
 
-## The inventory that matters — six of the seventeen were already built
-
-**A grep for "does a column with this name exist" gets four of these six WRONG**, because
-upstream solved them on tables this app already has:
+**Nine of the seventeen were already built**, mostly upstream years before the issue was filed.
+My first two inventories were both wrong, in *opposite* directions, which is the reason this
+warning is at the top:
 
 | Item | Status | Evidence |
 |---|---|---|
-| #1444 tag description | **DONE** | migration `36_tags_description`; `tags.description`, already a GraphQL field |
+| #1444 tag description | **DONE** | migration `36_tags_description`; `tags.description`, already in GraphQL |
 | #1253 tag categories | **DONE** | migration `26_tag_hierarchy` → `tags_relations(parent_id, child_id)` |
-| #2643 tag stash_ids | **DONE** | migration `74_tag_stash_ids` → `tag_stash_ids(tag_id, endpoint, stash_id)` |
-| #1868 scene multiple URLs | **DONE** | migration `47_scene_urls` → `scene_urls`, which **dropped `scenes.url`** |
-| #703 performer multiple URLs | **DONE** | migration `62_performer_urls` → `performer_urls`, which dropped `url`, `twitter`, `instagram` |
-| #638 performer disambiguation | **DONE** | migration `42_performer_disambig_aliases` → `performers.disambiguation` |
-| #2507 performer aliases (list) | **DONE** | `performer_aliases`, migration 42 |
+| #2643 tag stash_ids | **DONE** | migration `74_tag_stash_ids` |
+| #1868 scene multiple URLs | **DONE** | migration `47_scene_urls` → dropped `scenes.url` |
+| #703 performer multiple URLs | **DONE** | migration `62_performer_urls` → dropped `url`/`twitter`/`instagram` |
+| #638 disambiguation | **DONE** | migration `42_performer_disambig_aliases` |
+| #2507 performer aliases | **DONE** | `performer_aliases`, migration 42 |
+| #571 multiple performer images | **DONE** | this fork, `8e3c87778` |
+| **#1351 performer merging** | **DONE** | `PerformerStore.Merge`, upstream `65e82a0cf` (#5910), in `PerformerReader`, wired to the `performerMerge` mutation, covered by `TestPerformerMerge` |
 
-So the two most expensive-looking items on the list — multi-URL for scenes and performers —
-need **nothing**. My first pass at this inventory concluded the opposite, from grepping for
-`urls`/`URLs []string` in Go models and finding none, which is exactly backwards: the feature
-is implemented as a join table plus a GraphQL resolver, and neither matches those patterns.
+**#1351 was found AFTER I had already built it.** Migration 125 originally added
+`performers.merged_into_id` plus a trigger, on sound reasoning ("merge is a move, not a delete,
+keep a tombstone"). The existing `Merge` already repoints every referencing row with
+`UPDATE OR IGNORE`, deletes what would duplicate, then destroys the source — so it satisfies the
+requirement. **The column was removed.** A second merge mechanism with different semantics,
+reachable through a different column that nothing reads, is exactly the ambiguity #2359 was filed
+to remove. `docs/migration-124-125-check.sh` now asserts `merged_into_id` is **absent**, so the
+duplication cannot come back unnoticed.
 
-**#1253's tag categories exist as a general parent/child relation** (`tags_relations`), not the
-single-parent shape Stash-Box uses. Left as-is: a DAG subsumes a tree, and changing it would
-be churn with no capability gained.
+The first error was grepping Go models for `urls`/`URLs []string` and concluding the multi-URL
+features were absent — backwards, because they are join tables plus GraphQL resolvers.
+**"The column I expected is absent" and "the feature is absent" are different claims**, and the
+second one costs a migration to discover.
 
-## What genuinely does not exist, and is being built
+## Built and verified
 
-| # | Item | Upstream sub-issues | Migration |
-|---|---|---|---|
-| S1 | studio codes (several per studio) | #2607, #3051 | `124` |
-| S2 | scene director, **structured** | #3051 | `124` |
-| S3 | performer scene alias ("Jane Doe as Jane") | #3825 | `124` |
-| S5 | performer **split** aliases (alias owner) | #422, #2341 | `125` |
-| S6 | defined nationality | #1922 | `125` |
-| S10 | tattoo & piercing structure | *(none)* | `125` |
-| S11 | performer merging | #1351 | `125` |
+| # | Item | Sub-issues | Migration | Store |
+|---|---|---|---|---|
+| S1 | studio codes (several per studio) | #2607, #3051 | 124 | ✅ |
+| S2 | scene director, **structured** | #3051 | 124 | ✅ |
+| S3 | performer scene alias ("Jane Doe as Jane") | #3825 | 124 | ✅ |
+| S5 | performer **split** aliases (alias owner) | #422, #2341 | 125 | ✅ |
+| S6 | defined nationality | #1922 | 125 | ✅ |
+| S10 | tattoo & piercing structure | *(none)* | 125 | ✅ |
 
-Also already done and needing nothing: **#571** multiple performer images (`8e3c87778`),
-**#1253**'s marker half (`SceneMarker.TagIDs`).
+**Verified:** `docs/migration-124-125-check.sh` builds, boots on a fresh DB so all 125
+migrations run, asserts `systemStatus` reports `databaseSchema:125 appSchema:125`, then asserts
+each new table, each added column, that `merged_into_id` is absent, and the back-fill. Back-fill
+correctness asserted by direct query, not inferred from exit 0: a performer seeded with
+`tattoos='left arm, right shoulder, ankle'` yields **3** rows.
+`go build ./pkg/...` clean.
 
-## Four design decisions, each forced by something already in the tree
+## Four decisions forced by something already in the tree
 
 **S2 — a packed column cannot answer `director = ?`.** `scenes.director` already exists
-(migration 47) as `text` holding a comma-separated list, and it is **kept**. "Ana L.opez" and
-"Ana López" are two directors; searching for one does not find the other under accent folding,
-because the compared substring crosses a comma that is not part of either name. Filtering a
-scene list by director — the actual use — is therefore a `LIKE` against a packed column, which
-cannot use an index and cannot be exact. Hence `scene_directors(scene_id, director)` with a
-composite primary key, which also makes "the same director credited twice" impossible.
+(migration 47) as `text` holding a comma-separated list, and is **kept**. "Ana L.opez" and
+"Ana López" differ only across a comma that is not part of either name, so accent-folded
+comparison of a substring fails; filtering scenes by director — the actual use — is a `LIKE`
+against a packed column, which cannot use an index and cannot be exact. Hence one row per
+director, composite primary key.
 
 **S5 — the owner cannot be a column on `performer_aliases`.** That table's primary key is
-`(performer_id, alias)`, so the **owner is already part of the key** and the same alias string
-cannot be attached to two performers at all. That constraint *is* the defect #422/#2341
-describe. A new column cannot express "this string belongs to A while the same string belongs
-to B"; widening the key to `(performer_id, alias, owner_performer_id)` can, but then `alias` is
-no longer unique per performer and every existing read has to tolerate duplicates. Hence a side
-table `performer_alias_owners`, with a **nullable** owner so an unowned alias stays valid —
-which is what makes it additive rather than a migration that invents an owner per existing row.
+`(performer_id, alias)`, so **the owner is already part of the key** and one alias string cannot
+belong to two performers. That constraint *is* the #422/#2341 defect. A column cannot express
+"this string belongs to A and the same string to B"; widening the key can, but then alias is no
+longer unique per performer and every existing read must tolerate duplicates. Hence a side table
+with a **nullable** owner, so an unowned alias stays valid and no migration invents an owner.
 
-**S11 — merge is a move, not a delete.** Deleting the duplicate destroys its scene credit and
-images; keeping both rows leaves two people in one, which is the duplicate the feature exists
-to remove. So `performers.merged_into_id` records the move and the row survives as a tombstone.
-`ON DELETE SET NULL` so deleting the *survivor* returns the tombstone to an ordinary performer
-rather than leaving a dangling redirect. A `CHECK` cannot be added by `ALTER`, so the
-no-self-merge rule is a trigger.
+**S10 — one table for tattoos and piercings, `kind` discriminator.** `performers.tattoos` and
+`.piercings` already exist as `varchar(255)`, are on the GraphQL surface, are rendered by the UI
+and written by CSV import. **Kept**, structure added beside them, back-filled. Two tables would
+mean two stores, two destroy paths and two GraphQL types for identical shape.
 
-**S10 — one table for tattoos and piercings, with a `kind` discriminator.** `performers.tattoos`
-and `performers.piercings` already exist as `varchar(255)` (migration 42's table rebuild), are
-on the GraphQL surface, are rendered by the UI and are written by CSV import. They are **kept**
-and structure is added beside them. Two tables would mean two stores, two destroy paths and
-two GraphQL types for identical shape.
+**Back-fill correctness.** The first version kept only the *first* comma-separated value. The
+second carried `performer_id` through the recursion but joined back on `rest`, which the
+recursion rewrites — so it matched only the first iteration, back-filled exactly one mark per
+performer, **and exited 0**. A migration that silently drops data is indistinguishable from one
+that worked. Shipped version carries the id through the recursion.
 
-## The back-fill bug worth recording
+Separator is comma-**and-space**, because that is what this app's UI and importer write; a bare
+`,` would split `"Los Angeles, CA"` — one location — into two.
 
-The first version of the body-marks back-fill produced **one row per performer, keeping only
-the first comma-separated entry** — a plausible-looking migration that quietly drops every
-value after the first. The second version carried `performer_id` through the recursion but
-*joined back* on the accumulated `rest`; since `rest` is rewritten each step, that join matches
-only the first iteration, so it back-filled exactly one mark per performer **and still looked
-like it worked**.
+## What is left
 
-The shipped version carries the performer id through the recursion, which is the only shape
-that cannot lose an entry. Verified directly: a performer seeded with
-`tattoos = 'left arm, right shoulder, ankle'` yields **3** rows, and
-`piercings = 'earlobe'` yields 1.
+| # | Item | Sub-issues | Migration | Store | GraphQL | UI | Test |
+|---|---|---|---|---|---|---|---|
+| S1 | studio codes | #2607, #3051 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| S2 | scene directors | #3051 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| S3 | performer scene alias | #3825 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| S5 | alias ownership | #422, #2341 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| S6 | nationality | #1922 | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| S10 | body marks | *(none)* | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
+| L1 | **store tests** — the seven features, each with a test that fails without the fix | | | | | | ⬜ |
+| L2 | **GraphQL** types, queries, mutations, and wiring into `PerformerReader`/`StudioReader`/`SceneReader` | | | | | | ⬜ |
+| L3 | **UI** — studio codes field, director field, per-scene alias, body-mark editor, nationality selector | | | | | | ⬜ |
+| L4 | **model fields** on `Studio`/`Scene`/`Performer` (`RelatedStrings` idiom) | | | | | | ⬜ |
+| L5 | **destroy paths** — deleting a performer must remove body marks and alias ownership. 13 tables reference `performers`; migration 121's rule is that a general table cannot use a foreign key, so cleanup must be explicit and **tested on row counts** | | | | | | ⬜ |
+| L6 | **ledgers** — own roster rows in `docs/UPSTREAM-ISSUES.md` with verdict + proving test; `docs/ISSUES.md` #2359 `skipped`→`done`; one `docs/closed-issues.md` row per sub-feature | | | | | | ⬜ |
+| L7 | **full re-verification** — `verify-all.sh` six gates, Playwright 71/0, mutation 3/3, fresh clone | | | | | | ⬜ |
 
-## Splitting `, ` versus `,`
+### Order of work
 
-The separator is comma-**and-space**, because that is what this app's UI and CSV importer
-write, so the back-fill reads back exactly what was stored. A bare `,` would also split
-`"Los Angeles, CA"` — one location — into two. A location that itself contains `", "` remains
-a known limitation, recorded rather than hidden.
+L4 (model fields) → L2 (GraphQL) → **L1 (tests)** → L3 (UI) → L5 (destroy paths) → L6 →
+L7. Tests land with or immediately after each feature rather than batched at the end, because
+the #3849 lesson in `WHATS-LEFT.md` is that a test written after the fact is a description of
+what the code does, not evidence that it does the right thing.
 
-## Verification for the schema layer
+### Two things needing a decision
 
-- `docs/migration-124-125-check.sh` — builds, boots on a **fresh** database so every migration
-  runs, asserts `systemStatus` reports `databaseSchema:125 appSchema:125`, then asserts every
-  new table, every added column and the trigger exist.
-- The app **refuses to open** a database whose recorded version differs from
-  `appSchemaVersion`, and the symptom is "the table is simply absent" — which reads as a
-  migration that did not run. `appSchemaVersion` was 123 and had to be bumped to 125 in the
-  same change; the first run of the check reported `databaseSchema:123` and no error at all,
-  which is what made the cause findable.
-- Back-fill correctness asserted directly (above), not inferred from the migration exiting 0.
-- `go test ./pkg/sqlite/...` green after the bump.
+- **#1253 tag categories** exist as a general parent/child DAG rather than Stash-Box's
+  single-parent shape. Left as-is: a DAG subsumes a tree, so changing it is churn with no
+  capability gained. Reversible if exact shape parity is wanted.
+- **`entity_urls` was dropped.** The first draft of migration 124 added one general URL table for
+  scenes and performers. It was **removed** when migrations 47/62 turned out to already do
+  exactly that with `scene_urls`/`performer_urls` (including `position`, which preserves order and
+  which the general table had dropped). Re-adding it would have been a second, worse
+  implementation of a shipped feature.
 
-## Ledger recording
+## The rule this issue keeps teaching
 
-Per the owner's direction, each sub-feature becomes its **own roster row** in
-`docs/UPSTREAM-ISSUES.md` with verdict `done` and the proving test, so the two ledgers agree
-and `check-issue-ledgers.py` keeps reconciling a closed set. `docs/ISSUES.md`'s #2359 row moves
-from `skipped` to `done` with the sub-feature table, and `docs/closed-issues.md` gains one row
-per sub-feature — its header claims one row per issue closed, and adding rows for issues that
-were not previously in the roster is what keeps that claim true.
+**Inventory by reading the migrations, not by grepping models.** Six of nine discoveries in this
+programme were sitting in files whose *names* say what they do
+(`36_tags_description`, `47_scene_urls`, `74_tag_stash_ids`), and none of them would match a
+grep for the feature name in the current language's idiom. And when a design decision rests on
+"this does not exist", the check that settles it is `git log -S`, not a search.
