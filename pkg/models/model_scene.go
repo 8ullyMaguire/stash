@@ -40,6 +40,11 @@ type Scene struct {
 	PlayDuration float64 `json:"play_duration"`
 
 	URLs         RelatedStrings  `json:"urls"`
+	// Directors is the STRUCTURED form of the packed `Director` string above, which stays.
+	// stash#2359 (#3051). One director per row rather than a split string, because a scene with two
+	// directors cannot be filtered by director without a LIKE on a packed column, and "Ana Lopez"
+	// and "Ana López" then differ only across a comma that is part of neither name.
+	Directors    RelatedStrings  `json:"directors"`
 	GalleryIDs   RelatedIDs      `json:"gallery_ids"`
 	TagIDs       RelatedIDs      `json:"tag_ids"`
 	PerformerIDs RelatedIDs      `json:"performer_ids"`
@@ -76,6 +81,9 @@ type ScenePartial struct {
 	Code           OptionalString
 	Details        OptionalString
 	Director       OptionalString
+	// Directors is *UpdateStrings so absent means "do not touch" and present-but-empty means
+	// "clear". stash#2359.
+	Directors      *UpdateStrings
 	Date           OptionalDate
 	ProductionDate OptionalDate
 	// Rating expressed in 1-100 scale

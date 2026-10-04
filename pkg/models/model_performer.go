@@ -38,6 +38,23 @@ type Performer struct {
 	URLs     RelatedStrings  `json:"urls"`
 	TagIDs   RelatedIDs      `json:"tag_ids"`
 	StashIDs RelatedStashIDs `json:"stash_ids"`
+
+	// TattooLocations and PiercingLocations are the STRUCTURED form of the packed `Tattoos` and
+	// `Piercings` strings above, which stay exactly as they are.
+	//
+	// stash#2359. The packed strings are on the GraphQL surface, rendered by the UI and written by
+	// CSV import, so they are not being replaced -- one value in a text box cannot answer "which
+	// tattoo is on the left arm", which is what #2359 is for. Both are RelatedStrings holding a
+	// LOCATION per mark, loaded together by LoadBodyMarks; the description, which is why a mark is
+	// not simply a string, is reached through BodyMarks rather than flattened into these.
+	TattooLocations  RelatedStrings `json:"tattoo_locations"`
+	PiercingLocations RelatedStrings `json:"piercing_locations"`
+
+	// Nationalities is []Nationality and not RelatedStrings because a performer may be dual-national
+	// (#1922) AND the caller needs the reference row: a selector offers names, but a query filter
+	// needs ids and an export needs codes. RelatedIDs would carry the ids and lose the names;
+	// RelatedStrings would carry the names and lose the ids.
+	Nationalities RelatedNationalities `json:"nationalities"`
 }
 
 type CreatePerformerInput struct {
@@ -93,6 +110,14 @@ type PerformerPartial struct {
 
 	Aliases *UpdateStrings
 	TagIDs  *UpdateIDs
+	// stash#2359. NationalityIDs is *UpdateIDs rather than a plain slice so that ABSENT means
+	// "do not touch" and PRESENT-BUT-EMPTY means "remove them all" -- the same distinction TagIDs
+	// makes, and the reason a partial cannot be a plain field. TattooLocations and
+	// PiercingLocations are UpdateStrings for the same reason: a form that renders an empty text box
+	// must be able to clear the marks, not silently leave them.
+	NationalityIDs    *UpdateIDs
+	TattooLocations   *UpdateStrings
+	PiercingLocations *UpdateStrings
 	// ImageIDs links the performer to rows in the `images` table through `performers_images`.
 	// stash#571.
 	//

@@ -286,6 +286,41 @@ func (qb *PerformerStore) Create(ctx context.Context, newObject *models.CreatePe
 		return err
 	}
 
+	// stash#2359. Tattoos and piercings are stored from their LOCATION lists, which is why
+	// LoadBodyMarks exists and why `description` is not settable at create time: a create input
+	// carries locations, and the description is a property of a mark the user adds later through
+	// bodyMarkCreate. Both are Loaded()-guarded so a performer created without them writes nothing.
+	if newObject.TattooLocations.Loaded() {
+		for _, location := range newObject.TattooLocations.List() {
+			if _, err := qb.CreateBodyMark(ctx, models.BodyMark{PerformerID: id, Kind: "tattoo", Location: location}); err != nil {
+				return err
+			}
+		}
+	}
+
+	if newObject.PiercingLocations.Loaded() {
+		for _, location := range newObject.PiercingLocations.List() {
+			if _, err := qb.CreateBodyMark(ctx, models.BodyMark{PerformerID: id, Kind: "piercing", Location: location}); err != nil {
+				return err
+			}
+		}
+	}
+
+	// stash#2359 (#1922). SetNationalities de-duplicates, so passing a repeated id here is safe
+	// rather than a UNIQUE violation the caller would have to understand.
+	if newObject.Nationalities.Loaded() {
+		nats := newObject.Nationalities.List()
+		ids := make([]int, 0, len(nats))
+		for _, n := range nats {
+			if n != nil {
+				ids = append(ids, n.ID)
+			}
+		}
+		if err := qb.SetNationalities(ctx, id, ids); err != nil {
+			return err
+		}
+	}
+
 	if newObject.Aliases.Loaded() {
 		if err := performersAliasesTableMgr.insertJoins(ctx, id, newObject.Aliases.List()); err != nil {
 			return err
@@ -337,6 +372,29 @@ func (qb *PerformerStore) UpdatePartial(ctx context.Context, id int, partial mod
 
 	if len(r.Record) > 0 {
 		if err := qb.tableMgr.updateByID(ctx, id, r.Record); err != nil {
+			return nil, err
+		}
+	}
+
+	// stash#2359. Body-mark UPDATES are a replace, not a modify: the client sends the full list of
+	// locations it wants, and the difference against what is stored is what gets written. Using
+	// modifyJoins here would interpret a two-element list against a three-mark performer as "add one
+	// and remove one", which is not what a form that re-rendered and resubmitted the list means.
+	if partial.TattooLocations != nil {
+		if err := qb.setBodyMarkLocations(ctx, id, "tattoo", partial.TattooLocations.Values, partial.TattooLocations.Mode); err != nil {
+			return nil, err
+		}
+	}
+
+	if partial.PiercingLocations != nil {
+		if err := qb.setBodyMarkLocations(ctx, id, "piercing", partial.PiercingLocations.Values, partial.PiercingLocations.Mode); err != nil {
+			return nil, err
+		}
+	}
+
+	// stash#2359 (#1922)
+	if partial.NationalityIDs != nil {
+		if err := qb.SetNationalities(ctx, id, partial.NationalityIDs.IDs); err != nil {
 			return nil, err
 		}
 	}
@@ -399,6 +457,18 @@ func (qb *PerformerStore) Update(ctx context.Context, updatedObject *models.Upda
 
 	if err := qb.tableMgr.updateByID(ctx, updatedObject.ID, r); err != nil {
 		return err
+	}
+
+	if updatedObject.TattooLocations.Loaded() {
+		if err := qb.setBodyMarkLocations(ctx, updatedObject.ID, "tattoo", updatedObject.TattooLocations.List(), models.RelationshipUpdateModeSet); err != nil {
+			return err
+		}
+	}
+
+	if updatedObject.PiercingLocations.Loaded() {
+		if err := qb.setBodyMarkLocations(ctx, updatedObject.ID, "piercing", updatedObject.PiercingLocations.List(), models.RelationshipUpdateModeSet); err != nil {
+			return err
+		}
 	}
 
 	if updatedObject.Aliases.Loaded() {

@@ -97,6 +97,11 @@ func (r *mutationResolver) StudioCreate(ctx context.Context, input models.Studio
 	newStudio.IgnoreAutoTag = translator.bool(input.IgnoreAutoTag)
 	newStudio.Organized = translator.bool(input.Organized)
 	newStudio.Aliases = models.NewRelatedStrings(stringslice.UniqueExcludeFold(stringslice.TrimSpace(input.Aliases), newStudio.Name))
+	// stash#2359 (#2607, #3051). UniqueFOLD, not Unique, and that is not incidental: a code is an
+	// identifier, so "imdb" and "IMDB" name the same thing, and `studio_codes` has no primary key
+	// that would tolerate both. TrimSpace per value for the same reason -- a stray space would make
+	// the code silently never match the Stash-Box identifier it is meant to equal.
+	newStudio.Codes = models.NewRelatedStrings(stringslice.UniqueFold(stringslice.TrimSpace(input.Codes)))
 	newStudio.StashIDs = models.NewRelatedStashIDs(models.StashIDInputs(input.StashIds).ToStashIDs())
 
 	var err error
@@ -191,6 +196,10 @@ func (r *mutationResolver) StudioUpdate(ctx context.Context, input models.Studio
 	updatedStudio.IgnoreAutoTag = translator.optionalBool(input.IgnoreAutoTag, "ignore_auto_tag")
 	updatedStudio.Organized = translator.optionalBool(input.Organized, "organized")
 	updatedStudio.Aliases = translator.updateStrings(input.Aliases, "aliases")
+	// stash#2359 (#2607, #3051). translator.updateStrings returns nil when the field was ABSENT and
+	// a non-nil UpdateStrings when it was present-but-empty, so an update that does not mention
+	// codes cannot clear them -- the distinction a plain []string could not carry.
+	updatedStudio.Codes = translator.updateStrings(input.Codes, "codes")
 	updatedStudio.StashIDs = translator.updateStashIDs(input.StashIds, "stash_ids")
 
 	updatedStudio.ParentID, err = translator.optionalIntFromString(input.ParentID, "parent_id")

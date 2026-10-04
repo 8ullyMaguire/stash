@@ -238,6 +238,13 @@ type PerformerCreateInput struct {
 	Piercings      *string          `json:"piercings"`
 	Aliases        *string          `json:"aliases"`
 	AliasList      []string         `json:"alias_list"`
+	// stash#2359. These three are the STRUCTURED form of Tattoos/Piercings and of the free-text
+	// Country field. gqlgen binds them to these slice fields directly (`it.NationalityIds = data`),
+	// so ABSENT arrives as nil and PRESENT-BUT-EMPTY arrives as a non-nil empty slice -- which is
+	// the distinction `updateStrings` checks for when it reads the update map.
+	TattooLocations   []string `json:"tattoo_locations"`
+	PiercingLocations []string `json:"piercing_locations"`
+	NationalityIds    []string `json:"nationality_ids"`
 	Twitter        *string          `json:"twitter"`   // deprecated
 	Instagram      *string          `json:"instagram"` // deprecated
 	Favorite       *bool            `json:"favorite"`
@@ -283,6 +290,10 @@ type PerformerUpdateInput struct {
 	Piercings      *string          `json:"piercings"`
 	Aliases        *string          `json:"aliases"`
 	AliasList      []string         `json:"alias_list"`
+	// stash#2359. Set by input resolvers .
+	TattooLocations   []string `json:"tattoo_locations"`
+	PiercingLocations []string `json:"piercing_locations"`
+	NationalityIds    []string `json:"nationality_ids"`
 	Twitter        *string          `json:"twitter"`   // deprecated
 	Instagram      *string          `json:"instagram"` // deprecated
 	Favorite       *bool            `json:"favorite"`

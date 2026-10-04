@@ -180,6 +180,8 @@ type SceneCreateInput struct {
 	Code           *string           `json:"code"`
 	Details        *string           `json:"details"`
 	Director       *string           `json:"director"`
+	// stash#2359 (#3051). Set by input resolvers .
+	Directors      []string        `json:"directors"`
 	URL            *string           `json:"url"`
 	Urls           []string          `json:"urls"`
 	Date           *string           `json:"date"`
@@ -209,6 +211,8 @@ type SceneUpdateInput struct {
 	Code             *string           `json:"code"`
 	Details          *string           `json:"details"`
 	Director         *string           `json:"director"`
+	// stash#2359 (#3051). Set by input resolvers .
+	Directors      []string         `json:"directors"`
 	URL              *string           `json:"url"`
 	Urls             []string          `json:"urls"`
 	Date             *string           `json:"date"`

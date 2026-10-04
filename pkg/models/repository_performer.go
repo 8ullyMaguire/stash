@@ -79,6 +79,11 @@ type PerformerReader interface {
 	StashIDLoader
 	TagIDLoader
 	URLLoader
+	// stash#2359. NationalityLoader carries BOTH the reference list and the performer's selections,
+	// because a caller that can resolve names needs both, and splitting them would mean a resolver
+	// asking a second question it already has the answer to.
+	NationalityLoader
+	BodyMarkLoader
 
 	CustomFieldsReader
 

@@ -96,6 +96,8 @@ type SceneReader interface {
 	SceneCounter
 
 	URLLoader
+	// stash#2359 (#3051)
+	DirectorLoader
 	ViewDateReader
 	ODateReader
 	FileIDLoader

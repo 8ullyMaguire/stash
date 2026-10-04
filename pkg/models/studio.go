@@ -70,6 +70,8 @@ type StudioCreateInput struct {
 	Favorite      *bool          `json:"favorite"`
 	Details       *string        `json:"details"`
 	Aliases       []string       `json:"aliases"`
+	// stash#2359 (#2607, #3051)
+	Codes        []string      `json:"codes"`
 	TagIds        []string       `json:"tag_ids"`
 	IgnoreAutoTag *bool          `json:"ignore_auto_tag"`
 	Organized     *bool          `json:"organized"`
@@ -91,6 +93,8 @@ type StudioUpdateInput struct {
 	Favorite      *bool          `json:"favorite"`
 	Details       *string        `json:"details"`
 	Aliases       []string       `json:"aliases"`
+	// stash#2359 (#2607, #3051)
+	Codes        []string      `json:"codes"`
 	TagIds        []string       `json:"tag_ids"`
 	IgnoreAutoTag *bool          `json:"ignore_auto_tag"`
 	Organized     *bool          `json:"organized"`

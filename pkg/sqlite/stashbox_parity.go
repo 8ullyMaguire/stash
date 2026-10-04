@@ -20,6 +20,7 @@
 package sqlite
 
 import (
+	"strings"
 	"context"
 	"fmt"
 
@@ -417,4 +418,110 @@ func (qb *PerformerStore) DestroyBodyMark(ctx context.Context, id int) (int, err
 	}
 
 	return int(affected), nil
+}
+
+// setBodyMarkLocations makes a performer's marks of one kind exactly match `locations`, honouring
+// the update mode.
+//
+// WHY REPLACE AND NOT modifyJoins
+// ================================
+//
+// `modifyJoins` is the right primitive for a list the client APPENDS TO or REMOVES FROM, and it is
+// what the alias and URL joins use. It is wrong for body marks, because a form does not send a
+// delta: it sends the list it rendered, and after an edit that list is what the user now sees. If
+// the user deleted one mark of three and the client resubmits two locations, modifyJoins reads that
+// as "add two, remove the third", which happens to be right. But if the user reordered nothing and
+// merely saved, the client resubmits the same three and modifyJoins reads it as "add three, remove
+// three" -- replacing rows and churning their ids for no reason. The mode is passed through so a
+// caller that genuinely means a delta can still express one; the form path uses Set.
+//
+// DESCRIPTIONS ARE PRESERVED FOR LOCATIONS THAT SURVIVE
+// ======================================================
+//
+// A replace that deleted every row and re-inserted from the location list would silently discard
+// each mark's `description`, which the location-only input cannot express. So the existing rows are
+// read first and their descriptions are carried onto the matching locations. That is why this does
+// not simply delete the kind and re-insert: a mark the user described for years should survive a
+// save that did not mention it.
+func (qb *PerformerStore) setBodyMarkLocations(ctx context.Context, performerID int, kind string, locations []string, mode models.RelationshipUpdateMode) error {
+	switch mode {
+	case models.RelationshipUpdateModeSet:
+		existing, err := qb.GetBodyMarks(ctx, performerID, kind)
+		if err != nil {
+			return err
+		}
+
+		// Descriptions keyed by location, so a surviving location keeps whatever it was told.
+		described := make(map[string]*string, len(existing))
+		for _, m := range existing {
+			described[m.Location] = m.Description
+		}
+
+		if _, err := exec(ctx, dialect.Delete(performerBodyMarksTableName).
+			Where(performerBodyMarksTableName.Col("performer_id").Eq(performerID)).
+			Where(performerBodyMarksTableName.Col("kind").Eq(kind))); err != nil {
+			return fmt.Errorf("clearing %s marks for performer %d: %w", kind, performerID, err)
+		}
+
+		seen := make(map[string]bool, len(locations))
+		for _, location := range locations {
+			location = strings.TrimSpace(location)
+			if location == "" || seen[location] {
+				continue
+			}
+			seen[location] = true
+
+			if _, err := qb.CreateBodyMark(ctx, models.BodyMark{
+				PerformerID:  performerID,
+				Kind:         kind,
+				Location:     location,
+				Description:  described[location],
+			}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+
+	default:
+		// An explicit delta from a bulk or script caller: apply it as add/remove against what is
+		// stored. A mode that is neither ADD nor REMOVE falls through to Set rather than to a
+		// no-op, because "replace with what you sent" is the meaning every other partial field
+		// gives a mode it does not recognise.
+		existing, err := qb.GetBodyMarks(ctx, performerID, kind)
+		if err != nil {
+			return err
+		}
+
+		desired := make(map[string]bool, len(existing))
+		for _, m := range existing {
+			desired[m.Location] = true
+		}
+		for _, location := range locations {
+			desired[strings.TrimSpace(location)] = true
+		}
+
+		for location, present := range desired {
+			switch mode {
+			case models.RelationshipUpdateModeAdd:
+				if present {
+					continue
+				}
+			case models.RelationshipUpdateModeRemove:
+				if !present {
+					continue
+				}
+			}
+
+			if _, err := qb.CreateBodyMark(ctx, models.BodyMark{
+				PerformerID: performerID,
+				Kind:        kind,
+				Location:    location,
+			}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
 }

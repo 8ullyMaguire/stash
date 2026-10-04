@@ -313,6 +313,15 @@ func (qb *SceneStore) Create(ctx context.Context, newObject *models.Scene, fileI
 
 	if newObject.URLs.Loaded() {
 		const startPos = 0
+		// stash#2359 (#3051). Directors are stored beside URLs but in their own table: the packed
+		// `director` column is left exactly as it is, because it is on the GraphQL surface and read
+		// by the existing UI, and a scene with two directors is not something a LIKE can answer.
+		if newObject.Directors.Loaded() {
+			if err := sceneDirectorsTableMgr.replaceJoins(ctx, id, newObject.Directors.List()); err != nil {
+				return err
+			}
+		}
+
 		if err := scenesURLsTableMgr.insertJoins(ctx, id, startPos, newObject.URLs.List()); err != nil {
 			return err
 		}
@@ -372,6 +381,15 @@ func (qb *SceneStore) UpdatePartial(ctx context.Context, id int, partial models.
 		}
 	}
 
+	// stash#2359 (#3051). Nil when the client did not send `directors`; non-nil when it sent an
+	// empty list, which is the request to clear them. Collapsing the two would delete every
+	// director on any update that did not mention the field.
+	if partial.Directors != nil {
+		if err := sceneDirectorsTableMgr.modifyJoins(ctx, id, partial.Directors.Values, partial.Directors.Mode); err != nil {
+			return nil, err
+		}
+	}
+
 	if partial.URLs != nil {
 		if err := scenesURLsTableMgr.modifyJoins(ctx, id, partial.URLs.Values, partial.URLs.Mode); err != nil {
 			return nil, err
@@ -420,6 +438,12 @@ func (qb *SceneStore) Update(ctx context.Context, updatedObject *models.Scene) e
 	}
 
 	if updatedObject.URLs.Loaded() {
+		if updatedObject.Directors.Loaded() {
+			if err := sceneDirectorsTableMgr.replaceJoins(ctx, updatedObject.ID, updatedObject.Directors.List()); err != nil {
+				return err
+			}
+		}
+
 		if err := scenesURLsTableMgr.replaceJoins(ctx, updatedObject.ID, updatedObject.URLs.List()); err != nil {
 			return err
 		}

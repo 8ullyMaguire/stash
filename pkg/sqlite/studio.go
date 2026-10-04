@@ -206,6 +206,15 @@ func (qb *StudioStore) Create(ctx context.Context, newObject *models.CreateStudi
 		return err
 	}
 
+	// stash#2359 (#2607, #3051). `Codes.Loaded()` guards it for the same reason as Aliases: a studio
+	// created without codes must not have an empty set written, or a later SetCodes would be
+	// indistinguishable from a create that had none.
+	if newObject.Codes.Loaded() {
+		if err := studioCodesTableMgr.replaceJoins(ctx, newObject.ID, newObject.Codes.List()); err != nil {
+			return err
+		}
+	}
+
 	if newObject.Aliases.Loaded() {
 		if err := studio.ValidateAliases(ctx, id, newObject.Aliases.List(), qb); err != nil {
 			return err
@@ -263,6 +272,13 @@ func (qb *StudioStore) UpdatePartial(ctx context.Context, input models.StudioPar
 	}
 
 	if input.Aliases != nil {
+		// stash#2359. Nil when `codes` was absent from the update; non-nil when it was sent empty.
+		if input.Codes != nil {
+			if err := studioCodesTableMgr.modifyJoins(ctx, input.ID, input.Codes.Values, input.Codes.Mode); err != nil {
+				return nil, err
+			}
+		}
+
 		if err := studiosAliasesTableMgr.modifyJoins(ctx, input.ID, input.Aliases.Values, input.Aliases.Mode); err != nil {
 			return nil, err
 		}
@@ -298,6 +314,12 @@ func (qb *StudioStore) Update(ctx context.Context, updatedObject *models.UpdateS
 
 	if err := qb.tableMgr.updateByID(ctx, updatedObject.ID, r); err != nil {
 		return err
+	}
+
+	if updatedObject.Codes.Loaded() {
+		if err := studioCodesTableMgr.replaceJoins(ctx, updatedObject.ID, updatedObject.Codes.List()); err != nil {
+			return err
+		}
 	}
 
 	if updatedObject.Aliases.Loaded() {

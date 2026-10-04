@@ -100,6 +100,7 @@ type StudioReader interface {
 	StashIDLoader
 	TagIDLoader
 	URLLoader
+	CodeLoader
 
 	CustomFieldsReader
 

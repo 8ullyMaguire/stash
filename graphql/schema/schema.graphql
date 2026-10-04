@@ -282,6 +282,8 @@ type Query @requiresRole(role: "subscriber") {
   allPerformers: [Performer!]!
   allTags: [Tag!]! @deprecated(reason: "Use findTags instead")
   allStudios: [Studio!]! @deprecated(reason: "Use findStudios instead")
+  "The nationality reference list, 107 entries seeded by migration 125. stash#2359, #1922"
+  allNationalities: [Nationality!]!
   allMovies: [Movie!]! @deprecated(reason: "Use findGroups instead")
 
   # Get everything with minimal metadata
@@ -412,6 +414,11 @@ type Mutation {
   studioCreate(input: StudioCreateInput!): Studio @requiresWriteRole(role: "contributor")
   studioUpdate(input: StudioUpdateInput!): Studio @requiresWriteRole(role: "contributor")
   studioDestroy(input: StudioDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
+
+  "Create a tattoo or piercing on a performer. stash#2359"
+  bodyMarkCreate(input: BodyMarkCreateInput!): BodyMark! @requiresWriteRole(role: "steward")
+  "Delete a tattoo or piercing. stash#2359"
+  bodyMarkDestroy(input: BodyMarkDestroyInput!): Boolean! @requiresWriteRole(role: "steward")
   studiosDestroy(ids: [ID!]!): Boolean! @requiresWriteRole(role: "steward")
   bulkStudioUpdate(input: BulkStudioUpdateInput!): [Studio!] @requiresWriteRole(role: "contributor")
 

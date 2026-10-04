@@ -37,6 +37,29 @@ func (_m *PerformerReaderWriter) All(ctx context.Context) ([]*models.Performer, 
 	return r0, r1
 }
 
+// AllNationalities provides a mock function with given fields: ctx
+func (_m *PerformerReaderWriter) AllNationalities(ctx context.Context) ([]*models.Nationality, error) {
+	ret := _m.Called(ctx)
+
+	var r0 []*models.Nationality
+	if rf, ok := ret.Get(0).(func(context.Context) []*models.Nationality); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*models.Nationality)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Count provides a mock function with given fields: ctx
 func (_m *PerformerReaderWriter) Count(ctx context.Context) (int, error) {
 	ret := _m.Called(ctx)
@@ -93,6 +116,29 @@ func (_m *PerformerReaderWriter) Create(ctx context.Context, newPerformer *model
 	return r0
 }
 
+// CreateBodyMark provides a mock function with given fields: ctx, mark
+func (_m *PerformerReaderWriter) CreateBodyMark(ctx context.Context, mark models.BodyMark) (*models.BodyMark, error) {
+	ret := _m.Called(ctx, mark)
+
+	var r0 *models.BodyMark
+	if rf, ok := ret.Get(0).(func(context.Context, models.BodyMark) *models.BodyMark); ok {
+		r0 = rf(ctx, mark)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*models.BodyMark)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, models.BodyMark) error); ok {
+		r1 = rf(ctx, mark)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Destroy provides a mock function with given fields: ctx, id
 func (_m *PerformerReaderWriter) Destroy(ctx context.Context, id int) error {
 	ret := _m.Called(ctx, id)
@@ -105,6 +151,27 @@ func (_m *PerformerReaderWriter) Destroy(ctx context.Context, id int) error {
 	}
 
 	return r0
+}
+
+// DestroyBodyMark provides a mock function with given fields: ctx, id
+func (_m *PerformerReaderWriter) DestroyBodyMark(ctx context.Context, id int) (int, error) {
+	ret := _m.Called(ctx, id)
+
+	var r0 int
+	if rf, ok := ret.Get(0).(func(context.Context, int) int); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Find provides a mock function with given fields: ctx, id
@@ -314,6 +381,29 @@ func (_m *PerformerReaderWriter) GetAliases(ctx context.Context, relatedID int) 
 	return r0, r1
 }
 
+// GetBodyMarks provides a mock function with given fields: ctx, performerID, kind
+func (_m *PerformerReaderWriter) GetBodyMarks(ctx context.Context, performerID int, kind string) ([]*models.BodyMark, error) {
+	ret := _m.Called(ctx, performerID, kind)
+
+	var r0 []*models.BodyMark
+	if rf, ok := ret.Get(0).(func(context.Context, int, string) []*models.BodyMark); ok {
+		r0 = rf(ctx, performerID, kind)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*models.BodyMark)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int, string) error); ok {
+		r1 = rf(ctx, performerID, kind)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetCustomFields provides a mock function with given fields: ctx, id
 func (_m *PerformerReaderWriter) GetCustomFields(ctx context.Context, id int) (map[string]interface{}, error) {
 	ret := _m.Called(ctx, id)
@@ -370,6 +460,29 @@ func (_m *PerformerReaderWriter) GetImage(ctx context.Context, performerID int) 
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
+		r1 = rf(ctx, performerID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetNationalities provides a mock function with given fields: ctx, performerID
+func (_m *PerformerReaderWriter) GetNationalities(ctx context.Context, performerID int) ([]models.Nationality, error) {
+	ret := _m.Called(ctx, performerID)
+
+	var r0 []models.Nationality
+	if rf, ok := ret.Get(0).(func(context.Context, int) []models.Nationality); ok {
+		r0 = rf(ctx, performerID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.Nationality)
 		}
 	}
 
