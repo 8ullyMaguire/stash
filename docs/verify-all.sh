@@ -51,6 +51,24 @@ say "ledger structure"
 python3 docs/ledger-check.py
 check "${PIPESTATUS[0]}" "ledger-check"
 
+# The cross-file check, which ledger-check.py does NOT do: it validates each ROW's shape and stops
+# there, so two ledgers holding the same fact can disagree -- a row `closed` in the roster with no
+# row in the log, or a stale count in the roster's own summary -- while ledger-check reports
+# "all well formed".
+#
+# That is not hypothetical. On 2026-10-04 the goal read ALL CLAUSES PASS and verify-all.sh printed
+# "674 issue rows, all well formed" while docs/check-issue-ledgers.py failed with 14 problems: six
+# `closed` rows stranded in the `Planned` work queue, the same six absent from closed-issues.md, and
+# a summary claiming 56 planned / 52 closed against a table holding 0 / 58. The checker that saw it
+# was simply not in the gate.
+say "ledger cross-check"
+python3 docs/check-issue-ledgers.py 2>&1 | tail -6
+check "${PIPESTATUS[0]}" "check-issue-ledgers"
+
+say "cited paths"
+python3 docs/check_cited_paths.py 2>&1 | tail -3
+check "${PIPESTATUS[0]}" "check_cited_paths"
+
 say "RESULT"
 [ "$rc" -eq 0 ] && echo "GO/BOOT VERIFICATION PASSED" || echo "GO/BOOT VERIFICATION FAILED"
 # Do NOT delete $TMPDIR on the way out. It is a shared, caller-overridable path

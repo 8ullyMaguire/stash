@@ -27,6 +27,7 @@ Design rules this file follows, each one learned the hard way in this project:
 import csv
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -455,11 +456,66 @@ def c6_branch_convention():
 # ---------------------------------------------------------------------------
 # C7 -- the full suite, INCLUDING the integration tag
 # ---------------------------------------------------------------------------
+def other_go_build_running():
+    """True if another `go build`/`go test` is in flight on this host.
+
+    Two concurrent `go test ./...` runs share one build cache, and the loser can fail to COMPILE packages
+    that are perfectly fine -- observed as `FAIL github.com/stashapp/stash/pkg/scraper [build failed]` while
+    `go build ./pkg/scraper/` and `go test ./pkg/scraper/` both succeeded moments later, and only when
+    goal-check ran alongside a mutation-check.
+
+    That is contention, not a defect, and reporting it as FAIL sends the next session hunting a bug that
+    does not exist. The rc==124 guard below exists for the mirror-image hazard (a killed build reading as a
+    pass); this is the other mirror (a clobbered build reading as a failure), and it was unguarded.
+
+    IMPLEMENTATION NOTE, because both obvious approaches are wrong here:
+
+    - `pgrep -f "go build"` matches THIS script's own wrapper shell, whose command line contains the
+      pattern as an argument. It reports contention when there is none -- which is worse than not checking,
+      because it turns a real compile failure into "re-run this" forever.
+    - `pgrep -f` also matches alvaro's `cargo test ... --test-threads=1`, since that argument text contains
+      "go test" nowhere but "--test-threads" ends in "test" under a looser pattern.
+
+    So this reads `ps -eo pid,args` and checks argv[0] alone: the basename must be exactly `go` and argv[1]
+    must be `build` or `test`. A shell wrapper has argv[0] == "bash", so it cannot match.
+    """
+    try:
+        out = subprocess.run(
+            ["ps", "-eo", "pid,args"], capture_output=True, text=True, timeout=10
+        ).stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+    for line in out.splitlines()[1:]:
+        _, _, args = line.strip().partition(" ")
+        argv = args.split()
+        if len(argv) < 2:
+            continue
+        if os.path.basename(argv[0]) == "go" and argv[1] in ("build", "test"):
+            return True
+
+    return False
+
+
 def c7_suite():
     rc, out, err = sh("go test ./... -count=1", timeout=1800)
     unit_fail = [l for l in out.splitlines() if l.startswith("FAIL")]
     if rc == 124:
         add("C7 full suite", "UNKNOWN", "unit suite timed out (rc=124) -- a killed build reads like a pass")
+        return
+    # "[build failed]" with no "--- FAIL" line means a package never compiled. Under concurrency that is
+    # usually cache contention, so it is UNKNOWN ("re-run") rather than FAIL ("fix the code") -- unless a
+    # second, uncontended run reproduces it, which is the only way to tell the two apart.
+    build_failed = [l for l in unit_fail if l.endswith("[build failed]")]
+    if build_failed and other_go_build_running():
+        add("C7 full suite", "UNKNOWN",
+            "unit suite: " + str(len(build_failed)) + " package(s) failed to COMPILE while another go "
+            "build/test was running -- build-cache contention, not a defect; re-run this alone")
+        return
+    if build_failed:
+        add("C7 full suite", "FAIL",
+            "unit suite: " + str(len(build_failed)) + " package(s) failed to compile with no other build "
+            "running, so this is real: " + "; ".join(build_failed[:3]))
         return
     if unit_fail:
         add("C7 full suite", "FAIL", "unit suite FAIL: " + "; ".join(unit_fail[:3]))

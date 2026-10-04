@@ -44,8 +44,21 @@ def main() -> int:
 
     for n, line in enumerate(path.read_text().splitlines(), 1):
         cells = line.split("|")
-        # A row is an issue row only if cell [1] is a bare issue number.
-        if len(cells) < 6 or not cells[1].strip().isdigit():
+        # A row is an issue row if cell [1] is a bare issue number -- and that test must NOT also
+        # require a minimum cell count, because a truncated row is precisely the defect this checker
+        # exists to catch.
+        #
+        # The old gate was `len(cells) < 6 or not cells[1].strip().isdigit()`, which meant a row
+        # split by an unescaped '|' into fewer than 6 cells was skipped as "not a row" and counted
+        # cleanly. Row 2747 sat that way from the commit that wrote it (a0c41eac9, 2026-10-04):
+        # truncated mid-sentence at 307 chars with no verdict cell at all, invisible here, and the
+        # count read 674 against a roster of 675. The checker was reporting "674 issue rows, all
+        # well formed" while the one row it could not parse was the one that was broken.
+        #
+        # So identify the row by its issue number alone, and let the cell-count and status checks
+        # below judge it. A header row (`| # | Title | ...`) has a non-numeric cell [1] and is still
+        # skipped, which is the only exclusion this needs.
+        if not line.startswith("|") or len(cells) < 2 or not cells[1].strip().isdigit():
             continue
 
         rows += 1
