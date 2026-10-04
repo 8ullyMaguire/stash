@@ -2,7 +2,7 @@
 
 **Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## Status: schema, store and GraphQL done and proven. UI, destroy paths and ledgers remain
+## Status: schema, store, GraphQL and destroy paths done and proven. UI and ledgers remain
 
 Last commit `dd391abc3`. Nine of #2359's seventeen were already built upstream; six are now built
 here (#1351 excluded, see below).
@@ -131,7 +131,7 @@ Separator is comma-**and-space**, because that is what this app's UI and importe
 | ~~L2~~ | ~~**GraphQL**~~ — **DONE** `91dcfd73b`. 6 output fields, 6 input fields, `allNationalities`, `bodyMarkCreate`/`Destroy`, 17 resolver tests | | | | | ✅ |
 | L3 | **UI** — studio codes field, director field, per-scene alias, body-mark editor, nationality selector | | | | | | ⬜ |
 | ~~L4~~ | ~~**model fields**~~ — **DONE** `092a279c8`: `RelatedStrings` on Studio.Codes / Scene.Directors / Tattoo+PiercingLocations, plus `RelatedNationalities` | | | | | ✅ |
-| L5 | **destroy paths** — deleting a performer must remove body marks and alias ownership. 13 tables reference `performers`; migration 121's rule is that a general table cannot use a foreign key, so cleanup must be explicit and **tested on row counts** | | | | | | ⬜ |
+| ~~L5~~ | ~~**destroy paths**~~ — **DONE**, and the premise was WRONG. Measured: all **12** tables carrying `performer_id` declare a cascading FK, and `Database.open` appends `&_fk=true`, so no cleanup code is needed. Two mutations prove the assertion bites | | | | | ✅ |
 | L6 | **ledgers** — own roster rows in `docs/UPSTREAM-ISSUES.md` with verdict + proving test; `docs/ISSUES.md` #2359 `skipped`→`done`; one `docs/closed-issues.md` row per sub-feature | | | | | | ⬜ |
 | L7 | **full re-verification** — `verify-all.sh` six gates, Playwright 71/0, mutation 3/3, fresh clone | | | | | | ⬜ |
 
@@ -191,3 +191,37 @@ Two smaller ones: `getUpdateInputMap` panics (nil deref) outside a live GraphQL 
 one; and `performer_body_marks` PK (performer_id, kind, location) makes `bodyMarkCreate`
 non-idempotent, so the seed tolerates exactly that one UNIQUE error and still aborts on everything
 else.
+
+
+## L5: the destroy paths did NOT need work, and proving that took two mutations
+
+WHATS-LEFT.md said L5 needed "explicit cleanup... 13 tables reference `performers`; migration 121's
+rule is that a general table cannot use a foreign key". Both halves of that were wrong.
+
+**It is 12 tables, not 13, and five of the names I first wrote did not exist** — `performer_favorites`,
+`performer_overseers`, `scene_performers`, `gallery_performers` and `performers_stash_ids`. The real
+list came from running `pragma_table_info` against a database the app's own migration path created,
+and its naming is inconsistent on purpose: `performer_tags` AND `performers_tags` both exist,
+`performers_scenes` rather than `scene_performers`. Guessing would have produced a confidently wrong
+list — which is the third time on this issue that reading the code was not the same as measuring it.
+
+**And every one of the 12 declares a cascading FK**, while `Database.open` appends `&_fk=true` unless
+`disableForeignKeys` is set — which it is not, for either the read or the write handle. So
+`ON DELETE CASCADE` fires and no cleanup code is required. Migration 121's rule is real but does not
+apply here: these are purpose-built join tables, not general tables.
+
+Proven with two mutations, and the *first* is the informative one:
+
+| Mutation | Result | What it means |
+|---|---|---|
+| `Destroy` → bare `DELETE FROM performers WHERE id = ?`, bypassing `destroyExisting` | **PASSED** | The cascade does the work; `destroyExisting` adds nothing for these tables |
+| `Destroy` → deletes the four parity child tables but forgets the performer row | **FAILED**, 8 orphans named | The assertion bites and names which tables leaked |
+
+A test that passes under the first mutation is measuring the schema plus the pragma rather than our
+code — which is *correct* here, and is the point. The file is a regression guard for a future
+migration that adds a `performer_id` without a cascading FK, not a guard on cleanup code.
+
+`TestEveryPerformerReferencingTableIsCovered` checks the fixture list against the schema by
+introspection, so a table added later fails the test rather than going unchecked. Its `ignored` map is
+now EMPTY — an earlier draft carried an entry for a table that does not exist, which would have made
+a wrong guess look like a deliberate exclusion.
