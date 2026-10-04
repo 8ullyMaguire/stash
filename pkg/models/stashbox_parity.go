@@ -29,8 +29,8 @@ type StudioCode struct {
 // only difference is a closed two-value literal. Two types would mean two stores, two destroy
 // paths and two GraphQL types for no representational gain.
 type BodyMark struct {
-	ID          int    `json:"id"`
-	PerformerID int    `db:"performer_id" json:"performer_id"`
+	ID          int `json:"id"`
+	PerformerID int `db:"performer_id" json:"performer_id"`
 	// Kind is "tattoo" or "piercing". Constrained by a CHECK in migration 125, so a caller cannot
 	// construct an unreadable row; these constants are the Go-side spelling of that constraint.
 	Kind        string  `db:"kind"        json:"kind"`

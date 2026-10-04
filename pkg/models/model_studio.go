@@ -18,12 +18,12 @@ type Studio struct {
 	IgnoreAutoTag bool   `json:"ignore_auto_tag"`
 	Organized     bool   `json:"organized"`
 
-	Aliases  RelatedStrings  `json:"aliases"`
-	URLs     RelatedStrings  `json:"urls"`
+	Aliases RelatedStrings `json:"aliases"`
+	URLs    RelatedStrings `json:"urls"`
 	// stash#2359 (#2607, #3051) -- Stash-Box codes. SEVERAL per studio: a network code plus
 	// per-site codes. RelatedStrings rather than a plain string because a single `code` column
 	// could hold exactly one, and the plurality is the feature. Same idiom as Aliases and URLs.
-	Codes RelatedStrings `json:"codes"`
+	Codes    RelatedStrings  `json:"codes"`
 	TagIDs   RelatedIDs      `json:"tag_ids"`
 	StashIDs RelatedStashIDs `json:"stash_ids"`
 }

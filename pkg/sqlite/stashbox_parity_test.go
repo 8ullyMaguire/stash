@@ -192,7 +192,7 @@ func TestSceneDirectors(t *testing.T) {
 		qb := db.Scene
 
 		scene := models.Scene{Path: "/tmp/parity-directors.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 
 		directors := []string{"Ana López", "Bo Tan", "Cy O'Neil"}
 		require.NoError(t, qb.SetDirectors(ctx, scene.ID, directors))
@@ -219,7 +219,7 @@ func TestSceneDirectors(t *testing.T) {
 	runWithRollbackTxn(t, "the same director cannot be credited twice", func(t *testing.T, ctx context.Context) {
 		qb := db.Scene
 		scene := models.Scene{Path: "/tmp/parity-directors-dup.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 
 		require.NoError(t, qb.SetDirectors(ctx, scene.ID, []string{"Repeat"}))
 		// A composite primary key on (scene_id, director) is what makes this a single row rather
@@ -232,7 +232,7 @@ func TestSceneDirectors(t *testing.T) {
 	runWithRollbackTxn(t, "destroying a scene removes its directors", func(t *testing.T, ctx context.Context) {
 		qb := db.Scene
 		scene := models.Scene{Path: "/tmp/parity-directors-destroy.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 		require.NoError(t, qb.SetDirectors(ctx, scene.ID, []string{"Gone"}))
 
 		require.NoError(t, qb.Destroy(ctx, scene.ID))
@@ -251,10 +251,10 @@ func TestScenePerformerAliases(t *testing.T) {
 		qb := db.Scene
 
 		scene := models.Scene{Path: "/tmp/parity-scene-alias.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 
 		p := models.Performer{Name: "parity-alias-performer", Disambiguation: "2359"}
-			require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+		require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
 
 		require.NoError(t, qb.SetPerformerAlias(ctx, models.ScenePerformerAlias{
 			SceneID:     scene.ID,
@@ -299,12 +299,12 @@ func TestScenePerformerAliases(t *testing.T) {
 		// pair-as-identity shape by showing two performers in one scene coexist while a second
 		// alias for the SAME pair replaces rather than appends (asserted in the test above).
 		scene := models.Scene{Path: "/tmp/parity-scene-alias-two.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 
 		p1 := models.Performer{Name: "parity-alias-p1", Disambiguation: "2359"}
-			require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p1}))
+		require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p1}))
 		p2 := models.Performer{Name: "parity-alias-p2", Disambiguation: "2359"}
-			require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p2}))
+		require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p2}))
 
 		require.NoError(t, qb.SetPerformerAlias(ctx, models.ScenePerformerAlias{
 			SceneID: scene.ID, PerformerID: p1.ID, Alias: "Lead",
@@ -327,9 +327,9 @@ func TestScenePerformerAliases(t *testing.T) {
 		// the scene side would leave the performer side untested, and an ON DELETE CASCADE that
 		// fires for one parent but not the other is exactly the asymmetry worth catching.
 		scene := models.Scene{Path: "/tmp/parity-scene-alias-cascade.mp4"}
-			require.NoError(t, qb.Create(ctx, &scene, nil))
+		require.NoError(t, qb.Create(ctx, &scene, nil))
 		p := models.Performer{Name: "parity-alias-cascade", Disambiguation: "2359"}
-			require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+		require.NoError(t, db.Performer.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
 
 		require.NoError(t, qb.SetPerformerAlias(ctx, models.ScenePerformerAlias{
 			SceneID: scene.ID, PerformerID: p.ID, Alias: "Doomed",
