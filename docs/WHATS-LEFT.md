@@ -58,6 +58,19 @@ className in a template literal that a minifier may rewrite. It now asserts on
 `[data-field="nationality_ids"]`, which `renderField` always emits -- so the test checks the
 component being rendered rather than a bundler decision.
 
+**The `internal/api` intermittent: 10 consecutive green runs, cause still unestablished.** It
+recurred once more (verify-all.sh reported EXIT=1 / GO/BOOT VERIFICATION FAILED while every
+individual gate in the same log printed PASS — which is its own small lesson: a summary line can
+contradict its own gates). Since then: 6 sequential full-suite runs, 3 *concurrent* full-suite runs
+(the condition most likely to produce it), and one verify-all — all green, no failure reproduced, and
+`go test -tags integration ./internal/api/` alone passes in ~15s.
+
+That is evidence of absence, not a fix. Nothing was changed to make it go away, so nothing here
+should be read as "resolved". What it does justify is the harness fix already in place: the gate now
+extracts failures FIRST and keeps the full log, so if it recurs it will name a test instead of
+reporting a bare FAIL. Recorded rather than papered over because an intermittent with no named test
+and no surviving log is the kind of thing that gets forgotten and then blamed on something else.
+
 **Still not claimed as fixed:** the `internal/api` intermittent described below.
 
 **Two gate defects were found and fixed while confirming this, and both are the same shape -- a
