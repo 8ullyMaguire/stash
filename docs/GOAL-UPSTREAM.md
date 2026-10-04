@@ -24,12 +24,18 @@ a time, until they are all done or the queue is empty. As of 2026-10-02 there ar
 
 | | |
 |---|---|
-| Repo | `~/code-local/go/stash` |
+| Repo | `~/work/lane-2/stash` (was `~/code-local/go/stash`, which does not exist here) |
 | **Branch** | **`main`** — the soft fork. All issue work lands here. |
-| Base | `b6b09dd5f` = upstream `stashapp/stash` `develop` |
-| Not this branch | `stashforge` — the StashForge product work (governance, clustering, P2P plugin). Do not touch it. |
-| The roster | `docs/UPSTREAM-ISSUES.md` — 675 issues, 84 planned, 553 not planned, 38 closed |
-| The log | `docs/closed-issues.md` — one row per issue closed, with the test that proves it |
+| Base | `b6b09dd5f` = upstream `stashapp/stash` `develop` (tag `latest_develop`) |
+| Not this branch | `stashforge` — **retired.** It was merged into `main`; the two are one history, so there is nothing to avoid touching. |
+| The roster | `docs/UPSTREAM-ISSUES.md` — 675 issues, **0 planned**, 610 not planned or deferred, 58 closed |
+| The log | `docs/closed-issues.md` — 46 rows, one per issue closed, with the test that proves it |
+
+The counts above were 675 / 84 planned / 553 / 38 when this file was written. They moved when
+C2 completed (`621ceca54`). `docs/check-issue-ledgers.py` is the authority for all three: it fails
+if the roster's own header disagrees with its table, or if the two ledgers name different closed
+sets. It does **not** read this file, so these numbers are ungated prose — re-read them from the
+ledger rather than trusting them, which is exactly how they went stale here for eight days.
 
 **`main` is a soft fork.** The point is to be worth more than upstream: real
 fixes, tests, and commits a maintainer could read. If a change would make the
@@ -42,7 +48,7 @@ diff harder to review than the issue was worth, it is the wrong change.
 **1. You must generate before you build or test.**
 
 ```bash
-cd ~/code-local/go/stash
+cd ~/work/lane-2/stash
 git checkout main
 go generate ./cmd/stash     # REQUIRED — takes ~2 min
 ```

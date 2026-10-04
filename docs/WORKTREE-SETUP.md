@@ -1,3 +1,11 @@
+> **HISTORICAL — this file records a session or plan as it stood when written.**
+> The paths below (`~/code-local/go/...`, `~/code/go/...`) and the host named as `gaming-pc`
+> do **not** exist on this machine. The checkout is `~/work/lane-2/stash` on **thinkcentre**;
+> a second, older pair sits at `~/work/lane-1/`. For current state read
+> `docs/WHATS-LEFT.md` and run `python3 docs/goal-check.py`.
+> Nothing here has been rewritten, because a record of what was known then is worth more than
+> a tidy path.
+
 # Worktree setup — read this before the first `go build`
 
 Recorded 2026-09-27 by the M6 pass. A fresh worktree of this repo **does not

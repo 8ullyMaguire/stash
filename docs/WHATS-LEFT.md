@@ -1,304 +1,147 @@
-# stash — what is left (measured 2026-10-02, `docs/goal-check.py`)
+# stash — what is left (measured 2026-10-04)
 
 **The predicate is the authority.** `python3 docs/goal-check.py` is the repo's own
 completion test; this file is a reading of it, not a substitute. Re-run it before
 believing anything here — the numbers move, and a number copied into a summary is
 not evidence.
 
-Repo `~/code-local/go/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Two remotes, both pushed: `origin` (GitHub), `forgejo`.
+Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
+Remote `origin` (GitHub). HEAD `12e4f1db1`.
 
-**Host note:** this repo lives on **gaming-pc, which is this machine**
-(`cachyos-B450`). `ssh gaming-pc` returns to the same box, so there is no
-second-host gate for stash. `ssh thinkcentre` does **not** have this repo
-(`~/code-local/go/stash` does not exist there) — verified, not assumed. Do not
-spend a build lane on it.
+**Host note:** this checkout lives on **thinkcentre** (M720q), at
+`~/work/lane-2/stash`. **The previous version of this file said the repo lived on
+gaming-pc and that `ssh thinkcentre` did not have it — both were wrong**, and had been
+since at least 2026-10-02. A second checkout of the same fork sits at
+`~/work/lane-1/stash`; do not confuse the two, and do not build in either.
 
-## Status: 2 clauses outstanding
+## Status: nothing outstanding
 
-Measured by `python3 docs/goal-check.py` and `python3 docs/check-issue-ledgers.py` after
-commit `65422cea9`. Re-run both before believing this table.
+Measured 2026-10-04 at `12e4f1db1` by `docs/goal-check.py`,
+`docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
+`docs/verify-all.sh`.
 
 | Clause | Verdict | What it says |
 |---|---|---|
-| C1 PRs decided | PASS | all 64 open PRs have a recorded decision |
-| **C2 issues dispositioned** | **FAIL** | **69 `planned` rows in `docs/UPSTREAM-ISSUES.md` are neither closed nor re-statused.** All 69 are R9 rows (`upstream-marked bug report`/`help wanted`/`bounty`), which R9 keeps **unconditionally** — so `planned` is their intended state, not an oversight, and disposing of them means per-issue measurement, not a label change. Settled this pass: 7 decided rows re-statused (`docs/restatus_upstream_planned.py`), #7247 closed factually, #4136 `not-planned` on measurement, #5731 `deferred` with its mechanism traced (`docs/apply_planned_verdicts.py`) |
+| C1 PRs decided | PASS | all 65 open PRs have a recorded decision |
+| C2 issues dispositioned | PASS | no rows left `planned` |
 | C3 M5 tagged | PASS | `m5-p2p-downloader`, reachable from main |
 | C4 M7/M8 done | PASS | `m7-mesh`, `m8-relay-mesh` |
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
-| C7 suites | PASS | 60 packages unit, 1 integration |
-| **C8 backlog-17 ledger** | **FAIL** | **1 of 17 rows remains: #2747** — #3530 went `done` in `af5ea1a83` (its `done` row carries the commit as evidence, which is what the clause requires). #4326 and #1790 blank-state but closed; verified by parsing the `state` column |
+| C7 suites | PASS | unit 1801 / 0, integration 806 / 0, 61 packages |
+| C8 backlog-17 ledger | PASS | 17 issues = 15 done, 0 open, 2 skipped (#2149, #2359) |
 
-`check-issue-ledgers.py`: **OK** — header, roster table and closed log agree (675 issues,
-34 closed, 34 log rows).
+Supporting gates, all passing:
 
-## What moved since the last reading of this file
+| Gate | Result |
+|---|---|
+| `docs/ledger-check.py` | PASS — 675 roster rows, all well formed |
+| `docs/check-issue-ledgers.py` | OK — header, table and log agree |
+| `docs/closed-log-check.py` | PASS — 46 log rows, 5 columns, 46 distinct issues |
+| `docs/check_cited_paths.py` | PATHS OK — 49 distinct cited paths, 0 missing |
+| `docs/e2e/playwright-e2e.js` | E2E PASSED — 71 assertions, 0 failed, 0 console/page errors |
+| `docs/e2e/mutation-check.sh` | 3 killed, 0 survived, 0 harness errors |
 
-**#1790 is DONE** (commits `62313ad60`, `1501fe43b`, `2974ed15a`; tag `stash-1790-done`).
-Generic external IDs: a source registry plus one polymorphic `external_ids` table. Proven
-generic by gallery — the one entity with no legacy `stash_ids` table — adopting external
-ids through the same code path with no migration. 26 tests and a 14/14 mutation gate
-(`docs/mutate_external_id.py`, exit 0).
+**The previous version of this file reported C2 FAIL (69 planned rows) and C8 FAIL (1 of 17
+remaining).** Both were true when measured on 2026-10-02 and both were resolved
+afterwards — C2 in `621ceca54`, C8 by the five remaining rows landing. The lesson
+below is about why the file went stale without anyone noticing.
 
-**#837 is DONE** and its API layer is verified, not assumed: 13 passing tests over
-`internal/api/routes_issue.go` + `resolver_issue.go` covering list, badge count,
-resolve, restore, 404 and 400.
+## Test counts, measured today
 
-**Three `build:` dispositions were FALSE and are corrected** (commit `65422cea9`). Rows
-2747, 3530 and 4326 each claimed a build while their state said `open`. Measured with
-`git log --diff-filter=A`: 2747's `ExternalPlayerButton` came from upstream `3d1b949f4`
-(#679) and 3530's `stream_segmented.go` from upstream `05669f550` (#3274) — the features
-are present, but this fork did not build them, and no fork commit carries those numbers.
-**4326 is not built anywhere**: the only `Related*` components are upstream group/sub-group
-relations (#5105), unrelated to browsing content during playback.
+Counted the way `docs/GOAL.md` states: `go test ... -v | grep -c '^--- PASS'`, top-level
+only, never mixed with a subtest-inclusive count.
 
-## The three that remain, and what each actually needs
+| | unit | integration |
+|---|---|---|
+| top-level PASS | 1801 | 806 |
+| top-level FAIL | 0 | 0 |
+| packages green | 61 | 1 |
 
-**#4326 — browse related content during video playback.** The one genuine implementation
-task of the three. Needs a panel that overlays the player and navigates without a route
-change, so playback is uninterrupted. No such component exists; nothing to correct.
+## Why this file was wrong for two days
 
-**#3530 — multiple scenes in a single file.** Note the trap: `pkg/ffmpeg/stream_segmented.go`
-looks like this feature and is not. It segments the HLS **video stream**; the issue asks for
-one file holding several **scenes**. Spec + plan written (`docs/ISSUE-3530-{spec,plan}.md`),
-decision made and **partly built**:
+Nothing in the gate chain read it. `goal-check.py` computes the clauses from
+`docs/ISSUES.md`, `docs/UPSTREAM-ISSUES.md` and `docs/requirements.csv`; `verify-all.sh`
+runs the checkers. **No checker asserts that this file agrees with them**, so it drifted
+freely while every gate stayed green — which is the same failure mode as the two ledger
+defects fixed in `e9929beb7` and `12e4f1db1`, one layer up: a document that states a
+conclusion no gate recomputes.
 
-    DONE  data model      migration 122, start_time/end_time on scenes_files (9871247b5)
-    DONE  derived length  GetFiles applies the window; 10 tests, mutation 8/8 (726ef5bf4)
-    DONE  aggregates      5 sites use one SQL constant; no double-count; 4/4 sites proven
-                          by mutation (2be0d52e3, tag stash-3530-duration)
-    DONE  dup detection   split files no longer self-duplicate; both branches; 6/6 killed
-                          (a444dc6c8, tag stash-3530-dupes)
+The fix in this pass is to stop this file from *stating* conclusions. It now carries the
+measured numbers and the commands that produce them, and says plainly that the predicate
+is the authority. It is not a gate and does not pretend to be one.
 
-**The measurement that chose the model:** `scenes_files` has `PRIMARY KEY (scene_id, file_id)`
-and only a NON-unique index on `file_id`, so the schema **already** permits many scenes per
-file. The referential half was never missing — only *which part of the file* was, so the
-change is two nullable floats rather than segment entities. Under segment-as-file, every
-`video_files.duration` read would need reconciling with "a file is now a slice of one"; under
-time ranges that column stays **true** and only scene-level views change.
+## Reusable lessons from #3849 and #3530
 
-**The measurement that corrected the spec:** a scene has NO duration field of its own. §8
-called `scene.go:1135` the site that decides the feature; it actually feeds
-`FindScenes.duration`, an aggregate. The chokepoint is `SceneStore.GetFiles`, because the UI
-reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
+Kept because they are not specific to a commit. The full accounts are in
+`docs/plan/BACKLOG-17.md`, `docs/ISSUE-3530-*.md` and the commit messages.
 
-**#3530 remains, in this order:**
-1. **the player + play URL** — DONE, all of it: `/stream.mp4|webm|mkv` (`-ss`/`-t`),
-   `/stream` (307/409), and HLS + DASH manifests (ecd659eb3, tag stash-3530-hls). The segment
-   cache key now includes the window, which was a real bug: two scenes of one file shared a
-   cache directory and served each other's segments.
-2. **the preview/webp cache key** — DONE. `992e8da69`, tag `stash-3530-previewkey`. `GeneratedChecksum`
-   (an opt-in wrapper around `GetHash`, NOT a change to `GetHash`) appends `_w<start>-<end>` to the
-   checksum, so two scenes of one file get different previews. Unranged scenes keep their exact
-   filename. Sweep 6/6.
-3. **sprite/VTT thumbs** — DONE. Tag `stash-3530-sprite`. Spec `docs/ISSUE-3530-sprite-spec.md`.
-   Deliberately not a copy of the preview fix, for three reasons recorded in the spec:
-   - the VTT cues are a **contract with the player**, not a lookup key;
-   - `SlowSeek` works in FRAMES, so the window must be converted via `FrameRate`;
-   - `chunkCount` is snapped to a perfect square, so a window inside a long file gets a grid sized
-     for the file.
+1. **"Intermittently" usually means insertion order, not chance.** SQLite's plan is
+   stable, so a many-to-many whose far side is unconstrained picks the same row every
+   time — which is why it was reproducible.
+2. **The gallery's file set must be reached through `files.zip_file_id`.**
+   `galleries_files` records a gallery's *archive*, so correlating against it directly
+   matches nothing, NULLs every key and **reverses** the order — worse than the bug.
+3. **A flat `A OR B OR C` is wrong where the alternatives are ranked.** The `OR` made the
+   join non-unique and the symptom returned verbatim; the failure was a non-unique join,
+   not a missing condition.
+4. **A characterisation test goes red when the bug is fixed** — so it is half a test.
+   Invert the assertion; then it is the specification.
+5. **A positive control that fails is the signal.** Two fixtures passed for the wrong
+   reason (no `files` rows, so `NotContains` was trivially true) and only the control
+   exposed it.
+6. **Assert the value the defect corrupts**, not an aggregate that happens to agree — one
+   fixture's expected order was the same whether the bug was present or fixed, so every
+   mutation survived.
+7. **A mutation that "survives" may never have been applied.** An anchor string that also
+   occurs in a doc comment means `replace(..., 1)` mutates the comment. An ambiguous
+   anchor is a harness defect, not a finding. In the `test-driven-development` skill.
+8. **`sqlite.Timestamp` is RFC3339 — second precision.** Every idempotence test written
+   against a timestamp is vacuous until the stored value is moved out of the way first,
+   and the test asserting that move must check its own premise.
+9. **A range column added to a JOIN table is erased by every `replaceJoins` on that
+   table**, silently, because the destroy half loses the columns the insert half does not
+   carry. NULL is a legal value ("no window"), so the CHECKs still pass and a scene
+   quietly reverts to the whole file with no error anywhere. Adding data columns to a join
+   table means auditing every `replaceJoins` caller.
+10. **Sweeping a constant proves the rule; only calling it proves the wiring.** Four of
+    five aggregate call sites for #3530 were untested while the constant's own sweep read
+    5/5 killed.
 
-   The spec's one open question — absolute vs window-relative cues — is **resolved by reading the
-   player** (`vtt-thumbnails.ts`: `time = percent * player.duration()`), so cues are relative to the
-   media element's timeline and window-relative is forced, not chosen.
+## Two ledger defects this pass fixed, since they are the reason the numbers above moved
 
-   What the implementation turned out to need, beyond the spec's four mutations:
-   - **`SpritePlan`** (`pkg/scene/generate/sprite_window.go`) so the tile loop, the frame loop and
-     the VTT writer all read one decision. The spec's own note — "reverting the CALL in
-     `previewVideo` changed no result" — is why the plan is a value the loops destructure rather
-     than helpers they call.
-   - **`SpriteNeedsFrameSeek` as a free function.** The caller must decide *before* the plan exists,
-     because choosing frame seeking triggers a frame RECOUNT and the plan carries the recounted
-     count. My first version made it a method, the caller built a throwaway plan to ask it, and that
-     plan was built from `videoFile.FrameRate` (the probe's figure, **0 when ffprobe cannot read it**)
-     while the real plan used `generator.FrameRate` (resolved). Two rates for one decision; the
-     windowed arm reads the rate directly, so a windowed short file with an unreadable rate was
-     judged frameless and wrongly refused frame seeking. Fixed by making it free, calling it once,
-     and moving `configure()` above the decision — safe because `calculateFrameRate` reads
-     `NbFrames`/`VideoStreamDuration` and never `videoFile.FrameCount`.
-   - **`LoadPrimaryFileWithWindow` on the sprite task**, because `LoadPrimaryFile` goes through
-     `FileStore.Find`, which does not select `start_time`/`end_time` **at all** — MEASURED in
-     `pkg/sqlite/scene_window_loader_test.go`, not assumed. It reports no window whatever the row
-     says, so the grid comes out tiled across the whole file with every arithmetic test green.
-   - **the sprite routes key on `GeneratedChecksum`.** Serving by the plain hash serves the
-     *unwindowed* sprite of another scene, at a URL that looks entirely correct.
-   - **MUTATION SWEEP 12/12 killed** (`docs/mutate_3530_sprite.py`, exit 0). Four from the spec, and
-     eight found while writing it. Two harness defects were fixed rather than accepted: a mutant
-     that fails to COMPILE was being counted as a cover (M3's first form left `firstFrame`
-     declared and not used), and an interrupted sweep left a mutation on disk, which the next run's
-     baseline reported as a source regression. The harness now reports `SKIP` for a non-compiling
-     mutant, exits non-zero on any survivor **or any skip**, and restores from an in-memory
-     snapshot on interrupt. Proven to report a survivor and exit 1 by adding a probe mutant the
-     suite genuinely does not catch.
-4. **detection** — needs an upstream discussion, not a guess.
-5. ~~any UI to set a range~~ — **DONE**, `36a2af273` (tag `stash-3530-range-ui`). `VideoFileData` carries `start_time`/`end_time`; `SceneFileInfoPanel` shows them for the primary file with an Edit button; `SceneRangeForm` writes them. `fileDuration` is derived as `duration + start` — an identity from GetFiles' `Duration = clampedEnd - start`, needed because `duration` alone is the WINDOW length once a window exists. Clear sends explicit `null`, never `undefined`. 13-case probe + 3/3 mutation sweep (`ui/v2.5/docs/mutate-3530-range-form.sh`). **#3530 is now code-complete**; only detection (guessing ranges from repeated encodes) remains, and that needs an upstream discussion.
-6. `scene_filter.go:141` still filters on the file's length. Defensible, now recorded as a
-   deliberate choice rather than an oversight.
+Both were found by checkers that existed but were not wired into any gate.
 
-**#3530's window-erasure finding worth carrying (`b604926c0`):** a range column added to a JOIN table is erased by every `replaceJoins` on that table, silently, because the destroy half loses the columns the insert half does not carry. It is silent because NULL is a legal value ("no window") and the CHECKs still pass — so the failure mode is a scene quietly reverting to the whole file with no error anywhere. Three transferable points: (a) adding data columns to a join table means auditing every `replaceJoins` caller; (b) the existing range tests could not see it because they set the window *after* creating the scene and never updated it again — the window was only ever set, never edited-around; (c) `relatedFilesTable.destroyJoins` filters on `file_id` ALONE, which is right for its callers and wrong for a per-scene delete, because two scenes of one file is the whole point of #3530.
+- `e9929beb7` — `docs/check-issue-ledgers.py` was in no gate at all and failed with 14
+  problems: six `closed` rows stranded in `## Planned` sections (4549, 5681, 6949, 7028,
+  7145, 7187), the same six absent from `closed-issues.md`, and a summary claiming
+  56 planned / 52 closed against a table holding 0 / 58. Additionally `ledger-check.py`
+  identified a row with `len(cells) < 6`, so a row **truncated** into fewer cells read as
+  "not a row" — row 2747 had been truncated mid-sentence since `a0c41eac9` and was
+  invisible. Both checkers are now in `verify-all.sh`.
+- `12e4f1db1` — ten malformed rows in `closed-issues.md`, which no checker inspected the
+  shape of. Same class of bug one file over, now covered by `docs/closed-log-check.py`.
 
-**#3530's duplicate-detection finding worth carrying:** three fixes were needed and the two that
-failed did so invisibly. `HAVING COUNT(DISTINCT file_id) > 1` is insufficient (`GROUP_CONCAT`
-cannot split a group by file: three segments plus a copy came back `[33 34 35 36]`), and
-`GROUP BY phash, file_id` is insufficient the other way (the UI treats each group as an
-independent set, so a copy pair becomes two singletons and `COUNT(phash) > 1` drops both).
-What works is `GROUP BY phash` plus a WHERE gate on the phash occurring under >1 file_id.
+The general rule, three instances now: **a checker must identify a row by something the
+defect cannot destroy.**
 
-**A known limitation, stated not hidden:** a split file whose phash ALSO occurs on another file
-is reported as ONE group with that file. The segments are not duplicates *of each other* but of
-the other file, and `[][]*Scene` cannot express a per-pair relation — returning nothing would hide
-a real duplicate.
-
-**#3530's own §8b finding worth carrying:** four of the five aggregate call sites were
-UNTESTED while the constant's own mutation sweep read 5/5 killed. **Sweeping the constant
-proves the rule; only calling it proves the wiring.** The per-site sweep that should have
-caught it was itself broken — `replace("SceneRangeDurationSQL", ..., 1)` hit the COMMENT above
-the `Sprintf` argument, and the sort assertions were POSITIONAL against lists that carry a
-mandatory `COALESCE(sort_name, name, id)` tiebreak, so a tie satisfied the assertion. Now
-differential (sort twice, windows swapped, order must change) with the entity names chosen to
-contradict the tiebreak. In the `test-driven-development` skill.
-
-**#3530's own spec §7 was wrong twice** (`ALTER TABLE ADD CONSTRAINT` — "invalid", then
-"verified and works"), both times because the `sqlite3` CLI is a NEWER SQLite than the pinned
-`go-sqlite3 v1.14.22`. The rebuild is required for the INDEXES, not the CHECKs, and the whole
-episode is in `db-migration-integrity` now.
-
-**#2747 — Jellyfin-like external remote player.** The upstream button opens a scene in a
-local external player. The issue asks for a **remote** player, which the row's old
-"config-driven command template" note gestured at and which does not exist. Smaller than
-3530; needs a spec too.
-
-**C2 is a separate goal item** from the C8 programme: it concerns the 82 upstream `planned`
-rows in the roster, not the 17-row backlog. Dispositioning 82 rows is a documentation
-pass with a checker to satisfy, not code.
-
-### "Merge all PRs" — already nothing to merge
-
-Verified live this session, not read from a note:
-
-- our fork `8ullyMaguire/stash`: **0 open PRs**, 0 open issues.
-- `gh pr list` returns nothing. The 7268-series PRs are **upstream** `stashapp/stash`,
-  not ours.
-- forgejo is reachable; `fj pr ls` is not a valid subcommand (`fj pr list` is) — a
-  stale habit from an earlier session, corrected.
-
-The real queue is C2's 84 rows plus C8's 5, not a merge backlog.
-
-## C8 — the five remaining rows, in build order
-
-Ordered by dependency, not by issue number. Each is a real feature request; none
-is a bug with a one-line fix.
-
-| # | Issue | Build | Done when |
-|---|---|---|---|
-| **837** | Log potential issues with files, show in a dedicated UI | new table + model + detection + panel | **partially built — see below** |
-| **1790** | Generalized support for external IDs | `ExternalID` with a source registry, migrating `StashIDs` | table + registry + migration, `StashIDs` reads through it |
-| **3530** | Support multiple scenes in a single file | segments, segment-aware duration and filters | segments table; duration sums the segments |
-| **2747** | Jellyfin-like external remote player | config-driven command template, detached, scrubbed env | a configured command runs detached and serves playback |
-| **4326** | Browse related content during video playback | overlay panel, no route change, playback uninterrupted | panel opens over playback; `<video>` is not reloaded |
-
-### #837 is halfway — the state to build from
-
-Landed and pushed:
-
-- `docs/ISSUE-837-spec.md`, `docs/ISSUE-837-plan.md` (spec + plan **before** code,
-  per the standing workflow).
-- `8b1082e85` — migration `120_issues`, `appSchemaVersion` 119→120, schema tests.
-- `3797a3ded` — `pkg/models/model_issue.go`, `pkg/sqlite/issue.go`, store tests.
-  **13/13 mutations killed.**
-
-**The design finding, so it is not re-derived:** refusing duplicate *dismissed*
-rows and allowing a *new* finding of the same kind are contradictory for a unique
-index. So the **index** keeps the live-row invariants (a live finding is unique, so
-two racing scans cannot both insert) and the **store** keeps the dismissal policy
-(`Record` skips a finding with a dismissed row of the same identity). Cost, stated
-in the migration rather than hidden: two racing scans *can* both insert a live
-duplicate, because the index only refuses a third row.
-
-**What remains for #837** (steps 4–8 of the plan):
-
-1. detection in the scan — four kinds (`duplicate`, `zero_duration`, `zero_size`,
-   `no_files`), each with a **negative** test, because a detector that fires on
-   everything produces a table nobody reads.
-2. `GET /issues` + `POST /issues/{id}/resolve`, and GraphQL for the panel.
-3. the `/issues` panel.
-4. close it: `docs/ISSUES.md` → done, `docs/closed-issues.md` row, roster row →
-   `closed`, then `check-issue-ledgers.py` → OK and `goal-check.py` → C8 green.
-
-## C2 — the 84 planned rows
-
-`docs/UPSTREAM-ISSUES.md` holds 675 rows: **84 planned, 553 not-planned or
-deferred, 38 closed**. Every row needs to move out of `planned` with a *reason*,
-which means closing it with a test or deferring it under a cited rule. C2 accepts
-"closed with a test, OR deferred with a reason" — so triage is a legitimate
-outcome for rows that genuinely do not belong in this fork.
-
-**This is the bulk of the remaining work and it is bookkeeping-shaped, not
-code-shaped.** The efficient order:
-
-1. Work the 5 C8 rows (real features, above).
-2. Sweep the remaining `planned` rows in batches: measure each, then either close
-   with a test or defer with a rule citation — one verdict per row, both files
-   updated together so they cannot disagree.
-3. Run `python3 docs/check-issue-ledgers.py` after every batch. It fails if the
-   roster says `closed` without a `closed-issues.md` row, which is the check that
-   catches a half-finished close.
-
-**The trap, measured twice in this project:** a row moved from `planned` to
-`done` with the commit in the wrong CSV cell is rejected by C8's *positional*
-evidence rule. Verified-column rows must **lead** with `**done** — commit ...`.
-Also: 34 rows were found sitting inside sections headed `Planned` while marked
-closed — the checker now fails on that, so the sections cannot lie again.
-
-## Ledger integrity, already repaired (2026-10-02)
-
-`04fa7dff6`. `docs/UPSTREAM-ISSUES.md` header said 90/554/30 while its own table
-held 84/553/32, and `check-issue-ledgers.py` said **OK** — for three separate
-reasons, all now fixed and all verified by mutation:
-
-- the header regex demanded a bare "not planned" while the prose deliberately says
-  "not planned or deferred";
-- it counted `closed` but never `done` (six rows use it);
-- nothing checked section membership.
-
-Both header counts and both section counts now reconcile to the table.
-
-## Commits this session
+## Commits, most recent first
 
 | Hash | What |
 |---|---|
-| `de1a30ac2` | **#3849 fixed** — gallery sort correlated to the gallery being viewed |
-| `e47c5c5eb` | `closed-issues.md` row for #3849 |
-| `04fa7dff6` | ledger drift + the checker that missed it |
-| `8b1082e85` | #837 migration 120 + schema tests |
-| `3797a3ded` | #837 model + store (13/13 mutations killed) |
+| `12e4f1db1` | repair 10 malformed rows in `closed-issues.md`; add `docs/closed-log-check.py` |
+| `62b273d41` | e2e `mutation-check.sh`: refuse to start when the test port is already held |
+| `e9929beb7` | ledger consistency; wire `check-issue-ledgers.py` + `check_cited_paths.py` into `verify-all.sh` |
+| `621ceca54` | **C2 complete** — 0 planned rows, 662 dispositioned |
+| `12e4f1db1`..`416895b7a` | the C2 sweep and the upstream-fork work between them |
 
-## Reusable lessons from #3849, which shaped everything after
+## Still open, deliberately
 
-1. **"Intermittently" usually means insertion order, not chance.** SQLite's plan
-   is stable, so a many-to-many whose far side is unconstrained picks the same
-   row every time — which is why it was reproducible.
-2. **The gallery's file set must be reached through `files.zip_file_id`.**
-   `galleries_files` records a gallery's *archive*, so correlating against it
-   directly matches nothing, NULLs every key and **reverses** the order — worse
-   than the bug.
-3. **A flat `A OR B OR C` is wrong where the alternatives are ranked.** The `OR`
-   made the join non-unique and the symptom returned verbatim; the failure was a
-   non-unique join, not a missing condition.
-4. **A characterisation test goes red when the bug is fixed** — so it is half a
-   test. Invert the assertion; then it is the specification.
-5. **A positive control that fails is the signal.** Two fixtures passed for the
-   wrong reason (no `files` rows, so `NotContains` was trivially true) and only the
-   control exposed it.
-6. **Assert the value the defect corrupts**, not an aggregate that happens to
-   agree — one fixture's expected order was the same whether the bug was present
-   or fixed, so every mutation survived.
-7. **A mutation that "survives" may never have been applied.** An anchor string
-   that also occurs in a doc comment means `replace(..., 1)` mutates the comment;
-   `-count=1` bypasses the result cache but not reliably the build cache. Both are
-   now in the `test-driven-development` skill. An ambiguous anchor is a harness
-   defect, not a finding.
-8. **`sqlite.Timestamp` is RFC3339 — second precision.** Every idempotence test
-   written against a timestamp is vacuous until the stored value is moved out of
-   the way first, and the test asserting that move must check its own premise.
+- **#3530 detection.** Inferring ranges from repeated encodes is not implemented. This
+  needs an upstream discussion rather than a guess. Everything else in #3530 is done,
+  including the range UI (`SceneRangeForm.tsx`, `36a2af273`, tag `stash-3530-range-ui`)
+  — so a window IS settable from the app, and only the *inference* is missing.
+- **#2149 (phash validation)** and **#2359 (Stash-Box parity)** — skipped, with reasons, in
+  `docs/plan/BACKLOG-17.md`.
+- **`pkg/sqlite/scene_filter.go:142` filters `Duration` on `video_files.duration`**, the
+  file's length, not the window. Defensible and recorded as a deliberate choice.

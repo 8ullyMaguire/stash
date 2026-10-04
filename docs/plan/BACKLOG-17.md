@@ -38,25 +38,37 @@ change makes the ok-count go *down*, that change deleted a package's tests.
 
 Findings, in the order the work should go. `?` means "not yet started".
 
-| # | title | verified state | plan |
-|---|---|---|---|
-| 571 | multiple performer images | partial | [A](#a-571) |
-| 837 | log file issues, show in UI | absent | [B](#b-837) |
-| 1253 | tags on higher-level objects | partial | [C](#c-1253) |
-| 1580 | DLNA folders | partial | [D](#d-1580) |
-| 1790 | generalized external IDs | absent | [E](#e-1790) |
-| 2149 | phash validation | **skip** (bounty) | recorded below |
-| 2293 | non-ASCII performers fail Auto Tag | **fixed** (`e8ae81674`) | [F](#f-2293) |
-| 2337 | multiple users, configurable permissions | absent, large | [G](#g-2337) |
-| 2359 | Stash-Box parity | satisfied by pointing at the owner's Stash-Box | recorded below |
-| 2507 | performer alias in Auto Tag | absent | [H](#h-2507) |
-| 2747 | external remote player | done | [I](#i-2747) — command template, scrubbed env, window-aware; 7/7 mutation sweep |
-| 2833 | `e` shortcut collides with subpages | bug present | [J](#j-2833) |
-| 3001 | `File.Destroy.Post` hook | absent | [K](#k-3001) |
-| 3122 | Create All/New/Missing on tagger page | absent | [L](#l-3122) |
-| 3450 | relative date filters | absent | [M](#m-3450) |
-| 3530 | multiple scenes in one file | present (`af5ea1a83`) — window-aware; detection + UI still open | [N](#n-3530) |
-| 4326 | related content during playback | absent | [O](#o-4326) |
+**THE `verified state` COLUMN BELOW IS A 2026-10-01 SNAPSHOT AND IS NOW HISTORICAL.** It records
+what the code looked like *before* the programme ran, which is what an audit is for — but read
+alone it contradicts `docs/ISSUES.md`, which is the authority and where all 15 rows are now
+`done`. Two entries were already stale when written: 3530's said "present (`af5ea1a83`)" while
+`WHATS-LEFT.md` recorded the same commit as mid-programme, and 2747's said "done" for the
+command-template half while the remote half did not exist.
+
+The left column is kept because the audit's value is the *sequence*, and rewriting it to say
+"done" everywhere would erase the record of what had to be built first. The current state is
+`docs/ISSUES.md`, and `docs/goal-check.py` clause **C8 reads that file, not this one** — so a
+stale row here cannot fail C8, and did not.
+
+| # | title | verified state (2026-10-01, historical) | plan | state now (`docs/ISSUES.md`) |
+|---|---|---|---|---|
+| 571 | multiple performer images | partial | [A](#a-571) | done |
+| 837 | log file issues, show in UI | absent | [B](#b-837) | done |
+| 1253 | tags on higher-level objects | partial | [C](#c-1253) | done |
+| 1580 | DLNA folders | partial | [D](#d-1580) | done |
+| 1790 | generalized external IDs | absent | [E](#e-1790) | closed |
+| 2149 | phash validation | **skip** (bounty) | recorded below | skipped |
+| 2293 | non-ASCII performers fail Auto Tag | **fixed** (`e8ae81674`) | [F](#f-2293) | done |
+| 2337 | multiple users, configurable permissions | absent, large | [G](#g-2337) | done |
+| 2359 | Stash-Box parity | satisfied by pointing at the owner's Stash-Box | recorded below | skipped |
+| 2507 | performer alias in Auto Tag | absent | [H](#h-2507) | done |
+| 2747 | external remote player | done (command-template half only) | [I](#i-2747) — command template, scrubbed env, window-aware; 7/7 mutation sweep | done |
+| 2833 | `e` shortcut collides with subpages | bug present | [J](#j-2833) | done |
+| 3001 | `File.Destroy.Post` hook | absent | [K](#k-3001) | done |
+| 3122 | Create All/New/Missing on tagger page | absent | [L](#l-3122) | done |
+| 3450 | relative date filters | absent | [M](#m-3450) | done |
+| 3530 | multiple scenes in one file | present (`af5ea1a83`) — window-aware; detection + UI still open | [N](#n-3530) | done |
+| 4326 | related content during playback | absent | [O](#o-4326) | closed |
 
 ### Not built, and why
 

@@ -20,14 +20,19 @@ Kademlia) that fetches into the library and gets files scanned and linked.
 
 | What | Path |
 |---|---|
-| Work here | `~/code-local/go/stash` |
-| Publish here (per milestone) | `~/code/go/stash` |
-| Spec | `~/code-local/go/stash/docs/specs/2026-09-27-stashforge-spec.md` |
-| Plan (executable, per-step) | `~/code-local/go/stash/docs/specs/2026-09-27-stashforge-plan.md` |
-| **Requirements ledger** | `~/code-local/go/stash/docs/requirements.csv` — one row per requirement, R001–R073, with a `status` column updated as work lands |
-| Upstream issue research | `~/secondbrain/10-Projects/stashforge/research/` |
-| Upstream remote | `https://github.com/stashapp/stash.git` |
-| Base commit | `b6b09dd5` (develop) |
+| Work here | `~/work/lane-2/stash` |
+| Publish here (per milestone) | *was `~/code/go/stash`; that path does not exist on this host. Publish by pushing `main` to `origin` (`github.com/8ullyMaguire/stash`) — the milestone tags `m5-p2p-downloader`, `m7-mesh` and `m8-relay-mesh` are already reachable from main.* |
+| Spec | `docs/specs/2026-09-27-stashforge-spec.md` |
+| Plan (executable, per-step) | `docs/specs/2026-09-27-stashforge-plan.md` |
+| **Requirements ledger** | `docs/requirements.csv` — one row per requirement, **R001–R090**, with a `status` column updated as work lands |
+| Upstream issue research | *the secondbrain note that existed at `~/secondbrain/10-Projects/stashforge/research/` is gone; the research now lives inline as the reason column of `docs/UPSTREAM-ISSUES.md`* |
+| Upstream remote | `https://github.com/stashapp/stash.git` (configured as `upstream`) |
+| Base commit | `b6b09dd5` (develop, tag `latest_develop`) |
+
+**Host note.** This checkout lives on **thinkcentre** at `~/work/lane-2/stash`. Earlier
+versions of this file said `~/code-local/go/stash` on **gaming-pc**; that path and that
+host claim were both stale, and a second checkout of the same fork sits at
+`~/work/lane-1/stash`. Verify with `git remote -v` before trusting any path in this file.
 
 **Read the plan before writing any code.** It names every file, every function
 signature, and the exact command that proves each step. Do not start a step
@@ -51,6 +56,13 @@ The suite is now fully green: no failing test at any milestone.
 | `m2-apply-path` (applier + sqlite targets) | 969 / 0 | **2287 / 0** |
 | `m2c-identity-clustering` (plan 2.4b, steps 0-9) | 643 / 0 | **1111 / 0** |
 | `m3-metadata-sharing` (consent + exporter + federation) | 682 / 0 | **1158 / 0** |
+| **today, 2026-10-04 at `12e4f1db1`** | **1801 / 0** | **806 / 0** |
+
+The last row is the current measurement and is the only one that describes HEAD. Every
+row above it is a historical snapshot taken when its milestone landed, kept because the
+growth *between* milestones is the record. Do not read an old row as the present state, and
+do not edit an old row to match today — add a row instead, which is what the 2026-10-04 line
+does. Unit today is 61 packages green; integration is 1 package (`./pkg/sqlite/`).
 
 Rows 1-4 are sequential snapshots of M2. The `1` failure in each of those rows is
 the same test, and it is now fixed: `TestStudioQueryFast`, the pre-existing

@@ -80,6 +80,19 @@ say "cited paths"
 python3 docs/check_cited_paths.py 2>&1 | tail -3
 check "${PIPESTATUS[0]}" "check_cited_paths"
 
+# docs/WHATS-LEFT.md is a prose SUMMARY of the ledgers, and it sat wrong for two days (C2 FAIL / C8
+# FAIL, both resolved on 2026-10-03) while every gate stayed green -- because goal-check.py computes
+# its clauses from the ledgers and nothing asserted that the summary agreed with them. A document
+# that restates a conclusion is a second copy of a fact with no gate on it.
+#
+# It shells out to goal-check.py rather than re-implementing the clauses: a second implementation of
+# the same rules is a second thing to keep honest, which is how the cross-ledger drift started.
+# Costs ~40s because goal-check runs the suite. Verified to FAIL with 4 signals when the original
+# drift is re-injected.
+say "whats-left summary"
+python3 docs/check-whats-left.py 2>&1 | tail -8
+check "${PIPESTATUS[0]}" "check-whats-left"
+
 say "RESULT"
 [ "$rc" -eq 0 ] && echo "GO/BOOT VERIFICATION PASSED" || echo "GO/BOOT VERIFICATION FAILED"
 # Do NOT delete $TMPDIR on the way out. It is a shared, caller-overridable path

@@ -8,8 +8,18 @@ improvement.
 
 | Repo | Role | Licence | Database |
 |---|---|---|---|
-| `~/code-local/go/stash` (branch `stashforge`) | the **node**: local library, scanning, curation tools, content plane | AGPL-3.0 | SQLite |
-| `~/code-local/go/stash-box` (branch `master`) | the **commons**: metadata, votes, trust, discovery surfaces | MIT | PostgreSQL |
+| `~/work/lane-2/stash` (branch `main`) | the **node**: local library, scanning, curation tools, content plane | AGPL-3.0 | SQLite |
+| `~/work/lane-2/stash-box` (branch `lane-2/726-phase-F`) | the **commons**: metadata, votes, trust, discovery surfaces | MIT | PostgreSQL |
+
+The `stash` fork's `stashforge` branch was merged into `main` and the two are one history
+now, so "branch `stashforge`" is history rather than a place to work. `stash-box` is a
+**separate programme** with its own goal-check (`docs/goal-check.py` in that repo) and its
+own phase lettering; its phase-F branch is not required to be `master` for anything stated
+here, and this file does not track its phase.
+
+Both paths were `~/code-local/go/...` until 2026-10-04 and are now under `~/work/lane-2/`.
+A second pair of checkouts exists at `~/work/lane-1/`, several phases behind on
+`stash-box`; confirm which lane you are in with `git remote -v` before trusting a path.
 
 This file is the boundary between them. Both specs cite it; neither restates it.
 When the two disagree, this file is the tie-break, and changing it is an
