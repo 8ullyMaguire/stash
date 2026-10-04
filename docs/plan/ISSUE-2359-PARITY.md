@@ -133,7 +133,7 @@ Separator is comma-**and-space**, because that is what this app's UI and importe
 | ~~L4~~ | ~~**model fields**~~ — **DONE** `092a279c8`: `RelatedStrings` on Studio.Codes / Scene.Directors / Tattoo+PiercingLocations, plus `RelatedNationalities` | | | | | ✅ |
 | ~~L5~~ | ~~**destroy paths**~~ — **DONE**, and the premise was WRONG. Measured: all **12** tables carrying `performer_id` declare a cascading FK, and `Database.open` appends `&_fk=true`, so no cleanup code is needed. Two mutations prove the assertion bites | | | | | ✅ |
 | ~~L6~~ | ~~**ledgers**~~ — **DONE.** `docs/ISSUES.md` #2359 `skipped`→`done`; `docs/UPSTREAM-ISSUES.md` #2359 `deferred`→`closed` and #422 `not-planned`→`closed`; one `docs/closed-issues.md` row each for #422 and #2359; header tallies re-counted | | | | | ✅ |
-| L7 | **full re-verification** — `verify-all.sh` six gates, Playwright 71/0, mutation 3/3, fresh clone | | | | | | ⬜ |
+| ~~L7~~ | ~~**full re-verification**~~ — **DONE.** `verify-all.sh` green end to end; Playwright **82/0** (was 71/0; +11 from section 10); mutation **5/5** (was 3/3; +m4, +m5); clean clone green after copying the two gitignored build outputs | | | | | ✅ |
 
 ### Order of work
 
@@ -325,3 +325,49 @@ is generated from `stashapp/stash` via the GitHub API and must hold 675 rows. #2
 and must keep returning nothing. Only #422 is an upstream Stash issue. Their verdicts live in the
 `docs/ISSUE-2359-PARITY.md` table and in the closed-issues rows, which is the right home for work whose
 issue tracker is a different repository.
+
+
+## L7: full re-verification, and what a clean clone actually needs
+
+Every gate green, measured rather than assumed:
+
+| Gate | Result |
+|---|---|
+| `go test ./...` | green |
+| `go test -tags integration ./...` | green |
+| `gofmt -l internal/ pkg/ cmd/` | clean |
+| `go vet ./...` | clean |
+| `tsc --noEmit` (ui/v2.5) | clean |
+| `biome check` on every changed file | clean |
+| `vite build` | ✓ built |
+| e2e (Playwright) | **82 passed / 0 failed** — was 71/0, +11 from section 10 |
+| mutation check | **5 killed / 0 survived / 0 harness errors** — was 3/3, +m4 and +m5 |
+| `docs/verify-all.sh` | GO/BOOT VERIFICATION PASSED (6 gates) |
+
+### A CLEAN CLONE DOES NOT BUILD, AND THAT IS NOT A BUG IN THE CLONE
+
+The first clean-clone run failed in five packages, and the failure is worth recording because it looks
+like a broken commit and is not:
+
+```
+ui/ui.go:10:12: pattern v2.5/build: no matching files found
+internal/api/access_directives.go:87:25: undefined: DirectiveRoot
+```
+
+Both `ui/v2.5/build` and `internal/api/generated_*.go` are **gitignored** (`.gitignore:22`) — the
+generated output is deliberately not committed. So `git clone` gives you a tree that cannot compile
+until you generate: `pnpm run gqlgen` + `vite build` on the UI, `gqlgen` on the backend. Copying both
+from a working tree is equivalent and much faster.
+
+The distinction matters for how a verification claim should be phrased. "Green in a clean clone" is
+only true for a tree that has been BUILT, and saying otherwise would have been a claim about a clone
+nobody can obtain. The measured statement is: a fresh clone, given the two gitignored build outputs,
+is green on unit, integration, gofmt and vet.
+
+## THE HEADLINE, AND IT IS A NEGATIVE RESULT
+
+**No production code was written for the destroy paths, and that is the finding rather than an
+absence.** L5's premise — 13 tables, no foreign keys because of migration 121's rule, cleanup
+required — was wrong in the count, wrong in five of the names, and wrong in the conclusion. All 12
+real tables cascade, and proving that needed two mutations because proving it the obvious way (reading
+the DDL) would have concluded nothing.
