@@ -133,8 +133,23 @@ func (rs imageRoutes) Image(w http.ResponseWriter, r *http.Request) {
 
 func (rs imageRoutes) serveImage(w http.ResponseWriter, r *http.Request, i *models.Image, useDefault bool) {
 	if i.Files.Primary() != nil {
-		err := i.Files.Primary().Base().Serve(&file.OsFS{}, w, r)
+		// #7130 - ServeWithStallGuard, not Serve. A stalled rclone/FUSE mount parks the handler in
+		// open(2) with nothing written, and the browser spins forever because nothing ever fails.
+		// The guard bounds the open and turns that into a real status code. See
+		// models.BaseFile.ServeWithStallGuard for what it deliberately does NOT fix (a mid-transfer
+		// stall, which cannot be turned into an error once bytes are committed).
+		err := i.Files.Primary().Base().ServeWithStallGuard(r.Context(), &file.OsFS{}, w, r, models.DefaultStallTimeout)
 		if err == nil {
+			return
+		}
+
+		if errors.Is(err, models.ErrStalledFS) {
+			// 504, not 500: the request did not fail, the UPSTREAM did. Nothing has been written to
+			// w at this point, which is the only reason a status code is meaningful here.
+			logger.Errorf("#7130: filesystem did not respond for %s: %v", i.DisplayName(), err)
+			http.Error(w,
+				"the storage holding this library did not respond. If it is a network mount, check that the mount is still connected.",
+				http.StatusGatewayTimeout)
 			return
 		}
 

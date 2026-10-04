@@ -200,6 +200,14 @@ func (f *BaseFile) Serve(fs FS, w http.ResponseWriter, r *http.Request) error {
 
 	defer reader.Close()
 
+	return f.serveOpen(reader, w, r)
+}
+
+// serveOpen is Serve with the file already open, so the open can be guarded separately from the
+// transfer. Split out for stash#7130: a stalled mount parks in Open, not in the copy loop, and the two
+// need different treatment (see stall_guard.go -- the open can be abandoned safely, the transfer
+// cannot).
+func (f *BaseFile) serveOpen(reader io.ReadCloser, w http.ResponseWriter, r *http.Request) error {
 	content, ok := reader.(io.ReadSeeker)
 	if !ok {
 		data, err := io.ReadAll(reader)
