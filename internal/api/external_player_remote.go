@@ -306,17 +306,31 @@ func (rs remotePlayerRoutes) RegisterRemotePlayer(w http.ResponseWriter, r *http
 	id := registerRemotePlayer(p)
 	logger.Infof("#2747: player %q registered as %s (%d connected)", name, id, len(registeredPlayerIDs()))
 
-	// A short deadline for the ack, so a client that never reads cannot hold the registration
-	// goroutine open. The write deadline is CLEARED afterwards: the socket then lives for hours,
-	// and a deadline left in place would kill an idle-but-healthy player on the TV.
-	_ = conn.SetWriteDeadline(time.Now().Add(playerDispatchTimeout))
-	if err := remotePlayerWriteJSON(conn, map[string]string{"id": id, "name": name}); err != nil {
+	// The ack goes out through sendRaw, which takes the SAME writeMu that dispatch uses, rather than
+	// through a bare conn.WriteJSON.
+	//
+	// This was the data race `go test -race ./internal/api/` reported as
+	// TestADispatchedFrameReachesThePlayer, at external_player_remote.go:319 vs :488.
+	// registerRemotePlayer hands the player to the registry BEFORE the ack is written, so a concurrent
+	// PlayOnRemotePlayer can already be inside p.send -- holding p.writeMu and calling
+	// conn.SetWriteDeadline -- while this goroutine calls conn.SetWriteDeadline on the same socket with
+	// no lock at all. gorilla's Conn keeps its write deadline in a plain field, and its documentation
+	// permits exactly one concurrent writer per connection.
+	//
+	// It cannot go through send(): send() marshals a remotePlayerCommand, and the ack is a different
+	// wire shape entirely -- a flat {"id","name"} object, not {"type":...}. Changing the player's parser
+	// to accept an ack masquerading as a command would be a bigger change than the bug deserves.
+	//
+	// sendRaw also sets and clears the deadline itself, which is why the explicit
+	// SetWriteDeadline(time.Time{}) below disappears. A deadline left in place would kill an
+	// idle-but-healthy player on the TV after playerDispatchTimeout; the old code had to remember to
+	// clear it by hand, on a path that returns early when the ack fails.
+	if err := p.sendRaw(map[string]string{"id": id, "name": name}); err != nil {
 		logger.Debugf("#2747: player %s ack failed: %v", id, err)
 		unregisterRemotePlayer(id)
 		_ = conn.Close()
 		return
 	}
-	_ = conn.SetWriteDeadline(time.Time{})
 
 	// Block until the peer goes away, reading so that close frames and pings are handled.
 	// This is the liveness mechanism: no heartbeat, no timeout, nothing to get wrong.
@@ -491,6 +505,27 @@ func (p *remotePlayer) send(cmd remotePlayerCommand) error {
 	defer func() { _ = p.conn.SetWriteDeadline(time.Time{}) }()
 
 	return p.conn.WriteJSON(cmd)
+}
+
+// sendRaw writes one arbitrary JSON value, serialised against dispatch by the same mutex, with a
+// deadline.
+//
+// It exists for the registration ack, whose wire shape is {"id","name"} rather than a
+// remotePlayerCommand. Before this, that ack was written with a bare conn.WriteJSON on a path that had
+// already published the player to the registry, which is the data race described at the call site.
+//
+// Sharing send()'s body rather than duplicating it keeps the deadline discipline in one place: set
+// before the write, cleared after, on both the success and failure paths.
+func (p *remotePlayer) sendRaw(v interface{}) error {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+
+	if err := p.conn.SetWriteDeadline(time.Now().Add(playerDispatchTimeout)); err != nil {
+		return err
+	}
+	defer func() { _ = p.conn.SetWriteDeadline(time.Time{}) }()
+
+	return remotePlayerWriteJSON(p.conn, v)
 }
 
 // remotePlayerSceneFinder is the slice of the scene store the play list needs.

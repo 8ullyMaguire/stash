@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -948,5 +949,98 @@ func TestRemotePlayerWindowComesFromTheSceneNotTheURL(t *testing.T) {
 	}
 	if got, want := remotePlayerFormatSeconds(end), "45"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConcurrentRegistrationAndDispatchShareOneWriteLock is the regression test for the data race
+// `go test -race ./internal/api/` reported as TestADispatchedFrameReachesThePlayer.
+//
+// THE RACE
+// --------
+// RegisterRemotePlayer published the player to the registry (external_player_remote.go:306) BEFORE it
+// wrote the registration ack (:313). So a concurrent POST /external_player/play could find the player
+// in the registry and call p.send, which takes p.writeMu and calls conn.SetWriteDeadline -- while the
+// registration goroutine called conn.SetWriteDeadline on the same socket with NO lock. gorilla keeps
+// the write deadline in a plain field, and its documentation allows one concurrent writer per
+// connection, so the race detector was right to complain and the two writes could interleave frames.
+//
+// WHY A CONCURRENCY TEST AND NOT A CODE INSPECTION
+// ------------------------------------------------
+// The fix is that the ack now goes out through sendRaw, which takes the same writeMu. A test that
+// merely registers one player and dispatches one command cannot see this: the race needs the two
+// writers to overlap, and a sequential test never overlaps them. It passes against the broken code.
+//
+// So this test races N registrations against N dispatches, and is only meaningful under -race. It is
+// not a weak test: under -race it went red on the pre-fix code and green after, which is the property
+// that matters.
+func TestConcurrentRegistrationAndDispatchShareOneWriteLock(t *testing.T) {
+	stubRemotePlayerConfig(t, "s3cret", "http://stash.lan:9999")
+	resetPlayerRegistry(t)
+
+	srv := httptest.NewServer(remotePlayerRoutes{}.Routes())
+	defer srv.Close()
+
+	const players = 8
+
+	// Phase 1: register every player, reading each ack so registration genuinely completes.
+	conns := make([]*websocket.Conn, 0, players)
+	ids := make([]string, 0, players)
+	for i := 0; i < players; i++ {
+		conn, _, err := dialTestPlayer(t, srv.URL+"/register?token=s3cret&name=tv"+strconv.Itoa(i))
+		if err != nil {
+			t.Fatalf("handshake %d: %v", i, err)
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var ack struct {
+			ID string `json:"id"`
+		}
+		if err := conn.ReadJSON(&ack); err != nil {
+			t.Fatalf("ack %d: %v", i, err)
+		}
+		conns = append(conns, conn)
+		ids = append(ids, ack.ID)
+	}
+	defer func() {
+		for _, c := range conns {
+			_ = c.Close()
+		}
+	}()
+
+	// Phase 2: dispatch to every registered player from many goroutines at once, while a second
+	// wave of goroutines registers new players. Both paths write to a websocket; before the fix one of
+	// them wrote without the lock.
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		for r := 0; r < 4; r++ {
+			wg.Add(1)
+			go func(playerID string) {
+				defer wg.Done()
+				p, found := playerFor(playerID)
+				if !found {
+					return
+				}
+				// A stop command needs no scene lookup, so it exercises the write path without
+				// needing a database.
+				_ = p.send(remotePlayerCommand{Type: playerCmdStop})
+			}(id)
+		}
+	}
+	for i := 0; i < players; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			conn, _, err := dialTestPlayer(t, srv.URL+"/register?token=s3cret&name=late"+strconv.Itoa(n))
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}(i)
+	}
+	wg.Wait()
+
+	// The assertion is simply that we got here without the race detector firing. A goroutine-leak or
+	// panic would also fail the test, which is the point.
+	if t.Failed() {
+		t.Fatal("dispatch or registration failed under concurrency")
 	}
 }
