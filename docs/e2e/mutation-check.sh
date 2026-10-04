@@ -78,7 +78,14 @@ EOF
   : > "$BUILD/log"
   # setsid, because this script's EXIT trap would otherwise be inherited by the server and run when
   # the server exits -- deleting the build directory out from under the suite.
-  ( setsid "$BUILD/stash" -c "$BUILD/c.yml" > "$BUILD/log" 2>&1 < /dev/null & )
+  #
+  # The PID IS RECORDED. The earlier `( setsid ... & )` form made cleanup impossible, so the only
+  # teardown available was `pkill -f "$BUILD/stash"` -- a PATTERN, which also matches another run's
+  # binary under the same build dir and any stale instance from before. That is how the port leaked
+  # and the next mutant ran against the unmutated binary. `$!` is the one handle that cannot be
+  # confused with anything else.
+  setsid "$BUILD/stash" -c "$BUILD/c.yml" > "$BUILD/log" 2>&1 < /dev/null &
+  local pid=$!
   local i
   for i in $(seq 1 60); do
     if grep -q 'address already in use' "$BUILD/log" 2>/dev/null; then
@@ -86,11 +93,38 @@ EOF
       grep 'address already in use' "$BUILD/log" | head -2 | sed 's/^/      /'
       return 1
     fi
-    grep -q 'is listening on' "$BUILD/log" 2>/dev/null && return 0
+    if grep -q 'is listening on' "$BUILD/log" 2>/dev/null; then
+      # The log line is necessary but not sufficient: it is a string in a file, and the port guard
+      # above is the real check. Confirm the process we just started is alive before declaring the
+      # mutant ready, so a server that logged then died cannot leave a later mutant talking to
+      # whatever answers on the port.
+      if ! kill -0 "$pid" 2>/dev/null; then
+        echo "    HARNESS BUG -- server logged 'is listening on' then exited; see $BUILD/log"
+        return 1
+      fi
+      SRV_PID="$pid"
+      return 0
+    fi
     sleep 1
   done
   echo "    (server did not start; see $BUILD/log)"
   return 1
+}
+
+# Teardown by PID, never by pattern. See the note at the launch site: a `pkill -f` here matches
+# other runs' binaries too, which is how a stale server outlived its own cleanup and made a later
+# mutant look like a surviving one.
+stop_server() {
+  [ -n "${SRV_PID:-}" ] || return 0
+  kill "$SRV_PID" 2>/dev/null
+  local i
+  for i in $(seq 1 10); do
+    kill -0 "$SRV_PID" 2>/dev/null || break
+    sleep 1
+  done
+  kill -9 "$SRV_PID" 2>/dev/null
+  SRV_PID=""
+  return 0
 }
 
 run_suite() {
@@ -216,13 +250,13 @@ run_mutant() {
       echo "  SEED FAILED -- the mutant is untested against an empty instance:"
       sed 's/^/      /' "$BUILD/seed.log" | head -6
       broken=$((broken+1))
-      pkill -f "$BUILD/stash" 2>/dev/null; sleep 2
+      stop_server
       restore; return 2
     fi
     report "$(run_suite)"
   fi
 
-  pkill -f "$BUILD/stash" 2>/dev/null; sleep 2
+  stop_server
   restore
   # Rebuild the clean UI so the next mutant starts from a known-good bundle.
   E2E_FORCE_UI=1 build_ui > /dev/null 2>&1 || true
@@ -252,7 +286,7 @@ else
   echo "$base_out" | grep -E '^  FAIL' | head -10 | sed 's/^/    /'
   exit 2
 fi
-pkill -f "$BUILD/stash" 2>/dev/null; sleep 2
+stop_server
 
 # ------------------------------------------------------------------- mutants
 run_mutant m1 "a GraphQL resolver panics" no \
