@@ -480,6 +480,10 @@ type handlerRequiredFilter struct {
 	FolderCache *lru.LRU[bool]
 
 	videoFileNamingAlgorithm models.HashAlgorithm
+
+	// FS is used by interactiveDisagrees to stat the funscript. Injected rather than reaching for a
+	// global so the check is testable against a fake filesystem.
+	FS models.FS
 }
 
 func newHandlerRequiredFilter(c *config.Config, repo models.Repository) *handlerRequiredFilter {
@@ -493,7 +497,32 @@ func newHandlerRequiredFilter(c *config.Config, repo models.Repository) *handler
 		GalleryFinder:            repo.Gallery,
 		FolderCache:              lru.New[bool](processes * 2),
 		videoFileNamingAlgorithm: c.GetVideoFileNamingAlgorithm(),
+		FS:                       &file.OsFS{},
 	}
+}
+
+// interactiveDisagrees reports whether a funscript exists on disk for this video, differently from what
+// the file row records.
+//
+// A stat failure is treated as "no funscript", which is the same default the scan decorator uses
+// (pkg/file/video/scan.go:42). Getting that wrong in the optimistic direction would mean re-running the
+// scene handler on every unchanged video file, which is a scan-time cost for no correctness gain; the
+// IsMissingMetadata check downstream is what guarantees the file row itself converges.
+func (f *handlerRequiredFilter) interactiveDisagrees(ctx context.Context, ff models.File) bool {
+	vf, ok := ff.(*models.VideoFile)
+	if !ok {
+		return false
+	}
+
+	if f.FS == nil {
+		return false
+	}
+
+	if _, err := f.FS.Lstat(video.GetFunscriptPath(vf.Base().Path)); err == nil {
+		return !vf.Interactive
+	}
+
+	return vf.Interactive
 }
 
 func (f *handlerRequiredFilter) Accept(ctx context.Context, ff models.File) bool {
@@ -527,6 +556,32 @@ func (f *handlerRequiredFilter) Accept(ctx context.Context, ff models.File) bool
 	// execute handler if there are no related objects
 	if n == 0 {
 		return true
+	}
+
+	// #3738 - a funscript appearing (or disappearing) next to an ALREADY-SCANNED video must re-run the
+	// handler, or nothing downstream ever learns the scene changed.
+	//
+	// The shape of the bug: `Interactive` lives on the FILE row, and it is derived from whether
+	// `<name>.funscript` exists on disk (pkg/file/video/scan.go:42). Dropping a funscript next to a
+	// video does not touch the video file, so the scanner classifies it as unchanged -- same mtime,
+	// same size, same basename -- and takes the `updated := ...` branch at pkg/file/scan.go:792 as
+	// false. That routes to onUnchangedFile, which DOES notice the metadata disagreement
+	// (Decorator.IsMissingMetadata ends in `interactive != vf.Interactive`) and fixes the file row.
+	//
+	// But it then asks isHandlerRequired, and the answer is no: this filter returns true only when a
+	// file has NO related objects. One scene already exists, so n == 1 and the scene handler is
+	// skipped. The file row is corrected and the SCENE row is never touched, so the scene's
+	// `updated_at` does not move and the UI keeps showing the old timestamp. Exactly what the report
+	// describes.
+	//
+	// So the handler is required whenever the on-disk funscript disagrees with what the file row says.
+	// Checking the file row rather than the scenes keeps this to one read per video file, and the
+	// filter already runs for every unchanged file.
+	//
+	// This also covers the reverse case, deleting a funscript, which the same argument produces and
+	// which nothing else catches.
+	if isVideoFile {
+		return f.interactiveDisagrees(ctx, ff)
 	}
 
 	// if create galleries from folder is enabled and the file is not in a zip
