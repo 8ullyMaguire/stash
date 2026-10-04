@@ -125,6 +125,9 @@ func (r *sceneResolver) Paths(ctx context.Context, obj *models.Scene) (*ScenePat
 
 	// Web-only formats: use unsigned URLs (rely on cookie authentication)
 	screenshotPath := paths.builder.GetScreenshotURL()
+	// #3741 - the width-capped copy. Unsigned like the screenshot beside it: both are cookie-
+	// authenticated, and signing a per-row thumbnail would mean a signature per queue item.
+	thumbnailPath := paths.builder.GetThumbnailURL()
 	previewPath := paths.builder.GetStreamPreviewURL()
 	webpPath := paths.builder.GetStreamPreviewImageURL()
 	objHash := obj.GetHash(config.GetVideoFileNamingAlgorithm())
@@ -134,6 +137,7 @@ func (r *sceneResolver) Paths(ctx context.Context, obj *models.Scene) (*ScenePat
 
 	return &ScenePathsType{
 		Screenshot:         &screenshotPath,
+		Thumbnail:          &thumbnailPath,
 		Preview:            &previewPath,
 		Stream:             &paths.stream,
 		Webp:               &webpPath,

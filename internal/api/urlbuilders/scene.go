@@ -57,6 +57,11 @@ func (b SceneURLBuilder) GetScreenshotURL() string {
 	return b.BaseURL + "/scene/" + b.SceneID + "/screenshot?t=" + b.UpdatedAt
 }
 
+// GetThumbnailURL is the width-capped cover for list and queue views. stash#3741.
+func (b SceneURLBuilder) GetThumbnailURL() string {
+	return b.BaseURL + "/scene/" + b.SceneID + "/thumbnail?t=" + b.UpdatedAt
+}
+
 func (b SceneURLBuilder) GetFunscriptURL(apiKey string) *url.URL {
 	u, err := url.Parse(fmt.Sprintf("%s/scene/%s/funscript", b.BaseURL, b.SceneID))
 	if err != nil {

@@ -13,6 +13,11 @@ type SceneFileType @requiresRole(role: "subscriber") {
 type ScenePathsType @requiresRole(role: "subscriber") {
 
   screenshot: String # Resolver
+  # #3741 - a width-capped copy of the cover, for list and queue views. Separate from `screenshot`
+  # on purpose: `screenshot` is the cover at its stored resolution (a 4K scene's cover is 3840px
+  # wide), and the queue renders it into a 142px box. Callers that display a small thumbnail should
+  # ask for this one.
+  thumbnail: String # Resolver
   preview: String # Resolver
   stream: String # Resolver
   webp: String # Resolver

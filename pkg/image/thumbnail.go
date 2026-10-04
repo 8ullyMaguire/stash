@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -141,6 +142,51 @@ func (e *ThumbnailEncoder) GetPreview(inPath string, outPath string, maxSize int
 		clipDuration = 30.0
 	}
 	return e.getClipPreview(inPath, outPath, maxSize, clipDuration, fileData.FrameRate)
+}
+
+// GetThumbnailFromBytes generates a thumbnail from an in-memory image.
+//
+// stash#3741. Exists because a scene's cover already lives in the database as bytes, and there is no
+// models.File to hand to GetThumbnail. Re-seeking the video with ffmpeg to make a 320px thumbnail of a
+// frame that is already decoded would be absurd, so this takes the buffer directly.
+//
+// Same encoder choice and the same WebP/Q output as GetThumbnail, so a scene thumbnail and an image
+// thumbnail of identical dimensions are the same bytes. Animated GIF/WebP is refused for the same
+// reason (#2266): thumbnailing the first frame of an animation is not a representative thumbnail.
+//
+// maxSize is the largest X/Y dimension, matching GetThumbnail.
+//
+// The encoder is a PARAMETER rather than being looked up here, because there is no safe way to build
+// one internally: ffmpeg.NewEncoder needs a path, and FFMpeg.Command dereferences its receiver
+// unconditionally (pkg/ffmpeg/ffmpeg.go:240), so a nil *FFMpeg panics rather than erroring. The caller
+// already holds the configured encoder -- manager.GetInstance().FFMpeg -- so passing it costs nothing
+// and makes the dependency visible.
+func GetThumbnailFromBytes(ffmpegEncoder *ffmpeg.FFMpeg, data []byte, maxSize int) ([]byte, error) {
+	e := ThumbnailEncoder{FFMpeg: ffmpegEncoder}
+
+	if vipsPath := GetVipsPath(); vipsPath != "" {
+		ve := vipsEncoder(vipsPath)
+		e.vips = &ve
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.Write(data); err != nil {
+		return nil, err
+	}
+
+	// An animated cover cannot be represented by one frame, so it is refused rather than silently
+	// reduced to frame zero (#2266). DetectContentType returns MIME types, so compare against those,
+	// not against the models format constants.
+	if format := http.DetectContentType(data); format == "image/gif" || format == "image/webp" {
+		if format == "image/gif" || isWebPAnimated(data) {
+			return nil, fmt.Errorf("%w: animated scene cover", ErrNotSupportedForThumbnail)
+		}
+	}
+
+	if e.vips != nil {
+		return e.vips.ImageThumbnail(buf, maxSize)
+	}
+	return e.ffmpegImageThumbnail(buf, maxSize)
 }
 
 func (e *ThumbnailEncoder) ffmpegImageThumbnail(image *bytes.Buffer, maxSize int) ([]byte, error) {

@@ -92,6 +92,10 @@ func (rs sceneRoutes) Routes() chi.Router {
 		r.Get("/stream.mpd/{segment}_a.webm", rs.StreamDASHAudioSegment)
 
 		r.Get("/screenshot", rs.Screenshot)
+		// #3741 - the small, width-capped copy for list and queue views. Same shape as
+		// /screenshot, not a variant of it: the scene route group already resolves the scene from the
+		// id and puts it in the context, so a second handler gets that for free.
+		r.Get("/thumbnail", rs.Thumbnail)
 		r.Get("/preview", rs.Preview)
 		r.Get("/webp", rs.Webp)
 		r.Get("/vtt/chapter", rs.VttChapter)
@@ -439,6 +443,17 @@ func (rs sceneRoutes) Screenshot(w http.ResponseWriter, r *http.Request) {
 		SceneCoverGetter: rs.sceneFinder,
 	}
 	ss.ServeScreenshot(scene, w, r)
+}
+
+// Thumbnail serves the small, width-capped cover. stash#3741 -- see manager.ServeThumbnail.
+func (rs sceneRoutes) Thumbnail(w http.ResponseWriter, r *http.Request) {
+	scene := r.Context().Value(sceneKey).(*models.Scene)
+
+	ss := manager.SceneServer{
+		TxnManager:       rs.txnManager,
+		SceneCoverGetter: rs.sceneFinder,
+	}
+	ss.ServeThumbnail(scene, w, r)
 }
 
 func (rs sceneRoutes) Preview(w http.ResponseWriter, r *http.Request) {

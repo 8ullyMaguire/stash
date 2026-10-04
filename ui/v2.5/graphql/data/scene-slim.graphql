@@ -22,6 +22,9 @@ fragment SlimSceneData on Scene {
 
   paths {
     screenshot
+    # #3741 - the width-capped copy for small displays. Falls back to `screenshot` in the UI so an
+    # older server that does not know the field still renders.
+    thumbnail
     preview
     stream
     webp

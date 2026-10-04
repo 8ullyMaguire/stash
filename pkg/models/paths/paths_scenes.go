@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/stashapp/stash/pkg/fsutil"
@@ -161,6 +162,26 @@ func (sp *scenePaths) GetVideoPreviewPath(checksum string) string {
 
 func (sp *scenePaths) GetWebpPreviewPath(checksum string) string {
 	return shardedJoin(sp.Screenshots, checksum, checksum+".webp")
+}
+
+// GetThumbnailPath is the scene queue thumbnail: a small, width-capped copy of the cover.
+//
+// stash#3741. The scene detail queue renders every item at 142x80 CSS px
+// (ui/v2.5/src/components/Scenes/styles.scss:696) and binds src straight to paths.screenshot, which
+// ServeScreenshot returns at the cover's stored resolution -- and the cover is generated with
+// Width: 0, which pkg/ffmpeg/transcoder/screenshot.go:82 treats as "no scaling applied". So a 4K scene
+// serves a 3840px-wide JPEG into a 142px box. Measured on a photographic 3840x2160 frame at the same
+// -q:v 2 the cover generator uses: 890 KiB served versus 16 KiB at 320px wide, 54.7x.
+//
+// Stored beside the other per-scene generated files rather than under Generated/Thumbnails, which is
+// keyed by IMAGE checksum; a scene and an image can share a checksum without sharing a thumb, and the
+// two encoders differ (the image side goes through image.ThumbnailEncoder).
+//
+// WebP, matching thumbnailExt and GetWebpPreviewPath: smaller again, and http.ServeFile derives
+// Content-Type from the extension, which is exactly what paths_generated.go:85 records about the
+// extension not being cosmetic.
+func (sp *scenePaths) GetThumbnailPath(checksum string, width int) string {
+	return shardedJoin(sp.Screenshots, checksum, fmt.Sprintf("%s_thumb_%d.webp", checksum, width))
 }
 
 func (sp *scenePaths) GetSpriteImageFilePath(checksum string) string {
