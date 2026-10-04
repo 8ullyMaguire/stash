@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/asticode/go-astisub"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/stashapp/stash/internal/collab"
@@ -681,10 +683,32 @@ func (rs sceneRoutes) Caption(w http.ResponseWriter, r *http.Request, lang strin
 			return
 		}
 
+		// stash#4771 - allow the client to shift the cues. Captions authored against a different cut of
+		// the video routinely sit early or late, and until now the only correction was editing the file
+		// by hand.
+		shiftCaptions(r, sub)
+
 		var buf bytes.Buffer
 
 		err = sub.WriteToWebVTT(&buf)
 		if err != nil {
+			// stash#4771 - an empty track is a legitimate outcome of a large offset, not a server
+			// error. Subtitles.Add drops cues pushed before zero, so a viewer who nudges captions far
+			// enough back can empty the track; WebVTT says an empty file is valid and players treat it
+			// as "no subtitles", which is exactly the truth. Returning 500 here made a cosmetic viewer
+			// preference look like a broken server, and videojs surfaces that as a console error on
+			// every scene with that language selected.
+			//
+			// Note this is a different condition from a READ failure above, which really is a 500: if
+			// the file cannot be parsed there is nothing to serve, whereas here the file parsed fine and
+			// we simply have nothing left to show.
+			if errors.Is(err, astisub.ErrNoSubtitlesToWrite) {
+				logger.Debugf("[caption] no cues remain for %s/%s after offset", lang, ext)
+				w.Header().Set("Content-Type", "text/vtt")
+				utils.ServeStaticContent(w, r, []byte("WEBVTT\n"))
+				return
+			}
+
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -693,6 +717,58 @@ func (rs sceneRoutes) Caption(w http.ResponseWriter, r *http.Request, lang strin
 		utils.ServeStaticContent(w, r, buf.Bytes())
 		return
 	}
+}
+
+// shiftCaptions applies the request's caption offset to a parsed subtitle track.
+//
+// stash#4771. The offset is a query parameter rather than stored state, deliberately: it is a property
+// of one viewing session on one device, not of the scene. The same scene watched in another browser, or
+// on a cast receiver that cannot pass the parameter, should keep the original timings. Storing it would
+// mean a mutation, a GraphQL field and a UI control for something that is a display concern.
+//
+// This is a named function rather than three inline lines so the tests can pin it directly. That is not
+// cosmetic: with the logic inline, the first version of the test file exercised parseCaptionOffset and
+// Subtitles.Add in isolation and every test still passed with the whole thing deleted from the handler.
+// A unit test on a helper proves the helper works and says nothing about whether the request path calls
+// it. See TestShiftCaptionsIsTheWiring.
+func shiftCaptions(r *http.Request, sub *astisub.Subtitles) {
+	offsetMS, ok := parseCaptionOffset(r)
+	if !ok {
+		return
+	}
+
+	// Subtitles.Add handles the cases that are easy to get wrong: it accepts a negative duration, drops
+	// cues pushed entirely before zero rather than emitting an invalid negative timestamp, and clamps
+	// cues that straddle zero to start at 0. Pinned in TestCaptionOffsetClampsAndDrops.
+	sub.Add(time.Duration(offsetMS) * time.Millisecond)
+}
+
+// parseCaptionOffset reads the optional `offset` query parameter, in milliseconds, from a caption
+// request.
+//
+// A missing, unparseable or absurd value means "no offset" rather than an error: a caption track is
+// still useful even if the client sent nonsense, and 400-ing the whole request would make a cosmetic
+// parameter take down subtitle playback. The bound exists because this value reaches a
+// time.Duration multiplication, and an untrusted query string should not be able to overflow it.
+func parseCaptionOffset(r *http.Request) (int64, bool) {
+	raw := r.URL.Query().Get("offset")
+	if raw == "" {
+		return 0, false
+	}
+
+	ms, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		logger.Warnf("[caption] ignoring unparseable offset %q", raw)
+		return 0, false
+	}
+
+	const maxOffsetMS = int64(24 * 60 * 60 * 1000) // a day; beyond this the request is nonsense
+	if ms < -maxOffsetMS || ms > maxOffsetMS {
+		logger.Warnf("[caption] ignoring out-of-range offset %dms", ms)
+		return 0, false
+	}
+
+	return ms, true
 }
 
 func (rs sceneRoutes) CaptionLang(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import videojs, { VideoJsPlayer, VideoJsPlayerOptions } from "video.js";
 import useScript from "src/hooks/useScript";
+import { readCaptionOffset } from "src/hooks/useCaptionOffset";
 import "videojs-contrib-dash";
 import "videojs-mobile-ui";
 import "videojs-seek-buttons";
@@ -690,6 +691,14 @@ export const ScenePlayer: React.FC<IScenePlayerProps> = PatchComponent(
           const captionURL = new URL(scene.paths.caption, window.location.href);
           captionURL.searchParams.set("lang", lang);
           captionURL.searchParams.set("type", caption.caption_type);
+
+          // stash#4771 - shift the cues for this language if the viewer has set an offset. Omitted
+          // entirely when zero so the URL is unchanged from what it was before, which keeps any
+          // signed-URL or cache assumptions intact.
+          const storedOffset = readCaptionOffset(lang);
+          if (storedOffset !== 0) {
+            captionURL.searchParams.set("offset", String(storedOffset));
+          }
 
           sourceSelector.addTextTrack(
             {
