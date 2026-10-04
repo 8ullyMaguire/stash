@@ -6,7 +6,7 @@ believing anything here — the numbers move, and a number copied into a summary
 not evidence.
 
 Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Remote `origin` (GitHub). HEAD `8323b44d4`.
+Remote `origin` (GitHub). HEAD `fa8a104ce`.
 
 **Host note:** this checkout lives on **thinkcentre** (M720q), at
 `~/work/lane-2/stash`. **The previous version of this file said the repo lived on
@@ -15,6 +15,50 @@ since at least 2026-10-02. A second checkout of the same fork sits at
 `~/work/lane-1/stash`; do not confuse the two, and do not build in either.
 
 ## Status: nothing outstanding
+
+**Both follow-ups named in the previous revision are now closed**, and closing them found three more
+things that were wrong:
+
+- **#422's STUDIO half was genuinely missing** (migration 126). Migration 125 had
+  `owner_performer_id`, which answers #2341 -- which *performer* an ambiguous alias belongs to -- but
+  upstream #422 asks which *studio*. Nullable `studio_id`, `ON DELETE SET NULL` so a deleted studio
+  keeps a real alias. The unique index on `(performer_id, alias)` is deliberately NOT widened to
+  include studio_id: that would permit a duplicate alias whose studio is then indeterminate, which is
+  the defect #2341 was filed about.
+- **The nationality list was incomplete and could not be fixed at runtime** (migration 127). It is
+  not Creatable and has no create mutation, so the migration is the only entry point and a gap is
+  permanent. Eight demonyms added. `'Croat'` deliberately NOT added: HR is already `Croatian`, and one
+  country gets one name -- the duplicate-name ambiguity #1922 exists to remove.
+- **The premise behind the second follow-up was false.** `type Nationality` claimed the list mirrors
+  Stash-Box "nationalities". Stash-Box has no such field -- only `country: String` and
+  `ethnicity: EthnicityEnum` (eight values). So there were no "Stash-Box nationalities outside the
+  seed" to support. The comment, the model and the test now say what the table actually is: an
+  answer to #1922's open question, which upstream declined to solve and closed unmerged.
+
+### Two harness defects, both of the same shape as the two above
+
+- **The mutation gate was wrong 3 mutants out of 6 on its first run**, and the tests were innocent.
+  `TESTS` was a string containing shell quotes and the harness ran `TESTS.split()`, which broke the
+  quoted `-run` pattern into separate argv entries -- so `go test` ran with NO filter, i.e. *every*
+  package, which is also green. Each "survivor" was killed the moment argv was corrected. **A green
+  baseline does not prove a harness works**, so the gate now requires the baseline to have actually
+  EXECUTED the five named tests (reading `=== RUN` lines) and exits 2 as a harness bug otherwise.
+- **The e2e suite tested a dead server for four consecutive runs.** Three NationalitySelect assertions
+  failed identically at clean HEAD, which ruled out the code and pointed at the environment. The log
+  said `is listening on 127.0.0.1:9982` and `bind: address already in use` in the same breath: a
+  server left over from an earlier gate held the port, the freshly built binary could not bind, and
+  the suite drove the OLD server's already-loaded bundle. The harness grepped one log for both
+  `'is listening on'` and `panic:|ERRO '` and the first match won; `( setsid ... & )` with `SRV=""`
+  also meant cleanup killed nothing, so it recurred every run. It now refuses to start on a held
+  port (exit 2, naming the holder), checks the bind error specifically, records the PID, and confirms
+  with `kill -0`. Verified both ways: rc=2 against a deliberately squatted port, 82/0 clean.
+
+**One selector change worth knowing about:** the e2e asserted on `.NationalitySelect`, a computed
+className in a template literal that a minifier may rewrite. It now asserts on
+`[data-field="nationality_ids"]`, which `renderField` always emits -- so the test checks the
+component being rendered rather than a bundler decision.
+
+**Still not claimed as fixed:** the `internal/api` intermittent described below.
 
 **Two gate defects were found and fixed while confirming this, and both are the same shape -- a
 check that reports a verdict without the evidence needed to act on it.** Recorded here because
@@ -41,7 +85,7 @@ server held any port, and no build failure was logged. Cause unestablished. The 
 diagnosis if it recurs.
 
 
-Measured 2026-10-04 at `8323b44d4` by `docs/goal-check.py`,
+Measured 2026-10-04 at `fa8a104ce` by `docs/goal-check.py`,
 `docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
 `docs/verify-all.sh`.
 
@@ -64,8 +108,9 @@ Supporting gates, all passing:
 | `docs/check-issue-ledgers.py` | OK — header, table and log agree |
 | `docs/closed-log-check.py` | PASS — 48 log rows, 5 columns, 48 distinct issues (#422 and #2359 added) |
 | `docs/check_cited_paths.py` | PATHS OK — 49 distinct cited paths, 0 missing |
-| `docs/e2e/playwright-e2e.js` | E2E PASSED — 71 assertions, 0 failed, 0 console/page errors |
-| `docs/e2e/mutation-check.sh` | 3 killed, 0 survived, 0 harness errors |
+| `docs/e2e/playwright-e2e.js` | E2E PASSED — 82 assertions, 0 failed, 0 console/page errors |
+| `docs/e2e/mutation-check.sh` | 5 killed, 0 survived, 0 harness errors |
+| `docs/mutate-alias-studio-association.py` | 8 killed, 0 survived, 0 harness errors — with a harness self-check |
 
 **The previous version of this file reported C2 FAIL (69 planned rows) and C8 FAIL (1 of 17
 remaining).** Both were true when measured on 2026-10-02 and both were resolved
