@@ -558,25 +558,39 @@ async function main() {
           panel: document.querySelectorAll('#performer-edit').length,
           form: document.querySelectorAll('form#performer-edit').length,
           nats: document.querySelectorAll('.NationalitySelect').length,
+          byDataField: document.querySelectorAll('[data-field="nationality_ids"]').length,
+          allFields: Array.from(document.querySelectorAll('form#performer-edit [data-field]'))
+            .map(e => e.getAttribute('data-field')),
           labelled: Array.from(document.querySelectorAll('label'))
             .some(l => (l.textContent || '').trim() === 'Nationality'),
         }));
 
         check('the performer edit form is shown', sel.form > 0,
           'no form#performer-edit -- the Edit button did not enter edit mode');
-        check('the performer edit form renders a NationalitySelect', sel.nats > 0,
-          'found ' + sel.nats + ' .NationalitySelect nodes in the edit form');
+        // Assert on [data-field="nationality_ids"], NOT on .NationalitySelect.
+        //
+        // renderField (ui/v2.5/src/utils/form.tsx) always emits data-field={field}, so that
+        // attribute is guaranteed by the form utilities. `.NationalitySelect` is a className passed
+        // to react-select, and a computed className in a template literal is exactly the kind of
+        // thing a minifier may rewrite -- so asserting on it couples the test to a bundler
+        // decision rather than to the component being rendered.
+        check('the performer edit form renders the nationality field',
+          sel.byDataField > 0,
+          'found ' + sel.byDataField + ' [data-field=nationality_ids] nodes; .NationalitySelect=' +
+          sel.nats + '; fields present: ' + JSON.stringify(sel.allFields));
         check('the nationality field is labelled', sel.labelled,
           'no label reading exactly "Nationality" -- the i18n key or renderField name is wrong');
 
         // Open the menu and confirm real names are offered. This is the assertion that would catch a
         // select wired to the ids instead of the names -- unusable, and invisible to a length check.
-        const first = page.locator('.NationalitySelect input').first();
+        // Scoped to the data-field wrapper (always emitted by renderField) rather than to the
+        // component's className, which a minifier is free to rewrite.
+        const first = page.locator('[data-field="nationality_ids"] input').first();
         if (await first.count() > 0) {
           await first.click();
           await page.waitForTimeout(1500);
           const opts = await page.evaluate(() =>
-            Array.from(document.querySelectorAll('.NationalitySelect [class*="option"]'))
+            Array.from(document.querySelectorAll('[data-field="nationality_ids"] [class*="option"]'))
               .slice(0, 6).map(o => (o.textContent || '').trim()).filter(Boolean));
           check('the nationality menu offers readable names', opts.length > 0,
             'no options rendered after opening the menu');
@@ -584,8 +598,8 @@ async function main() {
             opts.length === 0 || opts.some(o => /[A-Za-z]{3,}/.test(o)),
             JSON.stringify(opts));
         } else {
-          check('the NationalitySelect has an input to type into', false,
-            '.NationalitySelect input not found');
+          check('the nationality select has an input to type into', false,
+            'no input inside [data-field="nationality_ids"]');
         }
         await page.keyboard.press('Escape');
         await page.waitForTimeout(600);

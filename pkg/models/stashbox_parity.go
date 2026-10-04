@@ -50,8 +50,13 @@ const (
 type Nationality struct {
 	ID   int    `db:"id"   json:"id"`
 	Name string `db:"name" json:"name"`
-	// ISO 3166-1 alpha-2 where one applies. Nullable: Stash-Box carries nationalities that are not
-	// countries ("Kurdish"), and a non-null code here would force a fake one.
+	// ISO 3166-1 alpha-2 where one applies. Nullable because a nationality is not always a country
+	// ("Basque", "Kurdish" have no code in common use) and a non-null code would force a fake one.
+	// NOT NULL here would make those two unselectable rather than error, so the test asserts the
+	// nullability instead of trusting it.
+	//
+	// Codes are deliberately NOT unique: GB is shared by British, English, Scottish and Welsh, and
+	// PH/IL/KR by language-vs-demonym pairs. One country, one code, several names.
 	Code *string `db:"code" json:"code"`
 }
 

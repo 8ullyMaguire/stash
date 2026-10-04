@@ -251,8 +251,26 @@ A nationality a performer may hold. stash#2359, #1922.
 
 A reference-table row rather than a string: `id` is what a filter matches on, `name` is what a
 selector shows, and `code` is what an export writes. Two entries have a NULL `code` (Basque,
-Kurdish), because Stash-Box carries nationalities that are not countries and a non-null code would
-force a lie.
+Kurdish), because a nationality is not always a country and a non-null code would force a lie.
+
+WHAT THIS IS NOT, CHECKED AGAINST UPSTREAM
+==========================================
+
+An earlier note here claimed this table mirrors Stash-Box, which carries "nationalities that are not
+countries". Read against the Stash-Box schema on 2026-10-04, that is false: Performer there has
+`country: String` and `ethnicity: EthnicityEnum` and NO nationalities field at all. EthnicityEnum is
+eight values (CAUCASIAN, BLACK, ASIAN, INDIAN, LATIN, MIDDLE_EASTERN, MIXED, OTHER) -- broad
+categories, not the 107 demonyms seeded here. So this table does not track an upstream field.
+
+What it actually is: Stash-Box's single free-text `country` loses the multi-valued case, which
+upstream #1922 raises directly ("performers with multiple comma separated nationalities stored in the
+country field") and ghost declined to solve there ("not entirely sure what you mean by that? A
+separate field for nationality distinct from country?"). One string cannot hold several, and the
+proposed #1922 fix -- store an ISO code instead -- makes that loss permanent rather than fixing it.
+So this is a deliberate answer to a question Stash-Box leaves open, not a mirror of its schema, and
+#1922 was closed unmerged, so upstream `develop` still has `country: String` and the two do not
+conflict. The four repeated codes (GB x4, PH, IL, KR) are language/demonym pairs, not seed errors:
+British/English/Scottish/Welsh all resolve to the one country.
 """
 type Nationality @publicRead {
   # @publicRead, not @requiresRole. Both new types hang off Performer, which is already @publicRead:

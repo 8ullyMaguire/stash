@@ -41,6 +41,7 @@ TEST_ARGS = [
     "-tags", "integration",
     "./pkg/sqlite/",
     "-run", "TestPerformerAliasStudioAssociation|TestPerformerAliasOwnership|"
+            "TestPerformerNationalities|"
             "TestDestroyingAPerformerLeavesNoRowsBehind|TestEveryPerformerReferencingTableIsCovered",
     "-count=1",
 ]
@@ -157,6 +158,45 @@ def m6():
          "\t// MUTANT: studio_id removed from the model")
 
 
+# ---------------------------------------------------------------------------- M7: migration 127 seeds nothing
+@mutant("m7-completion-migration-is-empty")
+def m7():
+    """Migration 127's INSERT is removed, leaving the reference list at its original 107 rows.
+
+    Nothing else notices. The table is not empty, `allNationalities` returns a healthy list, and the
+    UI renders a populated dropdown -- it is just missing eight countries, and the only symptom is a
+    performer whose nationality cannot be recorded. `require.NotEmpty` on the list passes; only
+    asserting the eight names catches it.
+    """
+    f = REPO / "pkg/sqlite/migrations/127_nationality_reference_completion.up.sql"
+    if not f.exists():
+        sys.exit("ANCHOR MISSING: 127_nationality_reference_completion.up.sql does not exist")
+    s = f.read_text()
+    if "Armenian" not in s:
+        sys.exit("ANCHOR MISSING: 127 no longer seeds 'Armenian'")
+    f.write_text(s.replace("INSERT INTO `nationalities`", "-- MUTANT: the completion INSERT is removed\n-- INSERT INTO `nationalities`", 1))
+
+
+# ---------------------------------------------------------------------------- M8: the duplicate name
+@mutant("m8-croat-is-seeded-too")
+def m8():
+    """'Croat' is added alongside 'Croatian', giving HR two names.
+
+    The temptation migration 127's own comment argues against: someone probing the list for gaps
+    finds HR has no 'Croat' and adds it. Nothing errors -- SQLite has no uniqueness on `code` and
+    would not on `name` either without a further index -- so the list grows a second name for one
+    country and the exact ambiguity #1922 exists to remove comes back.
+    """
+    f = REPO / "pkg/sqlite/migrations/127_nationality_reference_completion.up.sql"
+    s = f.read_text()
+    if "Montenegrin" not in s:
+        sys.exit("ANCHOR MISSING: 127 no longer seeds 'Montenegrin'")
+    f.write_text(s.replace(
+        "UNION ALL SELECT 'Uzbek',",
+        "UNION ALL SELECT 'Croat', 'HR'  WHERE NOT EXISTS (SELECT 1 FROM `nationalities` WHERE `name` = 'Croat')\n"
+        "UNION ALL SELECT 'Uzbek',", 1))
+
+
 def run_tests(verbose=False):
     env = {**__import__("os").environ, **GO_ENV}
     args = ["go", "test"] + TEST_ARGS + (["-v"] if verbose else [])
@@ -193,9 +233,10 @@ if __name__ == "__main__":
     # makes the run names appear; their absence is a harness bug, not a pass.
     rc, out = run_tests(verbose=True)
     ran = [n for n in ("TestPerformerAliasStudioAssociation", "TestPerformerAliasOwnership",
+                       "TestPerformerNationalities",
                        "TestDestroyingAPerformerLeavesNoRowsBehind",
                        "TestEveryPerformerReferencingTableIsCovered") if ("=== RUN   " + n) in out]
-    if len(ran) != 4:
+    if len(ran) != 5:
         print("HARNESS BUG -- the baseline did not run the tests this gate is about.")
         print(f"  expected 4 named tests, saw {len(ran)}: {ran}")
         print("  (a mis-tokenised -run filter looks exactly like a pass)")
@@ -208,6 +249,7 @@ if __name__ == "__main__":
         with tempfile.TemporaryDirectory() as td:
             baks = {}
             for f in ("pkg/sqlite/stashbox_parity.go",
+                      "pkg/sqlite/migrations/127_nationality_reference_completion.up.sql",
                       "pkg/models/stashbox_parity.go",
                       "pkg/sqlite/migrations/126_alias_studio_association.up.sql",
                       "pkg/sqlite/migrations/125_stashbox_parity_performers_tags.up.sql"):

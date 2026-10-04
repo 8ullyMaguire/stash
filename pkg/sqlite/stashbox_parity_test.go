@@ -354,6 +354,16 @@ func TestScenePerformerAliases(t *testing.T) {
 // belongs to -- upstream's `"aliases": {"Jane": "Brazzers"}`, with "" meaning no studio. Migration
 // 125 built the first; this file is what proves the second exists, because "the column exists" and
 // "the association round-trips" are different claims and only the second is the feature.
+// nationalityNames pulls the names out of the reference list, for Contains/NotContains assertions.
+// A helper rather than an inline loop in each of three tests.
+func nationalityNames(all []*models.Nationality) []string {
+	names := make([]string, 0, len(all))
+	for _, n := range all {
+		names = append(names, n.Name)
+	}
+	return names
+}
+
 func TestPerformerAliasStudioAssociation(t *testing.T) {
 	runWithRollbackTxn(t, "an alias carries the studio it belongs to", func(t *testing.T, ctx context.Context) {
 		assert := assert.New(t)
@@ -651,8 +661,14 @@ func TestPerformerNationalities(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, all)
 
-		// Stash-Box carries nationalities that are not countries, so `code` is nullable. Asserted
-		// here because a future migration that made it NOT NULL would silently break those.
+		// A nationality is not always a country, so `code` is nullable. Asserted here because a
+		// future migration that made it NOT NULL would silently make Basque and Kurdish
+		// unselectable rather than erroring.
+		//
+		// (The older version of this comment said "Stash-Box carries nationalities that are not
+		// countries", which is not true of the Stash-Box schema -- it has country: String and
+		// ethnicity: EthnicityEnum and no nationalities field. See the corrected note on
+		// `type Nationality`.)
 		names := make([]string, 0, len(all))
 		for _, n := range all {
 			names = append(names, n.Name)
@@ -660,6 +676,87 @@ func TestPerformerNationalities(t *testing.T) {
 		}
 		assert.NotEmpty(t, names)
 	})
+
+	// migration 127. NationalitySelect is deliberately NOT Creatable and there is no create mutation,
+	// so this list is the ONLY way a nationality can enter the database -- which makes an incomplete
+	// list a permanent hole rather than a temporary annoyance, and makes "is it complete" a property
+	// that has to be asserted instead of assumed.
+	runWithRollbackTxn(t, "the reference list carries the demonyms migration 127 added", func(t *testing.T, ctx context.Context) {
+		all, err := db.Performer.AllNationalities(ctx)
+		require.NoError(t, err)
+
+		byName := make(map[string]*string, len(all))
+		for _, n := range all {
+			require.NotNil(t, n, "AllNationalities returned a nil entry")
+			byName[n.Name] = n.Code
+		}
+
+		// The eight migration 127 ships, with the codes it gives them.
+		for name, code := range map[string]string{
+			"Armenian": "AM", "Ghanaian": "GH", "Guyanese": "GY", "Kosovar": "XK",
+			"Montenegrin": "ME", "Sri Lankan": "LK", "Surinamese": "SR", "Uzbek": "UZ",
+		} {
+			got, ok := byName[name]
+			require.True(t, ok, "migration 127 was supposed to seed %q and did not", name)
+			require.NotNil(t, got, "%s has no code at all", name)
+			require.Equal(t, code, *got, "%s has the wrong code", name)
+		}
+	})
+
+	// 'Croat' is the entry migration 127 deliberately did NOT seed, because HR is already held by
+	// 'Croatian' and one country gets one demonym here. Asserting the ABSENCE is the point: the
+	// decision is recorded in a comment, and a comment cannot fail a build.
+	runWithRollbackTxn(t, "a country does not get two names for the same code", func(t *testing.T, ctx context.Context) {
+		all, err := db.Performer.AllNationalities(ctx)
+		require.NoError(t, err)
+
+		assert.NotContains(t, nationalityNames(all), "Croat", "HR is Croatian's code; 'Croat' duplicates it")
+		// And the two country NAMES my probe wrongly listed as demonyms are likewise absent --
+		// their demonyms are already present.
+		assert.NotContains(t, nationalityNames(all), "Iran", "'Iranian' already covers IR")
+		assert.NotContains(t, nationalityNames(all), "Singapore", "'Singaporean' already covers SG")
+		assert.Contains(t, nationalityNames(all), "Iranian")
+		assert.Contains(t, nationalityNames(all), "Singaporean")
+	})
+
+	// The duplicate-code question, answered by measurement rather than by reading the INSERT.
+	//
+	// GB x4, PH, IL and KR each appear more than once, and that is CORRECT: British, English,
+	// Scottish and Welsh all resolve to the same country, and Filipino/Philippine and
+	// Hebrew/Israeli are language-vs-demonym pairs. A test that forbade duplicate codes would be
+	// wrong, so this pins the actual invariant instead -- a code is never shared by two entries that
+	// are not the same country -- which is what makes a widened unique index on `code` a bug.
+	runWithRollbackTxn(t, "a repeated code is only ever the same country under another name",
+		func(t *testing.T, ctx context.Context) {
+			byCode := map[string][]string{}
+			all, err := db.Performer.AllNationalities(ctx)
+			require.NoError(t, err)
+			for _, n := range all {
+				if n.Code == nil {
+					continue
+				}
+				byCode[*n.Code] = append(byCode[*n.Code], n.Name)
+			}
+
+			// Named, so a NEW duplicate introduced later is not silently allowed by a
+			// catch-all rule that happens to be true today.
+			shared := map[string][]string{
+				"GB": {"British", "English", "Scottish", "Welsh"},
+				"PH": {"Filipino", "Philippine"},
+				"IL": {"Hebrew", "Israeli"},
+				"KR": {"Korean", "South Korean"},
+			}
+			for code, want := range shared {
+				require.ElementsMatch(t, want, byCode[code], "code %s should be shared by exactly these", code)
+			}
+
+			// Nothing else may share a code: an unnamed duplicate is a data error, whatever it is.
+			for code, names := range byCode {
+				if _, known := shared[code]; !known {
+					require.Len(t, names, 1, "code %s is shared by %v but was never expected to be", code, names)
+				}
+			}
+		})
 
 	runWithRollbackTxn(t, "destroying a performer removes their nationalities", func(t *testing.T, ctx context.Context) {
 		qb := db.Performer
