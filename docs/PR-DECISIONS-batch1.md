@@ -1262,3 +1262,58 @@ after a `tail`, and the file was truncated to 554 bytes, so the "before" set
 looked empty and the change looked like it introduced 14 findings. Re-run
 without the pipe, both sets are byte-identical. **A truncated baseline reads
 as a regression, and the truncation is invisible in the comparison.**
+
+---
+
+## PR #7269 — "Security: Fix critical RCE vulnerabilities (CVSS 9.8)" — DO NOT MERGE AS-IS
+
+`dbiesecke`, targeting `develop`. Assessed against `main` @ 238c85698. Decision also posted as a
+PR comment: https://github.com/stashapp/stash/pull/7269#issuecomment-5977794001
+
+Four claims. **Two are already fixed in this fork, and merging regresses them.**
+
+**#1 Zip-slip in `unzipFile` — already fixed, and the PR's version is weaker.**
+`internal/manager/task_import.go:155-161` already has the guard, added as **stash#7240**:
+`fn, err := fsutil.SafeJoin(t.BaseDir, f.Name)` with a comment naming the exact attack
+(`"../../../../arbitrary.txt"` cleans to a valid path outside BaseDir; `filepath.Join` cleans without
+containing). `pkg/fsutil/safepath.go:22-36` rejects three cases the PR's replacement does not:
+absolute paths (`:26`), Windows drive-relative/UNC forms that `filepath.IsAbs` misses on a Linux build
+(`:31`), and it cleans the base once so the prefix comparison is meaningful (`:36`).
+
+The PR swaps this for `filepath.Rel` + `strings.HasPrefix(rel, "..")`. That over-matches — any
+resolved path whose first component merely starts with `..` (a sibling dir named `..foo`) is refused —
+and silently allows an entry resolving exactly to `BaseDir`. Trading a documented, strictly stronger
+check for a looser one is a regression even though the intent matches.
+
+**#2 Unauthenticated mutation access — the claim does not describe this tree.**
+The PR says `allowUnauthenticated()` "only blocked external IPs when `!IsNewSystem() &&
+!HasCredentials()`". That is not this fork's function. `internal/api/authentication.go:19-22` is:
+
+    func allowUnauthenticated(r *http.Request) bool {
+        // #2715 - allow access to UI files
+        return strings.HasPrefix(r.URL.Path, loginEndpoint) || r.URL.Path == logoutEndpoint ||
+            r.URL.Path == "/css" || strings.HasPrefix(r.URL.Path, "/assets")
+    }
+
+No `IsNewSystem()`, no `HasCredentials()`, no IP check — replaced already as **stash#2715**. The diff
+deletes that and the whole `authenticateSignedRequest` block (8 deleted lines referencing `#2715` /
+`signedurl` / the signing-key lookup). Merging removes fork security work the PR's rationale never
+accounts for.
+
+**#3 plugin `exec:` allowlist and #4 `configureGeneral` — genuine gaps, worth taking.**
+`pkg/plugin/config.go` has no `validateExec` / allowlist / `allowedCommands` (grep returns nothing);
+`internal/api/resolver_mutation_configure.go` has no command or exec handling. So the OS-command-
+injection claim is **not** already mitigated here. That work is legitimate.
+
+**Why not merge anyway.** It arrives bundled with two regressions, and 685 deletions in
+`task_import.go` against a base where our zip-slip fix lives does not reconcile with a targeted fix on
+this fork.
+
+**To become mergeable:** split it. Take #3 and #4 as their own PR against `main` — they close real gaps
+with no existing code to regress. Drop #1 (regression on #7240) and #2 (regression on #2715, premised
+on code this fork does not have). Rebase onto `main`, not `develop`.
+
+Verified: main @ 238c85698 · `internal/manager/task_import.go:155-161` ·
+`pkg/fsutil/safepath.go:22-36` · `internal/api/authentication.go:19-22` ·
+`pkg/plugin/config.go` (no exec validation) · `internal/api/resolver_mutation_configure.go`
+(no command handling) · `gh pr diff 7269` (1690 lines, 6 deletions naming fork security markers).
