@@ -41,11 +41,13 @@ const (
 // migration that lands without the bump is applied but then reported as a
 // version mismatch on every subsequent open.
 // 121 = external_ids + external_sources (stash#1790).
+// 124 = studio_codes, scene_directors, scene_performer_aliases, entity_urls (stash#2359).
+// 125 = split-alias owner, nationalities, body marks, tag description/parent/stash_id (#2359).
 //
 // BUMPED IN THE SAME COMMIT AS THE MIGRATION, always. database.go refuses to open otherwise
 // and the symptom is "the table is simply absent", which reads as a migration that did not
 // run rather than as a version that was not bumped.
-var appSchemaVersion uint = 123
+var appSchemaVersion uint = 125
 
 //go:embed migrations/*.sql
 var migrationsBox embed.FS
