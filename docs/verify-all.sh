@@ -56,6 +56,10 @@ say "boot check"
 bash docs/boot-check.sh 2>&1 | tail -8
 check "${PIPESTATUS[0]}" "boot-check"
 
+say "alias studio-association mutation gate"
+python3 docs/mutate-alias-studio-association.py . 2>&1 | tail -8
+check "${PIPESTATUS[0]}" "mutate-alias-studio"
+
 say "ledger structure"
 python3 docs/ledger-check.py
 check "${PIPESTATUS[0]}" "ledger-check"

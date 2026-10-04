@@ -205,9 +205,12 @@ func (qb *PerformerStore) SetAliasOwner(ctx context.Context, ownership models.Pe
 		return err
 	}
 
+	// studio_id is in the column list, not left to default. The clear-then-insert below means a
+	// caller that omits StudioID would otherwise silently DROP a studio association on every re-save
+	// of the same alias -- the data loss is invisible because the alias itself is still there.
 	q := dialect.Insert(performerAliasOwnersTableName).
-		Cols("performer_id", "alias", "owner_performer_id").
-		Vals(goqu.Vals{ownership.PerformerID, ownership.Alias, ownership.OwnerPerformerID})
+		Cols("performer_id", "alias", "owner_performer_id", "studio_id").
+		Vals(goqu.Vals{ownership.PerformerID, ownership.Alias, ownership.OwnerPerformerID, ownership.StudioID})
 	if _, err := exec(ctx, q); err != nil {
 		return fmt.Errorf("setting performer %d alias owner: %w", ownership.PerformerID, err)
 	}

@@ -67,10 +67,20 @@ type Nationality struct {
 // alias, so every row that existed before migration 125 remains valid and no migration has to
 // invent an owner.
 type PerformerAliasOwnership struct {
-	ID               int    `db:"id"                 json:"id"`
-	PerformerID      int    `db:"performer_id"       json:"performer_id"`
-	Alias            string `db:"alias"              json:"alias"`
-	OwnerPerformerID *int   `db:"owner_performer_id" json:"owner_performer_id"`
+	ID          int    `db:"id"           json:"id"`
+	PerformerID int    `db:"performer_id" json:"performer_id"`
+	Alias       string `db:"alias"        json:"alias"`
+
+	// OwnerPerformerID is which PERFORMER an ambiguous alias string is attributed to (#2341): "JD"
+	// can belong to two different people, and this says which row a match is evidence for.
+	OwnerPerformerID *int `db:"owner_performer_id" json:"owner_performer_id"`
+
+	// StudioID is which STUDIO an alias is associated with (#422): upstream's
+	// `"aliases": {"Jane": "Brazzers"}`, where "" means no association. Orthogonal to the owner --
+	// the same alias at a different studio is a different match, and the same studio can carry
+	// different aliases of one performer. NULL is upstream's empty string, the common case, and
+	// means "no studio association recorded" rather than "no owner".
+	StudioID *int `db:"studio_id" json:"studio_id"`
 }
 
 // ScenePerformerAlias is a per-SCENE alias for a performer -- "Jane Doe as Jane" (#3825).

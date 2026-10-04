@@ -347,6 +347,165 @@ func TestScenePerformerAliases(t *testing.T) {
 // S5 — split aliases (#422, #2341)
 // ---------------------------------------------------------------------------
 
+// TestPerformerAliasStudioAssociation is the #422 half, and it is a SEPARATE test from
+// TestPerformerAliasOwnership rather than more cases in it, because they answer different questions.
+//
+// #2341 asks which PERFORMER an ambiguous alias is attributed to. #422 asks which STUDIO an alias
+// belongs to -- upstream's `"aliases": {"Jane": "Brazzers"}`, with "" meaning no studio. Migration
+// 125 built the first; this file is what proves the second exists, because "the column exists" and
+// "the association round-trips" are different claims and only the second is the feature.
+func TestPerformerAliasStudioAssociation(t *testing.T) {
+	runWithRollbackTxn(t, "an alias carries the studio it belongs to", func(t *testing.T, ctx context.Context) {
+		assert := assert.New(t)
+		qb := db.Performer
+
+		p := models.Performer{Name: "parity-alias-studio", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+		st := models.Studio{Name: "parity-alias-studio-brazzers"}
+		require.NoError(t, db.Studio.Create(ctx, &models.CreateStudioInput{Studio: &st}))
+
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: p.ID, Alias: "Jane", StudioID: &st.ID,
+		}))
+
+		got, err := qb.GetAliasOwners(ctx, p.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		require.NotNil(t, got[0].StudioID, "the studio association did not round-trip")
+		assert.Equal(st.ID, *got[0].StudioID)
+	})
+
+	// hyde231's second edge case, verbatim from the issue thread: "Two (or more) performers can have
+	// the same alias with a given studio". This is legal and must be recordable -- it is the reason
+	// the unique index is on (performer_id, alias) and NOT on (alias, studio_id).
+	runWithRollbackTxn(t, "two performers may share an alias at the SAME studio", func(t *testing.T, ctx context.Context) {
+		qb := db.Performer
+
+		a := models.Performer{Name: "parity-alias-shared-a", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &a}))
+		b := models.Performer{Name: "parity-alias-shared-b", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &b}))
+		st := models.Studio{Name: "parity-alias-shared-studio"}
+		require.NoError(t, db.Studio.Create(ctx, &models.CreateStudioInput{Studio: &st}))
+
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: a.ID, Alias: "Jayne", StudioID: &st.ID,
+		}))
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: b.ID, Alias: "Jayne", StudioID: &st.ID,
+		}))
+
+		require.Equal(t, "2", parityCount(ctx, t,
+			"SELECT count(*) FROM performer_alias_owners WHERE alias = 'Jayne' AND studio_id = ?", st.ID))
+	})
+
+	// hyde231's first edge case: "One performer can have two (or more) aliases for the same studio".
+	runWithRollbackTxn(t, "one performer may have several aliases at the same studio", func(t *testing.T, ctx context.Context) {
+		qb := db.Performer
+
+		p := models.Performer{Name: "parity-alias-multi", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+		st := models.Studio{Name: "parity-alias-multi-studio"}
+		require.NoError(t, db.Studio.Create(ctx, &models.CreateStudioInput{Studio: &st}))
+
+		for _, alias := range []string{"Jane", "Jayne", "Janey"} {
+			require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+				PerformerID: p.ID, Alias: alias, StudioID: &st.ID,
+			}))
+		}
+
+		require.Equal(t, "3", parityCount(ctx, t,
+			"SELECT count(*) FROM performer_alias_owners WHERE performer_id = ? AND studio_id = ?",
+			p.ID, st.ID))
+	})
+
+	// Upstream's `""` -- "not associated with any studio or website". This is the COMMON case, and it
+	// has to round-trip as NULL rather than being coerced to a sentinel: every row that existed
+	// before migration 126 has NULL, and if NULL meant something else the back-fill would be wrong.
+	runWithRollbackTxn(t, "no studio association is NULL and stays a valid alias", func(t *testing.T, ctx context.Context) {
+		assert := assert.New(t)
+		qb := db.Performer
+
+		p := models.Performer{Name: "parity-alias-nostudio", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: p.ID, Alias: "Unassociated",
+		}))
+
+		got, err := qb.GetAliasOwners(ctx, p.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Nil(got[0].StudioID, "an alias with no studio must read back as NULL, not 0")
+	})
+
+	// THE SILENT DATA LOSS THIS COLUMN IS EXPOSED TO.
+	//
+	// SetAliasOwner clears the (performer, alias) row and inserts a fresh one, so a writer that
+	// omitted studio_id from the INSERT would leave the alias present and the association GONE --
+	// and re-saving an alias for an unrelated reason would destroy it. The re-save below is exactly
+	// that: the same alias, re-saved while changing only the OWNER.
+	runWithRollbackTxn(t, "re-saving an alias preserves its studio association", func(t *testing.T, ctx context.Context) {
+		assert := assert.New(t)
+		qb := db.Performer
+
+		p := models.Performer{Name: "parity-alias-resave", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+		owner := models.Performer{Name: "parity-alias-resave-owner", Disambiguation: "2359"}
+		require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &owner}))
+		st := models.Studio{Name: "parity-alias-resave-studio"}
+		require.NoError(t, db.Studio.Create(ctx, &models.CreateStudioInput{Studio: &st}))
+
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: p.ID, Alias: "Jane", StudioID: &st.ID,
+		}))
+		// Now change ONLY the owner and re-save.
+		require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+			PerformerID: p.ID, Alias: "Jane", OwnerPerformerID: &owner.ID, StudioID: &st.ID,
+		}))
+
+		got, err := qb.GetAliasOwners(ctx, p.ID)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		require.NotNil(t, got[0].StudioID, "re-saving the alias dropped its studio association")
+		assert.Equal(st.ID, *got[0].StudioID)
+		assert.NotNil(t, got[0].OwnerPerformerID)
+		assert.Equal(owner.ID, *got[0].OwnerPerformerID)
+	})
+
+	// A deleted studio must NOT take the alias with it. ON DELETE SET NULL, matching 48_cleanup and
+	// 59_movie_urls: the alias is still a true alias of that performer, it has merely lost the studio
+	// it was associated with. CASCADE would delete a real alias because an unrelated row went away.
+	runWithRollbackTxn(t, "deleting the studio keeps the alias and clears only the association",
+		func(t *testing.T, ctx context.Context) {
+			assert := assert.New(t)
+			qb := db.Performer
+
+			p := models.Performer{Name: "parity-alias-studiogone", Disambiguation: "2359"}
+			require.NoError(t, qb.Create(ctx, &models.CreatePerformerInput{Performer: &p}))
+			st := models.Studio{Name: "parity-alias-studiogone-studio"}
+			require.NoError(t, db.Studio.Create(ctx, &models.CreateStudioInput{Studio: &st}))
+
+			require.NoError(t, qb.SetAliasOwner(ctx, models.PerformerAliasOwnership{
+				PerformerID: p.ID, Alias: "Jane", StudioID: &st.ID,
+			}))
+			require.NoError(t, db.Studio.Destroy(ctx, st.ID))
+
+			got, err := qb.GetAliasOwners(ctx, p.ID)
+			require.NoError(t, err)
+			require.Len(t, got, 1, "the alias row was deleted along with the studio")
+			assert.Equal("Jane", got[0].Alias)
+			// `assert.Nil` on a *int would also pass for a non-nil pointer to 0, so compare the
+			// POINTER: the property is "no association recorded".
+			assert.Nil(got[0].StudioID, "studio_id should be NULL after SET NULL, not left dangling")
+			// And the raw column, because the Go field could read nil while the column holds 0 --
+			// a different bug wearing the same symptom.
+			assert.Equal("NULL", parityScalar(ctx, t,
+				"SELECT COALESCE(studio_id,'NULL') FROM performer_alias_owners WHERE alias = 'Jane'"))
+
+		})
+}
+
 func TestPerformerAliasOwnership(t *testing.T) {
 	runWithRollbackTxn(t, "an alias can be attributed to one performer", func(t *testing.T, ctx context.Context) {
 		assert := assert.New(t)
