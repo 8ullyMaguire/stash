@@ -46,6 +46,15 @@ type Mover struct {
 	moved          map[string]string
 	foldersCreated []string
 
+	// #5631 -- opt-in pruning of directories this move leaves empty. Off by default; see
+	// move_prune.go for why "destructive and irreversible" argues for a flag rather than a default.
+	pruneEmptyDirs bool
+
+	// emptiedDirs records the parent of every file that has moved, so the post-commit hook knows
+	// which directories to check. Recorded during the move, acted on only after commit -- see
+	// noteEmptiedDir for why pruning mid-move would break rollback.
+	emptiedDirs map[string]struct{}
+
 	// needed for creating folder hierarchy when moving zip file entries
 	rootPaths []string
 }
@@ -147,6 +156,10 @@ func (m *Mover) moveFile(oldPath, newPath string) error {
 		return fmt.Errorf("renaming file %s to %s: %w", oldPath, newPath, err)
 	}
 
+	if m.pruneEmptyDirs {
+		m.noteEmptiedDir(oldPath)
+	}
+
 	if m.moved == nil {
 		m.moved = make(map[string]string)
 	}
@@ -167,6 +180,10 @@ func (m *Mover) RegisterHooks(ctx context.Context) {
 }
 
 func (m *Mover) commit() {
+	// #5631 - prune AFTER the transaction has committed. Doing it in commit() rather than in
+	// rollback() matters: rollback renames files back and needs the directories to still exist.
+	m.pruneEmptiedDirs()
+
 	m.moved = nil
 	m.foldersCreated = nil
 }

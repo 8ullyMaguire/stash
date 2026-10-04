@@ -21,6 +21,11 @@ func (r *mutationResolver) MoveFiles(ctx context.Context, input MoveFilesInput) 
 		fileStore := r.repository.File
 		folderStore := r.repository.Folder
 		mover := file.NewMover(fileStore, folderStore, manager.GetInstance().Config.GetStashPaths().Paths())
+		// #5631 - set BEFORE RegisterHooks, because the post-commit hook this installs is what
+		// actually does the pruning and it reads the flag when it runs.
+		if input.PruneEmptyFolders != nil {
+			mover.SetPruneEmptyDirs(*input.PruneEmptyFolders)
+		}
 		mover.RegisterHooks(ctx)
 
 		var (

@@ -192,6 +192,16 @@ input MoveFilesInput {
 
   "valid only for single file id. If empty, existing basename is used"
   destination_basename: String
+  """
+  #5631 - remove source directories this move leaves empty. OPTIONAL AND FALSE BY DEFAULT.
+  Pruning happens after the transaction commits, never during, so a rolled-back move puts its files
+  back into directories that still exist. Only directories inside the library are considered, a
+  library root is never removed, and the walk stops at the first non-empty ancestor.
+
+  Off by default because it is irreversible: a directory emptied because its last file moved is not
+  distinguishable, on disk, from one a user emptied by hand and expected to keep.
+  """
+  prune_empty_folders: Boolean
 }
 
 input SetFingerprintsInput {
