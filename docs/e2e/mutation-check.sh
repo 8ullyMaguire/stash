@@ -54,11 +54,38 @@ port: $PORT
 ui_location: $MUT/ui/v2.5/build
 nobrowser: true
 EOF
+
+  # REFUSE TO START IF THE PORT IS ALREADY HELD. This is not defensive tidiness -- it is the fix for
+  # a false "SURVIVED" on all three mutants, observed 2026-10-04.
+  #
+  # What happened: an earlier run left a server on $PORT. Each mutant then built a fresh binary,
+  # launched it, and that binary logged `bind: 127.0.0.1:$PORT: address already in use` and EXITED.
+  # The readiness loop above greps for 'is listening on' in a log file the new process truncates on
+  # open -- but the STALE process had already written that line in a previous run and `pkill` between
+  # mutants only killed processes matching $BUILD/stash, which the other run's binary also matched,
+  # so the port was never actually released before the next launch. The suite then ran against the
+  # OLD, UNMUTATED binary and reported all three mutants SURVIVED -- a 0/3 kill rate that looked
+  # exactly like three holes in the suite and was in fact one wrong path in the harness.
+  #
+  # So: check the port is free BEFORE launching, and confirm the log has no bind error AFTER. A
+  # readiness check that can be satisfied by another process's log line is not a readiness check.
+  if command -v ss >/dev/null 2>&1 && ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
+    echo "    HARNESS BUG -- port $PORT is already in use; a stale server would make every mutant"
+    echo "    run against the unmutated binary. Free it first (pkill -f 'stash -c')."
+    return 1
+  fi
+
+  : > "$BUILD/log"
   # setsid, because this script's EXIT trap would otherwise be inherited by the server and run when
   # the server exits -- deleting the build directory out from under the suite.
   ( setsid "$BUILD/stash" -c "$BUILD/c.yml" > "$BUILD/log" 2>&1 < /dev/null & )
   local i
   for i in $(seq 1 60); do
+    if grep -q 'address already in use' "$BUILD/log" 2>/dev/null; then
+      echo "    HARNESS BUG -- the new server could not bind $PORT:"
+      grep 'address already in use' "$BUILD/log" | head -2 | sed 's/^/      /'
+      return 1
+    fi
     grep -q 'is listening on' "$BUILD/log" 2>/dev/null && return 0
     sleep 1
   done
