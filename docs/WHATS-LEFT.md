@@ -29,7 +29,7 @@ Measured 2026-10-04 at `12e4f1db1` by `docs/goal-check.py`,
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
 | C7 suites | PASS | unit 1801 / 0, integration 806 / 0, 61 packages |
-| C8 backlog-17 ledger | PASS | 17 issues = 15 done, 0 open, 2 skipped (#2149, #2359) |
+| C8 backlog-17 ledger | PASS | 17 issues = 16 done, 0 open, 1 skipped (#2149). **#2359 moved from skipped to done** in `8808699bb`: its old "satisfied by configuration" disposition was right about the meta and wrong about the work — configuring a StashDB instance is push from a StashDB this build scrapes, and parity means Stash can *represent* what Stash-Box represents, which configuration cannot do |
 
 Supporting gates, all passing:
 

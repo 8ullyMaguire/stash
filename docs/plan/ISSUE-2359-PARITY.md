@@ -2,7 +2,7 @@
 
 **Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## Status: schema, store, GraphQL, destroy paths and UI done and proven. Ledgers remain
+## Status: COMPLETE. Schema, store, GraphQL, destroy paths, UI and ledgers all done and proven.
 
 Last commit `dd391abc3`. Nine of #2359's seventeen were already built upstream; six are now built
 here (#1351 excluded, see below).
@@ -132,7 +132,7 @@ Separator is comma-**and-space**, because that is what this app's UI and importe
 | ~~L3~~ | ~~**UI** — codes on studio bulk + edit, nationalities on performer edit and bulk, body marks / directors ~~ | | | | | ✅ |
 | ~~L4~~ | ~~**model fields**~~ — **DONE** `092a279c8`: `RelatedStrings` on Studio.Codes / Scene.Directors / Tattoo+PiercingLocations, plus `RelatedNationalities` | | | | | ✅ |
 | ~~L5~~ | ~~**destroy paths**~~ — **DONE**, and the premise was WRONG. Measured: all **12** tables carrying `performer_id` declare a cascading FK, and `Database.open` appends `&_fk=true`, so no cleanup code is needed. Two mutations prove the assertion bites | | | | | ✅ |
-| L6 | **ledgers** — own roster rows in `docs/UPSTREAM-ISSUES.md` with verdict + proving test; `docs/ISSUES.md` #2359 `skipped`→`done`; one `docs/closed-issues.md` row per sub-feature | | | | | | ⬜ |
+| ~~L6~~ | ~~**ledgers**~~ — **DONE.** `docs/ISSUES.md` #2359 `skipped`→`done`; `docs/UPSTREAM-ISSUES.md` #2359 `deferred`→`closed` and #422 `not-planned`→`closed`; one `docs/closed-issues.md` row each for #422 and #2359; header tallies re-counted | | | | | ✅ |
 | L7 | **full re-verification** — `verify-all.sh` six gates, Playwright 71/0, mutation 3/3, fresh clone | | | | | | ⬜ |
 
 ### Order of work
@@ -290,3 +290,38 @@ m5 exists because "the control rendered" and "the control is legible" are differ
 full of `1`, `2`, `3` renders, opens, and passes a length check while being unusable.
 
 Final e2e: **82 passed, 0 failed**; mutation check **5/5 killed**.
+
+
+## L6: the ledgers, and the rule that made the verdict `closed` and not `built`
+
+`docs/check-issue-ledgers.py` is stricter than it looks, and two of its rules bit:
+
+**Only `closed` counts as roster-closed.** `built` and `done` are separate verdicts, and the
+cross-file check is `verdict == "closed"` on one side against a `| stash#N |` row on the other. So
+flipping #2359 and #422 to `built` -- which is what the *other* seven built rows use -- made the two
+ledgers disagree about two issues that are, in fact, closed. The header tally counts `closed + done`,
+so a `built` row is invisible to it too. Both went to `closed`.
+
+**Editing the text is not the same as editing the row.** Both roster rows were edited with
+`row.rsplit("|", 2)[0] + " closed|"`, which keeps the pipe that *precedes* the verdict -- so the row
+ended `... 0 survived  closed|` and the parser read the verdict as the entire preceding sentence. The
+shape that parses is `... content | closed |`. Worth stating because the failure is invisible: the
+row still looks like a table row and the ledger checker reports a plausible "roster does not mark it
+closed" rather than a parse error.
+
+**#2359's old disposition was right about the meta and wrong about the work.** It read "satisfied by
+configuration -- owner runs a Stash-Box instance" and "point the app at that StashDB". Configuring a
+StashDB instance is *push* from a StashDB this build scrapes. Parity means Stash can *represent* what
+Stash-Box represents, and configuration cannot add a column.
+
+**#422's old verdict was about process, not about the feature.** It was `not-planned` because the work
+had no spec and no branch, and it said so: "if it is wanted, it belongs on a feature branch with its
+own spec". It was wanted; #2359 gave it both. Flipping the verdict without recording that would have
+been a lie about the row's own history, so the row now explains the flip rather than hiding it.
+
+**The Stash-Box sub-issues (#2607, #3051, #1922, #2341) get NO roster rows, deliberately.** The roster
+is generated from `stashapp/stash` via the GitHub API and must hold 675 rows. #2607 and friends are
+**Stash-Box** issues, not Stash issues — `grep '^| 2607 |' docs/UPSTREAM-ISSUES.md` returns nothing
+and must keep returning nothing. Only #422 is an upstream Stash issue. Their verdicts live in the
+`docs/ISSUE-2359-PARITY.md` table and in the closed-issues rows, which is the right home for work whose
+issue tracker is a different repository.
