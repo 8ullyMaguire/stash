@@ -6,7 +6,7 @@ believing anything here — the numbers move, and a number copied into a summary
 not evidence.
 
 Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Remote `origin` (GitHub). HEAD `2e937d29b`.
+Remote `origin` (GitHub). HEAD `8323b44d4`.
 
 **Host note:** this checkout lives on **thinkcentre** (M720q), at
 `~/work/lane-2/stash`. **The previous version of this file said the repo lived on
@@ -41,7 +41,7 @@ server held any port, and no build failure was logged. Cause unestablished. The 
 diagnosis if it recurs.
 
 
-Measured 2026-10-04 at `2e937d29b` by `docs/goal-check.py`,
+Measured 2026-10-04 at `8323b44d4` by `docs/goal-check.py`,
 `docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
 `docs/verify-all.sh`.
 

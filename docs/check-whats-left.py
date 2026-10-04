@@ -149,24 +149,59 @@ def main() -> int:
         else:
             problems.append("could not read the C8 done/skipped counts from this file")
 
-    # --- 5. the HEAD hash the file states ------------------------------------
+    # --- 5. no ledger changed AFTER the measurement this file states ---------
     #
-    # A stale commit hash is the cheapest possible drift to detect and the most misleading to
-    # read: it dates the measurement without invalidating it, so the numbers below still look
-    # current while every line refers to a tree that no longer exists.
+    # The first version of this check compared the stated hash to `git rev-parse HEAD`, and it was
+    # WRONG in the worst way for a check: it can never pass. Any commit touching this file --
+    # INCLUDING the one that updates the hash -- moves HEAD past it, so it failed on the commit that
+    # introduced it and again on the commit that corrected the hash. The only available response was
+    # to keep editing a number, which means a gate that is silenced by editing the file it guards.
+    #
+    # The property that actually matters is not "the hash equals HEAD" but "the measurement is at
+    # least as new as every fact this file reports": no ledger file may have changed after the commit
+    # this file was last measured against.
+    #
+    #     changed = git log -1 --format=%H -- docs/closed-issues.md
+    #     last    = git log -1 --format=%H -- docs/WHATS-LEFT.md
+    #     git merge-base --is-ancestor $changed $last    # non-zero => ledger moved after measuring
+    #
+    # That is drift, it is fixable by re-measuring, and a commit touching only WHATS-LEFT.md does NOT
+    # trip it -- because nothing the file reports has moved.
     head = re.search(r"HEAD\s+`([0-9a-f]{7,40})`", text)
     if not head:
         problems.append("this file states no HEAD commit hash, so nothing dates its own measurement")
     else:
-        actual = subprocess.run(
-            ["git", "-C", str(REPO), "rev-parse", "--short=9", "HEAD"],
+        stated = head.group(1)
+        # The commit that last touched this file is what its numbers were measured against.
+        last_touch = subprocess.run(
+            ["git", "-C", str(REPO), "log", "-1", "--format=%H", "--", str(FILE)],
             capture_output=True, text=True, timeout=60,
         ).stdout.strip()
-        stated = head.group(1)
-        if not actual.startswith(stated[:7]) and not stated.startswith(actual[:7]):
+        if not last_touch:
             problems.append(
-                f"this file says HEAD {stated} but the repository is at {actual} -- "
-                "re-measure, or the numbers below describe a tree that no longer exists")
+                "git cannot report the last commit touching this file, so nothing dates the "
+                "measurement (is this a git checkout?)")
+        else:
+            for label, path in (("docs/ISSUES.md", ISSUES),
+                                ("docs/UPSTREAM-ISSUES.md", ROSTER),
+                                ("docs/closed-issues.md", LEDGER),
+                                ("docs/requirements.csv", REQS)):
+                changed = subprocess.run(
+                    ["git", "-C", str(REPO), "log", "-1", "--format=%H", "--", str(path)],
+                    capture_output=True, text=True, timeout=60,
+                ).stdout.strip()
+                if not changed:
+                    continue
+                ancestor = subprocess.run(
+                    ["git", "-C", str(REPO), "merge-base", "--is-ancestor", changed, last_touch],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if ancestor.returncode != 0:
+                    problems.append(
+                        f"{label} changed AFTER this file's stated measurement "
+                        f"(HEAD {stated[:9]}); re-measure, or the numbers below predate a "
+                        "ledger edit")
+
 
     # --- 6. the supporting-gate row counts ------------------------------------
     #
