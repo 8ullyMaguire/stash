@@ -6,7 +6,7 @@ believing anything here — the numbers move, and a number copied into a summary
 not evidence.
 
 Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Remote `origin` (GitHub). HEAD `47b85d555`.
+Remote `origin` (GitHub). HEAD `2e937d29b`.
 
 **Host note:** this checkout lives on **thinkcentre** (M720q), at
 `~/work/lane-2/stash`. **The previous version of this file said the repo lived on
@@ -16,7 +16,32 @@ since at least 2026-10-02. A second checkout of the same fork sits at
 
 ## Status: nothing outstanding
 
-Measured 2026-10-04 at `47b85d555` by `docs/goal-check.py`,
+**Two gate defects were found and fixed while confirming this, and both are the same shape -- a
+check that reports a verdict without the evidence needed to act on it.** Recorded here because
+"nothing outstanding" is exactly the claim that stops someone looking:
+
+- **C7 ran ONE of THREE integration packages.** `goal-check.py` hardcoded
+  `go test -tags integration ./pkg/sqlite/` while `pkg/sqlite`, `internal/autotag` and
+  `internal/manager` all carry `//go:build integration` tests. It reported "1 package green" while
+  two packages went unexecuted. They were green by hand, but a clause that passes because it did
+  not look is not a check. Now discovered by build tag, and an empty discovery result is a FAIL
+  rather than a vacuous pass.
+- **`verify-all.sh`'s `tail -15` buried the diagnosis.** The integration gate reported
+  `FAIL internal/api` naming no failing test, and the fifteen visible lines were wizard spam reading
+  `error="database is locked"` -- which is a fake store's deliberate error string
+  (`errStoreUnreadable`), not a real lock. Both suites now extract failures FIRST and `tee` the full
+  log.
+- **This file's own HEAD hash and gate row counts had drifted** (four commits behind; 46 log rows
+  against a ledger holding 48) and no gate could see it, because neither is a clause. `check-whats-left.py`
+  now checks both, and it fired on its own commit the moment HEAD moved -- which is the point.
+
+**One open observation, deliberately not claimed as fixed:** that `internal/api` failure did not
+reproduce in 9 subsequent attempts (3 alone, 5 full-suite, 1 under a concurrent build), no stale
+server held any port, and no build failure was logged. Cause unestablished. The harness now shows the
+diagnosis if it recurs.
+
+
+Measured 2026-10-04 at `2e937d29b` by `docs/goal-check.py`,
 `docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
 `docs/verify-all.sh`.
 
