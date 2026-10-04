@@ -287,6 +287,19 @@ type VideoFile struct {
 	FrameRate  float64 `json:"frame_rate"`
 	BitRate    int64   `json:"bitrate"`
 
+	// #4233 - the rotation sidecar ffprobe reports, in DEGREES. 0 means no rotation.
+	//
+	// Stored rather than folded into Width/Height because those are the ENCODED dimensions and are
+	// used for more than orientation: the transcode scale filter, sprite sheet geometry and the
+	// "does this need a proxy" decision all read them. A 1920x1080 phone video with a 90-degree
+	// sidecar DISPLAYS as 1080x1920, and swapping the two on the way in would make all three of
+	// those compute against a size the file does not have.
+	//
+	// Rotation is not normalised to 0..270: ffprobe reports counter-clockwise as negative, and
+	// preserving the raw value means a rescan that sees the same sidecar agrees with the stored one.
+	// Consumers that need an angle should use VideoFile.DisplayOrientation, which handles the sign.
+	Rotation int `json:"rotation"`
+
 	Interactive      bool `json:"interactive"`
 	InteractiveSpeed *int `json:"interactive_speed"`
 
@@ -302,6 +315,57 @@ type VideoFile struct {
 	// nil means "no window": the scene uses the whole file.
 	StartTime *float64 `json:"start_time,omitempty"`
 	EndTime   *float64 `json:"end_time,omitempty"`
+}
+
+// DisplayOrientation reports whether the video should be laid out as portrait, taking the rotation
+// sidecar into account. stash#4233.
+//
+// The stored Width/Height are the ENCODED dimensions. ffprobe reports the display dimensions
+// separately when it can, and for a 1920x1080 frame carrying a 90-degree rotation the encoded pair is
+// the opposite way round from what a viewer sees. Comparing the encoded pair unconditionally -- which
+// is what the UI did, at ScenePlayer.tsx:604 and :997 -- therefore classifies a portrait phone video
+// as landscape, and the player's own layout then disagrees with the video inside it.
+//
+// So this is DisplayHeight() > DisplayWidth(), and NOT the encoded Height > Width: for a quarter turn
+// those two are the same comparison spelled differently, and only one of them consults the rotation.
+//
+// Missing or zero dimensions return false. An unknown size is not evidence of portrait, and guessing
+// here would flip the layout of every scene whose metadata failed to scan.
+func (v *VideoFile) DisplayOrientation() bool {
+	if v == nil || v.Width <= 0 || v.Height <= 0 {
+		return false
+	}
+	return v.DisplayHeight() > v.DisplayWidth()
+}
+
+// DisplayWidth and DisplayHeight are the dimensions a viewer actually sees, i.e. the encoded pair
+// with a quarter-turn rotation applied. stash#4233 -- the pair to use for anything user-facing
+// (orientation, aspect ratio, layout); the stored Width/Height stay correct for anything that has to
+// describe the file itself (transcode filters, sprite geometry).
+//
+// Both return 0 when the size is unknown, matching DisplayOrientation rather than transposing a zero
+// into the other axis. A partial row (width known, height not) would otherwise report a plausible-
+// looking non-zero dimension, and an aspect-ratio calculation would divide by it.
+func (v *VideoFile) DisplayWidth() int {
+	if v == nil || v.Width <= 0 || v.Height <= 0 {
+		return 0
+	}
+	rotation := ((v.Rotation % 360) + 360) % 360
+	if rotation == 90 || rotation == 270 {
+		return v.Height
+	}
+	return v.Width
+}
+
+func (v *VideoFile) DisplayHeight() int {
+	if v == nil || v.Width <= 0 || v.Height <= 0 {
+		return 0
+	}
+	rotation := ((v.Rotation % 360) + 360) % 360
+	if rotation == 90 || rotation == 270 {
+		return v.Width
+	}
+	return v.Height
 }
 
 func (f VideoFile) GetWidth() int {

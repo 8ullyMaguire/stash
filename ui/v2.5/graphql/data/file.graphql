@@ -25,6 +25,8 @@ fragment VideoFileData on VideoFile {
   height
   frame_rate
   bit_rate
+  # #4233 - rotation sidecar in degrees; see the note on the other fragment.
+  rotation
   fingerprints {
     type
     value
@@ -90,6 +92,9 @@ fragment VisualFileData on VisualFile {
     height
     frame_rate
     bit_rate
+    # #4233 - rotation sidecar in degrees. width/height stay the ENCODED dimensions, so anything
+    # deciding orientation has to account for this. See useDisplayDimensions.
+    rotation
     fingerprints {
       type
       value

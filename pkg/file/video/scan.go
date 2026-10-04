@@ -44,15 +44,18 @@ func (d *Decorator) Decorate(ctx context.Context, fs models.FS, f models.File) (
 	}
 
 	return &models.VideoFile{
-		BaseFile:    base,
-		Format:      string(container),
-		VideoCodec:  videoFile.VideoCodec,
-		AudioCodec:  videoFile.AudioCodec,
-		Width:       videoFile.Width,
-		Height:      videoFile.Height,
-		Duration:    videoFile.FileDuration,
-		FrameRate:   videoFile.FrameRate,
-		BitRate:     videoFile.Bitrate,
+		BaseFile:   base,
+		Format:     string(container),
+		VideoCodec: videoFile.VideoCodec,
+		AudioCodec: videoFile.AudioCodec,
+		Width:      videoFile.Width,
+		Height:     videoFile.Height,
+		Duration:   videoFile.FileDuration,
+		FrameRate:  videoFile.FrameRate,
+		BitRate:    videoFile.Bitrate,
+		// #4233 - the rotation sidecar, carried through verbatim. It is 0 for every file without
+		// one, which is the overwhelming majority, so this changes nothing for them.
+		Rotation:    int(videoFile.Rotation),
 		Interactive: interactive,
 	}, nil
 }

@@ -89,6 +89,12 @@ type VideoFile struct {
 	FrameRate  float64 `json:"frame_rate,omitempty"`
 	BitRate    int64   `json:"bitrate,omitempty"`
 
+	// #4233 - carried through the JSON export so a metadata-only export/import does not silently
+	// flatten a rotated video back to its encoded orientation. omitempty and not notomitempty: a file
+	// with no rotation must keep writing nothing rather than an explicit 0, so the JSON stays
+	// byte-identical to what earlier versions produced for the overwhelming majority of files.
+	Rotation int `json:"rotation,omitempty"`
+
 	Interactive      bool `json:"interactive,omitempty"`
 	InteractiveSpeed *int `json:"interactive_speed,omitempty"`
 }

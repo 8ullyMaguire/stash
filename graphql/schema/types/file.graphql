@@ -97,6 +97,14 @@ type VideoFile implements BaseFile @requiresRole(role: "subscriber") {
   audio_codec: String
   frame_rate: Float
   bit_rate: Int!
+  """
+  #4233 - the rotation sidecar in DEGREES, as ffprobe reports it. 0 means no rotation; a negative
+  value is counter-clockwise. `width` and `height` remain the ENCODED dimensions and are correct as
+  such (the transcode scale filter and sprite geometry both depend on that), so a client deciding
+  orientation must account for this rather than comparing width against height directly. A 1920x1080
+  video with rotation 90 displays as 1080x1920.
+  """
+  rotation: Int!
 
   """
   #3530 - the time THIS SCENE starts within this file, in seconds. null means the scene

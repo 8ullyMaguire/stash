@@ -1,0 +1,52 @@
+-- stash#4233 -- video rotation, so a portrait video recorded landscape is treated as portrait.
+--
+-- WHAT WAS ALREADY TRUE, AND WHY THAT IS NOT THE SAME AS FIXED
+--
+-- Rotation IS parsed. pkg/ffmpeg/ffprobe.go:112 declares `Rotation int64`, :226-228 adds
+-- `-show_entries stream_side_data=rotation` when ffprobe is new enough, and :356 assigns it out of
+-- the stream side data. The number is therefore known at scan time and then thrown away: it is not a
+-- field on models.VideoFile (pkg/models/model_file.go:279), so it is never written, never read back,
+-- and never reaches the UI. grep for "rotation" across graphql/schema/types/*.graphql returns nothing.
+--
+-- THE BUG, STATED PRECISELY
+--
+-- The UI decides orientation by comparing stored width against stored height
+-- (ScenePlayer.tsx:604 `file.width > file.height`, :997 `file.height > file.width`). Those are the
+-- ENCODED dimensions. A phone recording held in portrait writes 1920x1080 plus a 90-degree rotation
+-- sidecar, and the player lays it out as a 16:9 landscape video inside a portrait viewport: letterboxed,
+-- with the UI's own portrait layout (isPortrait at :997) disagreeing with what the user sees. Rotating
+-- a 1920x1080 file by 90 degrees gives a DISPLAY of 1080x1920.
+--
+-- WHY A COLUMN AND NOT A FIXED-UP width/height
+--
+-- The tempting fix is to swap width and height at scan time when rotation is 90 or 270. That is wrong,
+-- and wrong in a way that loses information permanently:
+--
+--   - width/height are used for more than orientation. They feed the transcode scale filter, the
+--     sprite sheet dimensions, and the "does this need a proxy" decision. Swapping them makes every
+--     one of those compute against a size the file does not have.
+--   - rotation is metadata that ffprobe can re-report on a rescan, and a user can strip it. Storing
+--     the authoritative display size means a scan that loses the sidecar silently CHANGES the
+--     dimensions of a file whose bytes never changed.
+--
+-- So the raw fact is stored and the derived display size is computed where it is consumed. Nothing
+-- existing changes value: every pre-existing row gets 0, and 0 means "not rotated", so
+-- width/height/rotation all behave exactly as before until a rescan repopulates the column.
+--
+-- WHY `ADD COLUMN` AND NOT A TABLE REBUILD
+--
+-- 122_scene_time_range.up.sql rebuilds scenes_files because it needed new INDEXES. This needs neither
+-- an index nor a CHECK -- rotation is any int, including the negative values ffprobe reports for
+-- counter-clockwise -- and the bundled SQLite (go-sqlite3 v1.14.22 -> 3.45.1) supports
+-- `ALTER TABLE ... ADD COLUMN`. Verified in 122: `ADD COLUMN ... CHECK` works on this driver, and the
+-- `ALTER TABLE ... ADD CONSTRAINT` form does not. Nothing here needs either.
+--
+-- 0 IS THE RIGHT DEFAULT, NOT NULL. "We do not know" and "zero degrees" produce the same rendering,
+-- so NULL would add a second "unknown" state that every reader has to handle for no benefit, and it
+-- would make the NOT NULL constraint below unavailable.
+--
+-- The appSchemaVersion bump to 123 must land in the SAME commit as this file: the runner refuses to
+-- open a database whose schema is ahead of the binary, and the symptom is "the column is simply
+-- absent", which reads as a migration that did not run rather than a version that was not bumped.
+
+ALTER TABLE `video_files` ADD COLUMN `rotation` integer NOT NULL DEFAULT 0;

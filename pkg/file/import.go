@@ -74,6 +74,7 @@ func (i *Importer) fileJSONToFile(ctx context.Context, fileJSON jsonschema.DirEn
 			AudioCodec:       ff.AudioCodec,
 			FrameRate:        ff.FrameRate,
 			BitRate:          ff.BitRate,
+			Rotation:         ff.Rotation, // #4233
 			Interactive:      ff.Interactive,
 			InteractiveSpeed: ff.InteractiveSpeed,
 		}, nil

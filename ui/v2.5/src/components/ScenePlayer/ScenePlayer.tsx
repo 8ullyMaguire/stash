@@ -49,6 +49,10 @@ import airplay from "@silvermine/videojs-airplay";
 import chromecast from "@silvermine/videojs-chromecast";
 import abLoopPlugin from "videojs-abloop";
 import ScreenUtils from "src/utils/screen";
+import {
+  isLandscapeVideo,
+  isPortraitVideo,
+} from "src/utils/visualFile";
 import { PatchComponent } from "src/patch";
 
 // register videojs plugins
@@ -601,7 +605,10 @@ export const ScenePlayer: React.FC<IScenePlayerProps> = PatchComponent(
       interactiveClient.pause();
 
       const isSafari = UAParser().browser.name?.includes("Safari");
-      const isLandscape = file.height && file.width && file.width > file.height;
+      // #4233 - rotation-aware. A 1920x1080 phone video with a 90-degree sidecar IS landscape to
+      // ffprobe and PORTRAIT to the viewer, and locking fullscreen to the wrong one is the visible
+      // symptom of getting this wrong.
+      const isLandscape = isLandscapeVideo(file);
       const mobileUiOptions = {
         fullscreen: {
           enterOnRotate: true,
@@ -994,7 +1001,8 @@ export const ScenePlayer: React.FC<IScenePlayerProps> = PatchComponent(
       }
     }
 
-    const isPortrait = file?.height && file?.width && file.height > file.width;
+    // #4233 - rotation-aware; see isPortraitVideo for why this is not just a height > width compare.
+    const isPortrait = isPortraitVideo(file);
 
     return (
       <div
