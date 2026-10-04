@@ -103,10 +103,55 @@ def m3_routing_dead():
     print(f"  mutated ui/v2.5/src/App.tsx ({len(routes)} routes collapsed onto the index)")
 
 
+def m4_parity_ui_unwired():
+    """The #2359 parity field renders with no data behind it.
+
+    The NationalitySelect is removed from the performer edit form while leaving everything else --
+    the API, the resolver, the schema, the seed -- exactly as it was. So `allNationalities` still
+    answers, the seed still writes 107 nationalities, and every pre-existing test still passes.
+
+    This is the specific hole section 10 of the suite exists to close: without the component, the
+    #2359 work is invisible in the product even though every layer below it is correct. Nothing in
+    sections 1-9 renders a performer edit form, so nothing else would notice.
+    """
+    f = UI / "components" / "Performers" / "PerformerDetails" / "PerformerEditPanel.tsx"
+    if not f.exists():
+        fail(f"{f} does not exist")
+    edit(
+        f,
+        "        {renderNationalityField()}\n",
+        "",
+    )
+
+
+def m5_nationality_ids_wrong():
+    """The nationality select offers ids where names should be.
+
+    A select whose value and options are the raw ids renders, opens, and passes a length check --
+    while being unusable, because a user sees "1", "2", "3" and cannot tell Basque from Kurdish.
+
+    This mutant exists because "the control rendered" and "the control is legible" are different
+    claims, and only the second is worth making. It also guards the code path where an id/name mixup
+    would otherwise be invisible: the API half of section 10 passes either way, since the ids come
+    from the same reference rows.
+    """
+    f = UI / "components" / "Shared" / "NationalitySelect.tsx"
+    if not f.exists():
+        fail(f"{f} does not exist")
+    edit(
+        f,
+        "      label: n.code ? `${n.name} (${n.code})` : n.name,",
+        "      label: n.id,",
+    )
+
+
 MUTANTS = {
     "m1": m1_resolver_panic,
     "m2": m2_stats_throws,
     "m3": m3_routing_dead,
+    # stash#2359 L3 -- the parity UI, which nothing else in the suite renders.
+    "m4": m4_parity_ui_unwired,
+    "m5": m5_nationality_ids_wrong,
 }
 
 if __name__ == "__main__":

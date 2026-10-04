@@ -7,6 +7,13 @@ fragment PerformerData on Performer {
   birthdate
   ethnicity
   country
+  # stash#2359 (#1922) -- NationalitySelect's initial values come from here; omitting it
+  # would initialise the form to [] and a subsequent save would silently clear every nationality.
+  nationalities {
+    id
+    name
+    code
+  }
   eye_color
   height_cm
   measurements

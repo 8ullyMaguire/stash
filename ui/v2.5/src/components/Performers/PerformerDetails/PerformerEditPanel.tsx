@@ -14,6 +14,7 @@ import { Icon } from "src/components/Shared/Icon";
 import { ImageInput } from "src/components/Shared/ImageInput";
 import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
 import { CountrySelect } from "src/components/Shared/CountrySelect";
+import { NationalitySelect } from "src/components/Shared/NationalitySelect";
 import ImageUtils from "src/utils/image";
 import { addUpdateStashID, getStashIDs } from "src/utils/stashIds";
 import { stashboxDisplayName } from "src/utils/stashbox";
@@ -108,6 +109,10 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     birthdate: yupDateString(intl),
     death_date: yupDateString(intl),
     country: yup.string().ensure(),
+    // stash#2359 (#1922). Nationality ids, not names: the reference list is a fixed seeded table
+    // and the API takes ids, so storing names here would mean a second lookup on save and a
+    // rename upstream would silently orphan the value.
+    nationality_ids: yup.array(yup.string().required()).defined(),
     ethnicity: yup.string().ensure(),
     hair_color: yup.string().ensure(),
     eye_color: yup.string().ensure(),
@@ -138,6 +143,7 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     birthdate: performer.birthdate ?? "",
     death_date: performer.death_date ?? "",
     country: performer.country ?? "",
+    nationality_ids: (performer.nationalities ?? []).map((n) => n.id),
     ethnicity: performer.ethnicity ?? "",
     hair_color: performer.hair_color ?? "",
     eye_color: performer.eye_color ?? "",
@@ -687,6 +693,20 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     return renderField("country", title, control);
   }
 
+  function renderNationalityField() {
+    // Right after country, because the two answer the same question at different granularity and a
+    // user looking at one should see the other. #1922 exists precisely because country is lossy here.
+    const title = intl.formatMessage({ id: "nationality" });
+    const control = (
+      <NationalitySelect
+        value={formik.values.nationality_ids}
+        onChange={(v) => formik.setFieldValue("nationality_ids", v)}
+      />
+    );
+
+    return renderField("nationality_ids", title, control);
+  }
+
   function renderTagsField() {
     const title = intl.formatMessage({ id: "tags" });
 
@@ -730,6 +750,7 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
         {renderDateField("death_date")}
 
         {renderCountryField()}
+        {renderNationalityField()}
 
         {renderInputField("ethnicity")}
         {renderInputField("hair_color")}

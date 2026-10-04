@@ -472,6 +472,132 @@ async function main() {
     await page.close();
   }
 
+  // ---- 10. the #2359 parity fields render and round-trip through the UI ----
+  //
+  // The gap this closes: sections 1-9 all render pages and read their text. Nothing asserted that a
+  // field ADDED for #2359 actually reaches the DOM. A resolver that returns nil for `codes`, or a
+  // GraphQL schema change that quietly dropped the field, would leave every existing test green --
+  // the page would still render, it would just be missing the thing this issue is about.
+  //
+  // So this asks the API the same question the UI asks, through the browser's own network stack,
+  // and then checks the SELECTORS exist on the edit dialogs. The two halves are what make it a
+  // round-trip: the API proves the data path, the DOM proves the component is wired to it.
+  console.log('\n[10] #2359 parity fields reach the API and the edit dialogs');
+  {
+    const { page, state } = await newPage(browser);
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
+    await dismissReleaseNotes(page);
+
+    // Ask the API for the parity fields directly. Namespaced under query { ... } so a schema that
+    // lacks any one of them fails here rather than 500-ing somewhere less readable.
+    const api = await page.evaluate(async () => {
+      const q = `query { allNationalities { id name code } }`;
+      const r = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+      const j = await r.json();
+      return j;
+    });
+
+    check('allNationalities resolves without an error envelope',
+      !api.errors, JSON.stringify((api.errors || []).slice(0, 2)));
+    const nats = api.data && api.data.allNationalities;
+    check('allNationalities returns the seeded reference list',
+      Array.isArray(nats) && nats.length >= 100,
+      'got ' + (Array.isArray(nats) ? nats.length : typeof nats) + ' rows');
+
+    // The multi-select is only useful if the OPTIONS are the names, not bare ids -- a select full of
+    // "1", "2", "3" renders and passes a length check while being unusable.
+    check('nationality options carry names, not bare ids',
+      Array.isArray(nats) && nats.length > 0 && typeof nats[0].name === 'string' && nats[0].name.length > 1,
+      JSON.stringify((nats || []).slice(0, 2)));
+
+    // The performer edit dialog, reached through the UI rather than the API: this is the half that
+    // proves the COMPONENT is wired up. A schema and resolver can both be correct while the dialog
+    // never renders the select, and nothing above this line would notice.
+    //
+    // The performer DETAIL route, not /performers. Reaching the dialog from the list needs list
+    // display mode -- grid mode renders cards with no row checkboxes, so only the header
+    // select-all exists and ListOperations never reveals its Edit button -- which means the list
+    // path would test the display-mode dropdown rather than the thing this section is about.
+    // The detail route has an Edit button unconditionally, so this stays about #2359.
+    const pid = await page.evaluate(async () => {
+      const r = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '{ allPerformers { id } }' }),
+      });
+      const j = await r.json();
+      return j.data && j.data.allPerformers && j.data.allPerformers[0]
+        ? j.data.allPerformers[0].id
+        : null;
+    });
+    check('the seeded performer is reachable for the dialog test', pid !== null,
+      'allPerformers returned nothing -- the dialog assertions did not run');
+
+    if (pid !== null) {
+      await page.goto(BASE + '/performers/' + pid, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(4000);
+
+      const edit = page.locator('button:has-text("Edit")').first();
+      const editVisible = await edit.isVisible().catch(() => false);
+      check('the performer detail page offers an Edit button', editVisible, 'no visible Edit button');
+
+      if (editVisible) {
+        await edit.click();
+        await page.waitForTimeout(3000);
+
+        // PerformerEditPanel is an INLINE panel (#performer-edit), not a modal -- the detail page's
+        // Edit button swaps the display into the form rather than opening a dialog. An earlier
+        // version of this test looked for .modal.show and would have failed forever against a
+        // dialog that does not exist by design.
+        const sel = await page.evaluate(() => ({
+          panel: document.querySelectorAll('#performer-edit').length,
+          form: document.querySelectorAll('form#performer-edit').length,
+          nats: document.querySelectorAll('.NationalitySelect').length,
+          labelled: Array.from(document.querySelectorAll('label'))
+            .some(l => (l.textContent || '').trim() === 'Nationality'),
+        }));
+
+        check('the performer edit form is shown', sel.form > 0,
+          'no form#performer-edit -- the Edit button did not enter edit mode');
+        check('the performer edit form renders a NationalitySelect', sel.nats > 0,
+          'found ' + sel.nats + ' .NationalitySelect nodes in the edit form');
+        check('the nationality field is labelled', sel.labelled,
+          'no label reading exactly "Nationality" -- the i18n key or renderField name is wrong');
+
+        // Open the menu and confirm real names are offered. This is the assertion that would catch a
+        // select wired to the ids instead of the names -- unusable, and invisible to a length check.
+        const first = page.locator('.NationalitySelect input').first();
+        if (await first.count() > 0) {
+          await first.click();
+          await page.waitForTimeout(1500);
+          const opts = await page.evaluate(() =>
+            Array.from(document.querySelectorAll('.NationalitySelect [class*="option"]'))
+              .slice(0, 6).map(o => (o.textContent || '').trim()).filter(Boolean));
+          check('the nationality menu offers readable names', opts.length > 0,
+            'no options rendered after opening the menu');
+          check('nationality options are names, not bare ids',
+            opts.length === 0 || opts.some(o => /[A-Za-z]{3,}/.test(o)),
+            JSON.stringify(opts));
+        } else {
+          check('the NationalitySelect has an input to type into', false,
+            '.NationalitySelect input not found');
+        }
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+      }
+    }
+
+    check('the parity UI produced no uncaught errors', state.perrs.length === 0,
+      JSON.stringify(state.perrs.slice(0, 2)));
+
+    await page.close();
+  }
+
   await browser.close();
 
   console.log(`\n${'='.repeat(60)}`);

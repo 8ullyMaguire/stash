@@ -156,7 +156,7 @@ run_mutant() {
   for f in "$@"; do
     local src="$f"
     case "$id" in
-      m2|m3) src="$MUT/$f" ;;   # UI files: the copy is what gets built
+      m2|m3|m4|m5) src="$MUT/$f" ;;   # UI files: the copy is what gets built
     esac
     cp "$src" "/tmp/e2e-mut-bak.$(echo "$src" | tr / _)" 2>/dev/null
     baks+=("$src"); baksrc+=("$f")
@@ -263,6 +263,15 @@ run_mutant m2 "the /stats component throws during render" yes \
 
 run_mutant m3 "routing dies -- every URL renders the landing page" yes \
   ui/v2.5/src/App.tsx
+
+# stash#2359 L3. Both are UI mutants (their edits invalidate the bundle) and both target the parity
+# work, which is invisible to m1-m3: the API answers correctly either way, so only a test that
+# RENDERS the edit form can tell a wired field from an absent one.
+run_mutant m4 "#2359 nationality field is not rendered at all" yes \
+  ui/v2.5/src/components/Performers/PerformerDetails/PerformerEditPanel.tsx
+
+run_mutant m5 "#2359 nationality select shows ids where names belong" yes \
+  ui/v2.5/src/components/Shared/NationalitySelect.tsx
 
 # ------------------------------------------------------------------- verdict
 rm -f "$BUILD/stash"

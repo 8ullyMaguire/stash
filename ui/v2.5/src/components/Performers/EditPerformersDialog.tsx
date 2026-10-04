@@ -26,6 +26,7 @@ import { IndeterminateCheckbox } from "../Shared/IndeterminateCheckbox";
 import { BulkUpdateFormGroup, BulkUpdateTextInput } from "../Shared/BulkUpdate";
 import { faPencilAlt } from "@fortawesome/free-solid-svg-icons";
 import { CountrySelect } from "../Shared/CountrySelect";
+import { NationalitySelect } from "../Shared/NationalitySelect";
 import { useConfigurationContext } from "src/hooks/Config";
 import cx from "classnames";
 import { BulkUpdateDateInput } from "../Shared/DateInput";
@@ -57,6 +58,10 @@ const performerFields = [
   "hair_color",
   "tattoos",
   "piercings",
+  // stash#2359 (#1922). Nationalities are bulk-updatable for the same reason tattoos are: a bulk
+  // import from Stash-Box sets them across many performers at once, and excluding them would make
+  // every import a per-row edit.
+  "nationalities",
   "ignore_auto_tag",
 ];
 
@@ -421,6 +426,22 @@ export const EditPerformersDialog: React.FC<IListOperationProps> = (
                 setUpdateField({ fake_tits: newValue })
               }
               unsetDisabled={unsetDisabled}
+            />
+          </BulkUpdateFormGroup>
+          {/* stash#2359 (#1922) -- a performer may hold SEVERAL nationalities, which is why this is
+              a multi-select over the seeded reference list rather than a single country. */}
+          <BulkUpdateFormGroup name="nationalities">
+            <NationalitySelect
+              value={updateInput.nationality_ids?.ids ?? undefined}
+              onChange={(values) =>
+                setUpdateField({
+                  nationality_ids: {
+                    ids: values,
+                    mode: GQL.BulkUpdateIdMode.Set,
+                  },
+                })
+              }
+              disabled={isUpdating}
             />
           </BulkUpdateFormGroup>
           <BulkUpdateFormGroup name="tattoos">

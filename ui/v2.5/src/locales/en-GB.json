@@ -182,6 +182,8 @@
         "database": "Database",
         "filesystem": "Filesystem"
     },
+    "body_mark": "Body Mark",
+    "body_marks": "Body Marks",
     "captions": "Captions",
     "career_end": "Career End",
     "career_length": "Career Length",
@@ -192,6 +194,7 @@
         "CUT": "Cut",
         "UNCUT": "Uncut"
     },
+    "codes": "Codes",
     "component_tagger": {
         "config": {
             "active_instance": "Active stash-box instance:",
@@ -1121,6 +1124,7 @@
     },
     "dimensions": "Dimensions",
     "director": "Director",
+    "directors": "Directors",
     "disambiguation": "Disambiguation",
     "display_mode": {
         "grid": "Grid",
@@ -1324,6 +1328,9 @@
     "megabits_per_second": "{value} mbps",
     "metadata": "Metadata",
     "name": "Name",
+    "nationalities": "Nationalities",
+    "nationality": "Nationality",
+    "nationality_none_found": "No matching nationality",
     "scene_has_no_file": "This scene has no file.",
     "sort_name": "Sort Name",
     "new": "New",
@@ -1641,6 +1648,7 @@
     "status": "Status: {statusText}",
     "studio": "Studio",
     "studio_and_parent": "Studio & Parent",
+    "studio_codes": "Studio Codes",
     "studio_count": "Studio Count",
     "studio_depth": "Levels (empty for all)",
     "studio_tagger": {

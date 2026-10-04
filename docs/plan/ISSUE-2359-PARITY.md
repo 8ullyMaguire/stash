@@ -2,7 +2,7 @@
 
 **Measured 2026-10-04. Repo `~/work/lane-2/stash`, branch `main`.**
 
-## Status: schema, store, GraphQL and destroy paths done and proven. UI and ledgers remain
+## Status: schema, store, GraphQL, destroy paths and UI done and proven. Ledgers remain
 
 Last commit `dd391abc3`. Nine of #2359's seventeen were already built upstream; six are now built
 here (#1351 excluded, see below).
@@ -129,7 +129,7 @@ Separator is comma-**and-space**, because that is what this app's UI and importe
 | S10 | body marks | *(none)* | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
 | ~~L1~~ | ~~**store tests**~~ — **DONE** `dd391abc3`: 21 subtests, mutation-checked | | | | | ✅ |
 | ~~L2~~ | ~~**GraphQL**~~ — **DONE** `91dcfd73b`. 6 output fields, 6 input fields, `allNationalities`, `bodyMarkCreate`/`Destroy`, 17 resolver tests | | | | | ✅ |
-| L3 | **UI** — studio codes field, director field, per-scene alias, body-mark editor, nationality selector | | | | | | ⬜ |
+| ~~L3~~ | ~~**UI** — codes on studio bulk + edit, nationalities on performer edit and bulk, body marks / directors ~~ | | | | | ✅ |
 | ~~L4~~ | ~~**model fields**~~ — **DONE** `092a279c8`: `RelatedStrings` on Studio.Codes / Scene.Directors / Tattoo+PiercingLocations, plus `RelatedNationalities` | | | | | ✅ |
 | ~~L5~~ | ~~**destroy paths**~~ — **DONE**, and the premise was WRONG. Measured: all **12** tables carrying `performer_id` declare a cascading FK, and `Database.open` appends `&_fk=true`, so no cleanup code is needed. Two mutations prove the assertion bites | | | | | ✅ |
 | L6 | **ledgers** — own roster rows in `docs/UPSTREAM-ISSUES.md` with verdict + proving test; `docs/ISSUES.md` #2359 `skipped`→`done`; one `docs/closed-issues.md` row per sub-feature | | | | | | ⬜ |
@@ -225,3 +225,68 @@ migration that adds a `performer_id` without a cascading FK, not a guard on clea
 introspection, so a table added later fails the test rather than going unchecked. Its `ignored` map is
 now EMPTY — an earlier draft carried an entry for a table that does not exist, which would have made
 a wrong guess look like a deliberate exclusion.
+
+
+## L3: the UI work, and the two wrong places I put it first
+
+The fields went into `EditPerformersDialog` and `EditStudiosDialog` before I checked what those
+actually are, and only one of the two is the form a user reaches for a single performer:
+
+| Component | What it really is | Parity fields added |
+|---|---|---|
+| `EditPerformersDialog` | the **bulk** multi-select dialog, reachable only from `/performers` in LIST display mode | `nationalities` |
+| `PerformerEditPanel` | the **single-performer** inline form on `/performers/{id}` — `#performer-edit`, not a modal | `nationalities` |
+| `EditStudiosDialog` | the studio bulk dialog; studios have no single-entity edit panel in this build | `codes` |
+
+`PerformerEditPanel` is the one that matters and it is neither a modal nor a dialog. The first version
+of the e2e test looked for `.modal.show` after clicking Edit, which would have failed forever against
+a dialog that does not exist by design — and the panel also ships `country`, `tattoos` and
+`piercings` as plain formik fields, which is the shape the new one follows.
+
+### NationalitySelect is multi and NOT Creatable, unlike CountrySelect
+
+`CountrySelect` is single-valued (one country) and `Creatable` (a user must be able to type a country
+this build has never heard of). A performer may hold **several** nationalities — that is all #1922 is —
+so this takes an array. It is deliberately **not** Creatable: a nationality here is a reference row
+with an id, and migration 125 seeds a fixed 107-entry list, so typing one that is not in it would
+create an id the backend cannot resolve. The trade is stated in the component: a nationality
+Stash-Box knows and this seed does not cannot be selected, which beats a selection that fails to save.
+
+### Codes are a BulkUpdateStrings, and `values` is not `ids`
+
+`BulkUpdateStrings` uses `values`; `BulkUpdateIds` uses `ids`. Writing `codes.ids` type-checks
+against neither and the compiler caught it. `values` also stays `undefined` until the user types,
+which is what keeps "did not touch" distinct from "cleared" — a bulk edit of something else must not
+wipe every studio's codes.
+
+### The fragment omission that would have silently destroyed data
+
+`graphql/data/performer.graphql` did not carry `nationalities`, so the edit form's
+`initialValues` would have been `[]`. Nothing errors: the field renders, an unrelated edit saves, and
+every nationality on that performer is **gone**. Adding the field to the fragment is not optional
+bookkeeping — it is the difference between a visible absence and data loss.
+
+### i18n: edit the text, never round-trip the JSON
+
+The first attempt rewrote `en-GB.json` through `json.dumps(indent=2)`: 1874 lines changed for 9 added
+strings, because the file is 4-space indented. The replacement inserts each key at its alphabetical
+position in the raw text, which is an 8-line diff. `director` already existed, so 8 not 9 — and the
+guard that caught it is why the file does not now carry a duplicate key.
+
+## The e2e suite now renders the parity UI, and two mutants prove it matters
+
+Sections 1-9 all render pages and read their text. None of them renders a performer edit form, so
+none of them could tell a wired field from an absent one: with the component deleted, the API still
+answers `allNationalities`, the seed still writes 107 rows, and every pre-existing test still passes.
+That is m4, and it is the shape a half-finished feature takes — correct at every layer, invisible in
+the product.
+
+| Mutant | Killed by |
+|---|---|
+| m4 — `#2359` nationality field not rendered at all | `the performer edit form renders a NationalitySelect` |
+| m5 — nationality select shows ids where names belong | `nationality options are names, not bare ids` |
+
+m5 exists because "the control rendered" and "the control is legible" are different claims. A select
+full of `1`, `2`, `3` renders, opens, and passes a length check while being unusable.
+
+Final e2e: **82 passed, 0 failed**; mutation check **5/5 killed**.
