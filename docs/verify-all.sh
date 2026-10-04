@@ -49,5 +49,10 @@ check "${PIPESTATUS[0]}" "boot-check"
 
 say "RESULT"
 [ "$rc" -eq 0 ] && echo "GO/BOOT VERIFICATION PASSED" || echo "GO/BOOT VERIFICATION FAILED"
-rm -rf "$TMPDIR"
+# Do NOT delete $TMPDIR on the way out. It is a shared, caller-overridable path
+# (VERIFY_TMPDIR), and other tooling on this host points TMPDIR at it too -- docs/e2e/mutation-check.sh
+# inherits it and then fails at `go: creating work dir: stat /home/hermes/work/.verify-tmp: no such
+# file or directory`. Removing a directory another process is about to use is a worse failure than
+# leaving a few hundred MB behind, so the scratch dir is left in place and cleaned by whoever owns
+# it.
 exit "$rc"
