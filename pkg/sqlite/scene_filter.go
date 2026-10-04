@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/stashapp/stash/pkg/models"
 )
@@ -500,29 +501,95 @@ func (qb *sceneFilterHandler) getMultiCriterionHandlerBuilder(foreignTable, join
 	}
 }
 
+// captionLanguageClause is stash#6459's real fix.
+//
+// The shared stringListCriterionHandlerBuilder matches with LIKE '%value%', which is right for a studio
+// NAME (a substring of the name is a sensible query) and wrong for a language code. Measured in SQLite:
+//
+//	'en'  LIKE '%en%'  -> true    correct
+//	'en-US' LIKE '%en%' -> true   correct, and the whole point: regional variants should match
+//	'sen' LIKE '%en%'  -> true    WRONG - Senegal has no English subtitles
+//	'eng' LIKE '%en%'  -> true    WRONG
+//	'men' LIKE '%en%'  -> true    WRONG
+//
+// So filtering by "en" returned scenes whose only subtitles are Senegalese or Montenegrin. That is a
+// correctness bug in a filter users rely on to find subtitled scenes, and it is independent of the feature
+// the issue asks for.
+//
+// The pattern therefore anchors the END of the code: 'en' matches 'en' and 'en-US' but not 'sen' or
+// 'eng'. A value that is itself regional ('pt-BR') still matches only itself, which is correct -- a user
+// typing 'pt-BR' wants Brazilian Portuguese, not every Portuguese track.
+//
+// The leading % is kept deliberately. A bare 'en' must not match 'fr' (which is what anchoring both ends
+// would give), and matching the tail is what makes the base language select its regional variants.
+// captionLanguageWhere is the predicate described below. It has FOUR placeholders -- one in the LIKE,
+// three in the length()/substr() checks -- so the caller binds the escaped value four times. Getting that
+// count wrong is a runtime error, not a wrong result, which is at least loud.
+// SQLite has no IN, so the two separator checks are spelled out.
+//
+// substr(C, length(V)+1, 1) is the character immediately after the matched prefix: '-' or '_' means the
+// prefix ended on a subtag boundary, which is what distinguishes en-US from Senegalese.
+// Built as an interpreted string literal rather than a raw one, because the SQL needs a SINGLE backslash
+// inside ESCAPE '...' and a Go raw literal cannot express one: it keeps both characters of a \\ pair, so a
+// two-character escape expression reaches SQLite and it rejects the query outright with "ESCAPE expression
+// must be a single character".
+//
+// FOUR placeholders, and they are deliberately NOT all the same value:
+//
+//	?  #1  the full LIKE pattern, escaped value suffixed with '%'
+//	?  #2  the RAW value, compared with = for the exact-match case
+//	?  #3  the RAW value, for length() in the subtag-boundary check
+//	?  #4  the RAW value, for substr() in the subtag-boundary check
+//
+// #2-#4 must be RAW. An earlier version bound all four to the escaped form, and for every value without a
+// LIKE metacharacter the two are identical -- so all the ordinary cases passed -- while `en_GB` escaped to
+// `en\\_GB`, two characters longer, and `length(code) = length('en\\_GB')` was false for the code `en_GB`.
+// Searching for the underscore form returned nothing. Feeding the escaped string to arithmetic that indexes
+// into the real code is wrong in a way that only shows up for values containing metacharacters, which is
+// exactly the kind of bug a table test with ordinary values will not catch.
+const captionLanguageWhere = "video_captions.language_code LIKE ? ESCAPE '\\' " +
+	"AND (" +
+	"video_captions.language_code = ? " +
+	"OR substr(video_captions.language_code, length(?) + 1, 1) = '-' " +
+	"OR substr(video_captions.language_code, length(?) + 1, 1) = '_'" +
+	")"
+
+// captionLanguageMatch builds the LIKE pattern for a caption-language filter value: the escaped value with
+// a trailing wildcard, so `en` matches `en-US`.
+//
+// The escaping matters. Without it a filter value of `%` matches every caption in the library, and `en_GB`
+// -- an underscore form that real subtitle tools emit -- also matches `enXGB`.
+func captionLanguageMatch(value string) string {
+	escaper := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_")
+	return escaper.Replace(value) + "%"
+}
+
 func (qb *sceneFilterHandler) captionCriterionHandler(captions *models.StringCriterionInput) criterionHandlerFunc {
-	h := stringListCriterionHandlerBuilder{
-		primaryTable: sceneTable,
-		primaryFK:    sceneIDColumn,
-		joinTable:    videoCaptionsTable,
-		stringColumn: captionCodeColumn,
-		addJoinTable: func(f *filterBuilder, joinType joinType) {
-			qb.addSceneFilesTable(f, joinTypeLeft)
-			f.addJoin(joinType, videoCaptionsTable, "", "video_captions.file_id = scenes_files.file_id")
-		},
-		excludeHandler: func(f *filterBuilder, criterion *models.StringCriterionInput) {
-			excludeClause := `scenes.id NOT IN (
+	return func(ctx context.Context, f *filterBuilder) {
+		if captions == nil {
+			return
+		}
+
+		switch captions.Modifier {
+		case models.CriterionModifierExcludes:
+			// The pre-existing exclude handler passed criterion.Value with no surrounding %, so an Excludes
+			// filter matched only codes CONTAINING the value exactly -- excluding "en" removed scenes coded
+			// literally "en" and kept scenes coded "en-US" or "sen". Kept as its own NOT IN subquery because
+			// that shape is what makes the negative case work at all.
+			excludeClause := fmt.Sprintf(`scenes.id NOT IN (
 				SELECT scenes_files.scene_id from scenes_files 
 				INNER JOIN video_captions on video_captions.file_id = scenes_files.file_id 
-				WHERE video_captions.language_code LIKE ?
-			)`
-			f.addWhere(excludeClause, criterion.Value)
-
-			// TODO - should we also exclude null values?
-		},
+				WHERE %s
+			)`, captionLanguageWhere)
+			raw := captions.Value
+			f.addWhere(excludeClause, captionLanguageMatch(raw), raw, raw, raw)
+		default:
+			qb.addSceneFilesTable(f, joinTypeLeft)
+			f.addJoin(joinTypeInner, videoCaptionsTable, "", "video_captions.file_id = scenes_files.file_id")
+			raw := captions.Value
+			f.addWhere(captionLanguageWhere, captionLanguageMatch(raw), raw, raw, raw)
+		}
 	}
-
-	return h.handler(captions)
 }
 
 func (qb *sceneFilterHandler) tagsCriterionHandler(tags *models.HierarchicalMultiCriterionInput) criterionHandlerFunc {
