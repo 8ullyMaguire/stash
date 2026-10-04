@@ -523,7 +523,40 @@ def c7_suite():
         npkg = sum(1 for l in out.splitlines() if l.startswith("ok"))
         add("C7 full suite", "PASS", f"unit suite: {npkg} packages green")
 
-    rc, out, err = sh("go test -tags integration ./pkg/sqlite/ -count=1", timeout=1800)
+    # DISCOVER the integration packages rather than hardcoding ./pkg/sqlite/.
+    #
+    # The hardcoded list was a silent under-count: three packages carry
+    # `//go:build integration` tests (pkg/sqlite, internal/autotag, internal/manager) and only one
+    # was run, so C7 could report "1 package green" while two packages' integration tests were
+    # never executed. Those two were verified green by hand -- but a clause that PASSES because it
+    # did not look is not a check, and the failure mode grows every time someone adds an
+    # integration test to a new package.
+    #
+    # Discovery is by build tag, not by a maintained list, for the same reason the roster has a
+    # checker: a hand-maintained inventory is exactly what goes stale. If discovery finds nothing,
+    # that is a FAIL rather than a vacuous pass -- an empty package list means the grep broke, not
+    # that the suite is trivially satisfied.
+    rc, disco, derr = sh(
+        "grep -rl '^//go:build integration' --include='*_test.go' . | xargs -r -n1 dirname | sort -u",
+        timeout=120,
+    )
+    ipkgs = sorted({ln.strip() for ln in disco.splitlines()
+                    if ln.strip().startswith("./")})
+    if not ipkgs:
+        add("C7 integration suite", "FAIL",
+            "found no package with an integration-tagged test -- the discovery step is broken, "
+            "which would otherwise report a vacuous PASS")
+        return
+    if rc != 0:
+        add("C7 integration suite", "FAIL",
+            f"integration package discovery failed rc={rc}: {derr.strip()[:120]}")
+        return
+
+    # One `go test` invocation for all of them: a per-package loop would multiply the build-cache
+    # contention that `other_go_build_running` exists to warn about.
+    rc, out, err = sh(
+        "go test -tags integration " + " ".join(ipkgs) + " -count=1", timeout=1800)
+
     if rc == 124:
         add("C7 integration suite", "UNKNOWN", "integration suite timed out (rc=124)")
         return
@@ -551,7 +584,8 @@ def c7_suite():
             + "  [go test ./... does NOT run these]")
     else:
         npkg = sum(1 for l in out.splitlines() if l.startswith("ok"))
-        add("C7 integration suite", "PASS", f"integration suite: {npkg} package(s) green")
+        add("C7 integration suite", "PASS",
+            "integration suite: %d package(s) green (%s)" % (npkg, ", ".join(ipkgs)))
 
 
 # ---------------------------------------------------------------------------

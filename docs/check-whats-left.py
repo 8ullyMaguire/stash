@@ -26,6 +26,13 @@ WHAT IT CHECKS
   2. the counts the file states for the ledgers match the ledgers themselves
   3. the C8 done/skipped split matches `docs/ISSUES.md`
   4. the file does not claim a clause is FAIL when the goal is complete
+  5. the HEAD commit hash the file states is the repository's actual HEAD
+  6. the row counts stated for the supporting gates match those gates' real output
+
+Checks 5 and 6 exist because of the staleness this file was corrected for on 2026-10-04: it
+carried `HEAD 12e4f1db1` four commits behind and "46 log rows" when the ledger held 48. Neither
+is a clause, so checks 1-4 could not see either -- a document that restates a conclusion is a
+second copy of a fact with no gate on it.
 
 Run:  python3 docs/check-whats-left.py     (exit 0 = agrees)
 """
@@ -141,6 +148,40 @@ def main() -> int:
                 problems.append(f"C8 says {c8.group(4)} skipped, docs/ISSUES.md has {len(skipped)}")
         else:
             problems.append("could not read the C8 done/skipped counts from this file")
+
+    # --- 5. the HEAD hash the file states ------------------------------------
+    #
+    # A stale commit hash is the cheapest possible drift to detect and the most misleading to
+    # read: it dates the measurement without invalidating it, so the numbers below still look
+    # current while every line refers to a tree that no longer exists.
+    head = re.search(r"HEAD\s+`([0-9a-f]{7,40})`", text)
+    if not head:
+        problems.append("this file states no HEAD commit hash, so nothing dates its own measurement")
+    else:
+        actual = subprocess.run(
+            ["git", "-C", str(REPO), "rev-parse", "--short=9", "HEAD"],
+            capture_output=True, text=True, timeout=60,
+        ).stdout.strip()
+        stated = head.group(1)
+        if not actual.startswith(stated[:7]) and not stated.startswith(actual[:7]):
+            problems.append(
+                f"this file says HEAD {stated} but the repository is at {actual} -- "
+                "re-measure, or the numbers below describe a tree that no longer exists")
+
+    # --- 6. the supporting-gate row counts ------------------------------------
+    #
+    # The closed-log count drifted by 2 the moment #422 and #2359 were added, and checks 1-4
+    # could not see it because it lives in a GATE row rather than a clause row. Reading the
+    # number back out of `docs/closed-issues.md` is cheaper than trusting a prose copy.
+    rows = re.findall(r"^\| stash#\d+ \|", LEDGER.read_text(), re.M)
+    stated_rows = re.search(r"closed-log-check\.py`?\s*\|\s*PASS\s*[^|]*?(\d+)\s+log rows", text)
+    if stated_rows:
+        if int(stated_rows.group(1)) != len(rows):
+            problems.append(
+                f"the closed-log gate row says {stated_rows.group(1)} log rows, "
+                f"docs/closed-issues.md holds {len(rows)}")
+    else:
+        problems.append("could not read the closed-log row count from this file")
 
     # --- report ---------------------------------------------------------------
     if problems:

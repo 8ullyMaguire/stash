@@ -36,11 +36,20 @@ export TMPDIR="${VERIFY_TMPDIR:-/home/hermes/work/.verify-tmp}"
 mkdir -p "$TMPDIR"
 
 say "unit suite"
-go test ./... -count=1 2>&1 | grep -Ev '^ok|no test files' | tail -15
+# Same fix as the integration suite below: extract failures FIRST so a chatty package cannot push
+# the diagnosis out of a tail window. PIPESTATUS[0] is `go test`, which is what the verdict needs.
+go test ./... -count=1 2>&1 | tee /tmp/stash-unit.log \
+  | grep -E '^(--- FAIL|    --- FAIL|FAIL|panic:)' | head -20
 check "${PIPESTATUS[0]}" "unit"
 
 say "integration suite"
-go test -tags integration ./... -count=1 2>&1 | grep -Ev '^ok|no test files' | tail -15
+# `tail -15` HID A REAL FAILURE. The suite logs one INFO line per wizard test and several of them
+# say `error="database is locked"` -- which is the fake store's DELIBERATE error string from
+# stashforge_wizard_test.go, not a real lock. Fifteen lines of that buried the actual failing
+# assertion, so the gate reported `FAIL` with no diagnosis and the next step looked like debugging
+# a database problem. Failures are now extracted FIRST and the log tail is only context.
+go test -tags integration ./... -count=1 2>&1 | tee /tmp/stash-integration.log \
+  | grep -E '^(--- FAIL|    --- FAIL|FAIL|panic:)' | head -20
 check "${PIPESTATUS[0]}" "integration"
 
 say "boot check"

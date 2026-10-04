@@ -6,7 +6,7 @@ believing anything here — the numbers move, and a number copied into a summary
 not evidence.
 
 Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Remote `origin` (GitHub). HEAD `12e4f1db1`.
+Remote `origin` (GitHub). HEAD `47b85d555`.
 
 **Host note:** this checkout lives on **thinkcentre** (M720q), at
 `~/work/lane-2/stash`. **The previous version of this file said the repo lived on
@@ -16,7 +16,7 @@ since at least 2026-10-02. A second checkout of the same fork sits at
 
 ## Status: nothing outstanding
 
-Measured 2026-10-04 at `12e4f1db1` by `docs/goal-check.py`,
+Measured 2026-10-04 at `47b85d555` by `docs/goal-check.py`,
 `docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
 `docs/verify-all.sh`.
 
@@ -28,7 +28,7 @@ Measured 2026-10-04 at `12e4f1db1` by `docs/goal-check.py`,
 | C4 M7/M8 done | PASS | `m7-mesh`, `m8-relay-mesh` |
 | C5 requirements.csv | PASS | 90 rows: 80 `tested`, 6 `shipped`, 4 `deferred` |
 | C6 branch convention | PASS | single-branch layout, nothing stranded |
-| C7 suites | PASS | unit 1801 / 0, integration 806 / 0, 61 packages |
+| C7 suites | PASS | unit 61 packages green; **integration 3 packages green** (./internal/autotag, ./internal/manager, ./pkg/sqlite) — discovered by build tag, not hardcoded |
 | C8 backlog-17 ledger | PASS | 17 issues = 16 done, 0 open, 1 skipped (#2149). **#2359 moved from skipped to done** in `8808699bb`: its old "satisfied by configuration" disposition was right about the meta and wrong about the work — configuring a StashDB instance is push from a StashDB this build scrapes, and parity means Stash can *represent* what Stash-Box represents, which configuration cannot do |
 
 Supporting gates, all passing:
@@ -37,7 +37,7 @@ Supporting gates, all passing:
 |---|---|
 | `docs/ledger-check.py` | PASS — 675 roster rows, all well formed |
 | `docs/check-issue-ledgers.py` | OK — header, table and log agree |
-| `docs/closed-log-check.py` | PASS — 46 log rows, 5 columns, 46 distinct issues |
+| `docs/closed-log-check.py` | PASS — 48 log rows, 5 columns, 48 distinct issues (#422 and #2359 added) |
 | `docs/check_cited_paths.py` | PATHS OK — 49 distinct cited paths, 0 missing |
 | `docs/e2e/playwright-e2e.js` | E2E PASSED — 71 assertions, 0 failed, 0 console/page errors |
 | `docs/e2e/mutation-check.sh` | 3 killed, 0 survived, 0 harness errors |
