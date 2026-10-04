@@ -2,15 +2,11 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/stashapp/stash/internal/api/loaders"
 	"github.com/stashapp/stash/internal/api/urlbuilders"
-	"github.com/stashapp/stash/pkg/gallery"
-	"github.com/stashapp/stash/pkg/group"
-	"github.com/stashapp/stash/pkg/image"
 	"github.com/stashapp/stash/pkg/models"
-	"github.com/stashapp/stash/pkg/performer"
-	"github.com/stashapp/stash/pkg/scene"
 )
 
 func (r *studioResolver) ImagePath(ctx context.Context, obj *models.Studio) (*string, error) {
@@ -83,70 +79,79 @@ func (r *studioResolver) Tags(ctx context.Context, obj *models.Studio) (ret []*m
 	return ret, firstError(errs)
 }
 
-func (r *studioResolver) SceneCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
+// studioCount answers one studio count field for one studio.
+//
+// It goes through the per-request batcher when one is attached, which is the difference between one
+// query per page and one query per row (docs/qcount.sh measured 219 statements for a 12-studio page
+// before this). The fallback is deliberate rather than an error: a single-object query or a resolver
+// reached without a page still has to work, and going through the same batched SQL with a one-element
+// slice keeps exactly one implementation of each count.
+//
+// depth is passed through untouched. It is part of the batcher's cache key because the studios page
+// asks for the same field at two depths in one request.
+func (r *studioResolver) studioCount(ctx context.Context, kind studioCountKind, studioID int, depth *int) (int, error) {
+	if b, ok := studioCountBatcherFrom(ctx); ok {
+		return b.count(ctx, kind, studioID, depth)
+	}
+
+	var counts []int
 	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = scene.CountByStudioID(ctx, r.repository.Scene, obj.ID, depth)
+		var err error
+		counts, err = r.studioCounts(ctx, kind, []int{studioID}, depth)
 		return err
 	}); err != nil {
 		return 0, err
 	}
-
-	return ret, nil
+	if len(counts) == 0 {
+		return 0, nil
+	}
+	return counts[0], nil
 }
 
-func (r *studioResolver) ImageCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
-	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = image.CountByStudioID(ctx, r.repository.Image, obj.ID, depth)
-		return err
-	}); err != nil {
-		return 0, err
+// studioCounts dispatches to the batched repository method for one count kind over a slice of studio
+// ids. Every count in this file goes through here, so there is exactly one call site per SQL shape
+// and the batched and single-studio paths cannot drift apart.
+func (r *studioResolver) studioCounts(ctx context.Context, kind studioCountKind, ids []int, depth *int) ([]int, error) {
+	switch kind {
+	case studioSceneCountKind:
+		return r.repository.Studio.GetManySceneCount(ctx, ids, depth)
+	case studioImageCountKind:
+		return r.repository.Studio.GetManyImageCount(ctx, ids, depth)
+	case studioGalleryCountKind:
+		return r.repository.Studio.GetManyGalleryCount(ctx, ids, depth)
+	case studioGroupCountKind:
+		return r.repository.Studio.GetManyGroupCount(ctx, ids, depth)
+	case studioPerformerCountKind:
+		return r.repository.Studio.GetManyPerformerCount(ctx, ids, depth)
+	case studioSceneMarkerCountKind:
+		return r.repository.Studio.GetManySceneMarkerCount(ctx, ids, depth)
+	default:
+		return nil, fmt.Errorf("unknown studio count kind %d", kind)
 	}
-
-	return ret, nil
 }
 
-func (r *studioResolver) GalleryCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
-	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = gallery.CountByStudioID(ctx, r.repository.Gallery, obj.ID, depth)
-		return err
-	}); err != nil {
-		return 0, err
-	}
-
-	return ret, nil
+func (r *studioResolver) SceneCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioSceneCountKind, obj.ID, depth)
 }
 
-func (r *studioResolver) PerformerCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
-	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = performer.CountByStudioID(ctx, r.repository.Performer, obj.ID, depth)
-		return err
-	}); err != nil {
-		return 0, err
-	}
-
-	return ret, nil
+func (r *studioResolver) ImageCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioImageCountKind, obj.ID, depth)
 }
 
-func (r *studioResolver) GroupCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
-	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = group.CountByStudioID(ctx, r.repository.Group, obj.ID, depth)
-		return err
-	}); err != nil {
-		return 0, err
-	}
-
-	return ret, nil
+func (r *studioResolver) GalleryCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioGalleryCountKind, obj.ID, depth)
 }
 
-func (r *studioResolver) SceneMarkerCount(ctx context.Context, obj *models.Studio, depth *int) (ret int, err error) {
-	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
-		ret, err = scene.MarkerCountByStudioID(ctx, r.repository.SceneMarker, obj.ID, depth)
-		return err
-	}); err != nil {
-		return 0, err
-	}
+func (r *studioResolver) PerformerCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioPerformerCountKind, obj.ID, depth)
+}
 
-	return ret, nil
+func (r *studioResolver) GroupCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioGroupCountKind, obj.ID, depth)
+}
+
+func (r *studioResolver) SceneMarkerCount(ctx context.Context, obj *models.Studio, depth *int) (int, error) {
+	return r.studioCount(ctx, studioSceneMarkerCountKind, obj.ID, depth)
 }
 
 // deprecated

@@ -40,6 +40,27 @@ type StudioCounter interface {
 	CountByTagID(ctx context.Context, tagID int) (int, error)
 }
 
+// StudioChildCounter provides BATCHED counts of a studio's children.
+//
+// These exist because the per-studio CountBy* helpers are called once per object by gqlgen, which
+// makes a list query issue one query per field per row. docs/qcount.sh measured that at 219 SQL
+// statements for a 12-studio page (18.2 per studio).
+//
+// depth is part of every signature and is NOT optional: the studios page asks for each count twice,
+// once plain and once as *_all with depth: -1 (ui/v2.5/graphql/data/studio.graphql), so one request
+// legitimately carries two depths for the same field. Batching across depths would return the wrong
+// number for one of them.
+//
+// Each returns a slice indexed by input position, with 0 for a studio whose child set is empty.
+type StudioChildCounter interface {
+	GetManySceneCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+	GetManyImageCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+	GetManyGalleryCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+	GetManyGroupCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+	GetManyPerformerCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+	GetManySceneMarkerCount(ctx context.Context, ids []int, depth *int) ([]int, error)
+}
+
 // StudioCreator provides methods to create studios.
 type StudioCreator interface {
 	Create(ctx context.Context, newStudio *CreateStudioInput) error
@@ -73,6 +94,7 @@ type StudioReader interface {
 	StudioQueryer
 	StudioAutoTagQueryer
 	StudioCounter
+	StudioChildCounter
 
 	AliasLoader
 	StashIDLoader

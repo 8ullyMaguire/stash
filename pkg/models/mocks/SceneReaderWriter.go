@@ -127,20 +127,6 @@ func (_m *SceneReaderWriter) AssignFiles(ctx context.Context, sceneID int, fileI
 	return r0
 }
 
-// SetSceneRange provides a mock function with given fields: ctx, sceneID, fileID, start, end
-func (_m *SceneReaderWriter) SetSceneRange(ctx context.Context, sceneID int, fileID models.FileID, start, end *float64) error {
-	ret := _m.Called(ctx, sceneID, fileID, start, end)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID, *float64, *float64) error); ok {
-		r0 = rf(ctx, sceneID, fileID, start, end)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // Count provides a mock function with given fields: ctx
 func (_m *SceneReaderWriter) Count(ctx context.Context) (int, error) {
 	ret := _m.Called(ctx)
@@ -837,34 +823,6 @@ func (_m *SceneReaderWriter) GetFiles(ctx context.Context, relatedID int) ([]*mo
 	return r0, r1
 }
 
-// GetPrimaryFile provides a mock function with given fields: ctx, sceneID, primaryFileID
-//
-// #3530 - hand-written to match the mockery v2.10.0 shape used throughout this file. mockery
-// regenerates from .mockery.yml, which has not been run for this method, and a hand-written stub
-// that returns zero values is indistinguishable from a correct one at every call site that does not
-// set an expectation -- so the tests that use it name what they expect explicitly.
-func (_m *SceneReaderWriter) GetPrimaryFile(ctx context.Context, sceneID int, primaryFileID models.FileID) (*models.VideoFile, error) {
-	ret := _m.Called(ctx, sceneID, primaryFileID)
-
-	var r0 *models.VideoFile
-	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID) *models.VideoFile); ok {
-		r0 = rf(ctx, sceneID, primaryFileID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*models.VideoFile)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, int, models.FileID) error); ok {
-		r1 = rf(ctx, sceneID, primaryFileID)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // GetGalleryIDs provides a mock function with given fields: ctx, relatedID
 func (_m *SceneReaderWriter) GetGalleryIDs(ctx context.Context, relatedID int) ([]int, error) {
 	ret := _m.Called(ctx, relatedID)
@@ -1132,6 +1090,29 @@ func (_m *SceneReaderWriter) GetPerformerIDs(ctx context.Context, relatedID int)
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
 		r1 = rf(ctx, relatedID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPrimaryFile provides a mock function with given fields: ctx, sceneID, primaryFileID
+func (_m *SceneReaderWriter) GetPrimaryFile(ctx context.Context, sceneID int, primaryFileID models.FileID) (*models.VideoFile, error) {
+	ret := _m.Called(ctx, sceneID, primaryFileID)
+
+	var r0 *models.VideoFile
+	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID) *models.VideoFile); ok {
+		r0 = rf(ctx, sceneID, primaryFileID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*models.VideoFile)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int, models.FileID) error); ok {
+		r1 = rf(ctx, sceneID, primaryFileID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1450,6 +1431,20 @@ func (_m *SceneReaderWriter) SetCustomFields(ctx context.Context, id int, fields
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, int, models.CustomFieldsInput) error); ok {
 		r0 = rf(ctx, id, fields)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// SetSceneRange provides a mock function with given fields: ctx, sceneID, fileID, start, end
+func (_m *SceneReaderWriter) SetSceneRange(ctx context.Context, sceneID int, fileID models.FileID, start *float64, end *float64) error {
+	ret := _m.Called(ctx, sceneID, fileID, start, end)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int, models.FileID, *float64, *float64) error); ok {
+		r0 = rf(ctx, sceneID, fileID, start, end)
 	} else {
 		r0 = ret.Error(0)
 	}

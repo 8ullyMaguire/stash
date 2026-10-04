@@ -103,6 +103,14 @@ SEED
 
 export QCOUNT_LOG="$BUILD/log"
 python3 docs/e2e/qcount.py "${QCOUNT_PER_PAGE:-12}"
+rc=$?
+
+# Fewer queries is only half the claim. This compares every batched count against the single-studio
+# path at BOTH depths, on a seeded studio hierarchy so depth 0 and depth -1 genuinely differ.
+if [ "${QCOUNT_SKIP_EQUIV:-0}" != 1 ]; then
+  echo
+  QCOUNT_BASE="$QCOUNT_BASE" QCOUNT_LOG="$BUILD/log" python3 docs/e2e/qcount_equiv.py || rc=1
+fi
 
 rc=$?
 for pid in $(ps -eo pid,args | grep "[s]tash -c $BUILD/c.yml" | awk '{print $1}'); do

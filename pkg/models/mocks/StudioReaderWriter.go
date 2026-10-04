@@ -360,6 +360,144 @@ func (_m *StudioReaderWriter) GetImage(ctx context.Context, studioID int) ([]byt
 	return r0, r1
 }
 
+// GetManyGalleryCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManyGalleryCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetManyGroupCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManyGroupCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetManyImageCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManyImageCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetManyPerformerCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManyPerformerCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetManySceneCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManySceneCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetManySceneMarkerCount provides a mock function with given fields: ctx, ids, depth
+func (_m *StudioReaderWriter) GetManySceneMarkerCount(ctx context.Context, ids []int, depth *int) ([]int, error) {
+	ret := _m.Called(ctx, ids, depth)
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func(context.Context, []int, *int) []int); ok {
+		r0 = rf(ctx, ids, depth)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, []int, *int) error); ok {
+		r1 = rf(ctx, ids, depth)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetStashIDs provides a mock function with given fields: ctx, relatedID
 func (_m *StudioReaderWriter) GetStashIDs(ctx context.Context, relatedID int) ([]models.StashID, error) {
 	ret := _m.Called(ctx, relatedID)

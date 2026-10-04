@@ -167,6 +167,12 @@ func Initialize() (*Server, error) {
 
 	r.Use(dataloaders.Middleware)
 
+	// The studio count batcher is per-request state, attached here for the same reason the dataloaders
+	// are: a field resolver is called once per object and cannot see the whole page, so the page has to
+	// be recorded somewhere the resolvers can reach. Attaching it after the dataloaders keeps the two
+	// request-scoped mechanisms in one place, and after authentication so the repository is available.
+	r.Use(studioCountMiddleware(repo))
+
 	pluginCache := mgr.PluginCache
 	sceneService := mgr.SceneService
 	imageService := mgr.ImageService
