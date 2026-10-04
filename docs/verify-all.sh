@@ -65,6 +65,17 @@ say "ledger cross-check"
 python3 docs/check-issue-ledgers.py 2>&1 | tail -6
 check "${PIPESTATUS[0]}" "check-issue-ledgers"
 
+# The SHAPE of the closed-issue log, which check-issue-ledgers.py does not check: it extracts issue
+# NUMBERS with a regex and never looks at a row's columns, so a truncated row, one split by a stray
+# pipe, or one never closed still contributes its number correctly and the cross-check passes.
+# docs/ledger-check.py checks the ROSTER's shape, not the log's.
+#
+# Ten such rows accumulated by 2026-10-04, in a file whose header insists every closure names the
+# test that proves it. Repaired by docs/repair-closed-log.py; this gate keeps them repaired.
+say "closed-log shape"
+python3 docs/closed-log-check.py
+check "${PIPESTATUS[0]}" "closed-log-check"
+
 say "cited paths"
 python3 docs/check_cited_paths.py 2>&1 | tail -3
 check "${PIPESTATUS[0]}" "check_cited_paths"
