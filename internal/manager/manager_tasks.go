@@ -177,6 +177,7 @@ func (s *Manager) Scan(ctx context.Context, input ScanMetadataInput) (int, error
 		scanner:       scanner,
 		input:         input,
 		subscriptions: s.scanSubs,
+		config:        config.GetInstance(),
 	}
 
 	return s.JobManager.Add(ctx, "Scanning...", &scanJob), nil

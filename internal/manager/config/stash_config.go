@@ -11,12 +11,32 @@ type StashConfigInput struct {
 	Path         string `json:"path"`
 	ExcludeVideo bool   `json:"excludeVideo"`
 	ExcludeImage bool   `json:"excludeImage"`
+
+	// SubtitleFolders are directory names, relative to this stash's Path, in which to look for
+	// subtitle files for videos stored elsewhere. See StashConfig.SubtitleFolders.
+	SubtitleFolders []string `json:"subtitleFolders"`
 }
 
 type StashConfig struct {
 	Path         string `json:"path"`
 	ExcludeVideo bool   `json:"excludeVideo"`
 	ExcludeImage bool   `json:"excludeImage"`
+
+	// SubtitleFolders lists directories to search for subtitle files, in addition to the video's own
+	// directory. Entries are absolute paths, or paths relative to Path; the most recently written value
+	// wins.
+	//
+	// stash#6744. Caption matching was previously directory-blind: video.MatchesCaption compared only
+	// basename prefixes, so `/library/vids/scene.mp4` and `/library/subs/scene.en.srt` never matched and
+	// the subtitle was silently discarded. That is fine for the sidecar layout the scanner assumed, and
+	// wrong for the two layouts people actually use: subtitles on a separate share (a SMB mount of a
+	// subtitle directory, which is how large subtitle collections are usually distributed), and a
+	// library where each show has a `subs/` folder next to the video.
+	//
+	// Kept per-stash rather than global because the folder only means something relative to a particular
+	// library root -- an absolute path in a global setting would be wrong as soon as a second library is
+	// configured, and a relative one has no anchor.
+	SubtitleFolders []string `json:"subtitleFolders"`
 }
 
 type StashConfigs []*StashConfig

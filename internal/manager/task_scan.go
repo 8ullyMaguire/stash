@@ -39,6 +39,9 @@ type ScanJob struct {
 	count     int
 
 	unmatchedCaptionFiles utils.MutexField[[]string]
+
+	// config is the instance config, captured at construction. Read by subtitleFoldersFor (#6744).
+	config *config.Config
 }
 
 func (j *ScanJob) Execute(ctx context.Context, progress *job.Progress) error {
@@ -197,7 +200,7 @@ func (j *ScanJob) queueFileFunc(ctx context.Context, f models.FS, zipFile *file.
 			// to handle them
 			if fsutil.MatchExtension(path, video.CaptionExts) {
 				fileRepo := j.scanner.Repository.File
-				matched := video.AssociateCaptions(ctx, path, j.scanner.Repository.TxnManager, fileRepo, fileRepo)
+				matched := video.AssociateCaptions(ctx, path, j.scanner.Repository.TxnManager, fileRepo, fileRepo, j.subtitleFoldersFor(path))
 
 				if !matched {
 					logger.Debugf("No matching video file found for caption file %s", path)
@@ -361,10 +364,12 @@ func (j *ScanJob) handleFile(ctx context.Context, f file.ScannedFile, progress *
 		videoFile, _ := r.File.(*models.VideoFile)
 
 		if videoFile != nil {
+			subtitleFolders := j.subtitleFoldersFor(videoFile.Path)
+
 			// try to match any unmatched caption files to this video file
 			for _, captionPath := range j.unmatchedCaptionFiles.Get() {
-				if video.MatchesCaption(videoFile.Path, captionPath) {
-					video.AssociateCaptions(ctx, captionPath, j.scanner.Repository.TxnManager, j.scanner.Repository.File, j.scanner.Repository.File)
+				if j.captionMatchesVideo(videoFile, captionPath) {
+					video.AssociateCaptions(ctx, captionPath, j.scanner.Repository.TxnManager, j.scanner.Repository.File, j.scanner.Repository.File, subtitleFolders)
 
 					// remove from the unmatched list
 					j.unmatchedCaptionFiles.SetFunc(func(files []string) []string {
@@ -484,6 +489,61 @@ type handlerRequiredFilter struct {
 	// FS is used by interactiveDisagrees to stat the funscript. Injected rather than reaching for a
 	// global so the check is testable against a fake filesystem.
 	FS models.FS
+}
+
+// captionMatchesVideo decides whether an unmatched caption file belongs to this video file.
+//
+// stash#6744. Extracted from the scan loop so it can be tested directly: with the decision inline, both
+// mutations below -- reverting to the directory-blind matcher, and resolving the folders to nil -- left
+// the whole suite green, because every test exercised subtitleFoldersFor and the matcher separately and
+// nothing exercised the line that joins them. Verified by mutation, which is the only reason this
+// function exists rather than two inline calls.
+//
+// Named for the same reason in the tests: this is the seam between the configuration and the behaviour.
+func (j *ScanJob) captionMatchesVideo(v *models.VideoFile, captionPath string) bool {
+	return video.MatchesCaptionInFolders(v.Path, captionPath, j.subtitleFoldersFor(v.Path))
+}
+
+// subtitleFoldersFor resolves the configured subtitle folders for the stash that owns videoPath, turning
+// any relative entries into absolute paths against that stash's root.
+//
+// Relative-to-the-stash is the useful form, because the common layout is a `subs/` (or `subtitles/`,
+// `captions/`) folder beside the library content, and writing that absolute on every machine would make
+// the config non-portable. Absolute entries are passed through untouched, which is what makes a separate
+// mount or SMB share work.
+//
+// #6744. Returns nil when nothing is configured, and nil keeps the pre-existing behaviour exactly: a
+// caption must sit beside its video.
+func (j *ScanJob) subtitleFoldersFor(videoPath string) []string {
+	if j == nil || j.config == nil {
+		return nil
+	}
+
+	stash := j.config.GetStashPaths().GetStashFromPath(videoPath)
+	if stash == nil || len(stash.SubtitleFolders) == 0 {
+		return nil
+	}
+
+	root := filepath.Clean(stash.Path)
+	out := make([]string, 0, len(stash.SubtitleFolders))
+	for _, f := range stash.SubtitleFolders {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+
+		if filepath.IsAbs(f) {
+			out = append(out, filepath.Clean(f))
+			continue
+		}
+
+		out = append(out, filepath.Join(root, f))
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func newHandlerRequiredFilter(c *config.Config, repo models.Repository) *handlerRequiredFilter {
