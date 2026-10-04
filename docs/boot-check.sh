@@ -157,4 +157,42 @@ echo "== 5. an ordinary scene id is routed too"
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/scene/1" || echo 000)
 [ "$code" = 404 ] || fail "/scene/1 returned $code, want 404 (routed, no such scene)"
 
-echo "PASS: the instance boots, serves the UI, answers GraphQL, and routes the sprite URLs"
+echo "== 6. the #2359 fields resolve on a LIVE server (stash#2359)"
+# The unit tests assert the resolvers reach the store; this asserts the whole chain -- executable
+# schema, generated resolver, field resolver, loader, store -- on a running instance. It is the
+# only check that would catch a field that is IN the schema but unreachable at runtime, which is
+# the PersonCluster.Members failure mode: everything compiles, every query succeeds, the list is
+# just empty.
+#
+# `allNationalities` is the one to lead with. It is seeded by migration 125 and was EMPTY once
+# already, with no error anywhere -- the only symptom was an empty dropdown.
+gql() {
+  # A heredoc-built body, not string interpolation into -d. Interpolating a query containing double
+  # quotes into a JSON string needs each quote escaped, and getting that wrong returns HTTP 400 with
+  # a body that says nothing useful. python3 builds the JSON so the escaping is correct by
+  # construction rather than by care.
+  python3 -c 'import json,sys; print(json.dumps({"query": sys.argv[1]}))' "$1"
+}
+
+nats=$(curl -s -X POST "http://127.0.0.1:$PORT/graphql" -H 'Content-Type: application/json' \
+  --data "$(gql '{ allNationalities { name } }')")
+echo "$nats" | grep -q '"errors"' && fail "allNationalities returned errors: $nats"
+count=$(echo "$nats" | grep -o '"name"' | wc -l | tr -d ' ')
+[ "${count:-0}" -ge 100 ] || fail "allNationalities returned $count entries, want >=100; migration 125 seeds 107 and an empty list previously presented as an empty dropdown with no error"
+echo "   allNationalities: $count entries"
+
+# The per-entity fields, on ids that do not exist. The point is that they RESOLVE -- an empty list
+# for a performer that is not there is correct, and a field that errors or returns null is not.
+# The queries are findStudio/findScene/findPerformer, not studio/scene/performer -- there is no
+# singular query by those names, and a wrong field name returns GRAPHQL_VALIDATION_FAILED, which
+# looks like a broken schema rather than a typo in a check.
+for q in '{ findStudio(id: "1") { codes } }' '{ findScene(id: "1") { directors } }' \
+         '{ findPerformer(id: "1") { tattoo_locations piercing_locations body_marks { kind location } nationalities { name } } }'; do
+  out=$(curl -s -X POST "http://127.0.0.1:$PORT/graphql" -H 'Content-Type: application/json' \
+    --data "$(gql "$q")")
+  echo "$out" | grep -q '"errors"' && fail "query failed: $q -> $out"
+  echo "$out" | grep -q '"data":null' && fail "query returned data:null: $q -> $out"
+done
+echo "   codes/directors/tattoo_locations/piercing_locations/body_marks/nationalities all resolve"
+
+echo "PASS: the instance boots, serves the UI, answers GraphQL, resolves the #2359 fields, and routes the sprite URLs"

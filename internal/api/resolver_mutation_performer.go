@@ -44,6 +44,24 @@ func (r *mutationResolver) PerformerCreate(ctx context.Context, input models.Per
 	newPerformer.Name = strings.TrimSpace(input.Name)
 	newPerformer.Disambiguation = translator.string(input.Disambiguation)
 	newPerformer.Aliases = models.NewRelatedStrings(stringslice.UniqueExcludeFold(stringslice.TrimSpace(input.AliasList), newPerformer.Name))
+
+	// stash#2359. The structured body marks, beside the packed `tattoos`/`piercings` strings rather
+	// than replacing them -- those stay authoritative for the fields the UI and CSV importer read.
+	// UniqueFold because two identical locations are one mark, and `performer_body_marks` has
+	// PK (performer_id, kind, location) which would reject the duplicate anyway.
+	newPerformer.TattooLocations = models.NewRelatedStrings(stringslice.UniqueFold(stringslice.TrimSpace(input.TattooLocations)))
+	newPerformer.PiercingLocations = models.NewRelatedStrings(stringslice.UniqueFold(stringslice.TrimSpace(input.PiercingLocations)))
+
+	// stash#2359 (#1922). Resolved from ids to rows HERE rather than handed to the store as ids,
+	// because Performer.Nationalities holds *Nationality for the GraphQL surface and the store
+	// needs to persist ids. A bad id is an error from the client, not a silently dropped selection.
+	if len(input.NationalityIds) > 0 {
+		nats, err := translator.relatedNationalities(ctx, r.repository.Performer, input.NationalityIds)
+		if err != nil {
+			return nil, fmt.Errorf("converting nationality ids: %w", err)
+		}
+		newPerformer.Nationalities = models.NewRelatedNationalities(nats)
+	}
 	newPerformer.Gender = input.Gender
 	newPerformer.Ethnicity = translator.string(input.Ethnicity)
 	newPerformer.Country = translator.string(input.Country)
@@ -361,6 +379,31 @@ func performerPartialFromInput(input models.PerformerUpdateInput, translator cha
 	// prefer alias_list over aliases
 	if translator.hasField("alias_list") {
 		updatedPerformer.Aliases = translator.updateStrings(input.AliasList, "alias_list")
+	}
+
+	// stash#2359. SIBLING of the alias_list block, not nested inside it.
+	//
+	// The first version nested these three inside `if translator.hasField("alias_list")`, which is
+	// the same mistake made in StudioStore.UpdatePartial and for the same reason: it reads as a
+	// harmless grouping. The effect was that `performerUpdate(input: {id, tattoo_locations})`
+	// returned success and persisted NOTHING, because the client did not also send alias_list.
+	// Caught by the e2e seed's round-trip assertion; invisible to every unit and integration test,
+	// all of which exercise one field at a time and so never notice a field gated behind another.
+	//
+	// All three go through updateStrings so ABSENT (nil) and EMPTY (non-nil, zero values) stay
+	// distinguishable: an edit that does not mention tattoos must not clear them.
+	updatedPerformer.TattooLocations = translator.updateStrings(input.TattooLocations, "tattoo_locations")
+	updatedPerformer.PiercingLocations = translator.updateStrings(input.PiercingLocations, "piercing_locations")
+
+	if ids := translator.updateStrings(input.NationalityIds, "nationality_ids"); ids != nil {
+		intIds, err := stringslice.StringSliceToIntSlice(ids.Values)
+		if err != nil {
+			return nil, fmt.Errorf("converting nationality ids: %w", err)
+		}
+		updatedPerformer.NationalityIDs = &models.UpdateIDs{
+			IDs:  intIds,
+			Mode: ids.Mode,
+		}
 	}
 
 	updatedPerformer.TagIDs, err = translator.updateIds(input.TagIds, "tag_ids")

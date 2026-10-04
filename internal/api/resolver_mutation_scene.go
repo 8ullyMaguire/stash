@@ -49,6 +49,11 @@ func (r *mutationResolver) SceneCreate(ctx context.Context, input models.SceneCr
 	newScene.Code = translator.string(input.Code)
 	newScene.Details = translator.string(input.Details)
 	newScene.Director = translator.string(input.Director)
+	// stash#2359 (#3051). The structured form, beside the packed string rather than replacing it.
+	// UniqueFOLD because a director is a NAME, and two directors differing only in case are one
+	// person -- which also means "Ana Lapez" and "Ana Lopez" collide, and that is the intended
+	// behaviour: they are the same director with a typo in one of them.
+	newScene.Directors = models.NewRelatedStrings(stringslice.UniqueFold(stringslice.TrimSpace(input.Directors)))
 	newScene.Rating = input.Rating100
 	newScene.Organized = translator.bool(input.Organized)
 	newScene.StashIDs = models.NewRelatedStashIDs(models.StashIDInputs(input.StashIds).ToStashIDs())
@@ -191,6 +196,11 @@ func scenePartialFromInput(input models.SceneUpdateInput, translator changesetTr
 	updatedScene.Code = translator.optionalString(input.Code, "code")
 	updatedScene.Details = translator.optionalString(input.Details, "details")
 	updatedScene.Director = translator.optionalString(input.Director, "director")
+	// stash#2359 (#3051). updateStrings returns nil when `directors` was ABSENT and a non-nil
+	// UpdateStrings when it was sent empty, so an update that does not mention directors cannot
+	// clear them. Without this line the field is accepted by the schema and silently discarded,
+	// which is exactly what the e2e seed's round-trip assertion caught.
+	updatedScene.Directors = translator.updateStrings(input.Directors, "directors")
 	updatedScene.Rating = translator.optionalInt(input.Rating100, "rating100")
 
 	if input.OCounter != nil {
@@ -552,6 +562,11 @@ func (r *mutationResolver) BulkSceneUpdate(ctx context.Context, input BulkSceneU
 	updatedScene.Code = translator.optionalString(input.Code, "code")
 	updatedScene.Details = translator.optionalString(input.Details, "details")
 	updatedScene.Director = translator.optionalString(input.Director, "director")
+	// stash#2359 (#3051). updateStrings returns nil when `directors` was ABSENT and a non-nil
+	// UpdateStrings when it was sent empty, so an update that does not mention directors cannot
+	// clear them. Without this line the field is accepted by the schema and silently discarded,
+	// which is exactly what the e2e seed's round-trip assertion caught.
+	updatedScene.Directors = translator.updateStringsBulk(input.Directors, "directors")
 	updatedScene.Rating = translator.optionalInt(input.Rating100, "rating100")
 	updatedScene.Organized = translator.optionalBool(input.Organized, "organized")
 

@@ -271,14 +271,21 @@ func (qb *StudioStore) UpdatePartial(ctx context.Context, input models.StudioPar
 		}
 	}
 
-	if input.Aliases != nil {
-		// stash#2359. Nil when `codes` was absent from the update; non-nil when it was sent empty.
-		if input.Codes != nil {
-			if err := studioCodesTableMgr.modifyJoins(ctx, input.ID, input.Codes.Values, input.Codes.Mode); err != nil {
-				return nil, err
-			}
+	// stash#2359 (#2607, #3051). SIBLING of the aliases block, not nested inside it.
+	//
+	// The first version nested this inside `if input.Aliases != nil`, which reads as a harmless
+	// grouping and is not: codes were then written only on an update that also sent aliases, so
+	// `studioUpdate(input: {id: 1, codes: ["X1"]})` returned success and persisted NOTHING. No error,
+	// no log, correct HTTP status. It was caught by the e2e seed's round-trip assertion and by
+	// nothing else -- not the unit tests, not the integration tests, not the resolver tests, all of
+	// which exercise one field at a time and so never notice a field gated behind a different one.
+	if input.Codes != nil {
+		if err := studioCodesTableMgr.modifyJoins(ctx, input.ID, input.Codes.Values, input.Codes.Mode); err != nil {
+			return nil, err
 		}
+	}
 
+	if input.Aliases != nil {
 		if err := studiosAliasesTableMgr.modifyJoins(ctx, input.ID, input.Aliases.Values, input.Aliases.Mode); err != nil {
 			return nil, err
 		}

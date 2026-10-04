@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/sliceutil/stringslice"
 )
 
 // stash#2359 — the GraphQL surface for the six parity features.
@@ -233,4 +235,57 @@ func (r *mutationResolver) BodyMarkDestroy(ctx context.Context, input BodyMarkDe
 	// destroy in this package: a destroy is a request to make something absent, and it already is.
 	// Reporting ErrNotFound would make a retried idempotent delete look like a failure.
 	return affected > 0, nil
+}
+
+// relatedNationalities resolves nationality ids to reference rows for the GraphQL surface.
+//
+// stash#2359 (#1922). Performer.Nationalities holds *Nationality because a selector needs the name
+// and a filter needs the id; the store persists ids. So the conversion happens here, once, rather
+// than in each of the four places a performer is written.
+//
+// The full reference list is fetched and filtered in memory rather than queried per id, because the
+// list is 107 rows seeded by migration 125 and a per-id query would be 2 round trips for a
+// dual-national performer to read one small table. An id that is not in the list is an ERROR rather
+// than a silent drop: a client that sends nationality 999 has a bug, and quietly discarding it
+// leaves the user with a selection that appears to have saved and did not.
+func (t changesetTranslator) relatedNationalities(ctx context.Context, l models.NationalityLoader, ids []string) ([]*models.Nationality, error) {
+	intIds, err := stringslice.StringSliceToIntSlice(ids)
+	if err != nil {
+		return nil, fmt.Errorf("converting nationality ids: %w", err)
+	}
+
+	wanted := make(map[int]bool, len(intIds))
+	for _, id := range intIds {
+		wanted[id] = true
+	}
+
+	all, err := l.AllNationalities(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*models.Nationality, 0, len(intIds))
+	for _, n := range all {
+		if n != nil && wanted[n.ID] {
+			out = append(out, n)
+		}
+	}
+
+	// Report the ids that resolved to nothing, by name, because "nationality 999 does not exist"
+	// is actionable and "invalid nationality" is not.
+	found := make(map[int]bool, len(out))
+	for _, n := range out {
+		found[n.ID] = true
+	}
+	var missing []string
+	for _, id := range intIds {
+		if !found[id] {
+			missing = append(missing, strconv.Itoa(id))
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("no such nationality id(s): %s", strings.Join(missing, ", "))
+	}
+
+	return out, nil
 }

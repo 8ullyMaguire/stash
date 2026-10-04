@@ -223,7 +223,213 @@ def main():
     if counts["findScenes"]["count"] < 1:
         print("  SEED FAILED: the scene list is still empty")
         sys.exit(1)
-    print("  seed verified")
+
+    # stash#2359 -- write and read back all six features through the real schema.
+    #
+    # This is here because the e2e suite is the only place these fields are exercised through the
+    # ACTUAL executable schema rather than a resolver invoked directly. It already earned its keep
+    # once: seeding sceneCreate failed with HTTP 422 "must be defined" on `directors`, because a
+    # bulk-style `[String!]!` had been applied to the INPUT. Nothing in the unit or integration suite
+    # could catch that -- an input field that is accidentally required is valid Go, valid schema, and
+    # only breaks a client that omits it, which is every existing client.
+    #
+    # The round trip matters in both directions. A field that cannot be WRITTEN passes every read
+    # assertion, and a field that cannot be READ passes every write assertion.
+    print("  seeding #2359 parity fields")
+
+    codes = ["imdb-e2e-1", "tmdb-e2e-2"]
+    must(
+        gql(
+            """mutation($id: ID!, $c: [String!]) {
+                 studioUpdate(input: {id: $id, codes: $c}) { id }
+               }""",
+            {"id": sid, "c": codes},
+        ),
+        "studioUpdate codes",
+    )
+
+    directors = ["E2E Director One", "E2E Director Two"]
+    must(
+        gql(
+            """mutation($id: ID!, $d: [String!]) {
+                 sceneUpdate(input: {id: $id, directors: $d}) { id }
+               }""",
+            {"id": scene["id"], "d": directors},
+        ),
+        "sceneUpdate directors",
+    )
+
+    must(
+        gql(
+            """mutation($id: ID!) {
+                 performerUpdate(input: {
+                   id: $id,
+                   tattoo_locations: ["left arm", "right shoulder"],
+                   piercing_locations: ["left ear"],
+                   nationality_ids: []
+                 }) { id }
+               }""",
+            {"id": pid},
+        ),
+        "performerUpdate parity fields",
+    )
+
+    # One mark WITH a description, so the read proves the description survives the write -- that is
+    # the field a location-only round trip would silently drop.
+    #
+    # The seed must be IDEMPOTENT, because it runs against a database that may already hold a
+    # previous run's data. `performer_body_marks` has PK (performer_id, kind, location), so a second
+    # run of this exact insert is a UNIQUE violation rather than a no-op. Tolerating that one error
+    # is correct rather than sloppy: the row is already there, which is the state we wanted, and
+    # every OTHER failure here still aborts.
+    mark = gql(
+        """mutation($id: ID!) {
+             bodyMarkCreate(input: {
+               performer_id: $id, kind: "tattoo",
+               location: "neck", description: "a raven"
+             }) { id kind location description }
+           }""",
+        {"id": pid},
+    )
+    if mark.get("errors"):
+        already = "UNIQUE constraint failed" in json.dumps(mark)
+        if not already:
+            print(f"  SEED FAILED at bodyMarkCreate: {mark['errors']}")
+            sys.exit(1)
+    else:
+        must(mark, "bodyMarkCreate")
+
+    # ---- read back, and assert ----
+    # Variables, not %-interpolation: the ids are GraphQL ID scalars and arrive as STRINGS, so a
+    # %d here raises TypeError rather than producing a bad query. Passing them as variables also
+    # keeps them out of the query text, which is where a quoting mistake becomes invisible.
+    got = must(
+        gql(
+            """query($s: ID!, $sc: ID!, $p: ID!) {
+               findStudio(id: $s) { codes }
+               findScene(id: $sc) { directors }
+               findPerformer(id: $p) {
+                 tattoo_locations piercing_locations
+                 nationalities { name }
+                 body_marks { kind location description }
+               }
+             }""",
+            {"s": str(sid), "sc": str(scene["id"]), "p": str(pid)},
+        ),
+        "post-seed parity read",
+    )
+
+    st = got["findStudio"]
+    sc = got["findScene"]
+    pe = got["findPerformer"]
+
+    if sorted(st.get("codes") or []) != sorted(codes):
+        print(f"  SEED FAILED: studio codes round-tripped as {st.get('codes')!r}, want {codes!r}")
+        sys.exit(1)
+
+    if sorted(sc.get("directors") or []) != sorted(directors):
+        print(f"  SEED FAILED: scene directors round-tripped as {sc.get('directors')!r}")
+        sys.exit(1)
+
+    # EXPECTED ORDER MATTERS, and getting it wrong here is instructive.
+    #
+    # The tattoo_locations update runs BEFORE bodyMarkCreate("neck"), and setBodyMarkLocations is a
+    # full REPLACE -- so "neck" is added on top of the two locations and the list is
+    # ["left arm", "right shoulder", "neck"], not the two that were sent. The first version of this
+    # assertion expected the two and failed with `['neck']`, which reads like data loss and is not:
+    # the store kept what it was given at each step and the two steps disagreed.
+    #
+    # The assertion below therefore checks the two locations are PRESENT rather than equal, and the
+    # full list is asserted through body_marks, which is where the complete set is visible. Checking
+    # membership here and equality there splits the question between the two fields that can answer
+    # it, instead of demanding one field answer both.
+    locs = pe.get("tattoo_locations") or []
+    for want in ("left arm", "right shoulder"):
+        if want not in locs:
+            print(f"  SEED FAILED: tattoo_locations is {locs!r}, missing {want!r}")
+            sys.exit(1)
+
+    if pe.get("piercing_locations") != ["left ear"]:
+        print(f"  SEED FAILED: piercing_locations is {pe.get('piercing_locations')!r}")
+        sys.exit(1)
+
+    marks = pe.get("body_marks") or []
+    raven = [m for m in marks if m.get("location") == "neck"]
+    if not raven:
+        print(f"  SEED FAILED: the described mark is missing from {marks!r}")
+        sys.exit(1)
+    if raven[0].get("description") != "a raven":
+        # A description is the ONLY thing body_marks carries that the location fields do not, so
+        # losing it here means the whole field is pointless.
+        print(f"  SEED FAILED: the description round-tripped as {raven[0].get('description')!r}")
+        sys.exit(1)
+
+    # An UPDATE THAT OMITS codes must not clear them. This is the absent-vs-empty distinction, and
+    # it is the one defect class that unit tests with an in-memory store keep missing.
+    must(
+        gql(
+            """mutation($id: ID!) {
+                 studioUpdate(input: {id: $id, details: "touched without codes"}) { id }
+               }""",
+            {"id": sid},
+        ),
+        "studioUpdate without codes",
+    )
+    after = must(
+        gql("query($s: ID!) { findStudio(id: $s) { codes } }", {"s": str(sid)}),
+        "post-touch read",
+    )
+    if sorted(after["findStudio"].get("codes") or []) != sorted(codes):
+        print(
+            f"  SEED FAILED: an update that omitted codes changed them to "
+            f"{after['findStudio'].get('codes')!r}. Absent and empty are different requests."
+        )
+        sys.exit(1)
+
+    # ...and an update that sends an EMPTY list must clear them.
+    must(
+        gql(
+            """mutation($id: ID!) {
+                 studioUpdate(input: {id: $id, codes: []}) { id }
+               }""",
+            {"id": sid},
+        ),
+        "studioUpdate empty codes",
+    )
+    cleared = must(
+        gql("query($s: ID!) { findStudio(id: $s) { codes } }", {"s": str(sid)}),
+        "post-clear read",
+    )
+    if cleared["findStudio"].get("codes"):
+        print(f"  SEED FAILED: codes were not cleared: {cleared['findStudio']['codes']!r}")
+        sys.exit(1)
+
+    # Restore them, so the Playwright suite still sees a studio with codes.
+    must(
+        gql(
+            """mutation($id: ID!, $c: [String!]) {
+                 studioUpdate(input: {id: $id, codes: $c}) { id }
+               }""",
+            {"id": sid, "c": codes},
+        ),
+        "studioUpdate restore codes",
+    )
+
+    nats = must(gql("{ allNationalities { name } }"), "allNationalities")
+    if len(nats["allNationalities"]) < 100:
+        print(
+            f"  SEED FAILED: allNationalities returned {len(nats['allNationalities'])} entries, "
+            "want >=100; migration 125 seeds 107"
+        )
+        sys.exit(1)
+
+    print(
+        f"  parity: codes={len(st['codes'])} directors={len(sc['directors'])} "
+        f"tattoos={len(pe['tattoo_locations'])} piercings={len(pe['piercing_locations'])} "
+        f"marks={len(marks)} nationalities={len(nats['allNationalities'])}"
+    )
+
+    # print("  seed verified")
 
 
 if __name__ == "__main__":

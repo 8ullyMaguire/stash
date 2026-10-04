@@ -114,8 +114,8 @@ input SceneCreateInput {
   code: String
   details: String
   director: String
-  "Structured directors, one per director. The structured form of `director`. stash#2359, #3051"
-  directors: [String!]!
+  "Structured directors, one per director. The structured form of `director`. Absent leaves them unchanged. stash#2359, #3051"
+  directors: [String!]
   url: String @deprecated(reason: "Use urls")
   urls: [String!]
   date: String
@@ -150,8 +150,8 @@ input SceneUpdateInput {
   code: String
   details: String
   director: String
-  "Structured directors, one per director. The structured form of `director`. stash#2359, #3051"
-  directors: [String!]!
+  "Structured directors, one per director. The structured form of `director`. Absent leaves them unchanged. stash#2359, #3051"
+  directors: [String!]
   url: String @deprecated(reason: "Use urls")
   urls: [String!]
   date: String
