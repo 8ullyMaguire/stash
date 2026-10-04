@@ -47,7 +47,7 @@ type Performer struct {
 	// tattoo is on the left arm", which is what #2359 is for. Both are RelatedStrings holding a
 	// LOCATION per mark, loaded together by LoadBodyMarks; the description, which is why a mark is
 	// not simply a string, is reached through BodyMarks rather than flattened into these.
-	TattooLocations  RelatedStrings `json:"tattoo_locations"`
+	TattooLocations   RelatedStrings `json:"tattoo_locations"`
 	PiercingLocations RelatedStrings `json:"piercing_locations"`
 
 	// Nationalities is []Nationality and not RelatedStrings because a performer may be dual-national

@@ -39,7 +39,7 @@ type Scene struct {
 	ResumeTime   float64 `json:"resume_time"`
 	PlayDuration float64 `json:"play_duration"`
 
-	URLs         RelatedStrings  `json:"urls"`
+	URLs RelatedStrings `json:"urls"`
 	// Directors is the STRUCTURED form of the packed `Director` string above, which stays.
 	// stash#2359 (#3051). One director per row rather than a split string, because a scene with two
 	// directors cannot be filtered by director without a LIKE on a packed column, and "Ana Lopez"
@@ -77,10 +77,10 @@ type UpdateSceneInput struct {
 // ScenePartial represents part of a Scene object. It is used to update
 // the database entry.
 type ScenePartial struct {
-	Title          OptionalString
-	Code           OptionalString
-	Details        OptionalString
-	Director       OptionalString
+	Title    OptionalString
+	Code     OptionalString
+	Details  OptionalString
+	Director OptionalString
 	// Directors is *UpdateStrings so absent means "do not touch" and present-but-empty means
 	// "clear". stash#2359.
 	Directors      *UpdateStrings

@@ -64,17 +64,17 @@ type StudioCreateInput struct {
 	ParentID *string  `json:"parent_id"`
 	ChildIds []string `json:"child_ids"`
 	// This should be a URL or a base64 encoded data URL
-	Image         *string        `json:"image"`
-	StashIds      []StashIDInput `json:"stash_ids"`
-	Rating100     *int           `json:"rating100"`
-	Favorite      *bool          `json:"favorite"`
-	Details       *string        `json:"details"`
-	Aliases       []string       `json:"aliases"`
+	Image     *string        `json:"image"`
+	StashIds  []StashIDInput `json:"stash_ids"`
+	Rating100 *int           `json:"rating100"`
+	Favorite  *bool          `json:"favorite"`
+	Details   *string        `json:"details"`
+	Aliases   []string       `json:"aliases"`
 	// stash#2359 (#2607, #3051)
-	Codes        []string      `json:"codes"`
-	TagIds        []string       `json:"tag_ids"`
-	IgnoreAutoTag *bool          `json:"ignore_auto_tag"`
-	Organized     *bool          `json:"organized"`
+	Codes         []string `json:"codes"`
+	TagIds        []string `json:"tag_ids"`
+	IgnoreAutoTag *bool    `json:"ignore_auto_tag"`
+	Organized     *bool    `json:"organized"`
 
 	CustomFields map[string]interface{} `json:"custom_fields"`
 }
@@ -87,17 +87,17 @@ type StudioUpdateInput struct {
 	ParentID *string  `json:"parent_id"`
 	ChildIds []string `json:"child_ids"`
 	// This should be a URL or a base64 encoded data URL
-	Image         *string        `json:"image"`
-	StashIds      []StashIDInput `json:"stash_ids"`
-	Rating100     *int           `json:"rating100"`
-	Favorite      *bool          `json:"favorite"`
-	Details       *string        `json:"details"`
-	Aliases       []string       `json:"aliases"`
+	Image     *string        `json:"image"`
+	StashIds  []StashIDInput `json:"stash_ids"`
+	Rating100 *int           `json:"rating100"`
+	Favorite  *bool          `json:"favorite"`
+	Details   *string        `json:"details"`
+	Aliases   []string       `json:"aliases"`
 	// stash#2359 (#2607, #3051)
-	Codes        []string      `json:"codes"`
-	TagIds        []string       `json:"tag_ids"`
-	IgnoreAutoTag *bool          `json:"ignore_auto_tag"`
-	Organized     *bool          `json:"organized"`
+	Codes         []string `json:"codes"`
+	TagIds        []string `json:"tag_ids"`
+	IgnoreAutoTag *bool    `json:"ignore_auto_tag"`
+	Organized     *bool    `json:"organized"`
 
 	CustomFields CustomFieldsInput `json:"custom_fields"`
 }

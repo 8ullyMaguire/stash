@@ -20,9 +20,9 @@
 package sqlite
 
 import (
-	"strings"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/jmoiron/sqlx"
@@ -472,10 +472,10 @@ func (qb *PerformerStore) setBodyMarkLocations(ctx context.Context, performerID 
 			seen[location] = true
 
 			if _, err := qb.CreateBodyMark(ctx, models.BodyMark{
-				PerformerID:  performerID,
-				Kind:         kind,
-				Location:     location,
-				Description:  described[location],
+				PerformerID: performerID,
+				Kind:        kind,
+				Location:    location,
+				Description: described[location],
 			}); err != nil {
 				return err
 			}

@@ -115,6 +115,7 @@ func (p *Performer) LoadNationalities(ctx context.Context, l NationalityLoader) 
 		return ptrs, nil
 	})
 }
+
 // ---------------------------------------------------------------------------
 // Scene
 // ---------------------------------------------------------------------------

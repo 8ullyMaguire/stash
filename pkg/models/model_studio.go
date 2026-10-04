@@ -69,8 +69,8 @@ type StudioPartial struct {
 	IgnoreAutoTag OptionalBool
 	Organized     OptionalBool
 
-	Aliases  *UpdateStrings
-	URLs     *UpdateStrings
+	Aliases *UpdateStrings
+	URLs    *UpdateStrings
 	// stash#2359 (#2607, #3051). Nil when `codes` was absent from the update and non-nil when it
 	// was sent as an empty list, which is the request to clear every code.
 	Codes    *UpdateStrings
