@@ -6,7 +6,7 @@ believing anything here — the numbers move, and a number copied into a summary
 not evidence.
 
 Repo `~/work/lane-2/stash`, branch `main` (the soft fork of `8ullyMaguire/stash`).
-Remote `origin` (GitHub). HEAD `fa8a104ce`.
+Remote `origin` (GitHub). HEAD `a24dbcd38`.
 
 **Host note:** this checkout lives on **thinkcentre** (M720q), at
 `~/work/lane-2/stash`. **The previous version of this file said the repo lived on
@@ -71,6 +71,20 @@ extracts failures FIRST and keeps the full log, so if it recurs it will name a t
 reporting a bare FAIL. Recorded rather than papered over because an intermittent with no named test
 and no surviving log is the kind of thing that gets forgotten and then blamed on something else.
 
+**Check 5 had a hole of its own, found while updating this file.** It used to require the stated HEAD
+hash to equal the repository's actual HEAD — unsatisfiable, since the commit that updates the hash
+moves HEAD past it — so it was redesigned to ask the satisfiable question "did any LEDGER move after
+this measurement?". That is right about what it asks, and it has a blind spot: it only fires when a
+ledger moves. So this file sat carrying `fa8a104ce` while HEAD was four commits ahead at `a24dbcd38`,
+and the check said PASS — the same class of defect it was written to catch, one level up.
+
+Now check 5b asks whether the hash is a **real commit and an ancestor of HEAD**, which is satisfiable
+(the normal case passes: a summary measured before later commits) and catches both failure modes. The
+staleness question stays where it belongs, in the ledger-drift check — a summary that has not moved
+with the ledgers is fine; a summary quoting a commit that does not exist, or from the wrong branch, is
+not. Proved in all three directions: a non-existent hash and an off-branch hash both FAIL, and a real
+ancestor passes.
+
 **Still not claimed as fixed:** the `internal/api` intermittent described below.
 
 **Two gate defects were found and fixed while confirming this, and both are the same shape -- a
@@ -98,7 +112,7 @@ server held any port, and no build failure was logged. Cause unestablished. The 
 diagnosis if it recurs.
 
 
-Measured 2026-10-04 at `fa8a104ce` by `docs/goal-check.py`,
+Measured 2026-10-04 at `a24dbcd38` by `docs/goal-check.py`,
 `docs/check-issue-ledgers.py`, `docs/ledger-check.py`, `docs/closed-log-check.py` and
 `docs/verify-all.sh`.
 

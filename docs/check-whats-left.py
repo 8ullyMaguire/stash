@@ -26,7 +26,8 @@ WHAT IT CHECKS
   2. the counts the file states for the ledgers match the ledgers themselves
   3. the C8 done/skipped split matches `docs/ISSUES.md`
   4. the file does not claim a clause is FAIL when the goal is complete
-  5. the HEAD commit hash the file states is the repository's actual HEAD
+  5. the HEAD commit hash the file states EXISTS and is an ancestor of HEAD
+     (not that it EQUALS HEAD -- that is unsatisfiable, see the comment at check 5)
   6. the row counts stated for the supporting gates match those gates' real output
 
 Checks 5 and 6 exist because of the staleness this file was corrected for on 2026-10-04: it
@@ -201,6 +202,48 @@ def main() -> int:
                         f"{label} changed AFTER this file's stated measurement "
                         f"(HEAD {stated[:9]}); re-measure, or the numbers below predate a "
                         "ledger edit")
+
+            # 5b. THE HASH MUST BE A COMMIT THAT ACTUALLY EXISTS, AND BE AN ANCESTOR OF HEAD.
+            #
+            # The merge-base test above is the fix for an unsatisfiable check, and it is right about
+            # what it tests -- but it only fires when a LEDGER moved. So a file carrying a hash that
+            # is simply WRONG passed cleanly, which is the same class of defect check 5 was written
+            # to catch, one level up. Observed 2026-10-05: the file said `fa8a104ce` while HEAD was
+            # four commits ahead at `a24dbcd38`, and this check said PASS because no ledger had
+            # moved since.
+            #
+            # So the hash gets its own check, and it is satisfiable -- an ancestor of HEAD passes,
+            # which is the NORMAL case for a file whose measurement predates later commits:
+            #
+            #   * not a commit at all (typo, truncated, other branch) -> FAIL
+            #   * a real commit but not an ancestor of HEAD          -> FAIL
+            #   * a real ancestor                                     -> PASS
+            #
+            # The staleness question ("is it TOO old?") is deliberately NOT asked here. That is the
+            # ledger-drift check above, and it is the right place for it, because a summary that has
+            # not moved with the ledgers is fine; a summary quoting a commit that does not exist, or
+            # from the wrong branch, is not. Conflating the two is what produced the blind spot.
+            real_head = subprocess.run(
+                ["git", "-C", str(REPO), "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=60,
+            ).stdout.strip()
+            probe = subprocess.run(
+                ["git", "-C", str(REPO), "rev-parse", "--verify", "--quiet", stated + "^{commit}"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if probe.returncode != 0:
+                problems.append(
+                    f"the HEAD hash this file states ({stated[:9]}) is not a commit in this "
+                    f"repository -- it cannot date anything, and nothing is measuring against it")
+            elif real_head:
+                anc = subprocess.run(
+                    ["git", "-C", str(REPO), "merge-base", "--is-ancestor", stated, real_head],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if anc.returncode != 0:
+                    problems.append(
+                        f"the HEAD hash this file states ({stated[:9]}) is not an ancestor of the "
+                        f"repository's HEAD ({real_head[:9]}) -- wrong branch, or rebased away")
 
 
     # --- 6. the supporting-gate row counts ------------------------------------
