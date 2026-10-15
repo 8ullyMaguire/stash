@@ -92,15 +92,28 @@ reads `scene.files[0].duration` directly (`SceneListTable.tsx:88`).
    (an opt-in wrapper around `GetHash`, NOT a change to `GetHash`) appends `_w<start>-<end>` to the
    checksum, so two scenes of one file get different previews. Unranged scenes keep their exact
    filename. Sweep 6/6.
-3. **sprite/VTT thumbs** — SPEC WRITTEN, NOT IMPLEMENTED. `docs/ISSUE-3530-sprite-spec.md`.
-   Deliberately not a copy of the preview fix, for three reasons recorded in the spec:
-   - the VTT cues are a **contract with the player**, not a lookup key;
-   - `SlowSeek` works in FRAMES, so the window must be converted via `FrameRate`;
-   - `chunkCount` is snapped to a perfect square, so a window inside a long file gets a grid sized
-     for the file.
-   The spec's one open question — absolute vs window-relative cues — is **resolved by reading the
-   player** (`vtt-thumbnails.ts`: `time = percent * player.duration()`), so cues are relative to the
-   media element's timeline and window-relative is forced, not chosen.
+3. **sprite/VTT thumbs** — the PLAN is built and green; NOT yet wired. Spec:
+   `docs/ISSUE-3530-sprite-spec.md`.
+
+   **Done:** `internal/manager/sprite_window_plan.go` — the window-sensitive arithmetic, extracted from
+   `NewSpriteGenerator` (which interleaves it with fsutil and ffmpeg probing, so it was untestable, which
+   is how the defect survived). 12 tests. `chunkCount`, `SpriteInterval`, `stepSize`, the sampling times,
+   the frame-seek base and the VTT cue step all derive from the WINDOW, and an unranged scene reduces to
+   today's expressions exactly.
+
+   **Still to wire:**
+   - `NewSpriteGenerator` still computes file-based `chunkCount`/`stepSize`/`SlowSeek`.
+   - `generateSpriteImage` still samples `i*stepSize` from 0, not `windowStart + i*stepSize`.
+   - `generateSpriteVTT` still emits file-relative cues (needs `plan.vttStepSize()`).
+   - `GenerateSpriteTask` still keys on `GetHash` — becomes `models.GeneratedChecksum` for free, since a
+     suffixed checksum already has no legacy path.
+
+   **Two things found while building it, both worth not rediscovering:**
+   - `SlowSeek` works in FRAMES, and computing only the step gives a correctly SPACED grid starting at
+     frame 0 — the wrong footage at the right intervals, invisible to every duration-only assertion.
+   - A window can hold FEWER FRAMES than the grid needs tiles (the count is snapped UP to a perfect
+     square), so frame seeking would repeat itself. The plan refuses that path instead.
+
 4. **detection** — needs an upstream discussion, not a guess.
 5. **any UI to set a range** — the columns are SQL/API-settable only today.
 
